@@ -13,6 +13,7 @@ That guide covers:
 - uploading the repo to EC2
 - first-time GPU instance setup
 - preparing a persistent EBS volume for Docker
+- storing model caches on the persistent EBS volume
 - restart recovery
 - readiness checks
 - launching the workload

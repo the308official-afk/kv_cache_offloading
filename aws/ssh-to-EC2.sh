@@ -4,7 +4,7 @@
 
 # Define your public IPs in an array
 IPS=(
-  "3.238.89.238"    # KV-offload-studies-01
+  "54.196.129.226"    # KV-offload-studies-01
 )
 
 # Check if an argument was passed

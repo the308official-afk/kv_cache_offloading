@@ -4,6 +4,7 @@
 # ssh -J ojaiyeob@falcon.7elements.com:1337 ojaiyeob@gracehopper
 # ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage test
 # ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage pg1184
+# ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage smoketest
 # ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage pg1184_wflush
 # ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage pg1184_wflush_aggressive
 # ojaiyeob@gracehopper:~/sglang$ ./run_docker_sglang.sh storage synthetic_prefix_repeat
@@ -15,16 +16,19 @@
 
 HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
 SGLANG_ROOT="${SGLANG_ROOT:-${HOST_HOME_DIR}/kv_cache_offloading/sglang}"
-SGLANG_CACHE_DIR="${SGLANG_CACHE_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/sglang_cache}"
+PERSISTENT_DATA_ROOT="${PERSISTENT_DATA_ROOT:-/mnt/docker-data}"
+SGLANG_CACHE_DIR="${SGLANG_CACHE_DIR:-${PERSISTENT_DATA_ROOT}/sglang_cache}"
 STUDY_ROOT="${STUDY_ROOT:-${HOST_HOME_DIR}/kv_cache_offloading/output}"
 VLLM_ROOT="${VLLM_ROOT:-${HOST_HOME_DIR}/kv_cache_offloading/vllm}"
 VLLM_CLIENT_DIR="${VLLM_CLIENT_DIR:-${VLLM_ROOT}/kv_cache_offloading/vllm/vllm_client}"
-VLLM_CACHE_DIR="${VLLM_CACHE_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/vllm/vllm_cache}"
+VLLM_CACHE_DIR="${VLLM_CACHE_DIR:-${PERSISTENT_DATA_ROOT}/vllm_cache}"
 HICACHE_HOST_DIR="${HICACHE_HOST_DIR:-/hicache_disk}"
 
 HICACHE_DISK_PATH="/workspace/hicache_disk"
 # HICACHE_DISK_PATH="/workspace/data/hicache_disk"
 SGLANG_PYTHONPATH="/workspace/sglang/python"
+SGLANG_DISABLE_PKG_VERSION_CHECK="${SGLANG_DISABLE_PKG_VERSION_CHECK:-1}"
+FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK:-1}"
 
 echo "------------------- Clearing out hicache_disk contents... -------------------"
 sudo rm -rf ${HICACHE_HOST_DIR} && sudo mkdir ${HICACHE_HOST_DIR} && sudo chmod 777 ${HICACHE_HOST_DIR}
@@ -36,12 +40,12 @@ IS_TEST=${2:-default}
 # LLM_MODEL_NAMES=('deepseek-llm-7b-chat' 'Llama-3.2-1B' 'Llama-2-7b-chat-hf' 'Meta-Llama-3.1-70B-Instruct-AWQ-INT4')
 # DATASETS=('ultrachat_200k' 'symbolic_instruction_tuning_800k' 'toucan_1pt5m')
 
-LLM_MODELS=('meta-llama/Llama-2-7b-chat-hf')
-LLM_MODEL_NAMES=('Llama-2-7b-chat-hf')
+# LLM_MODELS=('meta-llama/Llama-2-7b-chat-hf')
+# LLM_MODEL_NAMES=('Llama-2-7b-chat-hf')
 # LLM_MODELS=('deepseek-ai/deepseek-llm-7b-chat')
 # LLM_MODEL_NAMES=('deepseek-llm-7b-chat')
-# LLM_MODELS=('meta-llama/Llama-3.2-1B')
-# LLM_MODEL_NAMES=('Llama-3.2-1B')
+LLM_MODELS=('meta-llama/Llama-3.2-1B')
+LLM_MODEL_NAMES=('Llama-3.2-1B')
 DATASETS=('ultrachat_200k')
 
 # important: these allow the switch to enable/disable transfer statistics (e.g., bytes transferred, token IDs transferred, bandwidth etc)
@@ -164,17 +168,24 @@ do
 					# Run SERVER (interractive mode)
 					# -----------------------------
 					if false; then
+						sudo mkdir -p /mnt/docker-data/sglang_cache
+						sudo mkdir -p /mnt/docker-data/vllm_cache
+						sudo mkdir -p ~/kv_cache_offloading/output
+						sudo mkdir -p ~/kv_cache_offloading/hicache_disk
 						docker container rm docker-sglang-server -f 2>/dev/null
 						HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
 						SGLANG_ROOT="${SGLANG_ROOT:-${HOST_HOME_DIR}/kv_cache_offloading/sglang}"
-						SGLANG_CACHE_DIR="${SGLANG_CACHE_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/sglang_cache}"
+						PERSISTENT_DATA_ROOT="${PERSISTENT_DATA_ROOT:-/mnt/docker-data}"
+						SGLANG_CACHE_DIR="${SGLANG_CACHE_DIR:-${PERSISTENT_DATA_ROOT}/sglang_cache}"
 						STUDY_ROOT="${STUDY_ROOT:-${HOST_HOME_DIR}/kv_cache_offloading/output}"
 						HICACHE_HOST_DIR="${HICACHE_HOST_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/hicache_disk}"
 						HICACHE_DISK_PATH="${HICACHE_DISK_PATH:-/workspace/hicache_disk}"
 						mkdir -p "$SGLANG_CACHE_DIR" "$STUDY_ROOT" "$HICACHE_HOST_DIR"
-						docker run -it \
+						sudo docker run -it \
 							--gpus all \
 							--env "HF_TOKEN=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" \
+							-e SGLANG_DISABLE_PKG_VERSION_CHECK=1 \
+							-e FLASHINFER_DISABLE_VERSION_CHECK=1 \
 							-e HF_HOME=/models/hfcache \
 							-e SGLANG_TRAFFIC_LOG=/workspace/sglang/sglang_traffic.csv \
 							-e SGLANG_TRAFFIC_FLUSH_EVERY=16 \
@@ -188,15 +199,37 @@ do
 							lmsysorg/sglang:latest \
 							bash -i
 
-						PYTHONPATH="/workspace/sglang/python" python3 /workspace/sglang/python/sglang/launch_server.py \
-							--model-path 'meta-llama/Llama-2-7b-chat-hf' \
+						# SGLANG_DISABLE_PKG_VERSION_CHECK="${SGLANG_DISABLE_PKG_VERSION_CHECK}" FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK}" PYTHONPATH="/workspace/sglang/python" python3 /workspace/sglang/python/sglang/launch_server.py \
+						# 	--model-path 'meta-llama/Llama-2-7b-chat-hf' \
+						# 	--host 127.0.0.1 \
+						# 	--port 30000 \
+						# 	--page-size 32 \
+						# 	--mem-fraction-static 0.25 \
+						# 	--max-running-requests 96 \
+						# 	--enable-hierarchical-cache \
+						# 	--hicache-ratio 1.5 \
+						# 	--hicache-write-policy write_through_selective \
+						# 	--max-total-tokens 40000 \
+						# 	--chunked-prefill-size 1024 \
+						# 	--max-prefill-tokens 8192 \
+						# 	--max-queued-requests 128 \
+						# 	--hicache-storage-backend file \
+						# 	--hicache-storage-prefetch-policy best_effort \
+						# 	--file-storage-path /workspace/hicache_disk \
+						# 	--enable-cache-report \
+						# 	--enable-metrics \
+						# 	--log-level debug \
+						# 	--log-level-http debug
+
+						SGLANG_DISABLE_PKG_VERSION_CHECK=1 FLASHINFER_DISABLE_VERSION_CHECK=1 PYTHONPATH="/workspace/sglang/python" python3 /workspace/sglang/python/sglang/launch_server.py \
+							--model-path 'Qwen/Qwen2.5-0.5B' \
 							--host 127.0.0.1 \
 							--port 30000 \
 							--page-size 32 \
 							--mem-fraction-static 0.25 \
 							--max-running-requests 96 \
 							--enable-hierarchical-cache \
-							--hicache-ratio 1.5 \
+							--hicache-ratio 1 \
 							--hicache-write-policy write_through_selective \
 							--max-total-tokens 40000 \
 							--chunked-prefill-size 1024 \
@@ -209,6 +242,12 @@ do
 							--enable-metrics \
 							--log-level debug \
 							--log-level-http debug
+
+						du -sh ~/kv_cache_offloading/sglang_cache/hub/models--Qwen--Qwen2.5-0.5B
+						find ~/kv_cache_offloading/sglang_cache/hub/models--meta-llama--Llama-3.2-1B/blobs -name '*.incomplete' -ls
+
+						watch -n 5 'du -sh ~/kv_cache_offloading/sglang_cache/hub/models--meta-llama--Llama-3.2-1B'
+						watch -n 5 'find ~/kv_cache_offloading/sglang_cache/hub/models--meta-llama--Llama-3.2-1B/blobs -name "*.incomplete" -ls'
 					fi 
 			
 					# -----------------------------
@@ -220,6 +259,8 @@ do
 						echo "------------------- Invoking special sglang server run (last level=storage, hicache enabled)... -------------------"
 						docker run \
 						--env "HF_TOKEN=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" \
+						-e SGLANG_DISABLE_PKG_VERSION_CHECK="${SGLANG_DISABLE_PKG_VERSION_CHECK}" \
+						-e FLASHINFER_DISABLE_VERSION_CHECK="${FLASHINFER_DISABLE_VERSION_CHECK}" \
 						-e HF_HOME=/models/hfcache \
 						-e SGLANG_TRAFFIC_LOG=/workspace/sglang/sglang_traffic.csv \
 						-e SGLANG_TRAFFIC_FLUSH_EVERY=16 \
@@ -234,6 +275,8 @@ do
 						bash -lc '
 								pwd 
 								export PYTHONPATH=/workspace/sglang/python
+								export SGLANG_DISABLE_PKG_VERSION_CHECK='"${SGLANG_DISABLE_PKG_VERSION_CHECK}"'
+								export FLASHINFER_DISABLE_VERSION_CHECK='"${FLASHINFER_DISABLE_VERSION_CHECK}"'
 								
 								echo "hello" > ${HICACHE_DISK_PATH}/test_file.txt
 								export SGLANG_HICACHE_FILE_BACKEND_STORAGE_DIR='"${HICACHE_DISK_PATH}"'
@@ -276,100 +319,6 @@ do
 									| tee /workspace/output/output_server--sglang.log
 
 									' \ &
-					fi 
-					if [ "$SERVER_TYPE" = "host" ]; then 
-						echo "------------------- Invoking basic sglang server (last level=host, hicache enabled)... -------------------"
-						docker run \
-							--env "HF_TOKEN=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" \
-							-e HF_HOME=/models/hfcache \
-							-e SGLANG_TRAFFIC_LOG=/workspace/sglang/sglang_traffic.csv \
-							-e SGLANG_TRAFFIC_FLUSH_EVERY=16 \
-							-v ${SGLANG_CACHE_DIR}:/models/hfcache \
-							-v ${SGLANG_ROOT}:/workspace/sglang \
-							-v ${STUDY_ROOT}:/workspace/output \
-							-w /workspace/sglang \
-							--network host \
-						--name docker-sglang-server \
-						lmsysorg/sglang:latest \
-						bash -lc '
-									pwd 
-									export PYTHONPATH=/workspace/sglang/python
-									
-									echo "[INIT] Running transfer-sglang-files.sh..."
-									if true; then
-										cp -rf /workspace/sglang/python/sglang/launch_server.py /sgl-workspace/sglang/python/sglang/launch_server.py
-										cp -rf /workspace/sglang/python/sglang/bench_serving.py /sgl-workspace/sglang/python/sglang/bench_serving.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/hiradix_cache.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/cache_controller.py /sgl-workspace/sglang/python/sglang/srt/managers/cache_controller.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/memory_pool_host.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/hicache_storage.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/hicache_storage.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/schedule_policy.py /sgl-workspace/sglang/python/sglang/srt/managers/schedule_policy.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/scheduler.py /sgl-workspace/sglang/python/sglang/srt/managers/scheduler.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/schedule_batch.py /sgl-workspace/sglang/python/sglang/srt/managers/schedule_batch.py
-										cp -rf /workspace/sglang/python/sglang/srt/entrypoints/http_server.py /sgl-workspace/sglang/python/sglang/srt/entrypoints/http_server.py
-									fi
-								
-									python3 /workspace/sglang/python/sglang/launch_server.py \
-										--watchdog-timeout 600 \
-										--model-path '"${LLM_MODELS[model]}"' \
-										--host 127.0.0.1 \
-										--port 30000 \
-										--page-size 32 \
-										--log-level '"${LOG_LEVEL}"' \
-										--log-level-http '"${LOG_LEVEL}"' \
-										--enable-hierarchical-cache \
-										--hicache-write-policy '"${STORAGE_WRITE_POLICY[policy]}"' \
-										--max-total-tokens '"${MAX_TOTAL_TOKENS}"' \
-										--chunked-prefill-size '"${CHUNKED_PREFILL_SIZE}"' \
-										--max-prefill-tokens '"${MAX_PREFILL_TOKENS}"' \
-										--max-queued-requests '"${MAX_QUEUED_REQUESTS}"' \
-										| tee /workspace/output/output_server--'"${LLM_MODEL_NAMES[model]}"'--'"${DATASETS[dataset]}"'--'"${STORAGE_WRITE_POLICY[policy]}"'--bw'"${bw}"'--linkthresh'"${LINK_CHANNEL_THRESHOLD_MB___WRITEBACK[linkthreshold]}"'.log' \ &
-					fi 
-					if [ "$SERVER_TYPE" = "hbm" ]; then 
-						echo "------------------- Invoking basic sglang server (last level=HBM, hicache disabled)... -------------------"
-						docker run \
-							--env "HF_TOKEN=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" \
-							-e HF_HOME=/models/hfcache \
-							-e SGLANG_TRAFFIC_LOG=/workspace/sglang/sglang_traffic.csv \
-							-e SGLANG_TRAFFIC_FLUSH_EVERY=16 \
-							-v ${SGLANG_CACHE_DIR}:/models/hfcache \
-							-v ${SGLANG_ROOT}:/workspace/sglang \
-							-v ${STUDY_ROOT}:/workspace/output \
-							-w /workspace/sglang \
-							--network host \
-						--name docker-sglang-server \
-						lmsysorg/sglang:latest \
-						bash -lc '
-									pwd 
-									export PYTHONPATH=/workspace/sglang/python
-
-									echo "[INIT] Running transfer-sglang-files.sh..."
-									if true; then
-										cp -rf /workspace/sglang/python/sglang/launch_server.py /sgl-workspace/sglang/python/sglang/launch_server.py
-										cp -rf /workspace/sglang/python/sglang/bench_serving.py /sgl-workspace/sglang/python/sglang/bench_serving.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/hiradix_cache.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/cache_controller.py /sgl-workspace/sglang/python/sglang/srt/managers/cache_controller.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/memory_pool_host.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
-										cp -rf /workspace/sglang/python/sglang/srt/mem_cache/hicache_storage.py /sgl-workspace/sglang/python/sglang/srt/mem_cache/hicache_storage.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/schedule_policy.py /sgl-workspace/sglang/python/sglang/srt/managers/schedule_policy.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/scheduler.py /sgl-workspace/sglang/python/sglang/srt/managers/scheduler.py
-										cp -rf /workspace/sglang/python/sglang/srt/managers/schedule_batch.py /sgl-workspace/sglang/python/sglang/srt/managers/schedule_batch.py
-										cp -rf /workspace/sglang/python/sglang/srt/entrypoints/http_server.py /sgl-workspace/sglang/python/sglang/srt/entrypoints/http_server.py
-									fi
-									
-									python3 /workspace/sglang/python/sglang/launch_server.py \
-										--watchdog-timeout 600 \
-										--model-path '"${LLM_MODELS[model]}"' \
-										--host 127.0.0.1 \
-										--port 30000 \
-										--page-size 32 \
-										--log-level '"${LOG_LEVEL}"' \
-										--log-level-http '"${LOG_LEVEL}"' \
-										--max-total-tokens '"${MAX_TOTAL_TOKENS}"' \
-										--chunked-prefill-size '"${CHUNKED_PREFILL_SIZE}"' \
-										--max-prefill-tokens '"${MAX_PREFILL_TOKENS}"' \
-										--max-queued-requests '"${MAX_QUEUED_REQUESTS}"' \
-										| tee /workspace/output/output_server--'"${LLM_MODEL_NAMES[model]}"'--'"${DATASETS[dataset]}"'--'"${STORAGE_WRITE_POLICY[policy]}"'--bw'"${bw}"'--linkthresh'"${LINK_CHANNEL_THRESHOLD_MB___WRITEBACK[linkthreshold]}"'.log' \ &
 					fi 
 					if [ "$SERVER_TYPE" = "README" ]; then
 						# --mem-fraction-static MEM_FRACTION_STATIC: The fraction of the memory used for static allocation (model weights and KV cache memory pool). Use a smaller value if you see out-of-memory errors.
@@ -425,6 +374,17 @@ do
 					# Run CLIENT (foreground) | 10,10000 | 10,1000 | 100,1000*
 					# -----------------------------
 					RUN_DOCKER_TEST=${2:-default}
+					if [ "$RUN_DOCKER_TEST" = "smoketest" ]; then
+						curl -X POST http://127.0.0.1:30000/generate \
+						-H "Content-Type: application/json" \
+						-d '{
+							"text": "Write one short sentence about KV cache offloading.",
+							"sampling_params": {
+							"max_new_tokens": 40,
+							"temperature": 0.7
+							}
+						}'
+					fi
 					if [ "$RUN_DOCKER_TEST" = "pg1184" ]; then
 						echo "------------------- Invoking pg1184 dataset for client (this dataset encourages s2h transfers)... -------------------"
 						export HF_TOKEN="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" 
@@ -524,4 +484,3 @@ JSONEOF
 done
 
 echo FINISH
-

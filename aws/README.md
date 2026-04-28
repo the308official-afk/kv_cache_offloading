@@ -8,6 +8,7 @@ This is the operational guide for bringing up `kv_cache_offloading` on a GPU EC2
 - GPU instance with NVIDIA hardware
 - Project is uploaded to `~/kv_cache_offloading`
 - Persistent Docker data should live on a separate attached EBS volume
+- SGLang model cache should also live on that persistent EBS volume
 
 ## 1. Upload the Repo From Local
 
@@ -69,6 +70,15 @@ Expected:
 
 - `/mnt/docker-data` backed by `/dev/nvme1n1`
 - `Docker Root Dir: /mnt/docker-data`
+
+By default, `run_docker_sglang.sh` now uses:
+
+```bash
+SGLANG_CACHE_DIR=/mnt/docker-data/sglang_cache
+VLLM_CACHE_DIR=/mnt/docker-data/vllm_cache
+```
+
+This keeps model downloads and cache files off the small root disk.
 
 ## 4. Standard Readiness Check Before Running
 

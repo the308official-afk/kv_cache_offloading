@@ -7,7 +7,7 @@ PEM="/Users/oluwolejaiyeoba/Documents/GitHub/secrets/projectonekeypair.pem"
 LOCAL_BASE="/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading"
 REMOTE_PROJECT_DIR="/home/ec2-user/kv_cache_offloading"
 
-SERVERS=("3.238.89.238")
+SERVERS=("54.196.129.226")
 LABELS=("S0")
 
 # Ensure key permissions
