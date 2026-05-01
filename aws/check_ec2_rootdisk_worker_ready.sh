@@ -2,10 +2,9 @@
 
 set -euo pipefail
 
-DOCKER_DATA_MOUNT="${DOCKER_DATA_MOUNT:-/mnt/docker-data}"
-EXPECTED_DOCKER_ROOT="${EXPECTED_DOCKER_ROOT:-/mnt/docker-data}"
-EXPECTED_DOCKER_DEVICE="${EXPECTED_DOCKER_DEVICE:-/dev/nvme1n1}"
-MIN_DOCKER_FREE_GB="${MIN_DOCKER_FREE_GB:-50}"
+EXPECTED_DOCKER_ROOT="${EXPECTED_DOCKER_ROOT:-/var/lib/docker}"
+ROOT_MOUNT="${ROOT_MOUNT:-/}"
+MIN_ROOT_FREE_GB="${MIN_ROOT_FREE_GB:-50}"
 
 pass() {
   echo "[PASS] $1"
@@ -47,24 +46,14 @@ check_docker_root() {
   fi
 }
 
-check_mount_backing_disk() {
-  local backing_fs
-  backing_fs="$(df -h "$DOCKER_DATA_MOUNT" 2>/dev/null | awk 'NR==2 {print $1}' || true)"
-  if [ "$backing_fs" = "$EXPECTED_DOCKER_DEVICE" ]; then
-    pass "$DOCKER_DATA_MOUNT is backed by the expected Docker disk ($backing_fs)"
-  else
-    fail "$DOCKER_DATA_MOUNT is backed by '$backing_fs' instead of '$EXPECTED_DOCKER_DEVICE'"
-  fi
-}
-
-check_free_space() {
+check_root_free_space() {
   local avail_kb avail_gb
-  avail_kb="$(df -Pk "$DOCKER_DATA_MOUNT" | awk 'NR==2 {print $4}')"
+  avail_kb="$(df -Pk "$ROOT_MOUNT" | awk 'NR==2 {print $4}')"
   avail_gb=$((avail_kb / 1024 / 1024))
-  if [ "$avail_gb" -ge "$MIN_DOCKER_FREE_GB" ]; then
-    pass "$DOCKER_DATA_MOUNT has ${avail_gb}G free"
+  if [ "$avail_gb" -ge "$MIN_ROOT_FREE_GB" ]; then
+    pass "$ROOT_MOUNT has ${avail_gb}G free"
   else
-    fail "$DOCKER_DATA_MOUNT has only ${avail_gb}G free; expected at least ${MIN_DOCKER_FREE_GB}G"
+    fail "$ROOT_MOUNT has only ${avail_gb}G free; expected at least ${MIN_ROOT_FREE_GB}G"
   fi
 }
 
@@ -80,8 +69,7 @@ main() {
   check_gpu
   check_docker_runtime
   check_docker_root
-  check_mount_backing_disk
-  check_free_space
+  check_root_free_space
   check_gpu_container
 }
 
