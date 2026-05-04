@@ -18,9 +18,29 @@ DYNAMO_FRONTEND_PORT="${DYNAMO_FRONTEND_PORT:-8000}"
 DYNAMO_MODEL_PATH="${DYNAMO_MODEL_PATH:-Qwen/Qwen2.5-1.5B}"
 DYNAMO_DISCOVERY_BACKEND="${DYNAMO_DISCOVERY_BACKEND:-etcd}"
 DYNAMO_ROUTER_MODE="${DYNAMO_ROUTER_MODE:-kv}"
-ETCD_ENDPOINTS="${ETCD_ENDPOINTS:-http://127.0.0.1:2379}"
-NATS_SERVER="${NATS_SERVER:-nats://127.0.0.1:4222}"
+DYNAMO_KV_CACHE_BLOCK_SIZE="${DYNAMO_KV_CACHE_BLOCK_SIZE:-64}"
+HEAD_PRIVATE_IP="${HEAD_PRIVATE_IP:-}"
+ETCD_ENDPOINTS="${ETCD_ENDPOINTS:-}"
+NATS_SERVER="${NATS_SERVER:-}"
 ROUTER_EXTRA_ARGS="${ROUTER_EXTRA_ARGS:---no-router-kv-events --router-queue-threshold 4.0}"
+
+detect_head_private_ip() {
+  if [[ -n "${HEAD_PRIVATE_IP}" ]]; then
+    return
+  fi
+
+  HEAD_PRIVATE_IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  if [[ -z "${HEAD_PRIVATE_IP}" ]]; then
+    echo "Could not determine head private IP. Set HEAD_PRIVATE_IP explicitly." >&2
+    exit 1
+  fi
+}
+
+initialize_endpoints() {
+  detect_head_private_ip
+  ETCD_ENDPOINTS="${ETCD_ENDPOINTS:-http://${HEAD_PRIVATE_IP}:2379}"
+  NATS_SERVER="${NATS_SERVER:-nats://${HEAD_PRIVATE_IP}:4222}"
+}
 
 usage() {
   cat <<EOF
@@ -38,8 +58,10 @@ Environment overrides:
   FRONTEND_IMAGE         Default: ${FRONTEND_IMAGE}
   DYNAMO_MODEL_PATH      Default: ${DYNAMO_MODEL_PATH}
   DYNAMO_FRONTEND_PORT   Default: ${DYNAMO_FRONTEND_PORT}
-  ETCD_ENDPOINTS         Default: ${ETCD_ENDPOINTS}
-  NATS_SERVER            Default: ${NATS_SERVER}
+  DYNAMO_KV_CACHE_BLOCK_SIZE Default: ${DYNAMO_KV_CACHE_BLOCK_SIZE}
+  HEAD_PRIVATE_IP        Default: auto-detected from hostname -I
+  ETCD_ENDPOINTS         Default: auto-derived as http://<head-private-ip>:2379
+  NATS_SERVER            Default: auto-derived as nats://<head-private-ip>:4222
   ROUTER_EXTRA_ARGS      Default: ${ROUTER_EXTRA_ARGS}
 
 Notes:
@@ -113,6 +135,7 @@ start_frontend() {
     bash -lc "python3 -m dynamo.frontend \
       --http-port '${DYNAMO_FRONTEND_PORT}' \
       --router-mode '${DYNAMO_ROUTER_MODE}' \
+      --kv-cache-block-size '${DYNAMO_KV_CACHE_BLOCK_SIZE}' \
       ${ROUTER_EXTRA_ARGS}" >/dev/null
 }
 
@@ -194,6 +217,7 @@ test_priority() {
 
 start_all() {
   require_docker
+  initialize_endpoints
   ensure_dirs
   start_etcd
   wait_for_container "${ETCD_CONTAINER_NAME}"
@@ -210,6 +234,7 @@ etcd endpoint: ${ETCD_ENDPOINTS}
 nats endpoint: ${NATS_SERVER}
 frontend:      http://127.0.0.1:${DYNAMO_FRONTEND_PORT}
 model name:    ${DYNAMO_MODEL_PATH}
+kv block size: ${DYNAMO_KV_CACHE_BLOCK_SIZE}
 
 Next steps:
   $0 status

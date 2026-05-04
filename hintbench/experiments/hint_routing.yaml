@@ -1,0 +1,10 @@
+name: hint_routing
+router_mode: kv
+model: Qwen/Qwen2.5-0.5B
+workload: shared_prefix
+hint_policy: static_priority
+concurrency: 4
+num_conversations: 4
+turns_per_conversation: 3
+notes: "Use as the first config to compare hint-bearing requests against plain kv mode."
+

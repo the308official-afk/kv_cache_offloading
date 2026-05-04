@@ -199,6 +199,7 @@ What it does:
 - starts `nats-server -js`
 - starts `dynamo.frontend`
 - runs the frontend in KV-router mode
+- sets `--kv-cache-block-size 64` by default so the router has a valid block size
 - uses `--no-router-kv-events` by default for a simpler first distributed experiment
 
 Why this is the recommended head-node flow:
@@ -274,6 +275,7 @@ What it does:
 - registers with the head node’s `etcd`
 - mounts the worker cache directory
 - uses the stable Dynamo + SGLang image
+- sets `--page-size 64` by default so KV-router mode can match the backend block size
 
 Important:
 - run this separately on worker A and worker B
@@ -301,6 +303,20 @@ cd ~/kv_cache_offloading
 What it does:
 - shows the worker logs
 - use this first if the worker does not stay up
+
+To follow logs live in real time, use either:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_worker.sh logs-follow
+```
+
+or:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_worker.sh logs -f
+```
 
 ### `./run_dynamo_worker.sh stop`
 
@@ -332,9 +348,10 @@ cd ~/kv_cache_offloading
 sudo ./aws/bootstrap_ec2_gpu.sh rootdisk
 newgrp docker
 ./aws/check_ec2_rootdisk_worker_ready.sh
-ETCD_ENDPOINTS=http://<head-private-ip>:2379 ./run_dynamo_worker.sh start
+ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
 ./run_dynamo_worker.sh status
-./run_dynamo_worker.sh logs
+./run_dynamo_worker.sh logs -f
+./run_dynamo_worker.sh stop
 ```
 
 Recommended worker instance: `g5.xlarge` or `g5.2xlarge`
@@ -346,9 +363,10 @@ cd ~/kv_cache_offloading
 sudo ./aws/bootstrap_ec2_gpu.sh rootdisk
 newgrp docker
 ./aws/check_ec2_rootdisk_worker_ready.sh
-ETCD_ENDPOINTS=http://<head-private-ip>:2379 ./run_dynamo_worker.sh start
+ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
 ./run_dynamo_worker.sh status
-./run_dynamo_worker.sh logs
+./run_dynamo_worker.sh logs -f
+./run_dynamo_worker.sh stop
 ```
 
 Recommended worker instance: `g5.xlarge` or `g5.2xlarge`
@@ -369,10 +387,13 @@ If your current head node private IP is `172.31.92.60`, this is the exact startu
 
 ```bash
 cd ~/kv_cache_offloading
+DYNAMO_ROUTER_MODE=round-robin ./run_dynamo_head.sh start
+./run_dynamo_head.sh stop
 ./run_dynamo_head.sh start
 ./run_dynamo_head.sh status
 ./run_dynamo_head.sh logs
-./run_dynamo_head.sh stop
+./run_dynamo_head.sh test
+./run_dynamo_head.sh test-priority
 ```
 
 #### Worker A
@@ -380,10 +401,11 @@ cd ~/kv_cache_offloading
 ```bash
 cd ~/kv_cache_offloading
 ./aws/check_ec2_rootdisk_worker_ready.sh
+./run_dynamo_worker.sh stop
+export HF_TOKEN=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
 ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
 ./run_dynamo_worker.sh status
-./run_dynamo_worker.sh logs
-./run_dynamo_worker.sh stop
+./run_dynamo_worker.sh logs -f
 ```
 
 #### Worker B
@@ -391,10 +413,11 @@ ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
 ```bash
 cd ~/kv_cache_offloading
 ./aws/check_ec2_rootdisk_worker_ready.sh
+./run_dynamo_worker.sh stop
+export HF_TOKEN=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
 ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
 ./run_dynamo_worker.sh status
-./run_dynamo_worker.sh logs
-./run_dynamo_worker.sh stop
+./run_dynamo_worker.sh logs -f
 ```
 
 ### `./aws/check_ec2_rootdisk_worker_ready.sh`
@@ -420,6 +443,24 @@ Optional override:
 ```bash
 MIN_ROOT_FREE_GB=30 ./aws/check_ec2_rootdisk_worker_ready.sh
 ```
+
+## HintBench
+
+The benchmark harness for hint-guided routing experiments lives under:
+
+- [hintbench/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/hintbench/README.md)
+
+Its main Phase 1.5 runner is:
+
+- [hintbench/run_experiment.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/hintbench/run_experiment.py)
+
+That runner is the simplest way to:
+
+- read one experiment config
+- generate a workload
+- send requests to the frontend
+- collect per-request results
+- write a compact summary bundle under `hintbench/results/`
 
 ### `./aws/switch_worker_to_rootdisk.sh`
 
@@ -449,6 +490,57 @@ What this proves:
 - the frontend can see registered workers
 - the workers can serve requests through the head node
 - you have moved beyond the single-box Dynamo test setup
+
+## Enabling KV-router Mode
+
+If `DYNAMO_ROUTER_MODE=kv` is crashing with `block_size must be greater than 1`, the frontend and workers are not agreeing on the KV block size.
+
+The scripts now default to:
+
+- head/frontend: `DYNAMO_KV_CACHE_BLOCK_SIZE=64`
+- workers: `DYNAMO_PAGE_SIZE=64`
+
+That follows the Dynamo router guidance that the frontend `--kv-cache-block-size` should match the backend configuration, and it follows NVIDIA’s SGLang examples that use `--page-size 64`.
+
+To bring the cluster up in KV-router mode:
+
+### Head/frontend node
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_head.sh stop
+DYNAMO_ROUTER_MODE=kv ./run_dynamo_head.sh start
+./run_dynamo_head.sh status
+./run_dynamo_head.sh logs
+```
+
+### Worker A
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_worker.sh stop
+ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
+./run_dynamo_worker.sh status
+./run_dynamo_worker.sh logs
+```
+
+### Worker B
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_worker.sh stop
+ETCD_ENDPOINTS=http://172.31.92.60:2379 ./run_dynamo_worker.sh start
+./run_dynamo_worker.sh status
+./run_dynamo_worker.sh logs
+```
+
+### Test from the head node
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_head.sh test
+./run_dynamo_head.sh test-priority
+```
 
 ### Worker instance cost comparison
 

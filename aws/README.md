@@ -101,6 +101,12 @@ Recommended worker instance types:
 - `g5.xlarge` for the smallest supported worker
 - `g5.2xlarge` if you want more memory headroom
 
+For KV-router mode with Dynamo + SGLang:
+- the frontend `--kv-cache-block-size` should match the backend configuration
+- the repo scripts now default to:
+  - frontend block size: `64`
+  - worker page size: `64`
+
 ### Simpler head/frontend instance
 
 Use this on a fresh **non-GPU** head/frontend node:

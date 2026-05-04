@@ -1,0 +1,9 @@
+name: baseline_round_robin
+router_mode: round-robin
+model: Qwen/Qwen2.5-0.5B
+workload: shared_prefix
+hint_policy: static_priority
+concurrency: 4
+num_conversations: 4
+turns_per_conversation: 3
+

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "priority": { "type": "number" },
+    "latency_sla_ms": { "type": "number" },
+    "expected_output_tokens": { "type": "number" },
+    "reuse_likelihood": { "type": "number" },
+    "agent_phase": { "type": "string" },
+    "cache_policy": { "type": "string" },
+    "prefill_weight": { "type": "number" },
+    "decode_weight": { "type": "number" }
+  },
+  "additionalProperties": true
+}
+

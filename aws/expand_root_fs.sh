@@ -26,7 +26,25 @@ show_before() {
 }
 
 expand_partition() {
-  growpart "${ROOT_DISK}" "${ROOT_PARTITION_NUMBER}"
+  local output status
+  set +e
+  output="$(growpart "${ROOT_DISK}" "${ROOT_PARTITION_NUMBER}" 2>&1)"
+  status=$?
+  set -e
+
+  echo "${output}"
+
+  if [ "${status}" -eq 0 ]; then
+    return 0
+  fi
+
+  if echo "${output}" | grep -q "NOCHANGE"; then
+    echo "Partition is already using the full root volume."
+    return 0
+  fi
+
+  echo "growpart failed unexpectedly." >&2
+  exit "${status}"
 }
 
 expand_xfs() {

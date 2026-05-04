@@ -2,12 +2,21 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_NAME="$(basename "${REPO_ROOT}")"
+
 # === CONFIG ===
 PEM="/Users/oluwolejaiyeoba/Documents/GitHub/secrets/projectonekeypair.pem"
-LOCAL_BASE="/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading"
-REMOTE_PROJECT_DIR="/home/ec2-user/kv_cache_offloading"
+LOCAL_BASE="${REPO_ROOT}"
+REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
-SERVERS=("44.201.229.234" "44.202.2.239" "3.88.7.135")
+# SERVERS=("44.201.229.234" "44.202.2.239" "3.88.7.135")
+SERVERS=(
+  "35.174.14.134"   
+  "44.203.72.96"
+  "54.146.236.190"
+)
 LABELS=("S0" "S1" "S2")
 
 # Ensure key permissions
@@ -57,16 +66,27 @@ rsync_upload_repo() {
     "$remote_path"
 }
 
+if [[ ! -d "${LOCAL_BASE}" ]]; then
+  echo "Local repo root not found: ${LOCAL_BASE}" >&2
+  exit 1
+fi
+
+if [[ ! -d "${LOCAL_BASE}/hintbench" ]]; then
+  echo "Warning: ${LOCAL_BASE}/hintbench was not found locally." >&2
+fi
+
 for i in "${!SERVERS[@]}"; do
   ip="${SERVERS[$i]}"
   label="${LABELS[$i]}"
   remote_host="ec2-user@${ip}"
   remote_base="${remote_host}:${REMOTE_PROJECT_DIR}/"
 
-  echo "==== Uploading kv_cache_offloading to ${label} (${ip}) ===="
+  echo "==== Uploading ${REPO_NAME} to ${label} (${ip}) ===="
+  echo "Local source: ${LOCAL_BASE}/"
+  echo "Remote dest:  ${REMOTE_PROJECT_DIR}/"
 
   ssh "${SSH_OPTS[@]}" "$remote_host" "mkdir -p '${REMOTE_PROJECT_DIR}'"
 
-  # Trailing slash uploads the contents of the repo root into REMOTE_PROJECT_DIR.
+  # Trailing slash uploads the full repo contents into REMOTE_PROJECT_DIR.
   rsync_upload_repo "${LOCAL_BASE}/" "$remote_base"
 done

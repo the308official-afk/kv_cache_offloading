@@ -1,0 +1,7 @@
+{
+  "total_requests": 12,
+  "successful_requests": 12,
+  "failed_requests": 0,
+  "avg_latency_ms": 425.604,
+  "avg_cached_tokens": 100.571
+}
