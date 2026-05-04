@@ -43,6 +43,9 @@ def parse_flat_yaml(path: Path) -> dict:
         key, value = line.split(":", 1)
         key = key.strip()
         value = value.strip().strip('"').strip("'")
+        if value.lower() in {"true", "false"}:
+            data[key] = value.lower() == "true"
+            continue
         if value.isdigit():
             data[key] = int(value)
             continue
@@ -51,6 +54,15 @@ def parse_flat_yaml(path: Path) -> dict:
             continue
         except ValueError:
             pass
+        if (
+            (value.startswith("{") and value.endswith("}"))
+            or (value.startswith("[") and value.endswith("]"))
+        ):
+            try:
+                data[key] = json.loads(value)
+                continue
+            except json.JSONDecodeError:
+                pass
         data[key] = value
     return data
 
@@ -93,10 +105,25 @@ def main() -> None:
 
     experiment_name = str(config.get("name", config_path.stem))
     model = str(config.get("model", "Qwen/Qwen2.5-0.5B"))
+    model_served_name = str(config.get("model_served_name", model))
     workload = str(config.get("workload", "shared_prefix"))
     concurrency = int(config.get("concurrency", 4))
     num_conversations = int(config.get("num_conversations", 4))
     turns_per_conversation = int(config.get("turns_per_conversation", 3))
+    max_tokens = int(config.get("max_tokens", 128))
+    temperature = float(config.get("temperature", 0.0))
+    request_timeout_s = int(config.get("request_timeout_s", 120))
+    system_prompt = str(
+        config.get(
+            "system_prompt",
+            "You are a careful assistant. Reuse prior context when possible and answer concisely.",
+        )
+    )
+    shared_prefix_group = str(config.get("shared_prefix_group", "group-a"))
+    hint_policy = str(config.get("hint_policy", "static_priority"))
+    hint_defaults = config.get("hint_defaults", {})
+    if not isinstance(hint_defaults, dict):
+        raise SystemExit("hint_defaults must be a JSON object in the flat YAML config.")
 
     if workload != "shared_prefix":
         raise SystemExit(f"Unsupported workload for Phase 1.5: {workload}")
@@ -119,6 +146,12 @@ def main() -> None:
         str(num_conversations),
         "--turns-per-conversation",
         str(turns_per_conversation),
+        "--system-prompt",
+        system_prompt,
+        "--shared-prefix-group",
+        shared_prefix_group,
+        "--hint-defaults-json",
+        json.dumps(hint_defaults),
     ]
     workload_output = subprocess.check_output(workload_cmd, cwd=REPO_ROOT, text=True)
     workload_file.write_text(workload_output, encoding="utf-8")
@@ -129,13 +162,23 @@ def main() -> None:
         "--frontend-url",
         args.frontend_url,
         "--model",
-        model,
+        model_served_name,
         "--workload-file",
         str(workload_file),
         "--output-file",
         str(results_file),
         "--concurrency",
         str(concurrency),
+        "--experiment-name",
+        experiment_name,
+        "--router-mode",
+        str(config.get("router_mode")),
+        "--request-timeout-s",
+        str(request_timeout_s),
+        "--max-tokens",
+        str(max_tokens),
+        "--temperature",
+        str(temperature),
     ]
     run_cmd(client_cmd, env=os.environ.copy())
 
@@ -154,11 +197,21 @@ def main() -> None:
         "config_path": str(config_path),
         "frontend_url": args.frontend_url,
         "model": model,
+        "model_served_name": model_served_name,
         "workload": workload,
         "router_mode": config.get("router_mode"),
+        "description": config.get("description"),
+        "notes": config.get("notes"),
+        "hint_policy": hint_policy,
+        "hint_defaults": hint_defaults,
         "concurrency": concurrency,
         "num_conversations": num_conversations,
         "turns_per_conversation": turns_per_conversation,
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "request_timeout_s": request_timeout_s,
+        "system_prompt": system_prompt,
+        "shared_prefix_group": shared_prefix_group,
         "results_timezone": args.results_timezone,
         "run_started_at": run_started_at.isoformat(),
         "run_dir": str(run_dir),
