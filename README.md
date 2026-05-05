@@ -78,6 +78,77 @@ python3 hintbench/run_experiment.py \
   --frontend-url http://127.0.0.1:8000/v1/chat/completions
 ```
 
+## Single-Host GH200 Mode
+
+Use this for same-machine development and debugging when you want the head/frontend and one worker on the same host.
+
+First-time bootstrap on the GH200 host:
+
+```bash
+cd ~/kv_cache_offloading
+sudo ./aws/bootstrap_ec2_gpu.sh rootdisk
+newgrp docker
+./aws/check_ec2_rootdisk_worker_ready.sh
+```
+
+Start the single-host stack:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_single_host.sh start
+```
+
+Verify it:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_single_host.sh status
+./run_dynamo_single_host.sh logs
+./run_dynamo_single_host.sh test
+```
+
+Run one short HintBench experiment:
+
+```bash
+cd ~/kv_cache_offloading
+python3 hintbench/run_experiment.py \
+  --config hintbench/experiments/baseline_round_robin.yaml \
+  --frontend-url http://127.0.0.1:8000/v1/chat/completions
+```
+
+Run one long HintBench experiment:
+
+```bash
+cd ~/kv_cache_offloading
+python3 hintbench/run_experiment.py \
+  --config hintbench/experiments/baseline_round_robin_long.yaml \
+  --frontend-url http://127.0.0.1:8000/v1/chat/completions
+```
+
+Run one very long HintBench experiment:
+
+```bash
+cd ~/kv_cache_offloading
+python3 hintbench/run_experiment.py \
+  --config hintbench/experiments/baseline_round_robin_very_long.yaml \
+  --frontend-url http://127.0.0.1:8000/v1/chat/completions
+```
+
+Stop the single-host stack:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_single_host.sh stop
+```
+
+Use this mode for:
+
+- functional validation
+- HintBench iteration
+- live hint-shim testing on one machine
+
+Do not treat it as a substitute for the real two-worker routing setup.
+
 Run the standard 3-config suite:
 
 ```bash
@@ -132,6 +203,7 @@ python3 hintbench/runtime_patches/aggregate_live_router_logs.py \
 
 - [run_dynamo_head.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_head.sh): starts the head node
 - [run_dynamo_worker.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_worker.sh): starts one worker
+- [run_dynamo_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_single_host.sh): starts head + one worker on the same machine
 - [run_docker_sglang.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_docker_sglang.sh): single-node SGLang flow
 - [aws/bootstrap_ec2_docker.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/aws/bootstrap_ec2_docker.sh): simple Docker bootstrap
 - [aws/bootstrap_ec2_gpu.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/aws/bootstrap_ec2_gpu.sh): GPU worker bootstrap

@@ -1,13 +1,14 @@
-name: hint_routing_long
-description: Longer shared-prefix experiment with hint-bearing requests.
-router_mode: kv
+name: baseline_round_robin_langchain
+description: Baseline shared-prefix experiment using round-robin routing through the LangChain client backend.
+router_mode: round-robin
 model: Qwen/Qwen2.5-0.5B
 model_served_name: Qwen/Qwen2.5-0.5B
 workload: shared_prefix
+client_backend: langchain
 hint_policy: static_priority
-concurrency: 8
-num_conversations: 20
-turns_per_conversation: 5
+concurrency: 4
+num_conversations: 4
+turns_per_conversation: 3
 max_tokens: 128
 temperature: 0.0
 request_timeout_s: 120
@@ -15,4 +16,4 @@ results_timezone: America/Chicago
 system_prompt: You are a careful assistant. Reuse prior context when possible and answer concisely.
 shared_prefix_group: group-a
 hint_defaults: {"priority": 5, "reuse_likelihood": 0.9, "agent_phase": "execution", "latency_sensitivity": 0.7, "program_id": "hintbench.shared_prefix", "context_type": "multi_turn_shared_prefix", "expected_output_tokens": 128}
-notes: Longer hint-bearing run for more stable comparison against plain KV routing.
+notes: Use this to test the optional LangChain-based request path against the same frontend.

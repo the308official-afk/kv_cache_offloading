@@ -121,6 +121,7 @@ def main() -> None:
     )
     shared_prefix_group = str(config.get("shared_prefix_group", "group-a"))
     hint_policy = str(config.get("hint_policy", "static_priority"))
+    client_backend = str(config.get("client_backend", "async_loadgen"))
     hint_defaults = config.get("hint_defaults", {})
     if not isinstance(hint_defaults, dict):
         raise SystemExit("hint_defaults must be a JSON object in the flat YAML config.")
@@ -156,9 +157,18 @@ def main() -> None:
     workload_output = subprocess.check_output(workload_cmd, cwd=REPO_ROOT, text=True)
     workload_file.write_text(workload_output, encoding="utf-8")
 
+    client_script = {
+        "async_loadgen": CLIENTS_DIR / "async_loadgen.py",
+        "langchain": CLIENTS_DIR / "langchain_loadgen.py",
+    }.get(client_backend)
+    if client_script is None:
+        raise SystemExit(f"Unsupported client_backend: {client_backend}")
+
+    # [CHECK_POINT] HintBench chooses the LangChain client backend here when
+    # client_backend=langchain in the experiment config.
     client_cmd = [
         sys.executable,
-        str(CLIENTS_DIR / "async_loadgen.py"),
+        str(client_script),
         "--frontend-url",
         args.frontend_url,
         "--model",
@@ -203,6 +213,7 @@ def main() -> None:
         "description": config.get("description"),
         "notes": config.get("notes"),
         "hint_policy": hint_policy,
+        "client_backend": client_backend,
         "hint_defaults": hint_defaults,
         "concurrency": concurrency,
         "num_conversations": num_conversations,

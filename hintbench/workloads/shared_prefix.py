@@ -84,7 +84,7 @@ def main() -> None:
     parser.add_argument("--shared-prefix-group", default="group-a")
     parser.add_argument(
         "--hint-defaults-json",
-        default='{"priority": 5, "reuse_likelihood": 0.9, "agent_phase": "execution", "expected_output_tokens": 128}',
+        default='{"priority": 5, "reuse_likelihood": 0.9, "agent_phase": "execution", "latency_sensitivity": 0.7, "program_id": "hintbench.shared_prefix", "context_type": "multi_turn_shared_prefix", "expected_output_tokens": 128}',
     )
     args = parser.parse_args()
 
