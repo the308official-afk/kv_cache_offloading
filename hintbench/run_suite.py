@@ -28,6 +28,16 @@ DEFAULT_CONFIGS = [
     str(EXPERIMENTS_DIR / "kv_router.yaml"),
     str(EXPERIMENTS_DIR / "hint_routing.yaml"),
 ]
+LONG_CONFIGS = [
+    str(EXPERIMENTS_DIR / "baseline_round_robin_long.yaml"),
+    str(EXPERIMENTS_DIR / "kv_router_long.yaml"),
+    str(EXPERIMENTS_DIR / "hint_routing_long.yaml"),
+]
+VERY_LONG_CONFIGS = [
+    str(EXPERIMENTS_DIR / "baseline_round_robin_very_long.yaml"),
+    str(EXPERIMENTS_DIR / "kv_router_very_long.yaml"),
+    str(EXPERIMENTS_DIR / "hint_routing_very_long.yaml"),
+]
 
 
 def parse_flat_yaml(path: Path) -> dict:
@@ -141,6 +151,23 @@ def extract_run_dir(stdout: str) -> str:
     raise SystemExit("Could not find 'Run directory:' in run_experiment.py output.")
 
 
+def write_analysis(
+    script_name: str,
+    run_dirs: list[str],
+    text_output: Path,
+    json_output: Path,
+) -> None:
+    cmd = [
+        sys.executable,
+        str(ANALYSIS_DIR / script_name),
+        *run_dirs,
+        "--json-output",
+        str(json_output),
+    ]
+    completed = run_cmd(cmd, env=os.environ.copy(), capture_output=True)
+    text_output.write_text(completed.stdout, encoding="utf-8")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -178,7 +205,22 @@ def main() -> None:
         default=DEFAULT_CONFIGS,
         help="Experiment configs to run in order.",
     )
+    parser.add_argument(
+        "--long",
+        action="store_true",
+        help="Run the built-in longer evaluation suite instead of the short smoke-test suite.",
+    )
+    parser.add_argument(
+        "--very-long",
+        action="store_true",
+        help="Run the built-in very long evaluation suite for the heaviest stability checks.",
+    )
     args = parser.parse_args()
+
+    if args.long:
+        args.configs = LONG_CONFIGS
+    if args.very_long:
+        args.configs = VERY_LONG_CONFIGS
 
     results_tz = ZoneInfo(args.results_timezone)
     suite_started_at = datetime.now(results_tz)
@@ -232,22 +274,29 @@ def main() -> None:
 
     compare_json = suite_dir / "comparison.json"
     compare_stdout = suite_dir / "comparison.txt"
+    latency_json = suite_dir / "latency.json"
+    latency_txt = suite_dir / "latency.txt"
+    cache_json = suite_dir / "cached_tokens.json"
+    cache_txt = suite_dir / "cached_tokens.txt"
+    workers_json = suite_dir / "worker_distribution.json"
+    workers_txt = suite_dir / "worker_distribution.txt"
 
-    compare_cmd = [
-        sys.executable,
-        str(ANALYSIS_DIR / "compare_runs.py"),
-        *run_dirs,
-        "--json-output",
-        str(compare_json),
-    ]
-    completed = run_cmd(compare_cmd, env=os.environ.copy(), capture_output=True)
-    compare_stdout.write_text(completed.stdout, encoding="utf-8")
+    write_analysis("compare_runs.py", run_dirs, compare_stdout, compare_json)
+    write_analysis("plot_latency.py", run_dirs, latency_txt, latency_json)
+    write_analysis("plot_cached_tokens.py", run_dirs, cache_txt, cache_json)
+    write_analysis("plot_worker_distribution.py", run_dirs, workers_txt, workers_json)
 
     print("\n=== Combined comparison ===")
-    print(completed.stdout, end="")
+    print(compare_stdout.read_text(encoding="utf-8"), end="")
     print(f"Suite directory: {suite_dir}")
     print(f"Comparison text: {compare_stdout}")
     print(f"Comparison JSON: {compare_json}")
+    print(f"Latency text:    {latency_txt}")
+    print(f"Latency JSON:    {latency_json}")
+    print(f"Cache text:      {cache_txt}")
+    print(f"Cache JSON:      {cache_json}")
+    print(f"Workers text:    {workers_txt}")
+    print(f"Workers JSON:    {workers_json}")
 
 
 if __name__ == "__main__":

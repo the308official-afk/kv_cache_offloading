@@ -1,0 +1,18 @@
+name: kv_router_long
+description: Longer shared-prefix experiment using Dynamo KV routing.
+router_mode: kv
+model: Qwen/Qwen2.5-0.5B
+model_served_name: Qwen/Qwen2.5-0.5B
+workload: shared_prefix
+hint_policy: static_priority
+concurrency: 8
+num_conversations: 20
+turns_per_conversation: 5
+max_tokens: 128
+temperature: 0.0
+request_timeout_s: 120
+results_timezone: America/Chicago
+system_prompt: You are a careful assistant. Reuse prior context when possible and answer concisely.
+shared_prefix_group: group-a
+hint_defaults: {"priority": 5, "reuse_likelihood": 0.9, "agent_phase": "execution", "expected_output_tokens": 128}
+notes: Longer KV-router run for more stable latency and cache-reuse comparisons.

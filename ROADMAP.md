@@ -2,7 +2,13 @@
 
 This file turns the high-level research strategy into concrete next steps for this repository.
 
-## Phase 1: Build the benchmark harness
+Status markers:
+
+- `Done`
+- `In Progress`
+- `Next`
+
+## Phase 1: Build the benchmark harness (`Done`)
 
 The first goal is not to patch Dynamo immediately. The first goal is to make experiments repeatable.
 
@@ -109,7 +115,7 @@ Recommended structure:
   - summary JSON
   - plots
 
-## Phase 2: Define the first request/result schema
+## Phase 2: Define the first request/result schema (`Done`)
 
 The first version of the client harness should record one structured result per request.
 
@@ -139,7 +145,7 @@ Minimum response/result fields:
 
 This is the minimum data needed for useful comparisons.
 
-## Phase 3: Implement the first workload
+## Phase 3: Implement the first workload (`Done`)
 
 Implement `hintbench/workloads/shared_prefix.py` first.
 
@@ -157,7 +163,7 @@ This is the best workload for:
 
 The first version can be synthetic and small.
 
-## Phase 4: Implement the first client harness
+## Phase 4: Implement the first client harness (`Done`)
 
 Implement `hintbench/clients/async_loadgen.py` next.
 
@@ -172,7 +178,7 @@ The client should not depend on Dynamo internals.
 
 It should treat the frontend as a normal OpenAI-style API.
 
-## Phase 5: First experiment configs
+## Phase 5: First experiment configs (`Done`)
 
 Add these first:
 
@@ -214,7 +220,7 @@ Use:
   - reuse likelihood
   - agent phase
 
-## Phase 6: First analysis outputs
+## Phase 6: First analysis outputs (`Done`)
 
 The first plots should answer:
 
@@ -230,7 +236,7 @@ First three plots:
 
 These are enough for the first serious comparison.
 
-## Phase 7: First runtime patch target
+## Phase 7: First runtime patch target (`In Progress`)
 
 Do not patch everything at once.
 
@@ -250,7 +256,24 @@ This should come only after the harness can compare:
 - KV-aware
 - hint-aware
 
-## Phase 8: Second runtime patch target
+Current Phase 7 status:
+
+- offline hint-aware routing policy scaffold exists
+- offline simulator exists
+- live hint-routing shim exists
+- live decision logging exists
+- policy-vs-actual backend comparison exists
+
+Still remaining for Phase 7:
+
+- move from live observation to stronger live routing influence
+- reduce `unknown` shadow choices at the start of runs
+- decide whether to add a multi-run live-log aggregator before deeper routing control
+- decide whether the next control step should be:
+  - a stronger shim-based live experiment
+  - or a deeper custom frontend/runtime integration
+
+## Phase 8: Second runtime patch target (`Next`)
 
 After routing is measurable, implement:
 
