@@ -12,9 +12,9 @@ REMOTE_RESULTS_DIR="${REMOTE_PROJECT_DIR}/hintbench/results"
 LOCAL_RESULTS_DIR="${REPO_ROOT}/hintbench/results"
 
 SERVERS=(
-  "35.174.14.134"
-  "44.203.72.96"
-  "54.146.236.190"
+  "44.211.175.29"
+  "3.80.140.19"
+  "44.211.226.196"
 )
 LABELS=("S0" "S1" "S2")
 

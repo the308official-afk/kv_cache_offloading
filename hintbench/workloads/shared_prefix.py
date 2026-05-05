@@ -26,10 +26,16 @@ class WorkloadRequest:
     hint_payload: dict
 
 
-def build_requests(num_conversations: int, turns_per_conversation: int) -> list[WorkloadRequest]:
+def build_requests(
+    num_conversations: int,
+    turns_per_conversation: int,
+    *,
+    system_prompt: str,
+    shared_prefix_group: str,
+    hint_defaults: dict,
+) -> list[WorkloadRequest]:
     requests: list[WorkloadRequest] = []
     workload_name = "shared_prefix"
-    shared_prefix_group = "group-a"
 
     for conv_idx in range(num_conversations):
         topic = f"topic-{conv_idx}"
@@ -44,7 +50,7 @@ def build_requests(num_conversations: int, turns_per_conversation: int) -> list[
             )
             prior_user_messages.append(turn_prompt)
 
-            messages = [{"role": "system", "content": DEFAULT_SYSTEM_PROMPT}]
+            messages = [{"role": "system", "content": system_prompt}]
             for idx, content in enumerate(prior_user_messages):
                 messages.append({"role": "user", "content": content})
                 if idx < len(prior_user_messages) - 1:
@@ -63,12 +69,7 @@ def build_requests(num_conversations: int, turns_per_conversation: int) -> list[
                     shared_prefix_group=shared_prefix_group,
                     turn_index=turn_idx + 1,
                     messages=messages,
-                    hint_payload={
-                        "priority": 5,
-                        "reuse_likelihood": 0.9,
-                        "agent_phase": "execution",
-                        "expected_output_tokens": 128,
-                    },
+                    hint_payload=dict(hint_defaults),
                 )
             )
 
@@ -79,12 +80,25 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-conversations", type=int, default=4)
     parser.add_argument("--turns-per-conversation", type=int, default=3)
+    parser.add_argument("--system-prompt", default=DEFAULT_SYSTEM_PROMPT)
+    parser.add_argument("--shared-prefix-group", default="group-a")
+    parser.add_argument(
+        "--hint-defaults-json",
+        default='{"priority": 5, "reuse_likelihood": 0.9, "agent_phase": "execution", "expected_output_tokens": 128}',
+    )
     args = parser.parse_args()
 
-    for item in build_requests(args.num_conversations, args.turns_per_conversation):
+    hint_defaults = json.loads(args.hint_defaults_json)
+
+    for item in build_requests(
+        args.num_conversations,
+        args.turns_per_conversation,
+        system_prompt=args.system_prompt,
+        shared_prefix_group=args.shared_prefix_group,
+        hint_defaults=hint_defaults,
+    ):
         print(json.dumps(asdict(item), ensure_ascii=True))
 
 
 if __name__ == "__main__":
     main()
-

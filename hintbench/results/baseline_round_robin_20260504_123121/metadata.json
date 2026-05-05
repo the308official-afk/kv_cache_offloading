@@ -1,0 +1,29 @@
+{
+  "experiment_name": "baseline_round_robin",
+  "config_path": "hintbench/experiments/baseline_round_robin.yaml",
+  "frontend_url": "http://127.0.0.1:9/v1/chat/completions",
+  "model": "Qwen/Qwen2.5-0.5B",
+  "model_served_name": "Qwen/Qwen2.5-0.5B",
+  "workload": "shared_prefix",
+  "router_mode": "round-robin",
+  "description": "Baseline shared-prefix experiment using round-robin routing.",
+  "notes": "Use this as the control run before KV-aware or hint-aware routing.",
+  "hint_policy": "static_priority",
+  "hint_defaults": {
+    "priority": 5,
+    "reuse_likelihood": 0.9,
+    "agent_phase": "execution",
+    "expected_output_tokens": 128
+  },
+  "concurrency": 4,
+  "num_conversations": 4,
+  "turns_per_conversation": 3,
+  "max_tokens": 128,
+  "temperature": 0.0,
+  "request_timeout_s": 120,
+  "system_prompt": "You are a careful assistant. Reuse prior context when possible and answer concisely.",
+  "shared_prefix_group": "group-a",
+  "results_timezone": "America/Chicago",
+  "run_started_at": "2026-05-04T12:31:21.070615-05:00",
+  "run_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/hintbench/results/baseline_round_robin_20260504_123121"
+}

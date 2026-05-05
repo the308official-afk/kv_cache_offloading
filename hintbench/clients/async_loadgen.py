@@ -10,10 +10,13 @@ import json
 import time
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 
-def post_json(url: str, payload: dict) -> tuple[int | None, dict | None, str | None, float]:
+def post_json(
+    url: str, payload: dict, timeout_s: int
+) -> tuple[int | None, dict | None, str | None, float]:
     start = time.time()
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(
@@ -23,7 +26,7 @@ def post_json(url: str, payload: dict) -> tuple[int | None, dict | None, str | N
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as resp:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
             body = resp.read().decode("utf-8")
             latency_ms = (time.time() - start) * 1000.0
             return resp.status, json.loads(body), None, latency_ms
@@ -36,19 +39,37 @@ def post_json(url: str, payload: dict) -> tuple[int | None, dict | None, str | N
         return None, None, repr(exc), latency_ms
 
 
-async def one_request(frontend_url: str, model: str, request_obj: dict) -> dict:
+async def one_request(
+    frontend_url: str,
+    model: str,
+    request_obj: dict,
+    *,
+    experiment_name: str,
+    router_mode: str,
+    max_tokens: int,
+    temperature: float,
+    request_timeout_s: int,
+) -> dict:
     payload = {
         "model": model,
         "messages": request_obj["messages"],
-        "max_tokens": request_obj["hint_payload"].get("expected_output_tokens", 128),
+        "max_tokens": max_tokens,
+        "temperature": temperature,
         "nvext": {"agent_hints": request_obj.get("hint_payload", {})},
     }
     status, body, error, latency_ms = await asyncio.to_thread(
-        post_json, frontend_url, payload
+        post_json, frontend_url, payload, request_timeout_s
     )
     usage = body.get("usage", {}) if body else {}
     prompt_details = usage.get("prompt_tokens_details", {}) if usage else {}
+    nvext = body.get("nvext", {}) if body else {}
+    timing = nvext.get("timing", {}) if nvext else {}
+    worker_id = nvext.get("worker_id", {}) if nvext else {}
     return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "experiment_name": experiment_name,
+        "router_mode": router_mode,
+        "model": model,
         "request_id": request_obj["request_id"],
         "prompt_id": request_obj["prompt_id"],
         "workload_name": request_obj["workload_name"],
@@ -58,9 +79,12 @@ async def one_request(frontend_url: str, model: str, request_obj: dict) -> dict:
         "success": body is not None and status == 200,
         "error": error,
         "latency_ms": round(latency_ms, 3),
+        "ttft_ms": timing.get("ttft_ms"),
+        "kv_hit_rate": timing.get("kv_hit_rate"),
         "prompt_tokens": usage.get("prompt_tokens"),
         "completion_tokens": usage.get("completion_tokens"),
         "cached_tokens": prompt_details.get("cached_tokens"),
+        "worker_id": worker_id or None,
         "response_id": body.get("id") if body else None,
         "raw_response": body,
     }
@@ -73,6 +97,11 @@ async def main() -> None:
     parser.add_argument("--workload-file", required=True)
     parser.add_argument("--output-file", required=True)
     parser.add_argument("--concurrency", type=int, default=4)
+    parser.add_argument("--experiment-name", default="unnamed_experiment")
+    parser.add_argument("--router-mode", default="unknown")
+    parser.add_argument("--request-timeout-s", type=int, default=120)
+    parser.add_argument("--max-tokens", type=int, default=128)
+    parser.add_argument("--temperature", type=float, default=0.0)
     args = parser.parse_args()
 
     requests = [json.loads(line) for line in Path(args.workload_file).read_text().splitlines() if line.strip()]
@@ -80,7 +109,16 @@ async def main() -> None:
 
     async def guarded(req: dict) -> dict:
         async with semaphore:
-            return await one_request(args.frontend_url, args.model, req)
+            return await one_request(
+                args.frontend_url,
+                args.model,
+                req,
+                experiment_name=args.experiment_name,
+                router_mode=args.router_mode,
+                max_tokens=args.max_tokens,
+                temperature=args.temperature,
+                request_timeout_s=args.request_timeout_s,
+            )
 
     results = await asyncio.gather(*(guarded(req) for req in requests))
     output_path = Path(args.output_file)
@@ -92,4 +130,3 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-

@@ -59,6 +59,23 @@ This:
 - writes per-request results
 - writes a compact summary
 
+The experiment configs are intentionally richer now, so each run is more self-describing. Typical fields include:
+
+- `description`
+- `router_mode`
+- `model`
+- `model_served_name`
+- `concurrency`
+- `num_conversations`
+- `turns_per_conversation`
+- `max_tokens`
+- `temperature`
+- `request_timeout_s`
+- `system_prompt`
+- `shared_prefix_group`
+- `hint_defaults`
+- `notes`
+
 Outputs go under:
 
 - `hintbench/results/<experiment_name>_<timestamp>/`
@@ -92,6 +109,9 @@ Notes:
 
 - workers should already be running
 - `run_suite.py` restarts the head node between runs to switch router modes
+- after each head restart, it checks `/v1/models` and waits for the target model to appear before launching the next experiment
+- if the model never appears, the suite stops early with a clear error instead of producing invalid `404 Model not found` runs
+- if that happens, restart both workers so they re-register, then rerun the suite
 
 Suite output:
 

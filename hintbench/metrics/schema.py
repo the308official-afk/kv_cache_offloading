@@ -14,20 +14,21 @@ REQUEST_FIELDS = [
 ]
 
 RESULT_FIELDS = [
+    "timestamp",
     "success",
     "status_code",
     "error",
     "latency_ms",
     "ttft_ms",
+    "kv_hit_rate",
     "completion_tokens",
     "prompt_tokens",
     "cached_tokens",
     "worker_id",
-    "timestamp",
+    "response_id",
 ]
 
 
 if __name__ == "__main__":
     print("REQUEST_FIELDS =", REQUEST_FIELDS)
     print("RESULT_FIELDS =", RESULT_FIELDS)
-

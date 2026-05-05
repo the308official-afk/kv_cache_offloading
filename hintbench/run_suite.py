@@ -5,9 +5,13 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
+import time
+import urllib.error
+import urllib.request
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -84,6 +88,52 @@ def restart_head(router_mode: str, model: str) -> None:
     run_cmd(start_cmd, env=start_env)
 
 
+def models_url_from_frontend_url(frontend_url: str) -> str:
+    if "/v1/chat/completions" in frontend_url:
+        return frontend_url.replace("/v1/chat/completions", "/v1/models")
+    return frontend_url.rstrip("/") + "/v1/models"
+
+
+def fetch_available_models(frontend_url: str, timeout_s: int) -> list[str]:
+    url = models_url_from_frontend_url(frontend_url)
+    req = urllib.request.Request(url, method="GET")
+    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+        body = resp.read().decode("utf-8")
+    payload = json.loads(body)
+    data = payload.get("data", [])
+    return [item.get("id") for item in data if item.get("id")]
+
+
+def wait_for_model(frontend_url: str, model_name: str, timeout_s: int) -> None:
+    deadline = time.time() + timeout_s
+    last_error = "unknown error"
+    while time.time() < deadline:
+        try:
+            models = fetch_available_models(frontend_url, timeout_s=10)
+            if model_name in models:
+                print(f"Model is available on frontend: {model_name}")
+                return
+            last_error = f"model '{model_name}' not listed in /v1/models: {models}"
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            last_error = f"HTTP {exc.code} from /v1/models: {body}"
+        except Exception as exc:  # noqa: BLE001
+            last_error = repr(exc)
+        time.sleep(2)
+
+    raise SystemExit(
+        "\n".join(
+            [
+                f"Model preflight failed for {model_name}.",
+                f"Frontend URL: {frontend_url}",
+                f"Last observed issue: {last_error}",
+                "This usually means the head node restarted but the workers did not re-register.",
+                "Restart both workers, confirm the model appears in /v1/models, then rerun the suite.",
+            ]
+        )
+    )
+
+
 def extract_run_dir(stdout: str) -> str:
     for line in stdout.splitlines():
         if line.startswith("Run directory: "):
@@ -117,6 +167,12 @@ def main() -> None:
         help="Do not restart the head node between configs. Use only if you manage router mode manually.",
     )
     parser.add_argument(
+        "--model-preflight-timeout-s",
+        type=int,
+        default=60,
+        help="How long to wait for the target model to appear in /v1/models before failing.",
+    )
+    parser.add_argument(
         "--configs",
         nargs="+",
         default=DEFAULT_CONFIGS,
@@ -138,14 +194,23 @@ def main() -> None:
         experiment_name = str(config.get("name", config_path.stem))
         router_mode = str(config.get("router_mode", "round-robin"))
         model = str(config.get("model", "Qwen/Qwen2.5-0.5B"))
+        model_served_name = str(config.get("model_served_name", model))
 
         print(f"\n=== Running {experiment_name} ===")
         print(f"router mode: {router_mode}")
         print(f"model:       {model}")
+        print(f"served name: {model_served_name}")
 
         if not args.skip_head_restart:
             print("Restarting head node for requested router mode...")
             restart_head(router_mode, model)
+
+        print("Waiting for target model to appear in /v1/models...")
+        wait_for_model(
+            args.frontend_url,
+            model_served_name,
+            timeout_s=args.model_preflight_timeout_s,
+        )
 
         experiment_cmd = [
             sys.executable,
