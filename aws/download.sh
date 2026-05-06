@@ -8,8 +8,6 @@ REPO_NAME="$(basename "${REPO_ROOT}")"
 
 PEM="/Users/oluwolejaiyeoba/Documents/GitHub/secrets/projectonekeypair.pem"
 REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
-REMOTE_RESULTS_DIR="${REMOTE_PROJECT_DIR}/hintbench/results"
-LOCAL_RESULTS_DIR="${REPO_ROOT}/hintbench/results"
 
 SERVERS=(
   "44.211.175.29"
@@ -18,13 +16,43 @@ SERVERS=(
 )
 LABELS=("S0" "S1" "S2")
 
-DEFAULT_INDEX=0
-INDEX="${1:-$DEFAULT_INDEX}"
+usage() {
+  cat <<'EOF'
+Usage:
+  ./download.sh
+    Download AgentBench results from server 0
 
-if [[ "${INDEX}" -lt 0 ]] || [[ "${INDEX}" -ge ${#SERVERS[@]} ]]; then
-  echo "Usage: $0 [server-index]" >&2
-  echo "Example: $0 0" >&2
-  echo "Valid server indexes: 0..$((${#SERVERS[@]} - 1))" >&2
+  ./download.sh <server-index>
+    Download AgentBench results from the given server
+
+Examples:
+  ./download.sh
+  ./download.sh 1
+EOF
+}
+
+REMOTE_RESULTS_DIR="${REMOTE_PROJECT_DIR}/agentbench/results"
+LOCAL_RESULTS_DIR="${REPO_ROOT}/agentbench/results"
+INDEX="0"
+
+if [[ $# -gt 1 ]]; then
+  usage >&2
+  exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+  INDEX="$1"
+fi
+
+if ! [[ "${INDEX}" =~ ^[0-9]+$ ]]; then
+  echo "Server index must be numeric: ${INDEX}" >&2
+  usage >&2
+  exit 1
+fi
+
+if (( INDEX < 0 || INDEX >= ${#SERVERS[@]} )); then
+  echo "Server index out of range: ${INDEX}" >&2
+  echo "Valid indices: 0..$(( ${#SERVERS[@]} - 1 ))" >&2
   exit 1
 fi
 
@@ -53,7 +81,7 @@ ip="${SERVERS[$INDEX]}"
 label="${LABELS[$INDEX]}"
 remote_host="ec2-user@${ip}"
 
-echo "==== Downloading HintBench results from ${label} (${ip}) ===="
+echo "==== Downloading agentbench results from ${label} (${ip}) ===="
 echo "Remote source: ${REMOTE_RESULTS_DIR}/"
 echo "Local dest:    ${LOCAL_RESULTS_DIR}/"
 

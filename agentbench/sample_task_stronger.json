@@ -1,0 +1,8 @@
+{
+  "instance_id": "sample__stronger_behavior__001",
+  "repo": "example/repo",
+  "problem_statement": "A Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.",
+  "requirements": "Keep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.",
+  "interface": "Assume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.",
+  "selected_test_files_to_run": "tests/test_cli_dry_run.py"
+}

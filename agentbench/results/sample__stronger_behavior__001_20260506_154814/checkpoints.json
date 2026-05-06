@@ -1,0 +1,90 @@
+[
+  {
+    "check_point": "1. SWE-bench task loaded before Deep Agents harness",
+    "task_index": 0,
+    "task_source": "json:agentbench/sample_task_stronger.json",
+    "app_variant": "upstream_deploy_coding_agent",
+    "task": {
+      "instance_id": "sample__stronger_behavior__001",
+      "repo": "example/repo",
+      "problem_statement": "A Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.",
+      "requirements": "Keep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.",
+      "interface": "Assume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.",
+      "selected_test_files_to_run": "tests/test_cli_dry_run.py"
+    }
+  },
+  {
+    "check_point": "3. Planning request leaving Deep Agents harness",
+    "task_index": 0,
+    "task_source": "json:agentbench/sample_task_stronger.json",
+    "task_metadata": {
+      "instance_id": "sample__stronger_behavior__001",
+      "repo": "example/repo",
+      "app_variant": "upstream_deploy_coding_agent"
+    },
+    "phase": "planning",
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: sample__stronger_behavior__001",
+    "prompt": "You are working on one SWE-bench Pro software engineering task.\n\nTask metadata:\n- instance_id: sample__stronger_behavior__001\n- repo: example/repo\n\nProblem statement:\nA Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.\n\nRequirements:\nKeep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.\n\nInterface / environment notes:\nAssume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.\n\nSelected tests to run:\ntests/test_cli_dry_run.py\n\nWorkspace:\nNo local repo workspace was provided for this run.\n\nYour job:\n1. Break this task into concrete steps.\n2. Identify what information would be needed to solve it well.\n3. Inspect the local repo if a workspace is available.\n4. Produce a structured plan for solving it.\n5. If the workspace is available, make a safe first-pass fix in the repo.\n6. Summarize what changed and what should be validated next.\n\nDo not claim that code was changed or tests were run unless you actually did so.\nFocus on decomposition, reasoning, and a clear action plan.\n\nReturn only valid JSON in this exact shape:\n{\n  \"steps\": [\n    {\n      \"step_id\": 1,\n      \"title\": \"short title\",\n      \"goal\": \"what this step should accomplish\",\n      \"deliverable\": \"what artifact or answer this step should produce\"\n    }\n  ]\n}\n\nKeep it to at most 4 steps.\n\nDo not include markdown, bullet points, commentary, or code fences.\nStart with `{` and end with `}`.",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "planning",
+      "latency_sensitivity": 0.4,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 512
+    },
+    "step_limit": 4,
+    "deepagents_runtime_source": "python_environment"
+  },
+  {
+    "check_point": "4. Step execution request leaving Deep Agents harness",
+    "task_index": 0,
+    "task_source": "json:agentbench/sample_task_stronger.json",
+    "task_metadata": {
+      "instance_id": "sample__stronger_behavior__001",
+      "repo": "example/repo",
+      "app_variant": "upstream_deploy_coding_agent"
+    },
+    "phase": "step_1_execution",
+    "app_variant": "upstream_deploy_coding_agent",
+    "step_index": 1,
+    "step_title": "Short title",
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: sample__stronger_behavior__001",
+    "prompt": "You are working on one SWE-bench Pro software engineering task.\n\nTask metadata:\n- instance_id: sample__stronger_behavior__001\n- repo: example/repo\n\nProblem statement:\nA Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.\n\nRequirements:\nKeep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.\n\nInterface / environment notes:\nAssume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.\n\nSelected tests to run:\ntests/test_cli_dry_run.py\n\nWorkspace:\nNo local repo workspace was provided for this run.\n\nYour job:\n1. Break this task into concrete steps.\n2. Identify what information would be needed to solve it well.\n3. Inspect the local repo if a workspace is available.\n4. Produce a structured plan for solving it.\n5. If the workspace is available, make a safe first-pass fix in the repo.\n6. Summarize what changed and what should be validated next.\n\nDo not claim that code was changed or tests were run unless you actually did so.\nFocus on decomposition, reasoning, and a clear action plan.\n\nApproved decomposition plan:\n[\n  {\n    \"step_id\": 1,\n    \"title\": \"Short title\",\n    \"goal\": \"What this step should accomplish\",\n    \"deliverable\": \"What artifact or answer this step should produce\"\n  }\n]\n\nCurrent step:\n{\n  \"step_id\": 1,\n  \"title\": \"Short title\",\n  \"goal\": \"What this step should accomplish\",\n  \"deliverable\": \"What artifact or answer this step should produce\"\n}\n\nCompleted step summaries so far:\nNone yet.\n\nYour job for this step:\n1. Focus only on the current step.\n2. Inspect or modify the workspace if it is available and needed.\n3. Produce a concise step summary.\n4. Say exactly what files or code locations mattered for this step.\n5. Do not invent test runs or edits you did not perform.",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "step_1_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768
+    },
+    "deepagents_runtime_source": "python_environment"
+  },
+  {
+    "check_point": "5. Final synthesis request leaving Deep Agents harness",
+    "task_index": 0,
+    "task_source": "json:agentbench/sample_task_stronger.json",
+    "task_metadata": {
+      "instance_id": "sample__stronger_behavior__001",
+      "repo": "example/repo",
+      "app_variant": "upstream_deploy_coding_agent"
+    },
+    "phase": "synthesis",
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: sample__stronger_behavior__001",
+    "prompt": "You are working on one SWE-bench Pro software engineering task.\n\nTask metadata:\n- instance_id: sample__stronger_behavior__001\n- repo: example/repo\n\nProblem statement:\nA Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.\n\nRequirements:\nKeep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.\n\nInterface / environment notes:\nAssume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.\n\nSelected tests to run:\ntests/test_cli_dry_run.py\n\nWorkspace:\nNo local repo workspace was provided for this run.\n\nYour job:\n1. Break this task into concrete steps.\n2. Identify what information would be needed to solve it well.\n3. Inspect the local repo if a workspace is available.\n4. Produce a structured plan for solving it.\n5. If the workspace is available, make a safe first-pass fix in the repo.\n6. Summarize what changed and what should be validated next.\n\nDo not claim that code was changed or tests were run unless you actually did so.\nFocus on decomposition, reasoning, and a clear action plan.\n\nPlan used:\n[\n  {\n    \"step_id\": 1,\n    \"title\": \"Short title\",\n    \"goal\": \"What this step should accomplish\",\n    \"deliverable\": \"What artifact or answer this step should produce\"\n  }\n]\n\nStep results:\nStep 1 (Short title):\n{'messages': [HumanMessage(content='You are working on one SWE-bench Pro software engineering task.\\n\\nTask metadata:\\n- instance_id: sample__stronger_behavior__001\\n- repo: example/repo\\n\\nProblem statement:\\nA Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.\\n\\nRequirements:\\nKeep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.\\n\\nInterface / environment notes:\\nAssume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.\\n\\nSelected tests to run:\\ntests/test_cli_dry_run.py\\n\\nWorkspace:\\nNo local repo workspace was provided for this run.\\n\\nYour job:\\n1. Break this task into concrete steps.\\n2. Identify what information would be needed to solve it well.\\n3. Inspect the local repo if a workspace is available.\\n4. Produce a structured plan for solving it.\\n5. If the workspace is available, make a safe first-pass fix in the repo.\\n6. Summarize what changed and what should be validated next.\\n\\nDo not claim that code was changed or tests were run unless you actually did so.\\nFocus on decomposition, reasoning, and a clear action plan.\\n\\nApproved decomposition plan:\\n[\\n  {\\n    \"step_id\": 1,\\n    \"title\": \"Short title\",\\n    \"goal\": \"What this step should accomplish\",\\n    \"deliverable\": \"What artifact or answer this step should produce\"\\n  }\\n]\\n\\nCurrent step:\\n{\\n  \"step_id\": 1,\\n  \"title\": \"Short title\",\\n  \"goal\": \"What this step should accomplish\",\\n  \"deliverable\": \"What artifact or answer this step should produce\"\\n}\\n\\nCompleted step summaries so far:\\nNone yet.\\n\\nYour job for this step:\\n1. Focus only on the current step.\\n2. Inspect or modify the workspace if it is available and needed.\\n3. Produce a concise step summary.\\n4. Say exactly what files or code locations mattered for this step.\\n5. Do not invent test runs or edits you did not perform.', additional_kwargs={}, response_metadata={}, id='77359e24-e923-43d9-9850-e3d0c34940d5'), AIMessage(content='Assistant: Assistant: Sure, let\\'s break down the task into concrete steps and identify the information needed to solve it well.\\n\\n1. **Short Title**: The short title of the task is \"Short title\". This should be a concise and descriptive name that captures the essence of the task.\\n\\n2. **Goal**: The goal of the task is \"What this step should accomplish\". This should be a clear and specific statement that defines what the step is supposed to achieve.\\n\\n3. **Deliverable**: The deliverable of the task is \"What artifact or answer this step should produce\". This should be a clear and specific statement that defines what the step will produce.\\n\\n4. **Step Summary**: The step summary should be a concise and clear description of what the step is supposed to accomplish. It should include the short title, goal, and deliverable.\\n\\n5. **Inspection or Modification of Workspace**: If a workspace is available, inspect or modify the workspace if needed. This could involve checking for any existing files or directories that may be relevant to the task.\\n\\n6. **Concise Step Summary**: Once the step summary is complete, say exactly what files or code locations mattered for this step. This should be a clear and concise statement that captures the essential information needed to understand the task.\\n\\n7. **Do Not Invent Test Runs or Edits**: Do not invent test runs or edits that you did not perform. This is a good practice to ensure that the task is well-defined and can be easily verified.\\n\\nBy following these steps, you can ensure that the task is well-defined and can be easily verified.', additional_kwargs={'refusal': None}, response_metadata={'token_usage': {'completion_tokens': 326, 'prompt_tokens': 6585, 'total_tokens': 6911, 'completion_tokens_details': None, 'prompt_tokens_details': None}, 'model_provider': 'openai', 'model_name': 'Qwen/Qwen2.5-0.5B', 'system_fingerprint': None, 'id': 'chatcmpl-15e5a09f-b246-48fd-a17a-e3cc9c6dd57d', 'finish_reason': 'stop', 'logprobs': None}, id='lc_run--019dff0c-7352-73e2-9467-93e39af85410-0', tool_calls=[], invalid_tool_calls=[], usage_metadata={'input_tokens': 6585, 'output_tokens': 326, 'total_tokens': 6911, 'input_token_details': {}, 'output_token_details': {}})]}\n\nProduce a final summary with these sections:\n1. Overall diagnosis\n2. Proposed fix strategy\n3. Files or code areas that matter most\n4. Validation steps still needed\n5. What actually changed in the workspace, if anything",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "synthesis",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768
+    },
+    "step_count": 1,
+    "deepagents_runtime_source": "python_environment"
+  }
+]

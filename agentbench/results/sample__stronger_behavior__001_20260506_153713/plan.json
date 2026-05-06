@@ -1,0 +1,27 @@
+{
+  "planning_hints": {
+    "priority": 5,
+    "reuse_likelihood": 0.9,
+    "agent_phase": "planning",
+    "latency_sensitivity": 0.4,
+    "program_id": "agentbench.deepagents_app",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512
+  },
+  "planning_prompt": "You are working on one SWE-bench Pro software engineering task.\n\nTask metadata:\n- instance_id: sample__stronger_behavior__001\n- repo: example/repo\n\nProblem statement:\nA Python CLI has a `--dry-run` flag. Users say the command still creates a temporary working directory during dry run. Identify the two most likely code areas to inspect first and propose one safe high-level fix strategy.\n\nRequirements:\nKeep the answer short and structured. Do not claim code was edited or tests were run unless that actually happened.\n\nInterface / environment notes:\nAssume a small Python CLI app with an argument parser, a dispatcher, and one helper that creates temporary directories.\n\nSelected tests to run:\ntests/test_cli_dry_run.py\n\nWorkspace:\nNo local repo workspace was provided for this run.\n\nYour job:\n1. Break this task into concrete steps.\n2. Identify what information would be needed to solve it well.\n3. Inspect the local repo if a workspace is available.\n4. Produce a structured plan for solving it.\n5. If the workspace is available, make a safe first-pass fix in the repo.\n6. Summarize what changed and what should be validated next.\n\nDo not claim that code was changed or tests were run unless you actually did so.\nFocus on decomposition, reasoning, and a clear action plan.\n\nReturn only valid JSON in this exact shape:\n{\n  \"steps\": [\n    {\n      \"step_id\": 1,\n      \"title\": \"short title\",\n      \"goal\": \"what this step should accomplish\",\n      \"deliverable\": \"what artifact or answer this step should produce\"\n    }\n  ]\n}\n\nKeep it to at most 2 steps.",
+  "planning_response_text": "Sure, let's break down the problem step by step:\n\n### Step 1: Break the Task into Concrete Steps\n1. **Inspect the Local Repo**: Check if a local repository is available for this run.\n2. **Identify Required Information**: Determine what information is needed to solve the problem well.\n3. **Inspect the Command Line Interface (CLI)**: Understand how the `--dry-run` flag works and what it does.\n4. **Inspect the Command Execution**: Understand how the CLI handles the dry run and what happens during the dry run.\n\n### Step 2: Identify What Information Would Be Needed to Solve It Well\n1. **Dry Run Behavior**: Understand the behavior of the CLI when running with the `--dry-run` flag.\n2. **Temporary Directory Creation**: Understand how the CLI creates temporary directories during the dry run.\n3. **User Experience**: Understand how the user interacts with the CLI during the dry run.\n\n### Step 3: Inspect the Local Repo if a Workspace is Available\n1. **Workspace Availability**: Check if a local workspace is available for this run.\n2. **Repository Structure**: Understand the structure of the local repository.\n3. **Repository Contents**: Understand the contents of the local repository.\n\n### Step 4: Produce a Structured Plan for Solving It\n1. **Short Title**: Create a short title for the plan.\n2. **Goal**: Define the goal of the plan.\n3. **Deliverable**: Define the artifact or answer the plan should produce.\n\n### Step 5: If the Workspace is Available, Make a Safe First-Pass Fix in the Repo\n1. **First-Pass Fix**: Inspect the local repository to find the first-pass fix for the problem.\n2. **Fix Strategy**: Propose a safe high-level fix strategy.\n3. **Validation**: Ensure the fix is validated before applying it.\n\n### Step 6: Summarize What Changed and What Should Be Validated Next\n1. **Change Description**: Describe the change in detail.\n2. **Next Steps**: List the next steps to be taken after the fix is applied.\n\n### Example JSON Structure\n```json\n{\n  \"steps\": [\n    {\n      \"step_id\": 1,\n      \"title\": \"Short Title\",\n      \"goal\": \"What this step should accomplish\",\n      \"deliverable\": \"What artifact or answer this step should produce\"\n    }\n  ]\n}\n```\n\n### Summary\n1. **Short Title**: \"Short Title\"\n2. **Goal**: \"What this step should accomplish\"\n3. **Deliverable**: \"What artifact or answer this step should produce\"\n\n1. **First-Pass Fix**: Inspect the local repository to find the first-pass fix for the problem.\n2. **Fix Strategy**: Propose a safe high-level fix strategy.\n3. **Validation**: Ensure the fix is validated before applying it.\n\nBy following these steps, we can ensure a structured and detailed plan for solving the problem effectively.",
+  "steps": [
+    {
+      "step_id": 1,
+      "title": "Sure, let's break down the problem step by step:",
+      "goal": "Sure, let's break down the problem step by step:",
+      "deliverable": ""
+    },
+    {
+      "step_id": 2,
+      "title": "### Step 1: Break the Task into Concrete Steps",
+      "goal": "### Step 1: Break the Task into Concrete Steps",
+      "deliverable": ""
+    }
+  ]
+}

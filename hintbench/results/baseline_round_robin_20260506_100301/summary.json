@@ -1,0 +1,12 @@
+{
+  "total_requests": 12,
+  "successful_requests": 12,
+  "failed_requests": 0,
+  "avg_latency_ms": 2249.496,
+  "p50_latency_ms": 1271.178,
+  "p95_latency_ms": 5187.249,
+  "p99_latency_ms": 5187.36,
+  "avg_ttft_ms": 1711.72,
+  "avg_cached_tokens": 64.0,
+  "avg_kv_hit_rate": 0.056
+}

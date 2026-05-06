@@ -78,6 +78,8 @@ Upstream target:
 
 Local:
 
+- [agentbench/deepagents_app/skills/code-review/SKILL.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills/code-review/SKILL.md)
+- [agentbench/deepagents_app/skills/coding-prefs/SKILL.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills/coding-prefs/SKILL.md)
 - [agentbench/deepagents_app/skills/planning/SKILL.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills/planning/SKILL.md)
 - [agentbench/deepagents_app/skills/dynamo-hints/SKILL.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills/dynamo-hints/SKILL.md)
 - [agentbench/deepagents_app/skills/swebench-coding/SKILL.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills/swebench-coding/SKILL.md)

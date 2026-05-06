@@ -41,8 +41,10 @@ agentbench/
     ├── deepagents.toml
     ├── mcp.json
     ├── skills/
-    │   ├── planning/SKILL.md
+    │   ├── code-review/SKILL.md
+    │   ├── coding-prefs/SKILL.md
     │   ├── dynamo-hints/SKILL.md
+    │   ├── planning/SKILL.md
     │   └── swebench-coding/SKILL.md
     └── src/
         ├── __init__.py
@@ -57,6 +59,7 @@ This folder is now the **active harness path** for:
 1. system prompts and workflow guidance
 2. skill surfaces
 3. Dynamo-specific model wiring
+4. preferring the cloned upstream `deepagents` source at runtime when it is present
 
 The outer runner still exists:
 
@@ -76,10 +79,22 @@ The runner now imports the app-layer code from:
 - [AGENTS.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/AGENTS.md)
 - [skills/](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/skills)
 
+The app now prepends the cloned upstream package path at runtime:
+
+- [agentbench/upstream/deepagents/libs/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/libs/deepagents)
+
+So calls to `deepagents` now prefer the downloaded GitHub source over a separately installed package copy when that cloned path exists.
+
+The outer runner can now also target the cloned upstream example variant:
+
+- `--app-variant upstream_deploy_coding_agent`
+- or [run_upstream_deploy_coding_agent_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_upstream_deploy_coding_agent_single_host.sh)
+
 ## Recommended Migration Order
 
 1. Keep SWE-bench task loading in the outer `agentbench/` wrapper.
-2. Move more workflow behavior from the runner into native Deep Agents surfaces.
-3. Reduce explicit repo-local orchestration over time.
-4. Add middleware and eval surfaces inspired by `better-harness`.
-5. Eventually patch/debug the real Deep Agents source and examples directly.
+2. Keep aligning local instructions and skill layout with `deploy-coding-agent`.
+3. Move more workflow behavior from the runner into native Deep Agents surfaces.
+4. Reduce explicit repo-local orchestration over time.
+5. Add middleware and eval surfaces inspired by `better-harness`.
+6. Eventually patch/debug the real Deep Agents source and examples directly.

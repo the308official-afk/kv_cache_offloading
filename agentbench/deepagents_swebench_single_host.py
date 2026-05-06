@@ -37,6 +37,7 @@ try:
     from agentbench.deepagents_app.src.agent import (
         run_task_workflow,
     )
+    from agentbench.log_utils import log_checkpoint, set_checkpoint_log_file
 except ImportError as exc:  # pragma: no cover
     raise SystemExit(
         "The Deep Agents app modules could not be imported. "
@@ -58,6 +59,20 @@ DEFAULT_HINTS = {
 }
 
 
+def task_source_label(
+    *,
+    dataset_name: str | None,
+    split: str,
+    csv_path: str | None,
+    json_path: str | None,
+) -> str:
+    if json_path:
+        return f"json:{json_path}"
+    if csv_path:
+        return f"csv:{csv_path}"
+    return f"dataset:{dataset_name}:{split}"
+
+
 def run_command(command: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
         command,
@@ -77,7 +92,7 @@ def load_swebench_task(
     index: int,
     instance_id: str | None,
 ) -> dict:
-    # [CHECK_POINT] One SWE-bench Pro task enters the agent harness here.
+    # [CHECK_POINT 1] One SWE-bench Pro task enters the agent harness here.
     if json_path:
         return json.loads(Path(json_path).read_text(encoding="utf-8"))
 
@@ -134,7 +149,7 @@ def prepare_workspace(
     repo_path: str | None,
     repo_url: str | None,
 ) -> tuple[Path | None, dict]:
-    # [CHECK_POINT] A writable repo workspace for the agent is prepared here.
+    # [CHECK_POINT 2] A writable repo workspace for the agent is prepared here.
     if not repo_path and not repo_url:
         return None, {"workspace_mode": "none"}
 
@@ -180,7 +195,7 @@ def prepare_workspace(
 
 
 def collect_workspace_artifacts(run_dir: Path, workspace_dir: Path | None) -> dict:
-    # [CHECK_POINT] Git patch and workspace artifacts are captured here.
+    # [CHECK_POINT 6] Git patch and workspace artifacts are captured here.
     if workspace_dir is None:
         return {"workspace_present": False}
 
@@ -238,6 +253,12 @@ def main() -> None:
     )
     parser.add_argument("--model", default="Qwen/Qwen2.5-0.5B")
     parser.add_argument(
+        "--app-variant",
+        default="local",
+        choices=["local", "upstream_deploy_coding_agent"],
+        help="Choose whether to run the local Deep Agents app or the cloned upstream deploy-coding-agent instructions/skills.",
+    )
+    parser.add_argument(
         "--hint-json",
         default=json.dumps(DEFAULT_HINTS),
         help="JSON object passed as nvext.agent_hints on every model call.",
@@ -269,6 +290,24 @@ def main() -> None:
     safe_instance = str(task.get("instance_id", f"task_{args.index}")).replace("/", "__")
     run_dir = RESULTS_DIR / f"{safe_instance}_{run_id}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_log_path = run_dir / "checkpoints.json"
+    set_checkpoint_log_file(checkpoint_log_path)
+    # [CHECK_POINT 1] SWE-bench task loaded before entering the Deep Agents harness.
+    # [CHECK_POINT 1] Normalized task payload logged here before prompt expansion.
+    log_checkpoint(
+        check_point="1. SWE-bench task loaded before Deep Agents harness",
+        task_index=args.index,
+        payload={
+            "task_source": task_source_label(
+                dataset_name=args.dataset,
+                split=args.split,
+                csv_path=args.csv_path,
+                json_path=args.json_path,
+            ),
+            "app_variant": args.app_variant,
+            "task": task,
+        },
+    )
 
     workspace_dir, workspace_metadata = prepare_workspace(
         run_dir=run_dir,
@@ -287,6 +326,14 @@ def main() -> None:
         base_hints=base_hints,
         step_limit=args.step_limit,
         workspace_dir=workspace_dir,
+        app_variant=args.app_variant,
+        task_index=args.index,
+        task_source=task_source_label(
+            dataset_name=args.dataset,
+            split=args.split,
+            csv_path=args.csv_path,
+            json_path=args.json_path,
+        ),
     )
     prompt = workflow["prompt"]
     decomposition_plan = workflow["decomposition_plan"]
@@ -313,6 +360,9 @@ def main() -> None:
         "hint_json": workflow["resolved_hints"],
         "task": task,
         "active_harness": "agentbench.deepagents_app",
+        "app_variant": workflow["app_variant"],
+        "deepagents_runtime_source": workflow["deepagents_runtime_source"],
+        "checkpoint_log_file": str(checkpoint_log_path),
         "workspace": workspace_metadata,
         "workspace_artifacts": workspace_artifacts,
         "prompt": prompt,
@@ -321,6 +371,7 @@ def main() -> None:
         "result": result,
     }
     save_result(run_dir, payload)
+    set_checkpoint_log_file(None)
 
     print(f"AgentBench run complete: {safe_instance}")
     print(f"Run directory: {run_dir}")

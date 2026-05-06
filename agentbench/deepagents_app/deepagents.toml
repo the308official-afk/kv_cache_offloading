@@ -1,7 +1,17 @@
-# Scaffold only.
-# This file mirrors upstream Deep Agents example structure but is not yet the
-# active runtime path for local Dynamo execution.
+# Upstream-aligned local app config.
+# Unlike deploy-coding-agent, this setup currently runs through the local
+# AgentBench single-host wrapper rather than `deepagents deploy`.
 
 [agent]
 name = "agentbench-single-host-coding-agent"
 model = "anthropic:claude-sonnet-4-5"
+
+# The upstream deploy-coding-agent example uses:
+#
+# [sandbox]
+# provider = "langsmith"
+# template = "coding-agent"
+# image = "python:3.12"
+#
+# We intentionally do not enable that here because local AgentBench currently
+# manages the writable workspace itself.

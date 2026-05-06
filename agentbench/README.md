@@ -1,21 +1,10 @@
 # AgentBench
 
-`agentbench/` is the single-GPU agent-harness layer for this repo.
-
-Best one-line summary:
-
-`agentbench/` is now a single-GPU explicit multi-step coding-agent harness that can route hard tasks through your Dynamo frontend and leave behind step traces and patch artifacts.
-
-It is for harder agentic workloads than `hintbench/`: take one complicated software-engineering task, break it into explicit steps, send those step-level requests through the local Dynamo frontend, and optionally work inside a real writable repo workspace.
-
-For the upstream-aligned Deep Agents app that now owns the main prompt/model wiring, see:
-
-- [agentbench/deepagents_app/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/README.md)
-- [agentbench/UPSTREAM_DEEPAGENTS_ADOPTION_MAP.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/UPSTREAM_DEEPAGENTS_ADOPTION_MAP.md)
+`agentbench/` is now a single-GPU coding-agent harness where complex tasks from sources like SWE-bench Pro are broken into several steps by Deep Agents before the resulting requests are sent through your Dynamo frontend, with step traces and patch artifacts saved after the run. Use it for harder agentic workloads than `hintbench/`: load one software-engineering task, decompose it, send the step-level requests through the local Dynamo frontend, and inspect the saved artifacts. The active app prefers the cloned upstream Deep Agents source at runtime when present.
 
 ## Prerequisite
 
-### 1. Start the single-host serving stack
+Start the single-host serving stack:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -24,113 +13,63 @@ cd ~/kv_cache_offloading
 ./run_dynamo_single_host.sh test
 ```
 
-### 2. Install Python dependencies
-
-If `pip` is not installed:
-
-```bash
-sudo dnf install -y python3-pip
-```
-
-Check your Python version:
-
-```bash
-python3 --version
-```
-
-`deepagents` requires Python `3.11+`. If `python3` is older than `3.11`, install and use `python3.11` instead:
+Install Python dependencies. `deepagents` requires Python `3.11+`:
 
 ```bash
 sudo dnf install -y python3.11 python3.11-pip
-python3.11 --version
-```
-
-Then install the agent stack with the interpreter you will use to run AgentBench:
-
-```bash
-cd ~/kv_cache_offloading
-python3 -m pip install -r agentbench/requirements.txt
-```
-
-or, if you need Python 3.11 explicitly:
-
-```bash
 cd ~/kv_cache_offloading
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
+## Instrumentation
+
+AgentBench now logs:
+- the complex task before it enters the Deep Agents harness
+- the planning, step-execution, and synthesis requests right before they leave the harness for Dynamo
+
+Control this in [agentbench/constants.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/constants.py):
+- `AGENTBENCH_LOG_MODE = "short" | "full" | "off"`
+- `AGENTBENCH_LOG_EVERY_N = 10`
+- checkpoints are also saved per run in `checkpoints.json`
+
+Checkpoint map:
+- `1` task loaded before Deep Agents harness: the normalized complex task as AgentBench received it, before prompt expansion or planning. [agentbench/deepagents_swebench_single_host.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py)
+- `3` planning request leaving Deep Agents harness: the first outbound planning prompt plus hints sent to Dynamo so the task can be decomposed. [agentbench/deepagents_app/src/agent.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/src/agent.py)
+- `4` step execution request leaving Deep Agents harness: each per-step execution prompt plus hints sent to Dynamo after the plan is created. [agentbench/deepagents_app/src/agent.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/src/agent.py)
+- `5` final synthesis request leaving Deep Agents harness: the final summarization prompt plus hints sent to Dynamo after all step results are collected. [agentbench/deepagents_app/src/agent.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/deepagents_app/src/agent.py)
+
 ## Experiments
 
-### Experiment 1: Sample Task Decomposition Run
+### Experiment 1: Upstream Deploy-Coding-Agent Variant Run
 
-Use this first. It proves the single-host agentic path works end to end with no dataset download.
+Use this as the main upstream-based testbed. It supports both the local sample task and `SWE-bench Pro` while using the cloned upstream `deploy-coding-agent` instructions and skills.
 
-Flow: `sample task -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
+Flow: `task source (sample task or SWE-bench Pro) -> upstream deploy-coding-agent instructions + skills -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
 
-Command:
+Sample task:
 
 ```bash
 cd ~/kv_cache_offloading
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --json-path agentbench/sample_task.json \
-  --frontend-url http://127.0.0.1:8000/v1/chat/completions \
-  --model Qwen/Qwen2.5-0.5B
+bash agentbench/run_upstream_deploy_coding_agent_single_host.sh
 ```
 
-Outputs:
-- `result.json`
-- `plan.json`
-- `step_results.json`
-- `final_summary.txt`
-
-Notes:
-- skips Hugging Face completely
-- best for initial validation
-- output quality depends heavily on model size
-
-### Experiment 2: SWE-bench Pro Task as Input Source
-
-Use this when you want a real benchmark-style task instead of the local sample.
-
-Flow: `SWE-bench Pro task -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
-
-Command:
+`SWE-bench Pro`:
 
 ```bash
 cd ~/kv_cache_offloading
-python3.11 agentbench/deepagents_swebench_single_host.py \
+bash agentbench/run_upstream_deploy_coding_agent_single_host.sh \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
-  --index 0 \
-  --frontend-url http://127.0.0.1:8000/v1/chat/completions \
-  --model Qwen/Qwen2.5-0.5B
+  --index 0
 ```
 
-Outputs:
-- `result.json`
-- `plan.json`
-- `step_results.json`
-- `final_summary.txt`
+Stronger-behavior variant:
 
-Notes:
-- first run may be slow because the dataset split must be downloaded
-- uses SWE-bench Pro as a hard task source, not yet as the official evaluator flow
-
-### Experiment 3: Local CSV Task Run
-
-Use this when you want faster repeated runs or your own curated task file.
-
-Flow: `local CSV task -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
-
-Command:
+Use this when you want a cleaner but richer upstream demo on the small model. It keeps the upstream `deploy-coding-agent` instructions and skills, but uses the easier sample task and a `4`-step budget.
 
 ```bash
 cd ~/kv_cache_offloading
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --csv-path /path/to/swe_bench_pro_full.csv \
-  --index 0 \
-  --frontend-url http://127.0.0.1:8000/v1/chat/completions \
-  --model Qwen/Qwen2.5-0.5B
+bash agentbench/run_upstream_deploy_coding_agent_stronger_behavior_single_host.sh
 ```
 
 Outputs:
@@ -140,53 +79,18 @@ Outputs:
 - `final_summary.txt`
 
 Notes:
-- CSV must already be prepared in the expected format
-- often more convenient than repeated HF downloads
-
-### Experiment 4: Writable Repo Workspace Run
-
-Use this when you want more than prompt-only reasoning and want a `git diff` style artifact after the run.
-
-Flow: `task -> repo workspace clone/copy -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker -> git diff artifact`
-
-Command:
-
-```bash
-cd ~/kv_cache_offloading
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --json-path agentbench/sample_task.json \
-  --repo-path /path/to/local/repo \
-  --frontend-url http://127.0.0.1:8000/v1/chat/completions \
-  --model Qwen/Qwen2.5-0.5B
-```
-
-Outputs:
-- `result.json`
-- `plan.json`
-- `step_results.json`
-- `final_summary.txt`
-- `git_status.txt`
-- `git_diff_stat.txt`
-- `workspace.patch`
-
-Notes:
-- the repo is cloned or copied into the run directory as a writable workspace
-- closer to SWE-bench-style execution, but still not the full official evaluator flow
+- uses the cloned upstream `deploy-coding-agent` instructions and skills
+- still runs through your local single-host Dynamo path
+- defaults to `agentbench/sample_task.json` when no task source is passed
+- this is the best candidate for your core testbed
 
 ## Inspect Results
-
-Inspect the latest run:
 
 ```bash
 cd ~/kv_cache_offloading
 LATEST_RUN=$(ls -td agentbench/results/* | head -n 1)
 echo "$LATEST_RUN"
 cat "$LATEST_RUN/result.json"
-```
-
-Inspect the explicit decomposition flow:
-
-```bash
 cat "$LATEST_RUN/plan.json"
 cat "$LATEST_RUN/step_results.json"
 cat "$LATEST_RUN/final_summary.txt"
@@ -203,7 +107,7 @@ cat "$LATEST_RUN/workspace.patch"
 ## Current Limitations
 
 - this is not yet the official SWE-bench Pro scoring pipeline
-- it can work against a local or remote repo workspace now, but it does not yet automatically materialize the exact official SWE-bench Pro repo/commit pair from task metadata
-- it captures `git diff` style artifacts, but it does not yet gather predictions in the official SWE-bench Pro submission format
+- it does not yet automatically materialize the exact official SWE-bench Pro repo/commit pair from task metadata
+- it does not yet gather predictions in the official SWE-bench Pro submission format
 - it does not yet run the official SWE-bench Pro evaluator
-- the runner now changes hints by phase (`planning`, `step_n_execution`, `synthesis`), but it does not yet do richer adaptive hinting based on runtime observations or tool outcomes
+- hints already vary by phase (`planning`, `step_n_execution`, `synthesis`), but they are not yet adaptively changed from runtime observations or tool outcomes

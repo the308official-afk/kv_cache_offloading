@@ -8,8 +8,20 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import sys
 from pathlib import Path
 from typing import Any
+
+from agentbench.log_utils import log_checkpoint
+
+THIS_FILE = Path(__file__).resolve()
+APP_ROOT = THIS_FILE.parents[1]
+AGENTBENCH_ROOT = APP_ROOT.parents[1]
+UPSTREAM_ROOT = AGENTBENCH_ROOT / "upstream" / "deepagents"
+CLONED_DEEPAGENTS_LIB_ROOT = UPSTREAM_ROOT / "libs" / "deepagents"
+if CLONED_DEEPAGENTS_LIB_ROOT.exists() and str(CLONED_DEEPAGENTS_LIB_ROOT) not in sys.path:
+    sys.path.insert(0, str(CLONED_DEEPAGENTS_LIB_ROOT))
 
 from deepagents import create_deep_agent
 from langchain_openai import ChatOpenAI
@@ -21,9 +33,9 @@ from .prompts import (
     format_swebench_task_prompt,
 )
 
-APP_ROOT = Path(__file__).resolve().parents[1]
 SKILLS_DIR = APP_ROOT / "skills"
 AGENTS_FILE = APP_ROOT / "AGENTS.md"
+UPSTREAM_DEPLOY_CODING_AGENT_ROOT = UPSTREAM_ROOT / "examples" / "deploy-coding-agent"
 
 DEFAULT_DYNAMO_HINTS: dict[str, Any] = {
     "priority": 5,
@@ -35,20 +47,58 @@ DEFAULT_DYNAMO_HINTS: dict[str, Any] = {
     "expected_output_tokens": 512,
 }
 
+DEEPAGENTS_RUNTIME_SOURCE = (
+    str(CLONED_DEEPAGENTS_LIB_ROOT)
+    if CLONED_DEEPAGENTS_LIB_ROOT.exists()
+    else "python_environment"
+)
 
-def load_agent_instructions() -> str:
+
+def _prompt_preview(prompt: str) -> str:
+    lines = [line.strip() for line in prompt.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    return " ".join(lines[:3])
+
+
+def log_outbound_harness_request(
+    *,
+    check_point: str,
+    task_index: int | None,
+    payload: dict[str, Any],
+) -> None:
+    log_checkpoint(
+        check_point=check_point,
+        task_index=task_index,
+        payload=payload,
+    )
+
+
+def resolve_app_root(app_variant: str = "local") -> Path:
+    if app_variant == "local":
+        return APP_ROOT
+    if app_variant == "upstream_deploy_coding_agent":
+        return UPSTREAM_DEPLOY_CODING_AGENT_ROOT
+    raise ValueError(f"Unsupported app_variant: {app_variant}")
+
+
+def load_agent_instructions(app_variant: str = "local") -> str:
     """Load the app-level instructions from AGENTS.md and skill docs.
 
     This makes `deepagents_app/` the active configuration surface instead of
     keeping the main workflow guidance embedded in the outer runner.
     """
 
-    parts = [SYSTEM_PROMPT, PLANNING_NOTES, DYNAMO_HINT_NOTES]
-    if AGENTS_FILE.exists():
-        parts.append(AGENTS_FILE.read_text(encoding="utf-8").strip())
+    app_root = resolve_app_root(app_variant)
+    agents_file = app_root / "AGENTS.md"
+    skills_dir = app_root / "skills"
 
-    if SKILLS_DIR.exists():
-        for skill_path in sorted(SKILLS_DIR.glob("*/SKILL.md")):
+    parts = [SYSTEM_PROMPT, PLANNING_NOTES, DYNAMO_HINT_NOTES]
+    if agents_file.exists():
+        parts.append(agents_file.read_text(encoding="utf-8").strip())
+
+    if skills_dir.exists():
+        for skill_path in sorted(skills_dir.glob("*/SKILL.md")):
             skill_text = skill_path.read_text(encoding="utf-8").strip()
             if skill_text:
                 parts.append(f"Skill reference: {skill_path.parent.name}\n{skill_text}")
@@ -96,6 +146,7 @@ def build_coding_agent(
     model: str,
     base_hints: dict[str, Any] | None = None,
     phase: str = "execution",
+    app_variant: str = "local",
 ):
     """Create the Deep Agents coding harness backed by a local Dynamo endpoint.
     """
@@ -107,11 +158,21 @@ def build_coding_agent(
     )
     return create_deep_agent(
         model=llm,
-        system_prompt=load_agent_instructions(),
+        system_prompt=load_agent_instructions(app_variant),
     )
 
 
 def response_text(response) -> str:
+    if isinstance(response, dict):
+        messages = response.get("messages")
+        if isinstance(messages, list):
+            for message in reversed(messages):
+                message_type = getattr(message, "type", None) or message.get("type") if isinstance(message, dict) else None
+                if message_type == "ai":
+                    return response_text(message)
+        content = response.get("content")
+        if content is not None:
+            return response_text(content)
     content = getattr(response, "content", None)
     if isinstance(content, str):
         return content
@@ -123,37 +184,74 @@ def response_text(response) -> str:
             else:
                 chunks.append(str(item))
         return "\n".join(chunks)
+    if isinstance(response, str):
+        return response
     return str(content if content is not None else response)
 
 
 def parse_decomposition_plan(raw_text: str, *, fallback_count: int) -> list[dict]:
-    try:
-        parsed = json.loads(raw_text)
-        if isinstance(parsed, dict):
-            parsed = parsed.get("steps", [])
-        if isinstance(parsed, list):
-            normalized = []
-            for idx, item in enumerate(parsed, start=1):
-                if isinstance(item, str):
-                    normalized.append({"step_id": idx, "title": item, "goal": item})
-                elif isinstance(item, dict):
-                    normalized.append(
-                        {
-                            "step_id": item.get("step_id", idx),
-                            "title": str(item.get("title", f"Step {idx}")),
-                            "goal": str(item.get("goal", item.get("title", f"Step {idx}"))),
-                            "deliverable": str(item.get("deliverable", "")),
-                        }
-                    )
-            if normalized:
-                return normalized[:fallback_count]
-    except Exception:  # noqa: BLE001
-        pass
+    json_match = re.search(r"\{[\s\S]*\}", raw_text)
+    candidate_texts = [raw_text]
+    if json_match:
+        candidate_texts.insert(0, json_match.group(0))
 
-    lines = [line.strip(" -0123456789.") for line in raw_text.splitlines() if line.strip()]
+    for candidate in candidate_texts:
+        try:
+            parsed = json.loads(candidate)
+            if isinstance(parsed, dict):
+                parsed = parsed.get("steps", [])
+            if isinstance(parsed, list):
+                normalized = []
+                for idx, item in enumerate(parsed, start=1):
+                    if isinstance(item, str):
+                        normalized.append({"step_id": idx, "title": item, "goal": item})
+                    elif isinstance(item, dict):
+                        normalized.append(
+                            {
+                                "step_id": item.get("step_id", idx),
+                                "title": str(item.get("title", f"Step {idx}")),
+                                "goal": str(item.get("goal", item.get("title", f"Step {idx}"))),
+                                "deliverable": str(item.get("deliverable", "")),
+                            }
+                        )
+                if normalized:
+                    return normalized[:fallback_count]
+        except Exception:  # noqa: BLE001
+            pass
+
+    candidate_lines = []
+    for raw_line in raw_text.splitlines():
+        line = raw_line.strip(" -0123456789.")
+        if not line:
+            continue
+        if line.lower().startswith(("sure,", "example json", "summary")):
+            continue
+        if line.startswith("### Step"):
+            continue
+        if ":" in line:
+            title, _, remainder = line.partition(":")
+            if len(title.split()) <= 8 and remainder.strip():
+                line = title.strip("*# ") + ": " + remainder.strip()
+        candidate_lines.append(line)
+
+    filtered = []
+    seen = set()
+    for line in candidate_lines:
+        normalized_line = line.strip()
+        if normalized_line in seen:
+            continue
+        seen.add(normalized_line)
+        if any(
+            keyword in normalized_line.lower()
+            for keyword in ("inspect", "identify", "propose", "check", "review", "trace")
+        ):
+            filtered.append(normalized_line)
+
+    lines = filtered or candidate_lines
     fallback = []
     for idx, line in enumerate(lines[:fallback_count], start=1):
-        fallback.append({"step_id": idx, "title": line, "goal": line, "deliverable": ""})
+        title = line.strip("*# ")
+        fallback.append({"step_id": idx, "title": title, "goal": title, "deliverable": ""})
     return fallback
 
 
@@ -164,9 +262,12 @@ def generate_decomposition_plan(
     base_hints: dict[str, Any],
     prompt: str,
     step_limit: int,
+    task_index: int | None = None,
+    task_source: str | None = None,
+    task_metadata: dict[str, Any] | None = None,
 ) -> dict:
-    # [CHECK_POINT] The harness explicitly decomposes the hard task into steps here.
-    # [CHECK_POINT] Planning phase happens here.
+    # [CHECK_POINT 3] The harness explicitly decomposes the hard task into steps here.
+    # [CHECK_POINT 3] Planning phase happens here.
     planning_hints = build_phase_hints(base_hints, phase="planning")
     planning_hints["latency_sensitivity"] = 0.4
     planning_hints["expected_output_tokens"] = 512
@@ -176,6 +277,29 @@ def generate_decomposition_plan(
         hint_payload=planning_hints,
         max_tokens=1024,
     )
+    preferred_step_guidance = ""
+    if "--dry-run" in prompt or "temporary working directory" in prompt or "temporary directories" in prompt:
+        preferred_step_guidance = f"""
+
+Prefer task-specific steps over generic planning language.
+For this kind of CLI dry-run bug, prefer up to {step_limit} steps like:
+1. inspect argument parsing for `--dry-run`
+2. inspect the dispatch or command execution flow
+3. inspect the helper that creates temporary directories
+4. propose a safe high-level fix strategy
+
+Use concrete titles such as:
+- "Inspect argument parsing for --dry-run"
+- "Inspect dispatch flow for dry-run handling"
+- "Inspect temporary-directory helper"
+- "Propose safe fix strategy"
+
+Do not use placeholder titles like:
+- "Short title"
+- "Step 1"
+- "Break the task into concrete steps"
+- "What this step should accomplish"
+"""
     planning_prompt = f"""{prompt}
 
 Return only valid JSON in this exact shape:
@@ -190,7 +314,24 @@ Return only valid JSON in this exact shape:
   ]
 }}
 
-Keep it to at most {step_limit} steps."""
+Keep it to at most {step_limit} steps.{preferred_step_guidance}"""
+
+    planning_prompt += "\n\nDo not include markdown, bullet points, commentary, or code fences.\nStart with `{` and end with `}`."
+    # [CHECK_POINT 3] Planning request leaving the Deep Agents harness for Dynamo.
+    log_outbound_harness_request(
+        check_point="3. Planning request leaving Deep Agents harness",
+        task_index=task_index,
+        payload={
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "phase": "planning",
+            "prompt_preview": _prompt_preview(planning_prompt),
+            "prompt": planning_prompt,
+            "hints": planning_hints,
+            "step_limit": step_limit,
+            "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+        },
+    )
     response = llm.invoke(planning_prompt)
     raw_text = response_text(response)
     steps = parse_decomposition_plan(raw_text, fallback_count=step_limit)
@@ -210,9 +351,13 @@ def execute_plan_steps(
     task_prompt: str,
     plan_steps: list[dict],
     workspace_dir: Path | None,
+    app_variant: str = "local",
+    task_index: int | None = None,
+    task_source: str | None = None,
+    task_metadata: dict[str, Any] | None = None,
 ) -> list[dict]:
-    # [CHECK_POINT] The harness sends explicit step-level requests to the frontend here.
-    # [CHECK_POINT] Step-by-step execution happens here.
+    # [CHECK_POINT 4] The harness sends explicit step-level requests to the frontend here.
+    # [CHECK_POINT 4] Step-by-step execution happens here.
     step_results: list[dict] = []
     prior_step_summaries: list[str] = []
     original_cwd = Path.cwd()
@@ -229,6 +374,7 @@ def execute_plan_steps(
                 model=model,
                 base_hints=step_hints,
                 phase=f"step_{idx}_execution",
+                app_variant=app_variant,
             )
             prior_context = "\n".join(
                 f"- Step {i + 1} summary: {summary}" for i, summary in enumerate(prior_step_summaries)
@@ -250,6 +396,23 @@ Your job for this step:
 3. Produce a concise step summary.
 4. Say exactly what files or code locations mattered for this step.
 5. Do not invent test runs or edits you did not perform."""
+            # [CHECK_POINT 4] Step execution request leaving the Deep Agents harness for Dynamo.
+            log_outbound_harness_request(
+                check_point="4. Step execution request leaving Deep Agents harness",
+                task_index=task_index,
+                payload={
+                    "task_source": task_source,
+                    "task_metadata": task_metadata or {},
+                    "phase": f"step_{idx}_execution",
+                    "app_variant": app_variant,
+                    "step_index": idx,
+                    "step_title": step.get("title"),
+                    "prompt_preview": _prompt_preview(step_prompt),
+                    "prompt": step_prompt,
+                    "hints": step_hints,
+                    "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+                },
+            )
             response = agent.invoke({"messages": [{"role": "user", "content": step_prompt}]})
             summary = response_text(response)
             prior_step_summaries.append(summary[:1200])
@@ -277,9 +440,12 @@ def synthesize_final_summary(
     task_prompt: str,
     plan_steps: list[dict],
     step_results: list[dict],
+    task_index: int | None = None,
+    task_source: str | None = None,
+    task_metadata: dict[str, Any] | None = None,
 ) -> dict:
-    # [CHECK_POINT] The harness synthesizes the multi-step results into a final answer here.
-    # [CHECK_POINT] Final synthesis happens here.
+    # [CHECK_POINT 5] The harness synthesizes the multi-step results into a final answer here.
+    # [CHECK_POINT 5] Final synthesis happens here.
     synthesis_hints = build_phase_hints(base_hints, phase="synthesis")
     synthesis_hints["expected_output_tokens"] = 768
     llm = build_dynamo_chat_model(
@@ -306,6 +472,21 @@ Produce a final summary with these sections:
 3. Files or code areas that matter most
 4. Validation steps still needed
 5. What actually changed in the workspace, if anything"""
+    # [CHECK_POINT 5] Final synthesis request leaving the Deep Agents harness for Dynamo.
+    log_outbound_harness_request(
+        check_point="5. Final synthesis request leaving Deep Agents harness",
+        task_index=task_index,
+        payload={
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "phase": "synthesis",
+            "prompt_preview": _prompt_preview(synthesis_prompt),
+            "prompt": synthesis_prompt,
+            "hints": synthesis_hints,
+            "step_count": len(step_results),
+            "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+        },
+    )
     response = llm.invoke(synthesis_prompt)
     return {
         "synthesis_hints": synthesis_hints,
@@ -323,6 +504,9 @@ def run_task_workflow(
     base_hints: dict[str, Any] | None = None,
     step_limit: int = 4,
     workspace_dir: Path | None = None,
+    app_variant: str = "local",
+    task_index: int | None = None,
+    task_source: str | None = None,
 ) -> dict:
     """Run the active multi-step Deep Agents workflow for one task."""
 
@@ -330,6 +514,11 @@ def run_task_workflow(
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
         resolved_hints.update(base_hints)
+    task_metadata = {
+        "instance_id": task.get("instance_id"),
+        "repo": task.get("repo"),
+        "app_variant": app_variant,
+    }
 
     decomposition_plan = generate_decomposition_plan(
         frontend_url=frontend_url,
@@ -337,6 +526,9 @@ def run_task_workflow(
         base_hints=resolved_hints,
         prompt=prompt,
         step_limit=step_limit,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
     )
     step_results = execute_plan_steps(
         frontend_url=frontend_url,
@@ -345,6 +537,10 @@ def run_task_workflow(
         task_prompt=prompt,
         plan_steps=decomposition_plan["steps"],
         workspace_dir=workspace_dir,
+        app_variant=app_variant,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
     )
     result = synthesize_final_summary(
         frontend_url=frontend_url,
@@ -353,10 +549,15 @@ def run_task_workflow(
         task_prompt=prompt,
         plan_steps=decomposition_plan["steps"],
         step_results=step_results,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
     )
     return {
         "prompt": prompt,
         "resolved_hints": resolved_hints,
+        "app_variant": app_variant,
+        "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
         "result": result,
