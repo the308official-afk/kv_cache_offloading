@@ -14,10 +14,18 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 # SERVERS=("44.201.229.234" "44.202.2.239" "3.88.7.135")
 SERVERS=(
   "44.211.175.29"   
-  "3.80.140.19"
+  "3.82.232.236"
   "44.211.226.196"
 )
 LABELS=("S0" "S1" "S2")
+
+usage() {
+  cat <<'EOF'
+Usage:
+  ./upload.sh        Upload to all configured servers
+  ./upload.sh <idx>  Upload only to server index <idx> (for example: ./upload.sh 1)
+EOF
+}
 
 # Ensure key permissions
 chmod 400 "$PEM"
@@ -75,7 +83,30 @@ if [[ ! -d "${LOCAL_BASE}/hintbench" ]]; then
   echo "Warning: ${LOCAL_BASE}/hintbench was not found locally." >&2
 fi
 
-for i in "${!SERVERS[@]}"; do
+TARGET_INDICES=()
+
+if [[ $# -gt 1 ]]; then
+  usage >&2
+  exit 1
+fi
+
+if [[ $# -eq 1 ]]; then
+  if ! [[ "$1" =~ ^[0-9]+$ ]]; then
+    echo "Server index must be numeric: $1" >&2
+    usage >&2
+    exit 1
+  fi
+  if (( "$1" < 0 || "$1" >= ${#SERVERS[@]} )); then
+    echo "Server index out of range: $1" >&2
+    echo "Valid indices: 0..$(( ${#SERVERS[@]} - 1 ))" >&2
+    exit 1
+  fi
+  TARGET_INDICES=("$1")
+else
+  TARGET_INDICES=("${!SERVERS[@]}")
+fi
+
+for i in "${TARGET_INDICES[@]}"; do
   ip="${SERVERS[$i]}"
   label="${LABELS[$i]}"
   remote_host="ec2-user@${ip}"

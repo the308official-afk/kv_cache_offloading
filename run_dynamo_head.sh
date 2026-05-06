@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ACTION="${1:-start}"
+LOG_MODE="${2:-}"
 
 HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
 HEAD_STATE_DIR="${HEAD_STATE_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/dynamo_head_state}"
@@ -173,14 +174,19 @@ show_status() {
 }
 
 show_logs() {
-  echo "===== etcd ====="
-  docker logs --tail 120 "${ETCD_CONTAINER_NAME}" || true
-  echo
-  echo "===== nats ====="
-  docker logs --tail 120 "${NATS_CONTAINER_NAME}" || true
-  echo
-  echo "===== frontend ====="
-  docker logs --tail 200 "${FRONTEND_CONTAINER_NAME}" || true
+  if [[ "${LOG_MODE}" = "-f" || "${LOG_MODE}" = "--follow" ]]; then
+    echo "===== frontend (follow) ====="
+    docker logs -f --tail 200 "${FRONTEND_CONTAINER_NAME}" || true
+  else
+    echo "===== etcd ====="
+    docker logs --tail 120 "${ETCD_CONTAINER_NAME}" || true
+    echo
+    echo "===== nats ====="
+    docker logs --tail 120 "${NATS_CONTAINER_NAME}" || true
+    echo
+    echo "===== frontend ====="
+    docker logs --tail 200 "${FRONTEND_CONTAINER_NAME}" || true
+  fi
 }
 
 stop_all() {

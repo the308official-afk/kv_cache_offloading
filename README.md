@@ -12,6 +12,7 @@ Tools and experiment scaffolding for:
 - research plan: [PLAN.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/PLAN.md)
 - implementation status: [ROADMAP.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/ROADMAP.md)
 - HintBench harness: [hintbench/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/hintbench/README.md)
+- AgentBench single-GPU harness: [agentbench/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/README.md)
 
 ## Current Pipeline
 
@@ -70,6 +71,12 @@ ETCD_ENDPOINTS=http://<head-private-ip>:2379 \
 ./run_dynamo_worker.sh logs -f
 ```
 
+Default worker flags in this setup:
+
+```text
+--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru
+```
+
 Run one benchmark:
 
 ```bash
@@ -104,6 +111,7 @@ Verify it:
 cd ~/kv_cache_offloading
 ./run_dynamo_single_host.sh status
 ./run_dynamo_single_host.sh logs
+./run_dynamo_single_host.sh logs -f
 ./run_dynamo_single_host.sh test
 ```
 

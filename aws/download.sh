@@ -13,7 +13,7 @@ LOCAL_RESULTS_DIR="${REPO_ROOT}/hintbench/results"
 
 SERVERS=(
   "44.211.175.29"
-  "3.80.140.19"
+  "3.82.232.236"
   "44.211.226.196"
 )
 LABELS=("S0" "S1" "S2")

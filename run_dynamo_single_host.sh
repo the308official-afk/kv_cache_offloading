@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ACTION="${1:-start}"
+LOG_MODE="${2:-}"
 
 HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
 DYNAMO_MODEL_PATH="${DYNAMO_MODEL_PATH:-Qwen/Qwen2.5-0.5B}"
@@ -82,10 +83,10 @@ show_status() {
 
 show_logs() {
   echo "===== head ====="
-  ./run_dynamo_head.sh logs || true
+  ./run_dynamo_head.sh logs "${LOG_MODE}" || true
   echo
   echo "===== worker ====="
-  ./run_dynamo_worker.sh logs || true
+  ./run_dynamo_worker.sh logs "${LOG_MODE}" || true
 }
 
 test_basic() {
