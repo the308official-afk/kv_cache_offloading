@@ -6,9 +6,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shutil
+import subprocess
+import sys
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
+
+CURRENT_FILE = Path(__file__).resolve()
+REPO_ROOT = CURRENT_FILE.parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 try:
     from datasets import load_dataset
@@ -25,21 +34,17 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 try:
-    from deepagents import create_deep_agent
+    from agentbench.deepagents_app.src.agent import (
+        run_task_workflow,
+    )
 except ImportError as exc:  # pragma: no cover
     raise SystemExit(
-        "deepagents is required. Install with: python3 -m pip install -r agentbench/requirements.txt"
-    ) from exc
-
-try:
-    from langchain_openai import ChatOpenAI
-except ImportError as exc:  # pragma: no cover
-    raise SystemExit(
-        "langchain-openai is required. Install with: python3 -m pip install -r agentbench/requirements.txt"
+        "The Deep Agents app modules could not be imported. "
+        "If dependencies are missing, install them with: python3 -m pip install -r agentbench/requirements.txt. "
+        f"Original import error: {exc}"
     ) from exc
 
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
 RESULTS_DIR = REPO_ROOT / "agentbench" / "results"
 DEFAULT_RESULTS_TIMEZONE = "America/Chicago"
 DEFAULT_HINTS = {
@@ -47,16 +52,20 @@ DEFAULT_HINTS = {
     "reuse_likelihood": 0.9,
     "agent_phase": "execution",
     "latency_sensitivity": 0.7,
-    "program_id": "agentbench.deepagents.swebench_pro",
+    "program_id": "agentbench.deepagents_app",
     "context_type": "software_engineering_long_horizon",
     "expected_output_tokens": 512,
 }
 
 
-def frontend_base_url(frontend_url: str) -> str:
-    if "/v1/chat/completions" in frontend_url:
-        return frontend_url.replace("/v1/chat/completions", "/v1")
-    return frontend_url.rstrip("/")
+def run_command(command: list[str], *, cwd: Path | None = None, check: bool = True) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        command,
+        cwd=str(cwd) if cwd else None,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
 
 
 def load_swebench_task(
@@ -64,9 +73,14 @@ def load_swebench_task(
     dataset_name: str | None,
     split: str,
     csv_path: str | None,
+    json_path: str | None,
     index: int,
     instance_id: str | None,
 ) -> dict:
+    # [CHECK_POINT] One SWE-bench Pro task enters the agent harness here.
+    if json_path:
+        return json.loads(Path(json_path).read_text(encoding="utf-8"))
+
     if csv_path:
         rows = pd.read_csv(csv_path)
         if instance_id:
@@ -92,63 +106,6 @@ def load_swebench_task(
     return dict(ds[index])
 
 
-def format_task_prompt(task: dict) -> str:
-    repo = task.get("repo", "unknown_repo")
-    instance_id = task.get("instance_id", "unknown_instance")
-    problem_statement = task.get("problem_statement", "").strip()
-    requirements = str(task.get("requirements", "")).strip()
-    interface = str(task.get("interface", "")).strip()
-    selected_tests = str(task.get("selected_test_files_to_run", "")).strip()
-
-    return f"""You are working on one SWE-bench Pro software engineering task.
-
-Task metadata:
-- instance_id: {instance_id}
-- repo: {repo}
-
-Problem statement:
-{problem_statement}
-
-Requirements:
-{requirements if requirements else "None provided."}
-
-Interface / environment notes:
-{interface if interface else "None provided."}
-
-Selected tests to run:
-{selected_tests if selected_tests else "Not provided."}
-
-Your job:
-1. Break this task into concrete steps.
-2. Identify what information would be needed to solve it well.
-3. Produce a structured plan for solving it.
-4. Give a first-pass solution strategy.
-
-Do not claim that code was changed or tests were run unless you actually did so.
-Focus on decomposition, reasoning, and a clear action plan."""
-
-
-def build_agent(frontend_url: str, model: str, hint_json: str):
-    extra_body = {"nvext": {"agent_hints": json.loads(hint_json)}}
-    llm = ChatOpenAI(
-        model=model,
-        base_url=frontend_base_url(frontend_url),
-        api_key="dummy",
-        temperature=0.0,
-        max_tokens=2048,
-        timeout=300,
-        extra_body=extra_body,
-    )
-    return create_deep_agent(
-        model=llm,
-        system_prompt=(
-            "You are a careful software engineering agent. "
-            "Break hard tasks into manageable steps, keep your reasoning organized, "
-            "and produce a clear plan before attempting a solution."
-        ),
-    )
-
-
 def save_result(run_dir: Path, payload: dict) -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     (run_dir / "result.json").write_text(
@@ -171,13 +128,110 @@ def stringify_unknown(value):
     return repr(value)
 
 
+def prepare_workspace(
+    *,
+    run_dir: Path,
+    repo_path: str | None,
+    repo_url: str | None,
+) -> tuple[Path | None, dict]:
+    # [CHECK_POINT] A writable repo workspace for the agent is prepared here.
+    if not repo_path and not repo_url:
+        return None, {"workspace_mode": "none"}
+
+    workspace_dir = run_dir / "workspace"
+    metadata: dict[str, str] = {"workspace_mode": "none"}
+
+    if repo_path:
+        source_repo = Path(repo_path).expanduser().resolve()
+        if not source_repo.exists():
+            raise SystemExit(f"--repo-path does not exist: {source_repo}")
+        try:
+            run_command(["git", "clone", "--no-hardlinks", str(source_repo), str(workspace_dir)])
+            metadata = {
+                "workspace_mode": "local_clone",
+                "source_repo_path": str(source_repo),
+                "workspace_path": str(workspace_dir),
+            }
+        except Exception:  # noqa: BLE001
+            shutil.copytree(source_repo, workspace_dir, dirs_exist_ok=True)
+            git_dir = workspace_dir / ".git"
+            if not git_dir.exists():
+                metadata = {
+                    "workspace_mode": "local_copy_non_git",
+                    "source_repo_path": str(source_repo),
+                    "workspace_path": str(workspace_dir),
+                }
+            else:
+                metadata = {
+                    "workspace_mode": "local_copy_git_repo",
+                    "source_repo_path": str(source_repo),
+                    "workspace_path": str(workspace_dir),
+                }
+        return workspace_dir, metadata
+
+    assert repo_url is not None
+    run_command(["git", "clone", repo_url, str(workspace_dir)])
+    metadata = {
+        "workspace_mode": "remote_clone",
+        "source_repo_url": repo_url,
+        "workspace_path": str(workspace_dir),
+    }
+    return workspace_dir, metadata
+
+
+def collect_workspace_artifacts(run_dir: Path, workspace_dir: Path | None) -> dict:
+    # [CHECK_POINT] Git patch and workspace artifacts are captured here.
+    if workspace_dir is None:
+        return {"workspace_present": False}
+
+    artifacts: dict[str, object] = {
+        "workspace_present": True,
+        "workspace_path": str(workspace_dir),
+        "git_repo": False,
+    }
+    git_dir = workspace_dir / ".git"
+    if not git_dir.exists():
+        return artifacts
+
+    artifacts["git_repo"] = True
+    status = run_command(["git", "status", "--short"], cwd=workspace_dir, check=False)
+    diff = run_command(["git", "diff", "--binary"], cwd=workspace_dir, check=False)
+    diff_stat = run_command(["git", "diff", "--stat"], cwd=workspace_dir, check=False)
+    head = run_command(["git", "rev-parse", "HEAD"], cwd=workspace_dir, check=False)
+
+    patch_path = run_dir / "workspace.patch"
+    patch_path.write_text(diff.stdout, encoding="utf-8")
+    (run_dir / "git_status.txt").write_text(status.stdout, encoding="utf-8")
+    (run_dir / "git_diff_stat.txt").write_text(diff_stat.stdout, encoding="utf-8")
+
+    artifacts.update(
+        {
+            "git_head": head.stdout.strip(),
+            "git_status": status.stdout,
+            "git_diff_stat": diff_stat.stdout,
+            "patch_file": str(patch_path),
+            "patch_nonempty": bool(diff.stdout.strip()),
+        }
+    )
+    return artifacts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", default="ScaleAI/SWE-bench_Pro")
     parser.add_argument("--split", default="test")
     parser.add_argument("--csv-path")
+    parser.add_argument("--json-path")
     parser.add_argument("--index", type=int, default=0)
     parser.add_argument("--instance-id")
+    parser.add_argument(
+        "--repo-path",
+        help="Local repo checkout to clone into the run workspace before invoking the agent.",
+    )
+    parser.add_argument(
+        "--repo-url",
+        help="Remote git URL to clone into the run workspace before invoking the agent.",
+    )
     parser.add_argument(
         "--frontend-url",
         default="http://127.0.0.1:8000/v1/chat/completions",
@@ -192,33 +246,78 @@ def main() -> None:
         "--results-timezone",
         default=DEFAULT_RESULTS_TIMEZONE,
     )
+    parser.add_argument(
+        "--step-limit",
+        type=int,
+        default=4,
+        help="Maximum number of explicit decomposition steps to dispatch.",
+    )
     args = parser.parse_args()
+
+    results_tz = ZoneInfo(args.results_timezone)
+    run_started_at = datetime.now(results_tz)
+    run_id = run_started_at.strftime("%Y%m%d_%H%M%S")
 
     task = load_swebench_task(
         dataset_name=args.dataset,
         split=args.split,
         csv_path=args.csv_path,
+        json_path=args.json_path,
         index=args.index,
         instance_id=args.instance_id,
     )
-    prompt = format_task_prompt(task)
-    agent = build_agent(args.frontend_url, args.model, args.hint_json)
-
-    results_tz = ZoneInfo(args.results_timezone)
-    run_started_at = datetime.now(results_tz)
-    run_id = run_started_at.strftime("%Y%m%d_%H%M%S")
     safe_instance = str(task.get("instance_id", f"task_{args.index}")).replace("/", "__")
     run_dir = RESULTS_DIR / f"{safe_instance}_{run_id}"
+    run_dir.mkdir(parents=True, exist_ok=True)
 
-    result = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+    workspace_dir, workspace_metadata = prepare_workspace(
+        run_dir=run_dir,
+        repo_path=args.repo_path,
+        repo_url=args.repo_url,
+    )
+    task = dict(task)
+    if workspace_dir is not None:
+        task["workspace_path"] = str(workspace_dir)
+
+    base_hints = json.loads(args.hint_json)
+    workflow = run_task_workflow(
+        frontend_url=args.frontend_url,
+        model=args.model,
+        task=task,
+        base_hints=base_hints,
+        step_limit=args.step_limit,
+        workspace_dir=workspace_dir,
+    )
+    prompt = workflow["prompt"]
+    decomposition_plan = workflow["decomposition_plan"]
+    (run_dir / "plan.json").write_text(
+        json.dumps(decomposition_plan, indent=2, default=stringify_unknown),
+        encoding="utf-8",
+    )
+
+    step_results = workflow["step_results"]
+    (run_dir / "step_results.json").write_text(
+        json.dumps(step_results, indent=2, default=stringify_unknown),
+        encoding="utf-8",
+    )
+
+    result = workflow["result"]
+    (run_dir / "final_summary.txt").write_text(result["response_text"], encoding="utf-8")
+
+    workspace_artifacts = collect_workspace_artifacts(run_dir, workspace_dir)
 
     payload = {
         "run_started_at": run_started_at.isoformat(),
         "frontend_url": args.frontend_url,
         "model": args.model,
-        "hint_json": json.loads(args.hint_json),
+        "hint_json": workflow["resolved_hints"],
         "task": task,
+        "active_harness": "agentbench.deepagents_app",
+        "workspace": workspace_metadata,
+        "workspace_artifacts": workspace_artifacts,
         "prompt": prompt,
+        "decomposition_plan": decomposition_plan,
+        "step_results": step_results,
         "result": result,
     }
     save_result(run_dir, payload)

@@ -1,0 +1,7 @@
+# Scaffold only.
+# This file mirrors upstream Deep Agents example structure but is not yet the
+# active runtime path for local Dynamo execution.
+
+[agent]
+name = "agentbench-single-host-coding-agent"
+model = "anthropic:claude-sonnet-4-5"

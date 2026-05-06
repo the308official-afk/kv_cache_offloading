@@ -1,0 +1,8 @@
+{
+  "instance_id": "sample__single_host__001",
+  "repo": "example/repo",
+  "problem_statement": "A CLI tool is supposed to accept `--dry-run` without changing files, but users report that temporary files are still created during the dry-run path. Analyze the likely causes, break the problem into steps, identify what code locations you would inspect first, and propose a safe fix strategy.",
+  "requirements": "Preserve existing behavior for non-dry-run calls. Avoid claiming that code was edited or tests were executed unless you actually did so.",
+  "interface": "Assume a Python CLI application with an argument parser, a command dispatcher, and helper functions that create temporary working files.",
+  "selected_test_files_to_run": "tests/test_cli_dry_run.py"
+}
