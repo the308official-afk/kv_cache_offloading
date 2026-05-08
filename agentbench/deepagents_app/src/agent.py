@@ -21,6 +21,7 @@ AGENTBENCH_ROOT = APP_ROOT.parents[1]
 UPSTREAM_ROOT = AGENTBENCH_ROOT / "upstream" / "deepagents"
 CLONED_DEEPAGENTS_LIB_ROOT = UPSTREAM_ROOT / "libs" / "deepagents"
 if CLONED_DEEPAGENTS_LIB_ROOT.exists() and str(CLONED_DEEPAGENTS_LIB_ROOT) not in sys.path:
+    # Debugging note: this is the "use the downloaded GitHub repo first" hook.
     sys.path.insert(0, str(CLONED_DEEPAGENTS_LIB_ROOT))
 
 from deepagents import create_deep_agent
@@ -75,6 +76,8 @@ def log_outbound_harness_request(
 
 
 def resolve_app_root(app_variant: str = "local") -> Path:
+    # Debugging note: this selects which instruction/skill surface the run uses.
+    # "local" = our adapted app; "upstream_deploy_coding_agent" = cloned upstream example content.
     if app_variant == "local":
         return APP_ROOT
     if app_variant == "upstream_deploy_coding_agent":
@@ -88,6 +91,7 @@ def load_agent_instructions(app_variant: str = "local") -> str:
     This makes `deepagents_app/` the active configuration surface instead of
     keeping the main workflow guidance embedded in the outer runner.
     """
+    # Debugging note: this is where AGENTS.md and skills are folded into the live agent prompt.
 
     app_root = resolve_app_root(app_variant)
     agents_file = app_root / "AGENTS.md"
@@ -107,12 +111,16 @@ def load_agent_instructions(app_variant: str = "local") -> str:
 
 
 def frontend_base_url(frontend_url: str) -> str:
+    # Debugging note: AgentBench receives a chat-completions URL,
+    # but the OpenAI-compatible client wants the /v1 base URL.
     if "/v1/chat/completions" in frontend_url:
         return frontend_url.replace("/v1/chat/completions", "/v1")
     return frontend_url.rstrip("/")
 
 
 def build_phase_hints(base_hints: dict[str, Any] | None = None, *, phase: str = "execution") -> dict[str, Any]:
+    # Debugging note: this is the hint adaptation hook for Dynamo.
+    # Every planning/step/synthesis request gets its own phase-tagged hint payload.
     hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
         hints.update(base_hints)
@@ -127,6 +135,8 @@ def build_dynamo_chat_model(
     hint_payload: dict[str, Any] | None = None,
     max_tokens: int = 2048,
 ) -> ChatOpenAI:
+    # Debugging note: this is the Deep Agents -> Dynamo adaptation hook.
+    # Instead of sending requests to a cloud model endpoint, the app points ChatOpenAI at local Dynamo.
     payload = hint_payload or dict(DEFAULT_DYNAMO_HINTS)
     extra_body = {"nvext": {"agent_hints": payload}}
     return ChatOpenAI(
@@ -150,6 +160,8 @@ def build_coding_agent(
 ):
     """Create the Deep Agents coding harness backed by a local Dynamo endpoint.
     """
+    # Debugging note: this is the Deep Agents harness construction point.
+    # The returned agent is powered by create_deep_agent(...) but wired to local Dynamo.
 
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
@@ -190,6 +202,8 @@ def response_text(response) -> str:
 
 
 def parse_decomposition_plan(raw_text: str, *, fallback_count: int) -> list[dict]:
+    # Debugging note: this parser lets the workflow survive weak planning output.
+    # It prefers JSON, but falls back to extracting step-like lines from plain prose.
     json_match = re.search(r"\{[\s\S]*\}", raw_text)
     candidate_texts = [raw_text]
     if json_match:
@@ -268,6 +282,8 @@ def generate_decomposition_plan(
 ) -> dict:
     # [CHECK_POINT 3] The harness explicitly decomposes the hard task into steps here.
     # [CHECK_POINT 3] Planning phase happens here.
+    # Debugging note: this is the planning-stage model request.
+    # It turns one task prompt into a decomposition plan before any step execution happens.
     planning_hints = build_phase_hints(base_hints, phase="planning")
     planning_hints["latency_sensitivity"] = 0.4
     planning_hints["expected_output_tokens"] = 512
@@ -358,6 +374,8 @@ def execute_plan_steps(
 ) -> list[dict]:
     # [CHECK_POINT 4] The harness sends explicit step-level requests to the frontend here.
     # [CHECK_POINT 4] Step-by-step execution happens here.
+    # Debugging note: this is the step-execution loop.
+    # The app sends one Deep Agents request per planned step and optionally operates inside the repo workspace.
     step_results: list[dict] = []
     prior_step_summaries: list[str] = []
     original_cwd = Path.cwd()
@@ -367,6 +385,7 @@ def execute_plan_steps(
             os.chdir(workspace_dir)
 
         for idx, step in enumerate(plan_steps, start=1):
+            # Debugging note: each iteration here becomes one Checkpoint 4 payload.
             step_hints = build_phase_hints(base_hints, phase=f"step_{idx}_execution")
             step_hints["expected_output_tokens"] = 768
             agent = build_coding_agent(
@@ -446,6 +465,8 @@ def synthesize_final_summary(
 ) -> dict:
     # [CHECK_POINT 5] The harness synthesizes the multi-step results into a final answer here.
     # [CHECK_POINT 5] Final synthesis happens here.
+    # Debugging note: this is the final merge stage.
+    # It collects all prior step outputs and asks the model for one combined answer.
     synthesis_hints = build_phase_hints(base_hints, phase="synthesis")
     synthesis_hints["expected_output_tokens"] = 768
     llm = build_dynamo_chat_model(
@@ -509,6 +530,9 @@ def run_task_workflow(
     task_source: str | None = None,
 ) -> dict:
     """Run the active multi-step Deep Agents workflow for one task."""
+    # Debugging note: this is the app-layer orchestration entry point.
+    # The wrapper calls this once per run, and this function owns:
+    # prompt building, planning, step execution, synthesis, and returned artifacts.
 
     prompt = format_swebench_task_prompt(task)
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)

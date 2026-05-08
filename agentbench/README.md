@@ -17,6 +17,7 @@ Install Python dependencies. `deepagents` requires Python `3.11+`:
 
 ```bash
 sudo dnf install -y python3.11 python3.11-pip
+sudo dnf install -y git
 cd ~/kv_cache_offloading
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
@@ -44,7 +45,7 @@ Checkpoint map:
 
 Use this as the main upstream-based testbed. It supports both the local sample task and `SWE-bench Pro` while using the cloned upstream `deploy-coding-agent` instructions and skills.
 
-Flow: `task source (sample task or SWE-bench Pro) -> upstream deploy-coding-agent instructions + skills -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
+Flow: `task source (sample task or SWE-bench Pro) -> for SWE-bench dataset tasks, cache GitHub repo under agentbench/repos/ and use that shared checkout at the task base commit -> upstream deploy-coding-agent instructions + skills -> decomposition plan -> step-level deepagents requests -> final synthesis -> Dynamo frontend -> single local SGLang worker`
 
 Sample task:
 
@@ -82,6 +83,10 @@ Notes:
 - uses the cloned upstream `deploy-coding-agent` instructions and skills
 - still runs through your local single-host Dynamo path
 - defaults to `agentbench/sample_task.json` when no task source is passed
+- for real `SWE-bench Pro` dataset tasks, AgentBench now keeps a shared writable GitHub checkout under `agentbench/repos/<owner>__<repo>/`
+- each run uses that shared checkout directly and checks out the task base commit there when available
+- edits made during one run remain in that shared checkout unless you clean or reset it yourself
+- manual `--repo-path` or `--repo-url` still overrides the automatic SWE-bench checkout path
 - this is the best candidate for your core testbed
 
 ## Inspect Results
@@ -107,7 +112,6 @@ cat "$LATEST_RUN/workspace.patch"
 ## Current Limitations
 
 - this is not yet the official SWE-bench Pro scoring pipeline
-- it does not yet automatically materialize the exact official SWE-bench Pro repo/commit pair from task metadata
 - it does not yet gather predictions in the official SWE-bench Pro submission format
 - it does not yet run the official SWE-bench Pro evaluator
 - hints already vary by phase (`planning`, `step_n_execution`, `synthesis`), but they are not yet adaptively changed from runtime observations or tool outcomes
