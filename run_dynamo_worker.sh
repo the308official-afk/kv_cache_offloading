@@ -132,6 +132,7 @@ start_worker() {
     -v "${DYNAMO_CACHE_DIR}:/models/hfcache" \
     -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}" \
     -e NATS_SERVER="${NATS_SERVER}" \
+    -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}" \
     -e HF_TOKEN="${HF_TOKEN:-}" \
     "${WORKER_IMAGE}" \
     bash -lc "python3 -m dynamo.sglang \

@@ -1,0 +1,4027 @@
+--- a/components/src/dynamo/common/runtime_logging.py
++++ b/components/src/dynamo/common/runtime_logging.py
+@@ -0,0 +1,169 @@
++"""Helpers for opt-in structured runtime JSON logging."""
++
++from __future__ import annotations
++
++import json
++import logging
++import os
++from typing import Any
++
++_RUNTIME_JSON_ENV = "DYN_RUNTIME_JSON_LOGS"
++_RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
++_OBSERVABILITY_KEY = "runtime_observability"
++
++
++def runtime_json_logs_enabled() -> bool:
++    return os.environ.get(_RUNTIME_JSON_ENV, "").lower() not in ("", "0", "false")
++
++
++def _sanitize(value: Any) -> Any:
++    if value is None or isinstance(value, (bool, int, float, str)):
++        return value
++    if isinstance(value, dict):
++        sanitized: dict[str, Any] = {}
++        for key, item in value.items():
++            if key is None:
++                continue
++            sanitized[str(key)] = _sanitize(item)
++        return sanitized
++    if isinstance(value, (list, tuple, set)):
++        return [_sanitize(item) for item in value]
++
++    model_dump = getattr(value, "model_dump", None)
++    if callable(model_dump):
++        return _sanitize(model_dump())
++
++    tolist = getattr(value, "tolist", None)
++    if callable(tolist):
++        try:
++            return _sanitize(tolist())
++        except Exception:
++            pass
++
++    return str(value)
++
++
++def extract_runtime_observability(request: dict[str, Any]) -> dict[str, Any]:
++    extra_args = request.get("extra_args")
++    if not isinstance(extra_args, dict):
++        return {}
++    runtime_observability = extra_args.get(_OBSERVABILITY_KEY)
++    if not isinstance(runtime_observability, dict):
++        return {}
++    return _sanitize(runtime_observability)
++
++
++def extract_request_context(request: dict[str, Any]) -> dict[str, Any] | None:
++    nvext = request.get("nvext")
++    if isinstance(nvext, dict):
++        request_context = nvext.get("request_context")
++        if isinstance(request_context, dict):
++            return _sanitize(request_context)
++
++    runtime_observability = extract_runtime_observability(request)
++    request_context = runtime_observability.get("request_context")
++    if isinstance(request_context, dict):
++        return _sanitize(request_context)
++
++    nested_nvext = runtime_observability.get("nvext")
++    if isinstance(nested_nvext, dict):
++        request_context = nested_nvext.get("request_context")
++        if isinstance(request_context, dict):
++            return _sanitize(request_context)
++
++    return None
++
++
++def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
++    nvext = request.get("nvext")
++    if isinstance(nvext, dict):
++        agent_hints = nvext.get("agent_hints")
++        if isinstance(agent_hints, dict):
++            return _sanitize(agent_hints)
++
++    runtime_observability = extract_runtime_observability(request)
++    agent_hints = runtime_observability.get("agent_hints")
++    if isinstance(agent_hints, dict):
++        return _sanitize(agent_hints)
++
++    nested_nvext = runtime_observability.get("nvext")
++    if isinstance(nested_nvext, dict):
++        agent_hints = nested_nvext.get("agent_hints")
++        if isinstance(agent_hints, dict):
++            return _sanitize(agent_hints)
++
++    return None
++
++
++def preferred_request_id(request: dict[str, Any], fallback: str | None = None) -> str | None:
++    request_context = extract_request_context(request)
++    if isinstance(request_context, dict):
++        request_id = request_context.get("request_id")
++        if isinstance(request_id, str) and request_id:
++            return request_id
++
++    runtime_observability = extract_runtime_observability(request)
++    runtime_request_id = runtime_observability.get("runtime_request_id")
++    if isinstance(runtime_request_id, str) and runtime_request_id:
++        return runtime_request_id
++
++    frontend_request_id = runtime_observability.get("frontend_request_id")
++    if isinstance(frontend_request_id, str) and frontend_request_id:
++        return frontend_request_id
++
++    return fallback
++
++
++def build_runtime_observability_extra_args(
++    request: dict[str, Any],
++    frontend_request_id: str,
++    runtime_request_id: str,
++) -> dict[str, Any] | None:
++    base_extra_args = request.get("extra_args")
++    extra_args = _sanitize(base_extra_args) if isinstance(base_extra_args, dict) else {}
++
++    runtime_observability: dict[str, Any] = {
++        "frontend_request_id": frontend_request_id,
++        "runtime_request_id": runtime_request_id,
++    }
++
++    request_context = extract_request_context(request)
++    if request_context:
++        runtime_observability["request_context"] = request_context
++
++    agent_hints = extract_agent_hints(request)
++    if agent_hints:
++        runtime_observability["agent_hints"] = agent_hints
++
++    if request_context or agent_hints:
++        runtime_observability["nvext"] = {}
++        if request_context:
++            runtime_observability["nvext"]["request_context"] = request_context
++        if agent_hints:
++            runtime_observability["nvext"]["agent_hints"] = agent_hints
++
++    extra_args[_OBSERVABILITY_KEY] = runtime_observability
++    return extra_args
++
++
++def emit_runtime_event(
++    logger: logging.Logger,
++    event_type: str,
++    component: str,
++    **payload: Any,
++) -> None:
++    if not runtime_json_logs_enabled():
++        return
++
++    event: dict[str, Any] = {
++        "event_type": event_type,
++        "component": component,
++    }
++    for key, value in payload.items():
++        event[key] = _sanitize(value)
++
++    logger.info(
++        "%s %s",
++        _RUNTIME_JSON_PREFIX,
++        json.dumps(event, sort_keys=True, separators=(",", ":")),
++    )
+--- a/components/src/dynamo/frontend/sglang_processor.py
++++ b/components/src/dynamo/frontend/sglang_processor.py
+@@ -0,0 +1,844 @@
++#  SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++#  SPDX-License-Identifier: Apache-2.0
++
++#
++# Use SGLang for input and output processing
++#
++
++import asyncio
++import logging
++import os
++import time
++from collections.abc import AsyncGenerator
++from concurrent.futures import ProcessPoolExecutor
++from concurrent.futures import wait as _futures_wait
++from dataclasses import dataclass
++from typing import Any
++
++from sglang.srt.utils.hf_transformers_utils import get_tokenizer
++
++from dynamo._core import Client
++from dynamo._internal import ModelDeploymentCard
++from dynamo.common.runtime_logging import (
++    build_runtime_observability_extra_args,
++    emit_runtime_event,
++    extract_agent_hints,
++    extract_request_context,
++    preferred_request_id,
++)
++from dynamo.frontend.frontend_args import FrontendConfig
++from dynamo.llm import (
++    KvRouter,
++    ModelCardInstanceId,
++    PythonAsyncEngine,
++    RouterConfig,
++    RouterMode,
++    fetch_model,
++)
++from dynamo.llm.exceptions import InvalidArgument, Unknown
++from dynamo.runtime import DistributedRuntime
++
++from .sglang_prepost import (
++    SglangStreamingPostProcessor,
++    ToolCallParserType,
++    _client_wants_separate_reasoning,
++    _get_history_tool_calls_count,
++    convert_tools,
++    create_parsers,
++    detect_force_reasoning_from_template,
++    preprocess_chat_request,
++)
++from .utils import (
++    PreprocessError,
++    extract_mm_urls,
++    nvext_extra_field_requested,
++    random_uuid,
++    worker_warmup,
++)
++
++logger = logging.getLogger(__name__)
++
++
++def _runtime_config_parser_name(
++    mdc: ModelDeploymentCard,
++    key: str,
++) -> str | None:
++    runtime_config = mdc.runtime_config()
++    if not isinstance(runtime_config, dict):
++        return None
++    value = runtime_config.get(key)
++    return value if isinstance(value, str) and value else None
++
++
++def _unsupported_n_message(n: int) -> str:
++    return f"Unsupported value: 'n={n}'. " "This endpoint currently supports only n=1."
++
++
++def _engine_error_message(
++    engine_response: Any,
++    request_id: str,
++) -> str:
++    """Extract a human-readable message from an invalid engine response."""
++    if isinstance(engine_response, dict) and engine_response.get("status") == "error":
++        backend_msg = engine_response.get("message") or "unknown backend error"
++        return f"Backend error for request {request_id}: {backend_msg}"
++    return f"Invalid engine response for request {request_id}"
++
++
++_FINISH_REASON_MAP: dict[str, str] = {
++    "eos": "stop",
++    "stop": "stop",
++    "length": "length",
++    "error": "error",
++    "abort": "stop",
++    "cancelled": "stop",
++    "content_filter": "stop",
++}
++
++
++def _map_finish_reason(raw: str | None) -> str | None:
++    """Map Dynamo router finish reasons to OpenAI finish reasons.
++
++    Exact matches use the dict.  Prefixed variants (``error:timeout``,
++    ``abort:cancelled``) are handled by ``startswith`` fallbacks.
++    """
++    if raw is None:
++        return None
++    mapped = _FINISH_REASON_MAP.get(raw)
++    if mapped is not None:
++        return mapped
++    if raw.startswith("error"):
++        return "error"
++    if raw.startswith("abort"):
++        return "stop"
++    return raw
++
++
++# ---------------------------------------------------------------------------
++# Worker process globals (initialized once per process by _init_worker)
++# ---------------------------------------------------------------------------
++_w_tokenizer: Any = None
++_w_tool_call_parser_name: str | None = None
++_w_reasoning_parser_name: str | None = None
++_w_exclude_tools_when_tool_choice_none: bool = True
++_w_template_force_reasoning: bool = False
++
++
++@dataclass
++class SglangPreprocessWorkerResult:
++    """Picklable return value from the SGLang preprocess worker."""
++
++    prompt_token_ids: list[int]
++    dynamo_preproc: dict[str, Any]
++    request: dict[str, Any]
++    force_reasoning: bool = False
++    # ``effective_reasoning_parser_name`` is None when the request opted out
++    # via ``separate_reasoning=False``; the main process must skip creating
++    # a reasoning parser in that case so the pool path matches the inline
++    # path byte-for-byte.
++    effective_reasoning_parser_name: str | None = None
++
++
++def _init_worker(
++    model_path: str,
++    tool_call_parser_name: str | None,
++    reasoning_parser_name: str | None,
++    exclude_tools_when_tool_choice_none: bool = True,
++    trust_remote_code: bool = False,
++    template_force_reasoning: bool = False,
++) -> None:
++    """Initialize a worker process with its own tokenizer."""
++    global _w_tokenizer, _w_tool_call_parser_name, _w_reasoning_parser_name
++    global _w_exclude_tools_when_tool_choice_none, _w_template_force_reasoning
++    _w_tokenizer = get_tokenizer(model_path, trust_remote_code=trust_remote_code)
++    _w_tool_call_parser_name = tool_call_parser_name
++    _w_reasoning_parser_name = reasoning_parser_name
++    _w_exclude_tools_when_tool_choice_none = exclude_tools_when_tool_choice_none
++    _w_template_force_reasoning = template_force_reasoning
++
++
++def _preprocess_worker(
++    request: dict[str, Any],
++    model_name: str,
++    eos_token_id: int | None,
++) -> SglangPreprocessWorkerResult:
++    """Preprocess a request in a worker process and return a picklable result."""
++    pre = preprocess_chat_request(
++        request,
++        tokenizer=_w_tokenizer,
++        tool_call_parser_name=_w_tool_call_parser_name,
++        reasoning_parser_name=_w_reasoning_parser_name,
++        exclude_tools_when_tool_choice_none=_w_exclude_tools_when_tool_choice_none,
++        template_force_reasoning=_w_template_force_reasoning,
++    )
++
++    n = request.get("n", 1)
++    if n != 1:
++        raise PreprocessError(_unsupported_n_message(n))
++
++    dynamo_preproc = _build_dynamo_preproc(
++        request,
++        pre.prompt_token_ids,
++        model_name,
++        eos_token_id,
++        pre.guided_decoding,
++        pre.tool_call_parser,
++    )
++
++    effective_reasoning_parser_name = (
++        _w_reasoning_parser_name if _client_wants_separate_reasoning(request) else None
++    )
++
++    return SglangPreprocessWorkerResult(
++        prompt_token_ids=pre.prompt_token_ids,
++        dynamo_preproc=dynamo_preproc,
++        request=request,
++        force_reasoning=pre.force_reasoning,
++        effective_reasoning_parser_name=effective_reasoning_parser_name,
++    )
++
++
++def _build_dynamo_preproc(
++    request: dict[str, Any],
++    prompt_token_ids: list[int],
++    model_name: str,
++    eos_token_id: int | None,
++    guided_decoding: dict[str, Any] | None = None,
++    tool_call_parser: ToolCallParserType | None = None,
++    frontend_request_id: str | None = None,
++    runtime_request_id: str | None = None,
++) -> dict[str, Any]:
++    """Build the Dynamo preprocessed request dict from request fields."""
++    max_tokens = request.get("max_completion_tokens") or request.get("max_tokens")
++
++    stop = request.get("stop")
++    stop_token_ids = request.get("stop_token_ids", [])
++    if isinstance(stop, str):
++        stop = [stop]
++    elif isinstance(stop, list) and all(
++        isinstance(item, int) and not isinstance(item, bool) for item in stop
++    ):
++        stop_token_ids = [*stop_token_ids, *stop]
++        stop = []
++    elif stop is None:
++        stop = []
++
++    # Handle logprobs
++    logprobs_val = None
++    logprobs = request.get("logprobs")
++    top_logprobs = request.get("top_logprobs")
++    if logprobs is True:
++        logprobs_val = top_logprobs or 1
++    elif isinstance(logprobs, int) and not isinstance(logprobs, bool):
++        logprobs_val = logprobs
++    elif top_logprobs not in (None, 0):
++        logprobs_val = top_logprobs
++
++    preproc = {
++        "model": model_name,
++        "token_ids": prompt_token_ids,
++        "stop_conditions": {
++            "max_tokens": max_tokens,
++            "stop": stop,
++            "stop_token_ids": stop_token_ids,
++            "min_tokens": request.get("min_tokens", 0),
++            "ignore_eos": request.get("ignore_eos", False),
++        },
++        "sampling_options": {
++            "n": request.get("n", 1),
++            "presence_penalty": request.get("presence_penalty", 0.0),
++            "frequency_penalty": request.get("frequency_penalty", 0.0),
++            "repetition_penalty": request.get("repetition_penalty", 1.0),
++            "temperature": request.get("temperature", 1.0),
++            "top_p": request.get("top_p", 1.0),
++            # SGLang uses -1 for "disabled", OpenAI/vLLM use 0
++            "top_k": request.get("top_k", 0) or -1,
++            "min_p": request.get("min_p", 0.0),
++            "seed": request.get("seed"),
++            "guided_decoding": guided_decoding,
++        },
++        "output_options": {
++            "logprobs": logprobs_val,
++            "prompt_logprobs": None,
++            # Preserve special tokens only when a tool-call parser is
++            # actually active — the parser needs delimiter tokens
++            # (e.g. <|tool_call|>) to detect calls. Mirrors the
++            # post-processor's _skip_special_tokens logic.
++            "skip_special_tokens": tool_call_parser is None,
++            "return_tokens_as_token_ids": request.get("return_tokens_as_token_ids"),
++        },
++        "eos_token_ids": [eos_token_id] if eos_token_id is not None else [],
++        "annotations": [],
++        "routing": request.get("routing"),
++    }
++
++    # Forward multimodal URLs so the backend handler can load the media.
++    mm_data = extract_mm_urls(request.get("messages", []))
++    if mm_data:
++        preproc["multi_modal_data"] = mm_data
++
++    if frontend_request_id and runtime_request_id:
++        extra_args = build_runtime_observability_extra_args(
++            request,
++            frontend_request_id=frontend_request_id,
++            runtime_request_id=runtime_request_id,
++        )
++        if extra_args:
++            preproc["extra_args"] = extra_args
++
++    return preproc
++
++
++class SglangProcessor:
++    def __init__(
++        self,
++        tokenizer,
++        router,  # Client or KvRouter
++        tool_call_parser_name: str | None,
++        reasoning_parser_name: str | None,
++        eos_token_id: int | None,
++        debug_perf: bool = False,
++        preprocess_pool: ProcessPoolExecutor | None = None,
++        preprocess_workers: int = 0,
++        stream_interval: int = 1,
++    ):
++        self.tokenizer = tokenizer
++        # Detect force_reasoning once from the chat template, matching
++        # sglang's template_manager. Per-request overrides still apply
++        # (see resolve_request_force_reasoning).
++        self.template_force_reasoning = detect_force_reasoning_from_template(
++            getattr(tokenizer, "chat_template", None)
++        )
++        if self.template_force_reasoning:
++            logger.info(
++                "Detected force-reasoning pattern in chat template; "
++                "thinking tokens will route to delta.reasoning_content by "
++                "default (clients can opt out via "
++                "separate_reasoning=false or "
++                "chat_template_kwargs.enable_thinking=false)."
++            )
++        self.router = router
++        self.is_kv_router = isinstance(router, KvRouter)
++        self.tool_call_parser_name = tool_call_parser_name
++        self.reasoning_parser_name = reasoning_parser_name
++        self.exclude_tools_when_tool_choice_none = True
++        self.eos_token_id = eos_token_id
++        self.debug_perf = debug_perf
++        self.stream_interval = stream_interval
++        self.preprocess_pool = preprocess_pool
++        if preprocess_pool is not None:
++            self._worker_semaphore: asyncio.Semaphore | None = asyncio.Semaphore(
++                preprocess_workers + 2
++            )
++        else:
++            self._worker_semaphore = None
++
++    async def generator(
++        self, request: dict[str, Any]
++    ) -> AsyncGenerator[dict[str, Any], None]:
++        """Main entry point: preprocess, route, post-process a chat request."""
++        if self.debug_perf:
++            from .perf_instrumentation import (  # type: ignore[import-not-found, import-untyped]
++                enter_generator,
++                exit_generator,
++            )
++
++            active = enter_generator()
++            t_start = time.monotonic()
++            logger.info("[perf] sglang generator enter: active_requests=%d", active)
++
++        try:
++            if self.preprocess_pool is None:
++                async for item in self._generator_inner(request):
++                    yield item
++            else:
++                async for item in self._generator_inner_pool(request):
++                    yield item
++        finally:
++            if self.debug_perf:
++                active = exit_generator()
++                elapsed_ms = (time.monotonic() - t_start) * 1000.0
++                logger.info(
++                    "[perf] sglang generator exit: total=%.2fms active_requests=%d",
++                    elapsed_ms,
++                    active,
++                )
++
++    async def _generator_inner(
++        self, request: dict[str, Any]
++    ) -> AsyncGenerator[dict[str, Any], None]:
++        """Single-process path: preprocess, dispatch, stream post-process."""
++        request_id = random_uuid()
++        runtime_request_id = preferred_request_id(request, fallback=request_id) or request_id
++
++        try:
++            if self.debug_perf:
++                t0 = time.monotonic()
++
++            pre = preprocess_chat_request(
++                request,
++                tokenizer=self.tokenizer,
++                tool_call_parser_name=self.tool_call_parser_name,
++                reasoning_parser_name=self.reasoning_parser_name,
++                exclude_tools_when_tool_choice_none=self.exclude_tools_when_tool_choice_none,
++                template_force_reasoning=self.template_force_reasoning,
++            )
++
++            if self.debug_perf:
++                t1 = time.monotonic()
++                logger.info(
++                    "[perf] sglang preprocess: %.2fms (request=%s)",
++                    (t1 - t0) * 1000.0,
++                    request_id,
++                )
++
++            tokens = pre.prompt_token_ids
++
++            n = request.get("n", 1)
++            if n != 1:
++                logger.error("Unsupported n=%d, only n=1 is supported", n)
++                raise InvalidArgument(_unsupported_n_message(n))
++
++            dynamo_preproc = _build_dynamo_preproc(
++                request,
++                tokens,
++                request["model"],
++                self.eos_token_id,
++                pre.guided_decoding,
++                pre.tool_call_parser,
++                frontend_request_id=request_id,
++                runtime_request_id=runtime_request_id,
++            )
++        except InvalidArgument:
++            raise
++        except Exception as exc:
++            logger.exception("SGLang preprocessing failed for request %s", request_id)
++            raise Unknown(f"Preprocessing error: {exc}") from exc
++
++        emit_runtime_event(
++            logger,
++            "frontend.request.preprocessed",
++            "frontend.sglang_processor",
++            frontend_request_id=request_id,
++            runtime_request_id=runtime_request_id,
++            model=request["model"],
++            kv_router=self.is_kv_router,
++            prompt_tokens=len(tokens),
++            request_context=extract_request_context(request),
++            agent_hints=extract_agent_hints(request),
++        )
++
++        post = SglangStreamingPostProcessor(
++            tokenizer=self.tokenizer,
++            tool_call_parser=pre.tool_call_parser,
++            reasoning_parser=pre.reasoning_parser,
++            history_tool_calls_count=_get_history_tool_calls_count(
++                request.get("messages", [])
++            ),
++            sglang_tools=convert_tools(request.get("tools")),
++            tool_call_parser_name=self.tool_call_parser_name,
++        )
++
++        async for item in self._generate_and_stream(
++            request_id, runtime_request_id, request, dynamo_preproc, tokens, post
++        ):
++            yield item
++
++    async def _generator_inner_pool(
++        self, request: dict[str, Any]
++    ) -> AsyncGenerator[dict[str, Any], None]:
++        """Pool path: preprocess in worker, stream in main process."""
++        request_id = random_uuid()
++        runtime_request_id = preferred_request_id(request, fallback=request_id) or request_id
++
++        # --- Phase 1: Preprocess (semaphore held) ---
++        assert self._worker_semaphore is not None
++        assert self.preprocess_pool is not None
++        try:
++            async with self._worker_semaphore:
++                future = self.preprocess_pool.submit(
++                    _preprocess_worker,
++                    request,
++                    request["model"],
++                    self.eos_token_id,
++                )
++                preproc_result: SglangPreprocessWorkerResult = (
++                    await asyncio.wrap_future(future)
++                )
++        except PreprocessError as exc:
++            raise InvalidArgument(str(exc)) from exc
++        except Exception as exc:
++            logger.exception(
++                "SGLang worker preprocessing failed for request %s", request_id
++            )
++            raise Unknown(f"Worker error: {exc}") from exc
++
++        # --- Phase 2: Recreate parsers in main process (not picklable) ---
++        # The worker already decided effective_reasoning_parser_name based on
++        # the request's separate_reasoning flag and computed force_reasoning;
++        # we mirror those choices to keep pool- and inline-path outputs
++        # identical.
++        tool_call_parser, reasoning_parser = create_parsers(
++            request,
++            tool_call_parser_name=self.tool_call_parser_name,
++            reasoning_parser_name=preproc_result.effective_reasoning_parser_name,
++            force_reasoning=preproc_result.force_reasoning,
++        )
++
++        post = SglangStreamingPostProcessor(
++            tokenizer=self.tokenizer,
++            tool_call_parser=tool_call_parser,
++            reasoning_parser=reasoning_parser,
++            history_tool_calls_count=_get_history_tool_calls_count(
++                request.get("messages", [])
++            ),
++            sglang_tools=convert_tools(request.get("tools")),
++            tool_call_parser_name=self.tool_call_parser_name,
++        )
++
++        preproc_result.dynamo_preproc["extra_args"] = build_runtime_observability_extra_args(
++            request,
++            frontend_request_id=request_id,
++            runtime_request_id=runtime_request_id,
++        )
++
++        emit_runtime_event(
++            logger,
++            "frontend.request.preprocessed",
++            "frontend.sglang_processor",
++            frontend_request_id=request_id,
++            runtime_request_id=runtime_request_id,
++            model=request["model"],
++            kv_router=self.is_kv_router,
++            prompt_tokens=len(preproc_result.prompt_token_ids),
++            request_context=extract_request_context(request),
++            agent_hints=extract_agent_hints(request),
++        )
++
++        async for item in self._generate_and_stream(
++            request_id,
++            runtime_request_id,
++            request,
++            preproc_result.dynamo_preproc,
++            preproc_result.prompt_token_ids,
++            post,
++        ):
++            yield item
++
++    async def _generate_and_stream(
++        self,
++        request_id: str,
++        runtime_request_id: str,
++        request: dict[str, Any],
++        dynamo_preproc: dict[str, Any],
++        tokens: list[int],
++        post: SglangStreamingPostProcessor,
++    ) -> AsyncGenerator[dict[str, Any], None]:
++        """Shared streaming logic for both single-process and pool paths."""
++        token_count = 0
++        post_proc_total_ms = 0.0
++        created_ts = int(time.time())
++        stream_interval = self.stream_interval
++        completion_logged = False
++
++        try:
++            if self.is_kv_router:
++                dynamo_stream = await self.router.generate(
++                    token_ids=tokens,
++                    model=dynamo_preproc["model"],
++                    stop_conditions=dynamo_preproc["stop_conditions"],
++                    sampling_options=dynamo_preproc["sampling_options"],
++                    output_options=dynamo_preproc["output_options"],
++                    extra_args=dynamo_preproc.get("extra_args"),
++                    multi_modal_data=dynamo_preproc.get("multi_modal_data"),
++                    request_id=runtime_request_id,
++                )
++            else:
++                dynamo_stream = await self.router.generate(
++                    dynamo_preproc, annotated=False
++                )
++
++            emit_runtime_event(
++                logger,
++                "frontend.request.dispatched",
++                "frontend.sglang_processor",
++                frontend_request_id=request_id,
++                runtime_request_id=runtime_request_id,
++                model=request["model"],
++                kv_router=self.is_kv_router,
++                prompt_tokens=len(tokens),
++                request_context=extract_request_context(request),
++                agent_hints=extract_agent_hints(request),
++            )
++
++            # Accumulate tokens for batched detokenization when
++            # stream_interval > 1.  Flush every N tokens or on
++            # finish_reason.  Use si=1 for the first chunk to minimize
++            # TTFT, then switch to the configured interval.
++            pending_token_ids: list[int] = []
++            pending_usage: dict[str, Any] | None = None
++            first_chunk = True
++
++            async for dynamo_response in dynamo_stream:
++                if self.is_kv_router:
++                    engine_response = dynamo_response
++                elif hasattr(dynamo_response, "data"):
++                    engine_response = dynamo_response.data()
++                else:
++                    engine_response = dynamo_response
++
++                if (
++                    not isinstance(engine_response, dict)
++                    or "token_ids" not in engine_response
++                ):
++                    msg = _engine_error_message(engine_response, request_id)
++                    logger.error(
++                        "Engine returned an invalid response for request %s: %s",
++                        request_id,
++                        engine_response,
++                    )
++                    raise Unknown(msg)
++
++                new_ids = engine_response["token_ids"]
++                raw_finish = engine_response.get("finish_reason")
++                finish_reason = _map_finish_reason(raw_finish)
++                stop_reason = engine_response.get("stop_reason")
++
++                if usage := engine_response.get("completion_usage"):
++                    pending_usage = usage
++
++                pending_token_ids.extend(new_ids)
++
++                # Flush on finish or when we've accumulated enough tokens.
++                # First chunk flushes immediately (si=1) to minimize TTFT.
++                flush_threshold = 1 if first_chunk else stream_interval
++                if finish_reason or len(pending_token_ids) >= flush_threshold:
++                    mapped_response = {
++                        "token_ids": pending_token_ids,
++                        "finish_reason": finish_reason,
++                    }
++
++                    if self.debug_perf:
++                        t_pp0 = time.monotonic()
++
++                    choice = post.process_output(mapped_response)
++
++                    if self.debug_perf:
++                        t_pp1 = time.monotonic()
++                        post_proc_total_ms += (t_pp1 - t_pp0) * 1000.0
++                        token_count += len(pending_token_ids)
++
++                    if choice:
++                        dynamo_out: dict[str, Any] = {
++                            "id": request_id,
++                            "choices": [choice],
++                            "created": created_ts,
++                            "model": request["model"],
++                            "object": "chat.completion.chunk",
++                        }
++                        if pending_usage:
++                            dynamo_out["usage"] = pending_usage
++                        if stop_reason is not None and nvext_extra_field_requested(
++                            request, "stop_reason"
++                        ):
++                            dynamo_out["nvext"] = {"stop_reason": stop_reason}
++
++                        yield dynamo_out
++
++                    if finish_reason and not completion_logged:
++                        emit_runtime_event(
++                            logger,
++                            "frontend.request.completed",
++                            "frontend.sglang_processor",
++                            frontend_request_id=request_id,
++                            runtime_request_id=runtime_request_id,
++                            model=request["model"],
++                            finish_reason=finish_reason,
++                            stop_reason=stop_reason,
++                            usage=pending_usage,
++                            request_context=extract_request_context(request),
++                            agent_hints=extract_agent_hints(request),
++                        )
++                        completion_logged = True
++
++                    pending_token_ids = []
++                    pending_usage = None
++                    first_chunk = False
++        except Unknown:
++            raise
++        except Exception as e:
++            emit_runtime_event(
++                logger,
++                "frontend.request.error",
++                "frontend.sglang_processor",
++                frontend_request_id=request_id,
++                runtime_request_id=runtime_request_id,
++                model=request["model"],
++                error=str(e),
++                request_context=extract_request_context(request),
++                agent_hints=extract_agent_hints(request),
++            )
++            logger.exception("Error generating response for request %s", request_id)
++            raise Unknown(
++                f"Error generating response for request {request_id}: {e}"
++            ) from e
++        finally:
++            if self.debug_perf and token_count > 0:
++                logger.info(
++                    "[perf] sglang stream done: request=%s tokens=%d "
++                    "post_processor_total=%.2fms (%.3fms/tok)",
++                    request_id,
++                    token_count,
++                    post_proc_total_ms,
++                    post_proc_total_ms / token_count,
++                )
++
++
++class SglangEngineFactory:
++    def __init__(
++        self,
++        runtime: DistributedRuntime,
++        router_config: RouterConfig,
++        config: FrontendConfig,
++        debug_perf: bool = False,
++        tool_call_parser_name: str | None = None,
++        reasoning_parser_name: str | None = None,
++    ):
++        self.runtime = runtime
++        self.router_config = router_config
++        self.config = config
++        self.debug_perf = debug_perf
++        self.tool_call_parser_name = tool_call_parser_name
++        self.reasoning_parser_name = reasoning_parser_name
++
++        self.trust_remote_code = config.trust_remote_code
++        self.stream_interval = 20
++        raw_stream_interval = os.getenv("DYN_SGLANG_STREAM_INTERVAL")
++        if raw_stream_interval:
++            try:
++                self.stream_interval = max(1, int(raw_stream_interval))
++            except ValueError:
++                logger.warning(
++                    "Invalid DYN_SGLANG_STREAM_INTERVAL=%r, using default=%d",
++                    raw_stream_interval,
++                    self.stream_interval,
++                )
++
++    async def chat_engine_factory(
++        self,
++        instance_id: ModelCardInstanceId,
++        mdc: ModelDeploymentCard,
++    ) -> PythonAsyncEngine:
++        """Called by Rust when a model is discovered."""
++        model_type = mdc.model_type()
++        if not model_type.supports_chat():
++            raise RuntimeError(
++                f"model type {model_type} is not supported by this factory"
++            )
++        loop = asyncio.get_running_loop()
++
++        source_path = mdc.source_path()
++        if not os.path.exists(source_path):
++            await fetch_model(source_path, ignore_weights=True)
++
++        logger.info("Loading SGLang tokenizer from %s", source_path)
++        tokenizer = get_tokenizer(source_path, trust_remote_code=self.trust_remote_code)
++
++        eos_token_id = getattr(tokenizer, "eos_token_id", None)
++
++        # Static reasoning-template scan (mirrors sglang's template_manager).
++        # Shared with worker-pool processes via initargs so they compute the
++        # same per-request force_reasoning flag as the main process.
++        template_force_reasoning = detect_force_reasoning_from_template(
++            getattr(tokenizer, "chat_template", None)
++        )
++
++        tool_call_parser_name = (
++            self.tool_call_parser_name
++            or _runtime_config_parser_name(mdc, "tool_call_parser")
++        )
++        reasoning_parser_name = (
++            self.reasoning_parser_name
++            or _runtime_config_parser_name(mdc, "reasoning_parser")
++        )
++
++        if tool_call_parser_name:
++            logger.info("SGLang tool call parser: %s", tool_call_parser_name)
++        if reasoning_parser_name:
++            logger.info("SGLang reasoning parser: %s", reasoning_parser_name)
++
++        (namespace_name, component_name, endpoint_name) = instance_id.triple()
++        generate_endpoint = self.runtime.endpoint(
++            f"{namespace_name}.{component_name}.{endpoint_name}"
++        )
++        router: Client | KvRouter
++        if self.router_config.router_mode == RouterMode.KV:
++            router = KvRouter(
++                endpoint=generate_endpoint,
++                block_size=self.config.kv_cache_block_size or 16,
++                kv_router_config=self.router_config.kv_router_config,
++            )
++        else:
++            router = await generate_endpoint.client(
++                router_mode=self.router_config.router_mode
++            )
++
++        preprocess_pool = None
++        preprocess_workers = self.config.preprocess_workers
++        if preprocess_workers > 0:
++            logger.info(
++                "Creating SGLang preprocess worker pool with %d workers for %s",
++                preprocess_workers,
++                source_path,
++            )
++            preprocess_pool = ProcessPoolExecutor(
++                max_workers=preprocess_workers,
++                initializer=_init_worker,
++                initargs=(
++                    source_path,
++                    tool_call_parser_name,
++                    reasoning_parser_name,
++                    self.config.exclude_tools_when_tool_choice_none,
++                    self.trust_remote_code,
++                    template_force_reasoning,
++                ),
++            )
++            futures = [
++                preprocess_pool.submit(worker_warmup) for _ in range(preprocess_workers)
++            ]
++            done, not_done = _futures_wait(futures, timeout=120)
++            if not_done:
++                for f in not_done:
++                    f.cancel()
++                preprocess_pool.shutdown(wait=False, cancel_futures=True)
++                raise RuntimeError(
++                    "Timed out waiting for SGLang preprocess worker pool warmup"
++                )
++            try:
++                for f in done:
++                    f.result()
++            except Exception:
++                preprocess_pool.shutdown(wait=False, cancel_futures=True)
++                raise
++            logger.info(
++                "SGLang preprocess worker pool ready (%d workers)", preprocess_workers
++            )
++
++        logger.info("SGLang processor stream_interval=%d", self.stream_interval)
++
++        gen = SglangProcessor(
++            tokenizer,
++            router,
++            tool_call_parser_name,
++            reasoning_parser_name,
++            eos_token_id,
++            debug_perf=self.debug_perf,
++            preprocess_pool=preprocess_pool,
++            preprocess_workers=preprocess_workers,
++            stream_interval=self.stream_interval,
++        )
++        gen.exclude_tools_when_tool_choice_none = (
++            self.config.exclude_tools_when_tool_choice_none
++        )
++
++        return PythonAsyncEngine(gen.generator, loop)
+--- a/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py
++++ b/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py
+@@ -0,0 +1,823 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import asyncio
++import logging
++import os
++import time
++from typing import Any, AsyncGenerator, Dict, Optional
++
++import pybase64
++import sglang as sgl
++
++from dynamo._core import Context
++from dynamo.common.constants import DisaggregationMode
++from dynamo.common.runtime_logging import (
++    emit_runtime_event,
++    extract_agent_hints,
++    extract_request_context,
++    preferred_request_id,
++)
++from dynamo.common.utils.engine_response import normalize_finish_reason
++from dynamo.common.utils.otel_tracing import build_trace_headers
++from dynamo.sglang._compat import filter_supported_async_generate_kwargs
++from dynamo.sglang.args import Config
++from dynamo.sglang.publisher import DynamoSglangPublisher
++from dynamo.sglang.request_handlers.handler_base import BaseWorkerHandler
++
++# Escape hatch: set to "1" (or any truthy value) to allow top_logprobs_num >= 1.
++# Default-off because SGLang's tokenizer manager detokenizes top-k tokens
++# per-position serially (O(N) per generated token), causing severe latency
++# degradation. Flip once upstream lands batched top-logprob detokenization:
++# https://github.com/sgl-project/sglang/pull/24447
++_ALLOW_TOP_LOGPROBS_ENV = "DYN_SGL_ALLOW_TOP_LOGPROBS"
++
++_TOP_LOGPROBS_UNSUPPORTED_MSG = (
++    "Dynamo's SGLang backend does not currently support logprobs >= 1 due to "
++    "an O(N) per-position detokenization in the upstream sglang tokenizer "
++    "manager. Use logprobs=0 for chosen-token logprobs, or set "
++    "DYN_SGL_ALLOW_TOP_LOGPROBS=1 to override at your own risk. "
++    "Track the upstream fix at https://github.com/sgl-project/sglang/pull/24447."
++)
++
++
++def _decode_request_payload(
++    request: Dict[str, Any],
++    runtime_context_id: str,
++) -> Dict[str, Any]:
++    request_context = extract_request_context(request)
++    agent_hints = extract_agent_hints(request)
++    external_request_id = preferred_request_id(
++        request, fallback=runtime_context_id
++    ) or runtime_context_id
++    return {
++        "external_request_id": external_request_id,
++        "runtime_context_id": runtime_context_id,
++        "request_context": request_context,
++        "agent_hints": agent_hints,
++    }
++
++
++def _top_logprobs_allowed() -> bool:
++    """Return True if the DYN_SGL_ALLOW_TOP_LOGPROBS escape hatch is enabled."""
++    return os.environ.get(_ALLOW_TOP_LOGPROBS_ENV, "").lower() not in ("", "0", "false")
++
++
++def _extract_media_urls(mm_data: Dict[str, Any], media_key: str) -> list[str] | None:
++    """Normalize multimodal URL items from the frontend wire format."""
++
++    items = mm_data.get(media_key)
++    if not items:
++        return None
++
++    urls: list[str] = []
++    for item in items:
++        if isinstance(item, str):
++            urls.append(item)
++            continue
++
++        if isinstance(item, dict):
++            url = item.get("Url")
++            if isinstance(url, str):
++                urls.append(url)
++
++    return urls or None
++
++
++def _nvext_extra_field_requested(request: Dict[str, Any], field: str) -> bool:
++    nvext = request.get("nvext")
++    if not isinstance(nvext, dict):
++        return False
++    extra_fields = nvext.get("extra_fields")
++    if not isinstance(extra_fields, list):
++        return False
++    return field in extra_fields
++
++
++def _user_stop_token_ids(request: Dict[str, Any]) -> set[int]:
++    stop_conditions = request.get("stop_conditions")
++    if isinstance(stop_conditions, dict):
++        return {
++            token_id
++            for token_id in (stop_conditions.get("stop_token_ids") or [])
++            if isinstance(token_id, int) and not isinstance(token_id, bool)
++        }
++
++    stop = request.get("stop")
++    if isinstance(stop, list) and all(
++        isinstance(item, int) and not isinstance(item, bool) for item in stop
++    ):
++        return set(stop)
++
++    return {
++        token_id
++        for token_id in (request.get("stop_token_ids") or [])
++        if isinstance(token_id, int) and not isinstance(token_id, bool)
++    }
++
++
++def _openai_stop_sampling_params(request: Dict[str, Any]) -> Dict[str, Any]:
++    stop = request.get("stop")
++    if isinstance(stop, str):
++        return {"stop": stop}
++    if isinstance(stop, list):
++        if stop and all(
++            isinstance(item, int) and not isinstance(item, bool) for item in stop
++        ):
++            return {"stop_token_ids": stop}
++        if stop and all(isinstance(item, str) for item in stop):
++            return {"stop": stop}
++
++    stop_token_ids = [
++        token_id
++        for token_id in (request.get("stop_token_ids") or [])
++        if isinstance(token_id, int) and not isinstance(token_id, bool)
++    ]
++    if stop_token_ids:
++        return {"stop_token_ids": stop_token_ids}
++    return {}
++
++
++def _extract_sglang_stop_reason(
++    finish_reason: Dict[str, Any] | None,
++    user_stop_token_ids: set[int] | None = None,
++) -> Any | None:
++    """Extract SGLang's matched stop value for Dynamo's stop_reason field."""
++
++    if not finish_reason:
++        return None
++
++    matched = finish_reason.get("matched")
++    if isinstance(matched, bool):
++        return None
++    if isinstance(matched, str):
++        return matched
++    if isinstance(matched, int):
++        if user_stop_token_ids is not None and matched not in user_stop_token_ids:
++            return None
++        return matched
++    if isinstance(matched, list) and all(
++        isinstance(item, int) and not isinstance(item, bool) for item in matched
++    ):
++        if user_stop_token_ids is not None and any(
++            item not in user_stop_token_ids for item in matched
++        ):
++            return None
++        return matched
++
++    return None
++
++
++class DecodeWorkerHandler(BaseWorkerHandler):
++    """Handler for decode workers in both aggregated and disaggregated serving modes."""
++
++    def __init__(
++        self,
++        engine: sgl.Engine,
++        config: Config,
++        publisher: Optional[DynamoSglangPublisher] = None,
++        generate_endpoint=None,
++        shutdown_event: Optional[asyncio.Event] = None,
++    ) -> None:
++        """Initialize decode worker handler.
++
++        Args:
++            engine: The SGLang engine instance.
++            config: SGLang and Dynamo configuration.
++            publisher: Metrics publisher for the worker.
++            shutdown_event: Optional event to signal shutdown.
++            generate_endpoint: The endpoint handle for discovery registration.
++        """
++        super().__init__(
++            engine,
++            config,
++            publisher,
++            generate_endpoint,
++            shutdown_event,
++        )
++        # Resolve the optional return_routed_experts kwarg once. Gating on the
++        # opt-in flag avoids sending the kwarg on sglang builds whose
++        # Engine.async_generate does not declare it (notably the deepseek_v4
++        # branch). Doing this at init keeps the per-request hot path free of
++        # signature inspection.
++        self._routed_experts_kwargs: Dict[
++            str, Any
++        ] = self._resolve_routed_experts_kwargs(self.engine, self.config.server_args)
++        if self.serving_mode == DisaggregationMode.DECODE:
++            logging.info(
++                "Decode worker handler initialized (disaggregated decode mode)"
++            )
++        else:
++            logging.info("Decode worker handler initialized (aggregated mode)")
++
++    @staticmethod
++    def _resolve_routed_experts_kwargs(engine: Any, server_args: Any) -> Dict[str, Any]:
++        """Resolve the return_routed_experts kwarg for this engine.
++
++        Returns ``{"return_routed_experts": True}`` only when the user opted in
++        via ``enable_return_routed_experts=True`` AND the engine's
++        ``async_generate`` signature declares the kwarg. Returns ``{}`` for the
++        default-off path and for sglang builds that do not declare the kwarg
++        (e.g. the ``deepseek_v4`` branch).
++        """
++        if not getattr(server_args, "enable_return_routed_experts", False):
++            return {}
++        return filter_supported_async_generate_kwargs(
++            engine, {"return_routed_experts": True}
++        )
++
++    def cleanup(self) -> None:
++        """Shutdown the engine and cleanup resources."""
++        super().cleanup()
++        self.engine.shutdown()
++        logging.info("Engine shutdown")
++
++    def _build_sampling_params(self, request: Dict[str, Any]) -> Dict[str, Any]:
++        """Build sampling params from request format.
++
++        Args:
++            request: Request dict in either token-based or OpenAI format.
++
++        Returns:
++            Dict of sampling parameters for SGLang engine.
++        """
++        if not self.use_sglang_tokenizer:
++            # Token-based request format
++            sampling_opts = request.get("sampling_options", {})
++            stop_conditions = request.get("stop_conditions", {})
++
++            _hidden = stop_conditions.get("stop_token_ids_hidden") or []
++            _plain = stop_conditions.get("stop_token_ids") or []
++            _merged = list(set(_hidden).union(_plain))
++            stop_token_ids = _merged if _merged else None
++
++            param_mapping = {
++                "temperature": sampling_opts.get("temperature"),
++                "top_p": sampling_opts.get("top_p"),
++                "top_k": sampling_opts.get("top_k"),
++                "n": sampling_opts.get("n"),
++                "max_new_tokens": stop_conditions.get("max_tokens"),
++                "ignore_eos": stop_conditions.get("ignore_eos"),
++                "stop_token_ids": stop_token_ids,
++                **self._get_guided_decoding_params(
++                    sampling_opts.get("guided_decoding")
++                ),
++            }
++        else:
++            # OpenAI request format
++            param_mapping = {
++                "temperature": request.get("temperature"),
++                "top_p": request.get("top_p"),
++                "top_k": request.get("top_k"),
++                "n": request.get("n"),
++                "max_new_tokens": request.get("max_tokens"),
++                **_openai_stop_sampling_params(request),
++                **self._get_guided_decoding_params(request.get("guided_decoding")),
++            }
++
++        # Keep max_new_tokens even when None — SGLang treats None as "generate
++        # until EOS/context-length" whereas omitting it triggers a default of 128.
++        keep_if_none = {"max_new_tokens"}
++        return {
++            k: v for k, v in param_mapping.items() if v is not None or k in keep_if_none
++        }
++
++    @staticmethod
++    def _build_logprob_kwargs(request: Dict[str, Any]) -> Dict[str, Any]:
++        """Build logprob kwargs for SGLang async_generate from output_options.
++
++        Maps the Dynamo output_options format (shared with vLLM/TRT-LLM) to
++        SGLang's async_generate keyword arguments:
++
++          - return_logprob (bool): enables logprob computation
++          - top_logprobs_num (int): number of top-k logprobs per token
++          - logprob_start_len (int): absolute position in the sequence where
++            logprob computation begins. SGLang defaults this to -1, which
++            means len(prompt) - 1 (i.e. output tokens only). Setting it to 0
++            computes logprobs from the start of the prompt — this is how we
++            implement prompt_logprobs. We don't expose logprob_start_len
++            directly; it's an SGLang-internal detail derived from whether the
++            user requested prompt_logprobs.
++
++        Args:
++            request: Request dict containing optional output_options.
++
++        Returns:
++            Dict of logprob-related kwargs for engine.async_generate().
++        """
++        kwargs: Dict[str, Any] = {}
++        output_options = request.get("output_options", {})
++        if not output_options:
++            return kwargs
++
++        allow_top = _top_logprobs_allowed()
++
++        def _parse(name: str, value: Any) -> Optional[int]:
++            try:
++                parsed = int(value)
++            except (ValueError, TypeError):
++                logging.warning(
++                    f"Invalid {name} value: {value} (must be integer), ignoring"
++                )
++                return None
++            if parsed < 0:
++                logging.warning(
++                    f"Invalid {name} value: {value} (must be non-negative), ignoring"
++                )
++                return None
++            if parsed >= 1 and not allow_top:
++                raise ValueError(_TOP_LOGPROBS_UNSUPPORTED_MSG)
++            return parsed
++
++        logprobs_value = output_options.get("logprobs")
++        if logprobs_value is not None:
++            parsed = _parse("logprobs", logprobs_value)
++            if parsed is not None:
++                kwargs["return_logprob"] = True
++                kwargs["top_logprobs_num"] = parsed
++
++        prompt_logprobs_value = output_options.get("prompt_logprobs")
++        if prompt_logprobs_value is not None:
++            parsed = _parse("prompt_logprobs", prompt_logprobs_value)
++            if parsed is not None:
++                kwargs["return_logprob"] = True
++                # SGLang has a single top_logprobs_num for both prompt
++                # and output tokens, so take the max of the two.
++                kwargs["top_logprobs_num"] = max(
++                    kwargs.get("top_logprobs_num", 0), parsed
++                )
++                # logprob_start_len=0 computes from prompt start;
++                # omitting it (or -1) computes output tokens only.
++                kwargs["logprob_start_len"] = 0
++
++        # Belt-and-suspenders: if return_logprob was requested and the gate is
++        # not open, pin top_logprobs_num=0 so no future code path can flip it on.
++        if kwargs.get("return_logprob") and not allow_top:
++            kwargs["top_logprobs_num"] = 0
++
++        return kwargs
++
++    @staticmethod
++    def _extract_logprobs(
++        meta_info: Dict[str, Any],
++        num_output_logprobs_so_far: int,
++        return_tokens_as_token_ids: bool = False,
++    ) -> tuple:
++        """Extract logprobs from SGLang meta_info for new tokens.
++
++        While Dynamo forces stream_output=True (args.py) so that output_ids
++        are disjoint per chunk, SGLang's output_token_logprobs and
++        output_top_logprobs in meta_info are always cumulative. We track an
++        offset to slice out only the new entries each chunk.
++
++        Args:
++            meta_info: SGLang response meta_info dict.
++            num_output_logprobs_so_far: Number of logprob entries already
++                processed in previous chunks.
++
++        Returns:
++            Tuple of (log_probs, top_logprobs, new_total):
++            - log_probs: List of floats (selected token logprob per position)
++            - top_logprobs: List of lists of dicts with rank/token_id/token/logprob
++            - new_total: Updated count of logprob entries processed so far
++        """
++        output_token_logprobs = meta_info.get("output_token_logprobs")
++        if not output_token_logprobs:
++            return None, None, num_output_logprobs_so_far
++
++        new_logprobs = output_token_logprobs[num_output_logprobs_so_far:]
++        if not new_logprobs:
++            return None, None, num_output_logprobs_so_far
++
++        # Extract selected-token logprobs: each entry is (logprob, token_id, text_or_None)
++        log_probs = [float(entry[0]) for entry in new_logprobs]
++
++        # Extract top logprobs if available
++        top_logprobs: list[list[dict[str, Any]]] | None = None
++        output_top = meta_info.get("output_top_logprobs")
++        if output_top:
++            new_top = output_top[num_output_logprobs_so_far:]
++            if new_top:
++                top_logprobs = []
++                for position_entries in new_top:
++                    if position_entries is None:
++                        top_logprobs.append([])
++                        continue
++                    position_list = []
++                    for rank_idx, entry in enumerate(position_entries):
++                        tok_id = entry[1]
++                        token_str = (
++                            f"token_id:{tok_id}"
++                            if return_tokens_as_token_ids
++                            else entry[2]
++                        )
++                        position_list.append(
++                            {
++                                "rank": rank_idx + 1,
++                                "token_id": tok_id,
++                                "token": token_str,
++                                "logprob": float(entry[0]),
++                            }
++                        )
++                    top_logprobs.append(position_list)
++
++        new_total = len(output_token_logprobs)
++        return log_probs, top_logprobs, new_total
++
++    async def generate(
++        self, request: Dict[str, Any], context: Context
++    ) -> AsyncGenerator[Dict[str, Any], None]:
++        """Generate response in aggregated or disaggregated mode.
++
++        Args:
++            request: Request dict with input and sampling parameters.
++            context: Context object for cancellation handling.
++
++        Yields:
++            Response dicts with token_ids or OpenAI-formatted chunks.
++
++        Raises:
++            RuntimeError: If no bootstrap info received from prefill worker.
++        """
++        runtime_context_id = context.id()
++        logging.debug(f"New Request ID: {runtime_context_id}")
++        emit_runtime_event(
++            logging.getLogger(__name__),
++            "worker.decode.request_received",
++            "worker.decode",
++            **_decode_request_payload(request, runtime_context_id),
++            model=self.config.server_args.served_model_name,
++            serving_mode=str(self.serving_mode),
++        )
++        trace_id = context.trace_id
++        sampling_params = self._build_sampling_params(request)
++        input_param = self._get_input_param(request)
++        priority = (request.get("routing") or {}).get("priority")
++        logprob_kwargs = self._build_logprob_kwargs(request)
++
++        output_options = request.get("output_options", {})
++        return_tokens_as_token_ids = bool(
++            output_options.get("return_tokens_as_token_ids")
++        )
++        user_stop_token_ids = _user_stop_token_ids(request)
++
++        lora_path = self._resolve_lora(request)
++        if lora_path:
++            logging.debug(f"Request {context.id()} will use LoRA adapter: {lora_path}")
++
++        if self.serving_mode == DisaggregationMode.DECODE:
++            # Check if bootstrap_info is pre-computed in the request (from frontend)
++            bootstrap_info = request.get("bootstrap_info")
++
++            if not bootstrap_info:
++                raise RuntimeError(
++                    "bootstrap_info is required for disaggregated decode but was not provided"
++                )
++
++            logging.debug(
++                f"Using bootstrap_info: "
++                f"host={bootstrap_info['bootstrap_host']}, "
++                f"port={bootstrap_info['bootstrap_port']}, "
++                f"room={bootstrap_info['bootstrap_room']}"
++            )
++
++            trace_header = build_trace_headers(context) if self.enable_trace else None
++
++            # Extract dp_rank from routing info (set by KV router)
++            routing = request.get("routing") or {}
++            dp_rank = routing.get("dp_rank")
++
++            decode = await self.engine.async_generate(
++                **input_param,
++                sampling_params=sampling_params,
++                stream=True,
++                **self._routed_experts_kwargs,
++                bootstrap_host=bootstrap_info["bootstrap_host"],
++                bootstrap_port=bootstrap_info["bootstrap_port"],
++                bootstrap_room=bootstrap_info["bootstrap_room"],
++                external_trace_header=trace_header,
++                rid=trace_id,
++                data_parallel_rank=dp_rank,
++                **self._session_kwargs(request),
++                lora_path=lora_path,
++                **logprob_kwargs,
++                **self._priority_kwargs(priority),
++            )
++
++            if not self.use_sglang_tokenizer:
++                async for out in self._process_token_stream(
++                    decode,
++                    context,
++                    request,
++                    return_tokens_as_token_ids,
++                    user_stop_token_ids=user_stop_token_ids,
++                ):
++                    yield out
++            else:
++                async for out in self._process_text_stream(
++                    decode,
++                    context,
++                    request=request,
++                    user_stop_token_ids=user_stop_token_ids,
++                ):
++                    yield out
++        else:
++            # Extract image/video URLs for multimodal requests. SGLang's mm_data_processor
++            # handles loading/preprocessing, and the scheduler does vision encoding.
++            mm_data = request.get("multi_modal_data", {})
++            image_data = _extract_media_urls(mm_data, "image_url")
++            video_data = _extract_media_urls(mm_data, "video_url")
++
++            trace_header = build_trace_headers(context) if self.enable_trace else None
++
++            # Extract dp_rank from routing info (set by KV router)
++            routing = request.get("routing") or {}
++            dp_rank = routing.get("dp_rank")
++
++            agg = await self.engine.async_generate(
++                **input_param,
++                image_data=image_data,
++                video_data=video_data,
++                sampling_params=sampling_params,
++                stream=True,
++                **self._routed_experts_kwargs,
++                external_trace_header=trace_header,
++                rid=trace_id,
++                data_parallel_rank=dp_rank,
++                **self._session_kwargs(request),
++                lora_path=lora_path,
++                **logprob_kwargs,
++                **self._priority_kwargs(priority),
++            )
++            if not self.use_sglang_tokenizer:
++                async for out in self._process_token_stream(
++                    agg,
++                    context,
++                    request,
++                    return_tokens_as_token_ids,
++                    user_stop_token_ids=user_stop_token_ids,
++                ):
++                    yield out
++            else:
++                async for out in self._process_text_stream(
++                    agg,
++                    context,
++                    request=request,
++                    user_stop_token_ids=user_stop_token_ids,
++                ):
++                    yield out
++
++    async def _process_token_stream(
++        self,
++        stream_source: AsyncGenerator[Dict[str, Any], None],
++        context: Context,
++        request: Dict[str, Any],
++        return_tokens_as_token_ids: bool = False,
++        user_stop_token_ids: set[int] | None = None,
++    ) -> AsyncGenerator[Dict[str, Any], None]:
++        """Process token-based stream output.
++
++        With stream_output=True (enforced by Dynamo), SGLang sends disjoint segments
++        containing only new tokens since the last output. We pass these through directly.
++
++        Args:
++            stream_source: Async generator from engine.async_generate.
++            context: Context object for cancellation handling.
++
++        Yields:
++            Dict with token_ids and optional finish_reason.
++        """
++        # Use Future pattern for request ID - will be set when first response arrives
++        request_id_future: asyncio.Future[str] = asyncio.Future()
++        # SGLang's token stream is asymmetric: output_ids are disjoint deltas
++        # when stream_output=True, but meta_info output logprobs are cumulative.
++        # With n>1, chunks for different choices are interleaved, so track the
++        # cumulative-logprob cursor per choice index instead of globally.
++        output_logprobs_per_choice: dict[int, int] = {}
++        attach_logged = False
++        async with self._cancellation_monitor(request_id_future, context):
++            async for res in stream_source:
++                # Extract SGLang request ID from the first response and set the future
++                if not request_id_future.done():
++                    meta_info = res.get("meta_info", {})
++                    sglang_request_id = meta_info.get("id")
++                    if sglang_request_id:
++                        request_id_future.set_result(sglang_request_id)
++                        logging.debug(f"New SGLang Request ID: {sglang_request_id}")
++                        if not attach_logged:
++                            emit_runtime_event(
++                                logging.getLogger(__name__),
++                                "worker.decode.request_attached",
++                                "worker.decode",
++                                sglang_request_id=sglang_request_id,
++                                model=self.config.server_args.served_model_name,
++                                **_decode_request_payload(request, context.id()),
++                            )
++                            attach_logged = True
++
++                # Check cancellation before yielding to allow proper cleanup.
++                # This lets SGLang proceed to the second token generation, which will
++                # async context switch and allow the abort monitor to signal cancellation.
++                # The loop should exit by itself when context.is_stopped() returns True.
++                # SGLang omits index for non-n/legacy chunks; treat those as
++                # choice 0 while preserving explicit indices for n>1.
++                output_idx = res.get("index") or 0
++                out: dict[str, Any] = {"index": output_idx}
++                finish_reason = res["meta_info"]["finish_reason"]
++                if finish_reason:
++                    out["finish_reason"] = normalize_finish_reason(
++                        finish_reason["type"]
++                    )
++                    stop_reason = _extract_sglang_stop_reason(
++                        finish_reason, user_stop_token_ids
++                    )
++                    if stop_reason is not None:
++                        out["stop_reason"] = stop_reason
++
++                # With stream_output=True, output_ids contains only new tokens (disjoint)
++                output_ids = res.get("output_ids", [])
++                # Empty, non-final chunks can happen during scheduler idle ticks.
++                # Keep waiting for the next chunk unless cancellation was requested.
++                if not output_ids and not finish_reason:
++                    if context.is_stopped():
++                        break
++                    continue
++
++                # Pass through disjoint token segments directly
++                out["token_ids"] = output_ids
++
++                # Extract logprobs for new tokens if available
++                (
++                    log_probs,
++                    top_logprobs,
++                    next_logprobs_total,
++                ) = self._extract_logprobs(
++                    res["meta_info"],
++                    output_logprobs_per_choice.get(output_idx, 0),
++                    return_tokens_as_token_ids=return_tokens_as_token_ids,
++                )
++                output_logprobs_per_choice[output_idx] = next_logprobs_total
++                if log_probs is not None:
++                    out["log_probs"] = log_probs
++                if top_logprobs is not None:
++                    out["top_logprobs"] = top_logprobs
++
++                routed_experts = res["meta_info"].get("routed_experts")
++                if routed_experts is not None:
++                    # Base64-encode tensor bytes to match sglang's output format.
++                    routed_experts = pybase64.b64encode(
++                        routed_experts.numpy().tobytes()
++                    ).decode("utf-8")
++                    # Internal transport field consumed by frontend nvext mapping.
++                    out["disaggregated_params"] = {"routed_experts": routed_experts}
++                if finish_reason:
++                    input_tokens = res["meta_info"]["prompt_tokens"]
++                    completion_tokens = res["meta_info"]["completion_tokens"]
++                    cached_tokens = res["meta_info"]["cached_tokens"]
++                    prefill_prompt_tokens_details = None
++                    if cached_tokens is not None and cached_tokens > 0:
++                        prefill_prompt_tokens_details = {"cached_tokens": cached_tokens}
++                    out["completion_usage"] = {
++                        "prompt_tokens": input_tokens,
++                        "completion_tokens": completion_tokens,
++                        "total_tokens": input_tokens + completion_tokens,
++                        "prompt_tokens_details": prefill_prompt_tokens_details,
++                    }
++                    emit_runtime_event(
++                        logging.getLogger(__name__),
++                        "worker.decode.request_completed",
++                        "worker.decode",
++                        sglang_request_id=res["meta_info"].get("id"),
++                        finish_reason=out.get("finish_reason"),
++                        stop_reason=out.get("stop_reason"),
++                        completion_usage=out["completion_usage"],
++                        model=self.config.server_args.served_model_name,
++                        serving_mode=str(self.serving_mode),
++                        **_decode_request_payload(request, context.id()),
++                    )
++                if not context.is_stopped():
++                    yield out
++
++    async def _process_text_stream(
++        self,
++        stream_source: AsyncGenerator[Dict[str, Any], None],
++        context: Context,
++        request: Dict[str, Any] | None = None,
++        user_stop_token_ids: set[int] | None = None,
++    ) -> AsyncGenerator[Dict[str, Any], None]:
++        """Process text-based stream output in OpenAI format.
++
++        Args:
++            stream_source: Async generator from engine.async_generate.
++            context: Context object for cancellation handling.
++
++        Yields:
++            OpenAI-formatted chat completion chunk dicts.
++        """
++        request = request or {}
++        # SGLang text chunks are cumulative per choice. Keep independent text
++        # offsets so interleaved n>1 choices do not compute deltas from each
++        # other's previous text.
++        text_counts_per_choice: dict[int, int] = {}
++
++        # Use Future pattern for request ID - will be set when first response arrives
++        request_id_future: asyncio.Future[str] = asyncio.Future()
++        attach_logged = False
++        async with self._cancellation_monitor(request_id_future, context):
++            async for res in stream_source:
++                # Extract SGLang request ID from the first response and set the future
++                if not request_id_future.done():
++                    meta_info = res.get("meta_info", {})
++                    sglang_request_id = meta_info.get("id")
++                    if sglang_request_id:
++                        request_id_future.set_result(sglang_request_id)
++                        logging.debug(f"New SGLang Request ID: {sglang_request_id}")
++                        if not attach_logged:
++                            emit_runtime_event(
++                                logging.getLogger(__name__),
++                                "worker.decode.request_attached",
++                                "worker.decode",
++                                sglang_request_id=sglang_request_id,
++                                model=self.config.server_args.served_model_name,
++                                **_decode_request_payload(request, context.id()),
++                            )
++                            attach_logged = True
++
++                # Check cancellation before yielding to allow proper cleanup.
++                # This lets SGLang proceed to the second token generation, which will
++                # async context switch and allow the abort monitor to signal cancellation.
++                # The loop should exit by itself when context.is_stopped() returns True.
++
++                # Same defaulting as token mode: non-n chunks are choice 0.
++                index = res.get("index") or 0
++                text = res.get("text", "")
++
++                finish_reason = res["meta_info"]["finish_reason"]
++                finish_reason_type = (
++                    normalize_finish_reason(finish_reason["type"])
++                    if finish_reason
++                    else None
++                )
++                next_count = len(text)
++                count = text_counts_per_choice.get(index, 0)
++                delta = text[count:]
++
++                choice_data = {
++                    "index": index,
++                    "delta": {"role": "assistant", "content": delta},
++                    "finish_reason": finish_reason_type,
++                }
++                stop_reason = _extract_sglang_stop_reason(
++                    finish_reason, user_stop_token_ids
++                )
++
++                response = {
++                    "id": res["meta_info"]["id"],
++                    "created": int(time.time()),
++                    "choices": [choice_data],
++                    "model": self.config.server_args.served_model_name,
++                    "object": "chat.completion.chunk",
++                }
++                response_nvext: dict[str, Any] = {}
++                if stop_reason is not None and _nvext_extra_field_requested(
++                    request, "stop_reason"
++                ):
++                    response_nvext["stop_reason"] = stop_reason
++                routed_experts = res["meta_info"].get("routed_experts")
++                if routed_experts is not None:
++                    # Base64-encode tensor bytes to match sglang's output format.
++                    routed_experts = pybase64.b64encode(
++                        routed_experts.numpy().tobytes()
++                    ).decode("utf-8")
++                    response_nvext["routed_experts"] = routed_experts
++                if response_nvext:
++                    response["nvext"] = response_nvext
++                if finish_reason:
++                    meta_info = res["meta_info"]
++                    prompt_tokens = meta_info.get("prompt_tokens")
++                    completion_tokens = meta_info.get("completion_tokens")
++                    completion_usage: Dict[str, Any] = {
++                        "prompt_tokens": prompt_tokens,
++                        "completion_tokens": completion_tokens,
++                        "total_tokens": (prompt_tokens or 0) + (completion_tokens or 0),
++                    }
++                    cached_tokens = meta_info.get("cached_tokens")
++                    if cached_tokens is not None and cached_tokens > 0:
++                        completion_usage["prompt_tokens_details"] = {
++                            "cached_tokens": cached_tokens
++                        }
++                    emit_runtime_event(
++                        logging.getLogger(__name__),
++                        "worker.decode.request_completed",
++                        "worker.decode",
++                        sglang_request_id=meta_info.get("id"),
++                        finish_reason=finish_reason_type,
++                        stop_reason=stop_reason,
++                        completion_usage=completion_usage,
++                        model=self.config.server_args.served_model_name,
++                        serving_mode=str(self.serving_mode),
++                        **_decode_request_payload(request, context.id()),
++                    )
++                if not context.is_stopped():
++                    yield response
++                text_counts_per_choice[index] = next_count
+--- a/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py
++++ b/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py
+@@ -0,0 +1,285 @@
++# SPDX-FileCopyrightText: Copyright (c) 2025-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++# SPDX-License-Identifier: Apache-2.0
++
++import asyncio
++import logging
++from typing import Any, AsyncGenerator, Dict, Optional
++
++import sglang as sgl
++
++from dynamo._core import Context
++from dynamo.common.runtime_logging import (
++    emit_runtime_event,
++    extract_agent_hints,
++    extract_request_context,
++    preferred_request_id,
++)
++from dynamo.common.utils.otel_tracing import build_trace_headers
++from dynamo.health_check import HEALTH_CHECK_KEY
++from dynamo.sglang.args import Config
++from dynamo.sglang.publisher import DynamoSglangPublisher
++from dynamo.sglang.request_handlers.handler_base import BaseWorkerHandler
++
++# Sentinel value matching u32::MAX from the C/Go prefill-routing ABI.
++# This remains as a compatibility fallback for older callers that still encode
++# an unresolved data-parallel rank in-band instead of omitting the field.
++_DP_RANK_UNSET = 2**32 - 1
++
++
++def _prefill_request_payload(
++    request: Dict[str, Any],
++    runtime_context_id: str,
++) -> Dict[str, Any]:
++    request_context = extract_request_context(request)
++    agent_hints = extract_agent_hints(request)
++    external_request_id = preferred_request_id(
++        request, fallback=runtime_context_id
++    ) or runtime_context_id
++    return {
++        "external_request_id": external_request_id,
++        "runtime_context_id": runtime_context_id,
++        "request_context": request_context,
++        "agent_hints": agent_hints,
++    }
++
++
++class PrefillWorkerHandler(BaseWorkerHandler):
++    """Handler for prefill workers in disaggregated serving mode."""
++
++    def __init__(
++        self,
++        engine: sgl.Engine,
++        config: Config,
++        publisher: DynamoSglangPublisher,
++        generate_endpoint=None,
++        shutdown_event: Optional[asyncio.Event] = None,
++    ) -> None:
++        """Initialize prefill worker handler.
++
++        Args:
++            engine: The SGLang engine instance.
++            config: SGLang and Dynamo configuration.
++            publisher: The SGLang publisher instance.
++            generate_endpoint: The endpoint handle for discovery registration.
++            shutdown_event: Optional event to signal shutdown.
++        """
++        self.engine = engine
++        self.bootstrap_host, self.bootstrap_port = self._get_bootstrap_info(self.engine)
++        super().__init__(engine, config, publisher, generate_endpoint, shutdown_event)
++        self._consume_tasks: set[asyncio.Task[Any]] = set()
++        logging.info(
++            f"Prefill worker handler initialized - bootstrap host: {self.bootstrap_host}, bootstrap port: {self.bootstrap_port}"
++        )
++
++    def cleanup(self) -> None:
++        """Shutdown the prefill engine and cleanup resources."""
++        # Cancel all pending consume tasks
++        for task in self._consume_tasks:
++            if not task.done():
++                task.cancel()
++        self._consume_tasks.clear()
++
++        super().cleanup()
++        self.engine.shutdown()
++        logging.info("Prefill engine shutdown")
++
++    async def generate(
++        self, request: Dict[str, Any], context: Context
++    ) -> AsyncGenerator[Dict[str, Any], None]:
++        """Generate prefill output and provide bootstrap info for decode worker.
++
++        Args:
++            request: Request dict with 'request', 'sampling_params', and possibly 'bootstrap_room' keys.
++            context: Context object for cancellation handling.
++
++        Yields:
++            Bootstrap info dict with host, port, and room for decode worker connection.
++        """
++        runtime_context_id = context.id()
++        logging.debug(f"New Request ID: {runtime_context_id}")
++        trace_id = context.trace_id
++
++        if "request" in request:
++            # DisaggPreprocessedRequest format
++            inner_request = request["request"]
++            sampling_params = request.get("sampling_params", {})
++        else:
++            inner_request = request
++            sampling_opts = request.get("sampling_options", {})
++            stop_conditions = request.get("stop_conditions", {})
++            sampling_params = {
++                "temperature": sampling_opts.get("temperature"),
++                "top_p": sampling_opts.get("top_p"),
++                "top_k": sampling_opts.get("top_k"),
++                "n": sampling_opts.get("n"),
++                "max_new_tokens": stop_conditions.get("max_tokens"),
++                **self._get_guided_decoding_params(
++                    sampling_opts.get("guided_decoding")
++                ),
++            }
++            sampling_params = {
++                k: v for k, v in sampling_params.items() if v is not None
++            }
++
++        emit_runtime_event(
++            logging.getLogger(__name__),
++            "worker.prefill.request_received",
++            "worker.prefill",
++            **_prefill_request_payload(inner_request, runtime_context_id),
++            model=self.config.server_args.served_model_name,
++            serving_mode="prefill",
++        )
++
++        # Use provided bootstrap_info if available (e.g., for health checks with FAKE_BOOTSTRAP_HOST)
++        # Otherwise use real bootstrap host/port from engine and generate room locally
++        bootstrap_host = self.bootstrap_host
++        bootstrap_port = self.bootstrap_port
++        bootstrap_room = None
++
++        bootstrap_info_from_req = inner_request.get("bootstrap_info")
++        if isinstance(bootstrap_info_from_req, dict):
++            # Allow overriding bootstrap_host for fake-transfer mode (health checks)
++            if "bootstrap_host" in bootstrap_info_from_req:
++                bootstrap_host = bootstrap_info_from_req["bootstrap_host"]
++                logging.debug(
++                    f"Using request-provided bootstrap_host: {bootstrap_host}"
++                )
++            if "bootstrap_port" in bootstrap_info_from_req:
++                bootstrap_port = bootstrap_info_from_req["bootstrap_port"]
++                logging.debug(
++                    f"Using request-provided bootstrap_port: {bootstrap_port}"
++                )
++            bootstrap_room = bootstrap_info_from_req.get("bootstrap_room")
++            if bootstrap_room is not None:
++                logging.debug(f"Using router-provided bootstrap_room: {bootstrap_room}")
++
++        if bootstrap_room is None:
++            bootstrap_room = self._generate_bootstrap_room()
++            logging.debug(f"Generated bootstrap_room locally: {bootstrap_room}")
++
++        bootstrap_info = {
++            "bootstrap_host": bootstrap_host,
++            "bootstrap_port": bootstrap_port,
++            "bootstrap_room": bootstrap_room,
++        }
++
++        input_param = self._get_input_param(inner_request)
++        routing = inner_request.get("routing") or {}
++        priority = routing.get("priority")
++        dp_rank = routing.get("dp_rank")
++
++        if dp_rank is not None and dp_rank == _DP_RANK_UNSET:
++            dp_rank = None
++
++        trace_header = build_trace_headers(context) if self.enable_trace else None
++
++        lora_path = self._resolve_lora(inner_request)
++        if lora_path:
++            logging.debug(
++                f"Prefill request {context.id()} will use LoRA adapter: {lora_path}"
++            )
++
++        results = await self.engine.async_generate(
++            **input_param,
++            sampling_params=sampling_params,
++            stream=True,
++            bootstrap_host=bootstrap_host,
++            bootstrap_port=bootstrap_port,
++            bootstrap_room=bootstrap_room,
++            external_trace_header=trace_header,
++            rid=trace_id,
++            data_parallel_rank=dp_rank,
++            **self._session_kwargs(inner_request),
++            lora_path=lora_path,
++            **self._priority_kwargs(priority),
++        )
++
++        if inner_request.get(HEALTH_CHECK_KEY):
++            # Canary: stream engine output so the Rust canary sees scheduler output.
++            # No _cancellation_monitor — probe is bounded (max_tokens=1, FAKE_BOOTSTRAP_HOST).
++            async for res in results:
++                yield res
++            return
++
++        # Yield bootstrap_info for PrefillRouter - required for async generator
++        # contract and Rust-side expects disaggregated_params in first output.
++        yield {
++            "token_ids": [],
++            "text": None,
++            "finish_reason": None,
++            "disaggregated_params": bootstrap_info,
++        }
++
++        task = asyncio.create_task(self._consume_results(results, context, inner_request))
++        self._consume_tasks.add(task)
++        task.add_done_callback(self._consume_tasks.discard)
++
++        await task
++
++    async def _consume_results(
++        self,
++        results: AsyncGenerator[Any, None],
++        context: Context,
++        request: Dict[str, Any],
++    ) -> None:
++        """Consume async generator results without processing.
++
++        Args:
++            results: Async generator from engine.async_generate.
++            context: Context object for cancellation handling.
++        """
++        # Use Future pattern for request ID - will be set when first response arrives
++        request_id_future: asyncio.Future[str] = asyncio.Future()
++        attach_logged = False
++        last_meta_info: Dict[str, Any] | None = None
++        async with self._cancellation_monitor(request_id_future, context):
++            async for res in results:
++                meta_info = res.get("meta_info", {})
++                if isinstance(meta_info, dict):
++                    last_meta_info = meta_info
++                # Extract SGLang request ID from the first response and set the future
++                if not request_id_future.done():
++                    sglang_request_id = meta_info.get("id")
++                    if sglang_request_id:
++                        request_id_future.set_result(sglang_request_id)
++                        logging.debug(f"New Prefill Request ID: {sglang_request_id}")
++                        if not attach_logged:
++                            emit_runtime_event(
++                                logging.getLogger(__name__),
++                                "worker.prefill.request_attached",
++                                "worker.prefill",
++                                sglang_request_id=sglang_request_id,
++                                model=self.config.server_args.served_model_name,
++                                **_prefill_request_payload(request, context.id()),
++                            )
++                            attach_logged = True
++
++                # Note: No explicit cancellation checks needed here.
++                # When abort_request is called by the cancellation monitor,
++                # SGLang will terminate this async generator automatically.
++
++        if last_meta_info:
++            prompt_tokens = last_meta_info.get("prompt_tokens")
++            completion_tokens = last_meta_info.get("completion_tokens")
++            completion_usage: Dict[str, Any] = {
++                "prompt_tokens": prompt_tokens,
++                "completion_tokens": completion_tokens,
++                "total_tokens": (prompt_tokens or 0) + (completion_tokens or 0),
++            }
++            cached_tokens = last_meta_info.get("cached_tokens")
++            if cached_tokens is not None and cached_tokens > 0:
++                completion_usage["prompt_tokens_details"] = {
++                    "cached_tokens": cached_tokens
++                }
++            emit_runtime_event(
++                logging.getLogger(__name__),
++                "worker.prefill.request_completed",
++                "worker.prefill",
++                sglang_request_id=last_meta_info.get("id"),
++                finish_reason=last_meta_info.get("finish_reason"),
++                completion_usage=completion_usage,
++                bootstrap_host=self.bootstrap_host,
++                bootstrap_port=self.bootstrap_port,
++                model=self.config.server_args.served_model_name,
++                **_prefill_request_payload(request, context.id()),
++            )
+--- a/lib/bindings/python/rust/llm/kv.rs
++++ b/lib/bindings/python/rust/llm/kv.rs
+@@ -0,0 +1,1215 @@
++// SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++// SPDX-License-Identifier: Apache-2.0
++
++use pythonize::{depythonize, pythonize};
++use std::collections::HashMap;
++use std::ffi::OsString;
++use std::sync::Arc;
++use std::sync::atomic::AtomicU32;
++use std::sync::mpsc;
++use tokio_stream::StreamExt;
++
++use super::*;
++use crate::Endpoint;
++#[cfg(feature = "kv-indexer")]
++use clap::Parser;
++use dynamo_kv_router::config::{KvRouterConfig, RouterConfigOverride};
++use dynamo_kv_router::protocols::compute_block_hash_for_seq;
++use dynamo_kv_router::protocols::*;
++#[cfg(feature = "kv-indexer")]
++use dynamo_kv_router::standalone_indexer::{self, IndexerConfig};
++use rs::pipeline::context::Context as RsContext;
++use rs::pipeline::{AsyncEngine, SingleIn};
++use rs::protocols::annotated::Annotated as RsAnnotated;
++use tracing;
++
++use llm_rs::kv_router::KvPushRouter as RsKvPushRouter;
++use llm_rs::kv_router::publisher::{KvEventSourceConfig, create_stored_blocks};
++use llm_rs::protocols::common::timing::RequestTracker;
++use llm_rs::protocols::common::{OutputOptions, SamplingOptions, StopConditions};
++use serde_json::json;
++
++use super::aic_callback::create_aic_prefill_load_estimator;
++use super::entrypoint::AicPerfConfig;
++
++fn depythonize_block_mm_infos(obj: &Bound<'_, PyAny>) -> PyResult<Vec<Option<BlockExtraInfo>>> {
++    depythonize(obj).map_err(to_pyerr)
++}
++
++#[cfg(feature = "kv-indexer")]
++#[derive(Parser)]
++#[command(
++    name = "python -m dynamo.indexer",
++    about = "Standalone KV cache indexer"
++)]
++struct KvIndexerCli {
++    /// KV cache block size for initial workers registered via --workers
++    #[arg(long)]
++    block_size: Option<u32>,
++
++    /// HTTP server port
++    #[arg(long, default_value_t = 8090)]
++    port: u16,
++
++    /// Number of indexer threads (1 = single-threaded KvIndexer, >1 = ThreadPoolIndexer)
++    #[arg(long, default_value_t = 4)]
++    threads: usize,
++
++    /// Initial workers as "worker_id[:dp_rank]=zmq_address,..." (e.g. "1=tcp://host:5557,1:1=tcp://host:5558")
++    #[arg(long)]
++    workers: Option<String>,
++
++    /// Model name for initial workers registered via --workers
++    #[arg(long, default_value = "default")]
++    model_name: String,
++
++    /// Tenant ID for initial workers registered via --workers
++    #[arg(long, default_value = "default")]
++    tenant_id: String,
++
++    /// Comma-separated peer URLs for P2P recovery (e.g. "http://host1:8090,http://host2:8091")
++    #[arg(long)]
++    peers: Option<String>,
++}
++
++pub fn run_kv_indexer_cli<I, T>(args: I) -> anyhow::Result<()>
++where
++    I: IntoIterator<Item = T>,
++    T: Into<OsString>,
++{
++    #[cfg(feature = "kv-indexer")]
++    {
++        let cli = KvIndexerCli::try_parse_from(
++            std::iter::once(OsString::from("python -m dynamo.indexer"))
++                .chain(args.into_iter().map(Into::into)),
++        )?;
++
++        init_standalone_logging();
++
++        let rt = tokio::runtime::Runtime::new()?;
++        rt.block_on(standalone_indexer::run_server(IndexerConfig {
++            block_size: cli.block_size,
++            port: cli.port,
++            threads: cli.threads,
++            workers: cli.workers,
++            model_name: cli.model_name,
++            tenant_id: cli.tenant_id,
++            peers: cli.peers,
++        }))
++    }
++
++    #[cfg(not(feature = "kv-indexer"))]
++    {
++        let _ = args;
++        anyhow::bail!(
++            "dynamo.indexer is not available in this build; reinstall with --features kv-indexer"
++        )
++    }
++}
++
++#[cfg(feature = "kv-indexer")]
++fn init_standalone_logging() {
++    let _ = tracing_subscriber::fmt()
++        .with_env_filter(
++            tracing_subscriber::EnvFilter::try_from_default_env()
++                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
++        )
++        .try_init();
++}
++
++#[pyfunction]
++#[pyo3(name = "compute_block_hash_for_seq", signature = (tokens, kv_block_size, block_mm_infos=None, lora_name=None, is_eagle=None))]
++pub fn compute_block_hash_for_seq_py(
++    _py: Python,
++    tokens: Vec<u32>,
++    kv_block_size: usize,
++    block_mm_infos: Option<Bound<PyAny>>,
++    lora_name: Option<String>,
++    is_eagle: Option<bool>,
++) -> PyResult<Vec<u64>> {
++    if kv_block_size == 0 {
++        return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
++            "kv_block_size cannot be 0",
++        ));
++    }
++
++    let mm_infos = block_mm_infos
++        .as_ref()
++        .map(depythonize_block_mm_infos)
++        .transpose()?;
++
++    let hashes = compute_block_hash_for_seq(
++        &tokens,
++        kv_block_size as u32,
++        BlockHashOptions {
++            block_mm_infos: mm_infos.as_deref(),
++            lora_name: lora_name.as_deref(),
++            is_eagle,
++        },
++    );
++
++    Ok(hashes.into_iter().map(|h| h.0).collect())
++}
++
++#[pyclass]
++pub(crate) struct WorkerMetricsPublisher {
++    inner: Arc<llm_rs::kv_router::publisher::WorkerMetricsPublisher>,
++}
++
++#[pymethods]
++impl WorkerMetricsPublisher {
++    #[new]
++    fn new() -> PyResult<Self> {
++        let inner =
++            llm_rs::kv_router::publisher::WorkerMetricsPublisher::new().map_err(to_pyerr)?;
++        Ok(Self {
++            inner: inner.into(),
++        })
++    }
++
++    #[pyo3(signature = (endpoint))]
++    fn create_endpoint<'p>(
++        &self,
++        py: Python<'p>,
++        endpoint: Endpoint,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        let rs_publisher = self.inner.clone();
++        let rs_component = endpoint.inner.component().clone();
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            rs_publisher
++                .create_endpoint(rs_component)
++                .await
++                .map_err(to_pyerr)?;
++            Ok(())
++        })
++    }
++
++    /// Publish worker metrics for load monitoring.
++    ///
++    /// # Arguments
++    /// * `dp_rank` - Data parallel rank of the worker (None defaults to 0)
++    /// * `active_decode_blocks` - Scheduler-compatible active decode block count
++    /// * `kv_used_blocks` - Authoritative total KV blocks currently in use
++    #[pyo3(signature = (dp_rank=None, active_decode_blocks=None, kv_used_blocks=None))]
++    fn publish(
++        &self,
++        dp_rank: Option<u32>,
++        active_decode_blocks: Option<u64>,
++        kv_used_blocks: Option<u64>,
++    ) -> PyResult<()> {
++        self.inner
++            .publish(dp_rank, active_decode_blocks, kv_used_blocks)
++            .map_err(to_pyerr)
++    }
++}
++
++#[pyclass]
++pub(crate) struct KvEventPublisher {
++    inner: Arc<llm_rs::kv_router::publisher::KvEventPublisher>,
++    kv_block_size: usize,
++    dp_rank: DpRank,
++    warning_count: Arc<AtomicU32>,
++}
++
++#[pymethods]
++impl KvEventPublisher {
++    /// Create a KV event publisher that batches raw engine events before forwarding
++    /// them to NATS / the event plane.
++    ///
++    /// Args:
++    ///     endpoint: The Dynamo component endpoint for this worker.
++    ///     worker_id: Identifier of this worker (default 0).
++    ///     kv_block_size: KV cache block size in tokens; must be > 0.
++    ///     dp_rank: Data-parallel rank of this worker (default 0).
++    ///     enable_local_indexer: When True, a local KV indexer is kept in-process
++    ///         so that routers can recover events directly from this worker.
++    ///     zmq_endpoint: Optional ZMQ SUB endpoint to read raw engine events from.
++    ///     zmq_topic: ZMQ topic filter (default "").
++    ///     batching_timeout_ms: Maximum time (in **milliseconds**) to accumulate
++    ///         events into a single batch before flushing.
++    ///         ``None`` disables batching: every event is published immediately.
++    ///         ``50`` to enable batching with a 50 ms window.
++    ///         ``0`` is treated as ``None`` (also disables batching).
++    ///         Maximum allowed is 15_000 (15 seconds); larger values are capped.
++    #[new]
++    #[pyo3(signature = (endpoint, worker_id=0, kv_block_size=0, dp_rank=0, enable_local_indexer=false, zmq_endpoint=None, zmq_topic=None, batching_timeout_ms=llm_rs::kv_router::publisher::DEFAULT_BATCHING_TIMEOUT_MS))]
++    #[allow(clippy::too_many_arguments)]
++    fn new(
++        endpoint: Endpoint,
++        worker_id: WorkerId,
++        kv_block_size: usize,
++        dp_rank: DpRank,
++        enable_local_indexer: bool,
++        zmq_endpoint: Option<String>,
++        zmq_topic: Option<String>,
++        batching_timeout_ms: Option<u64>,
++    ) -> PyResult<Self> {
++        let _ = worker_id;
++
++        let source_config = zmq_endpoint.map(|ep| KvEventSourceConfig::Zmq {
++            endpoint: ep,
++            topic: zmq_topic.unwrap_or_default(),
++        });
++
++        if kv_block_size == 0 {
++            return Err(to_pyerr(anyhow::anyhow!("kv_block_size cannot be 0")));
++        }
++
++        // Extract component from endpoint
++        let component = endpoint.inner.component().clone();
++
++        let inner = llm_rs::kv_router::publisher::KvEventPublisher::new_with_local_indexer(
++            component,
++            kv_block_size as u32,
++            source_config,
++            enable_local_indexer,
++            dp_rank,
++            batching_timeout_ms,
++        )
++        .map_err(to_pyerr)?;
++
++        Ok(Self {
++            inner: inner.into(),
++            kv_block_size,
++            dp_rank,
++            warning_count: Arc::new(AtomicU32::new(0)),
++        })
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    #[pyo3(signature = (token_ids, num_block_tokens, block_hashes, parent_hash=None, block_mm_infos=None, lora_name=None, is_eagle=None))]
++    fn publish_stored(
++        &self,
++        py: Python,
++        token_ids: Vec<u32>,
++        num_block_tokens: Vec<u64>,
++        block_hashes: Vec<i64>,
++        parent_hash: Option<i64>,
++        block_mm_infos: Option<Bound<PyAny>>,
++        lora_name: Option<String>,
++        is_eagle: Option<bool>,
++    ) -> PyResult<()> {
++        let kv_block_size = self.kv_block_size as u32;
++        let dp_rank = self.dp_rank;
++        let warning_count = self.warning_count.clone();
++        let inner = self.inner.clone();
++
++        let event_id = inner.next_event_id();
++
++        let mm_infos = block_mm_infos
++            .as_ref()
++            .map(depythonize_block_mm_infos)
++            .transpose()?;
++
++        py.allow_threads(|| {
++            let block_hashes_u64: Vec<u64> = block_hashes.iter().map(|&h| h as u64).collect();
++            let event = KvCacheEvent {
++                event_id,
++                data: KvCacheEventData::Stored(KvCacheStoreData {
++                    parent_hash: parent_hash.map(ExternalSequenceBlockHash::from),
++                    start_position: None,
++                    blocks: create_stored_blocks(
++                        kv_block_size,
++                        &token_ids,
++                        &num_block_tokens,
++                        &block_hashes_u64,
++                        lora_name.as_deref(),
++                        &warning_count,
++                        mm_infos.as_deref(),
++                        is_eagle,
++                    ),
++                }),
++                dp_rank,
++            };
++
++            inner.publish(event).map_err(to_pyerr)
++        })
++    }
++
++    fn publish_removed(&self, py: Python, block_hashes: Vec<i64>) -> PyResult<()> {
++        let dp_rank = self.dp_rank;
++        let inner = self.inner.clone();
++
++        // Use shared monotonic event_id counter from the inner publisher
++        let event_id = inner.next_event_id();
++
++        py.allow_threads(|| {
++            let block_hashes: Vec<ExternalSequenceBlockHash> = block_hashes
++                .into_iter()
++                .map(ExternalSequenceBlockHash::from)
++                .collect();
++            let event = KvCacheEvent {
++                event_id,
++                data: KvCacheEventData::Removed(KvCacheRemoveData { block_hashes }),
++                dp_rank,
++            };
++
++            inner.publish(event).map_err(to_pyerr)
++        })
++    }
++
++    fn shutdown(&mut self) {
++        // If no other Arc clones exist, shut down eagerly.
++        // Otherwise the Drop impl handles cleanup when the last reference is freed.
++        if let Some(inner) = Arc::get_mut(&mut self.inner) {
++            inner.shutdown();
++        }
++    }
++}
++
++#[pyclass]
++#[derive(Clone)]
++pub(crate) struct OverlapScores {
++    inner: dynamo_kv_router::protocols::OverlapScores,
++}
++
++#[pymethods]
++impl OverlapScores {
++    #[getter]
++    fn scores(&self) -> HashMap<(u64, u32), u32> {
++        // Return scores with full WorkerWithDpRank granularity as (worker_id, dp_rank) tuples
++        self.inner
++            .scores
++            .iter()
++            .map(|(worker, score)| ((worker.worker_id, worker.dp_rank), *score))
++            .collect()
++    }
++
++    #[getter]
++    fn frequencies(&self) -> Vec<usize> {
++        self.inner.frequencies.clone()
++    }
++}
++
++#[derive(Debug)]
++enum RadixTreeRequest {
++    FindMatches {
++        local_block_hashes: Vec<LocalBlockHash>,
++        early_exit: bool,
++        response_tx: mpsc::SyncSender<dynamo_kv_router::protocols::OverlapScores>,
++    },
++    ApplyEvent {
++        worker_id: WorkerId,
++        kv_cache_event_bytes: Vec<u8>,
++        response_tx: mpsc::SyncSender<PyResult<()>>,
++    },
++    RemoveWorker {
++        worker_id: WorkerId,
++        response_tx: mpsc::SyncSender<()>,
++    },
++    ClearAllBlocks {
++        worker_id: WorkerId,
++        response_tx: mpsc::SyncSender<()>,
++    },
++    DumpTreeAsEvents {
++        response_tx: mpsc::SyncSender<Vec<RouterEvent>>,
++    },
++    Shutdown,
++}
++
++// NOTE: RadixTree is now thread-safe with pure sync patterns
++#[pyclass]
++pub(crate) struct RadixTree {
++    request_tx: mpsc::Sender<RadixTreeRequest>,
++}
++
++#[pymethods]
++impl RadixTree {
++    #[new]
++    #[pyo3(signature = (expiration_duration_secs=None))]
++    fn new(expiration_duration_secs: Option<f64>) -> PyResult<Self> {
++        let expiration_duration = expiration_duration_secs.map(std::time::Duration::from_secs_f64);
++
++        let (request_tx, request_rx) = mpsc::channel::<RadixTreeRequest>();
++
++        // Spawn dedicated thread with simplified sync processing
++        std::thread::spawn(move || {
++            let mut radix_tree =
++                dynamo_kv_router::indexer::RadixTree::new_with_frequency(expiration_duration);
++
++            loop {
++                match request_rx.recv() {
++                    Ok(RadixTreeRequest::Shutdown) => {
++                        tracing::debug!("RadixTree thread received shutdown request");
++                        break;
++                    }
++                    Ok(request) => {
++                        Self::handle_request(&mut radix_tree, request);
++                    }
++                    Err(mpsc::RecvError) => {
++                        tracing::debug!("RadixTree request channel disconnected");
++                        break;
++                    }
++                }
++            }
++        });
++
++        Ok(Self { request_tx })
++    }
++
++    #[pyo3(signature = (sequence, early_exit=false))]
++    fn find_matches(
++        &self,
++        py: Python,
++        sequence: Vec<u64>,
++        early_exit: bool,
++    ) -> PyResult<OverlapScores> {
++        let (response_tx, response_rx) = mpsc::sync_channel(1);
++
++        let local_block_hashes =
++            py.allow_threads(|| sequence.into_iter().map(LocalBlockHash).collect());
++
++        let request = RadixTreeRequest::FindMatches {
++            local_block_hashes,
++            early_exit,
++            response_tx,
++        };
++
++        self.request_tx.send(request).map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                "RadixTree background task has shut down",
++            )
++        })?;
++
++        // Release GIL while waiting for response
++        let result = py.allow_threads(move || {
++            response_rx.recv().map_err(|_| {
++                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("RadixTree request was cancelled")
++            })
++        })?;
++
++        Ok(OverlapScores { inner: result })
++    }
++
++    fn apply_event(
++        &self,
++        py: Python,
++        worker_id: WorkerId,
++        kv_cache_event_bytes: &[u8],
++    ) -> PyResult<()> {
++        let (response_tx, response_rx) = mpsc::sync_channel(1);
++
++        let request = RadixTreeRequest::ApplyEvent {
++            worker_id,
++            kv_cache_event_bytes: kv_cache_event_bytes.to_vec(),
++            response_tx,
++        };
++
++        self.request_tx.send(request).map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                "RadixTree background task has shut down",
++            )
++        })?;
++
++        // Release GIL while waiting for response
++        let result = py.allow_threads(move || response_rx.recv());
++
++        result.map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("RadixTree request was cancelled")
++        })?
++    }
++
++    fn remove_worker(&self, py: Python, worker_id: WorkerId) -> PyResult<()> {
++        let (response_tx, response_rx) = mpsc::sync_channel(1);
++
++        let request = RadixTreeRequest::RemoveWorker {
++            worker_id,
++            response_tx,
++        };
++
++        self.request_tx.send(request).map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                "RadixTree background task has shut down",
++            )
++        })?;
++
++        // Release GIL while waiting for response
++        py.allow_threads(move || {
++            response_rx.recv().map_err(|_| {
++                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("RadixTree request was cancelled")
++            })
++        })
++    }
++
++    fn clear_all_blocks(&self, py: Python, worker_id: WorkerId) -> PyResult<()> {
++        let (response_tx, response_rx) = mpsc::sync_channel(1);
++
++        let request = RadixTreeRequest::ClearAllBlocks {
++            worker_id,
++            response_tx,
++        };
++
++        self.request_tx.send(request).map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                "RadixTree background task has shut down",
++            )
++        })?;
++
++        // Release GIL while waiting for response
++        py.allow_threads(move || {
++            response_rx.recv().map_err(|_| {
++                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("RadixTree request was cancelled")
++            })
++        })
++    }
++
++    fn dump_tree_as_events(&self, py: Python) -> PyResult<Vec<String>> {
++        let (response_tx, response_rx) = mpsc::sync_channel(1);
++
++        let request = RadixTreeRequest::DumpTreeAsEvents { response_tx };
++
++        self.request_tx.send(request).map_err(|_| {
++            PyErr::new::<pyo3::exceptions::PyRuntimeError, _>("Failed to send dump tree request")
++        })?;
++
++        // Release GIL while waiting for response from dedicated thread
++        let events = py.allow_threads(move || {
++            response_rx.recv().map_err(|_| {
++                PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                    "Failed to receive dump tree response",
++                )
++            })
++        })?;
++
++        // Serialize RouterEvent structs to JSON strings with GIL released
++        py.allow_threads(move || {
++            events
++                .into_iter()
++                .map(|event| {
++                    serde_json::to_string(&event).map_err(|e| {
++                        PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
++                            "Failed to serialize event to JSON: {}",
++                            e
++                        ))
++                    })
++                })
++                .collect::<Result<Vec<String>, PyErr>>()
++        })
++    }
++}
++
++impl RadixTree {
++    fn handle_request(
++        radix_tree: &mut dynamo_kv_router::indexer::RadixTree,
++        request: RadixTreeRequest,
++    ) {
++        match request {
++            RadixTreeRequest::FindMatches {
++                local_block_hashes,
++                early_exit,
++                response_tx,
++            } => {
++                let result = radix_tree.find_matches(local_block_hashes, early_exit);
++                let _ = response_tx.send(result);
++            }
++            RadixTreeRequest::ApplyEvent {
++                worker_id,
++                kv_cache_event_bytes,
++                response_tx,
++            } => {
++                let result = match serde_json::from_slice::<KvCacheEvent>(&kv_cache_event_bytes) {
++                    Ok(kv_cache_event) => {
++                        let router_event = RouterEvent::new(worker_id, kv_cache_event);
++                        match radix_tree.apply_event(router_event) {
++                            Ok(_) => Ok(()),
++                            Err(e) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(
++                                format!("Failed to apply event: {}", e),
++                            )),
++                        }
++                    }
++                    Err(e) => Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(format!(
++                        "Failed to deserialize KvCacheEvent: {}",
++                        e
++                    ))),
++                };
++                let _ = response_tx.send(result);
++            }
++            RadixTreeRequest::RemoveWorker {
++                worker_id,
++                response_tx,
++            } => {
++                radix_tree.remove_worker(worker_id);
++                let _ = response_tx.send(());
++            }
++            RadixTreeRequest::ClearAllBlocks {
++                worker_id,
++                response_tx,
++            } => {
++                radix_tree.clear_all_blocks(worker_id);
++                let _ = response_tx.send(());
++            }
++            RadixTreeRequest::DumpTreeAsEvents { response_tx } => {
++                let events = radix_tree.dump_tree_as_events();
++                let _ = response_tx.send(events);
++            }
++            RadixTreeRequest::Shutdown => {
++                // This is handled in the main loop
++            }
++        }
++    }
++}
++
++// Cleanup when RadixTree is dropped
++impl Drop for RadixTree {
++    fn drop(&mut self) {
++        // Only need graceful shutdown via RadixTreeRequest::Shutdown
++        let _ = self.request_tx.send(RadixTreeRequest::Shutdown);
++    }
++}
++
++/// Helper function to create a KV router from an endpoint using the ModelManager
++/// to ensure proper etcd registration.
++/// Infers worker type using endpoint naming and router config:
++/// - If endpoint name/component contains "prefill", treat as prefill
++/// - If router_track_active_blocks is disabled, treat as prefill
++/// - Otherwise, default to decode
++async fn create_kv_router_from_endpoint(
++    endpoint: &Endpoint,
++    block_size: usize,
++    kv_router_config: Option<KvRouterConfig>,
++    prefill_load_estimator: Option<Arc<dyn dynamo_kv_router::PrefillLoadEstimator>>,
++) -> Result<Arc<llm_rs::kv_router::KvRouter>, PyErr> {
++    // Create ModelManager and use it to create KvRouter (ensures registration)
++    let model_manager = Arc::new(llm_rs::discovery::ModelManager::new());
++    let endpoint_id = endpoint.inner.id();
++    let namespace = endpoint_id.namespace.to_lowercase();
++    let component = endpoint_id.component.to_lowercase();
++    let name = endpoint_id.name.to_lowercase();
++    let endpoint_is_prefill =
++        namespace.contains("prefill") || component.contains("prefill") || name.contains("prefill");
++    let track_active_blocks = kv_router_config
++        .as_ref()
++        .map(|cfg| cfg.router_track_active_blocks)
++        .unwrap_or(true);
++    let worker_type = if endpoint_is_prefill || !track_active_blocks {
++        llm_rs::discovery::WORKER_TYPE_PREFILL
++    } else {
++        llm_rs::discovery::WORKER_TYPE_DECODE
++    };
++
++    // Look up the worker's model card so we can derive both model_name (required
++    // for remote/served indexer) and Eagle routing semantics. When the model_name
++    // is required but no worker has registered yet, wait via the discovery watch
++    // stream until one appears so we don't race worker startup. Bounded by
++    // `DYN_ROUTER_MODEL_CARD_WAIT_SECS` (default 600s).
++    let needs_model_name = kv_router_config
++        .as_ref()
++        .map(|cfg| cfg.use_remote_indexer || cfg.serve_indexer)
++        .unwrap_or(false);
++    let (model_name, enable_eagle) = {
++        let maybe_card = if needs_model_name {
++            let wait_secs: u64 = std::env::var("DYN_ROUTER_MODEL_CARD_WAIT_SECS")
++                .ok()
++                .and_then(|v| v.parse().ok())
++                .unwrap_or(600);
++            tracing::info!(
++                namespace = %endpoint_id.namespace,
++                component = %endpoint_id.component,
++                endpoint = %endpoint_id.name,
++                wait_secs,
++                "Waiting for worker model card in discovery (required for remote/served indexer)"
++            );
++            llm_rs::discovery::wait_for_endpoint_model_card(
++                &endpoint.inner,
++                std::time::Duration::from_secs(wait_secs),
++                None,
++            )
++            .await
++            .map_err(to_pyerr)?
++        } else {
++            // Non-blocking snapshot — used only to detect Eagle routing semantics
++            // when a card happens to already be registered.
++            let discovery = endpoint.inner.component().drt().discovery();
++            let instances = discovery
++                .list(rs::discovery::DiscoveryQuery::EndpointModels {
++                    namespace: endpoint_id.namespace.clone(),
++                    component: endpoint_id.component.clone(),
++                    endpoint: endpoint_id.name.clone(),
++                })
++                .await
++                .map_err(to_pyerr)?;
++            instances.into_iter().find_map(|inst| {
++                inst.deserialize_model::<llm_rs::model_card::ModelDeploymentCard>()
++                    .ok()
++            })
++        };
++
++        match maybe_card {
++            Some(card) => {
++                let model_name = needs_model_name.then(|| card.display_name.clone());
++                (model_name, card.runtime_config.enable_eagle)
++            }
++            None => {
++                tracing::warn!(
++                    namespace = %endpoint_id.namespace,
++                    component = %endpoint_id.component,
++                    endpoint = %endpoint_id.name,
++                    "No model card found in discovery; defaulting to non-Eagle routing semantics"
++                );
++                (None, false)
++            }
++        }
++    };
++
++    let kv_router = model_manager
++        .kv_chooser_for(
++            &endpoint.inner,
++            block_size as u32,
++            kv_router_config,
++            prefill_load_estimator,
++            worker_type,
++            model_name,
++            enable_eagle,
++        )
++        .await
++        .map_err(to_pyerr)?;
++
++    Ok(kv_router)
++}
++
++#[pyclass]
++pub(crate) struct KvRouter {
++    inner: Arc<RsKvPushRouter>,
++}
++
++/// Inject worker_id info from tracker into response's disaggregated_params.
++/// This is needed for Python bindings to expose worker routing info since
++/// the raw LLMEngineOutput doesn't go through DeltaGenerator (which adds nvext).
++fn inject_worker_id_from_tracker(
++    data: &mut llm_rs::protocols::common::llm_backend::LLMEngineOutput,
++    tracker: &RequestTracker,
++) {
++    let Some(worker_info) = tracker.get_worker_info() else {
++        return;
++    };
++
++    let worker_id_json =
++        serde_json::to_value(&worker_info).expect("WorkerIdInfo serialization should not fail");
++
++    if let Some(obj) = data
++        .disaggregated_params
++        .as_mut()
++        .and_then(|p| p.as_object_mut())
++    {
++        obj.insert("worker_id".to_string(), worker_id_json);
++    } else {
++        data.disaggregated_params = Some(json!({"worker_id": worker_id_json}));
++    }
++}
++
++// TODO: can this reuse the stream conversion method in Client bindings?
++impl KvRouter {
++    /// Helper method to process a request and create a Python async generator
++    fn process_request_to_stream<'p>(
++        py: Python<'p>,
++        inner: Arc<RsKvPushRouter>,
++        request: llm_rs::protocols::common::preprocessor::PreprocessedRequest,
++        tracker: Option<Arc<RequestTracker>>,
++        request_id: Option<String>,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            let single_in = match request_id {
++                Some(request_id) => RsContext::with_id(request, request_id),
++                None => SingleIn::new(request),
++            };
++            let stream = inner.generate(single_in).await.map_err(to_pyerr)?;
++            let (tx, rx) = tokio::sync::mpsc::channel::<RsAnnotated<PyObject>>(100);
++
++            tokio::spawn(async move {
++                let mut stream = stream;
++                let mut first_item = true;
++                let mut first_token_gauges_observed = false;
++
++                while let Some(mut response) = stream.next().await {
++                    if first_item {
++                        first_item = false;
++                        if let (Some(tracker), Some(data)) = (&tracker, &mut response.data) {
++                            inject_worker_id_from_tracker(data, tracker);
++                        }
++                    }
++
++                    if !first_token_gauges_observed {
++                        let has_tokens = response
++                            .data
++                            .as_ref()
++                            .map(|d| !d.token_ids.is_empty())
++                            .unwrap_or(false);
++                        if has_tokens {
++                            if let Some(ref tracker) = tracker {
++                                tracker.observe_first_token_gauges();
++                            }
++                            first_token_gauges_observed = true;
++                        }
++                    }
++
++                    let py_response = Python::with_gil(|py| {
++                        pythonize(py, &response.data)
++                            .map(|obj| obj.unbind())
++                            .map_err(|e| e.to_string())
++                    });
++
++                    match py_response {
++                        Ok(obj) => {
++                            if tx.send(RsAnnotated::from_data(obj)).await.is_err() {
++                                break;
++                            }
++                        }
++                        Err(e) => {
++                            tracing::error!("Failed to pythonize response: {}", e);
++                            break;
++                        }
++                    }
++                }
++
++                if let Some(ref tracker) = tracker {
++                    tracker.observe_finish_gauges();
++                }
++            });
++
++            Ok(crate::AsyncResponseStream::new(rx, false))
++        })
++    }
++}
++
++#[pymethods]
++impl KvRouter {
++    /// Create a new KvRouter for KV-aware routing to workers.
++    ///
++    /// # Arguments
++    /// * `endpoint` - The endpoint to route requests to
++    /// * `block_size` - KV cache block size for routing decisions
++    /// * `kv_router_config` - Configuration for the KV router
++    ///
++    /// Note: Worker type for Prometheus metrics is inferred from the endpoint name/component
++    /// (contains "prefill") or by `router_track_active_blocks` being disabled.
++    #[new]
++    #[pyo3(signature = (endpoint, block_size, kv_router_config, aic_perf_config=None))]
++    fn new(
++        endpoint: &Endpoint,
++        block_size: usize,
++        kv_router_config: &super::entrypoint::KvRouterConfig,
++        aic_perf_config: Option<&AicPerfConfig>,
++    ) -> PyResult<Self> {
++        let prefill_load_estimator = aic_perf_config
++            .map(|config| {
++                Python::with_gil(|py| {
++                    create_aic_prefill_load_estimator(
++                        py,
++                        config.backend_name(),
++                        config.system(),
++                        config.model_path(),
++                        config.tp_size(),
++                        config.backend_version(),
++                    )
++                })
++            })
++            .transpose()
++            .map_err(to_pyerr)?;
++
++        let runtime = pyo3_async_runtimes::tokio::get_runtime();
++        runtime.block_on(async move {
++            let client = endpoint.inner.client().await.map_err(to_pyerr)?;
++
++            // Create PushRouter with KV router mode
++            let push_router = rs::pipeline::PushRouter::<
++                llm_rs::protocols::common::preprocessor::PreprocessedRequest,
++                rs::protocols::annotated::Annotated<
++                    llm_rs::protocols::common::llm_backend::LLMEngineOutput,
++                >,
++            >::from_client(
++                client,
++                rs::pipeline::network::egress::push_router::RouterMode::KV,
++            )
++            .await
++            .map_err(to_pyerr)?;
++
++            // Create KvRouter using helper function (ensures etcd registration)
++            let kv_router = create_kv_router_from_endpoint(
++                endpoint,
++                block_size,
++                Some(kv_router_config.inner()),
++                prefill_load_estimator,
++            )
++            .await?;
++
++            let kv_push_router = RsKvPushRouter::new(push_router, kv_router);
++
++            Ok(Self {
++                inner: Arc::new(kv_push_router),
++            })
++        })
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    #[pyo3(signature = (token_ids, model, stop_conditions=None, sampling_options=None, output_options=None, router_config_override=None, worker_id=None, dp_rank=None, extra_args=None, block_mm_infos=None, multi_modal_data=None, mm_routing_info=None, request_id=None))]
++    fn generate<'p>(
++        &self,
++        py: Python<'p>,
++        token_ids: Vec<u32>,
++        model: String,
++        stop_conditions: Option<PyObject>,
++        sampling_options: Option<PyObject>,
++        output_options: Option<PyObject>,
++        router_config_override: Option<PyObject>,
++        worker_id: Option<WorkerId>,
++        dp_rank: Option<DpRank>,
++        extra_args: Option<PyObject>,
++        block_mm_infos: Option<PyObject>,
++        multi_modal_data: Option<PyObject>,
++        mm_routing_info: Option<PyObject>,
++        request_id: Option<String>,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        // Depythonize the options with defaults
++        let stop_conditions: StopConditions = if let Some(obj) = stop_conditions {
++            depythonize(obj.bind(py)).map_err(to_pyerr)?
++        } else {
++            StopConditions::default()
++        };
++
++        let sampling_options: SamplingOptions = if let Some(obj) = sampling_options {
++            depythonize(obj.bind(py)).map_err(to_pyerr)?
++        } else {
++            SamplingOptions::default()
++        };
++
++        let output_options: OutputOptions = if let Some(obj) = output_options {
++            depythonize(obj.bind(py)).map_err(to_pyerr)?
++        } else {
++            OutputOptions::default()
++        };
++
++        let router_config_override: Option<RouterConfigOverride> =
++            if let Some(obj) = router_config_override {
++                Some(depythonize(obj.bind(py)).map_err(to_pyerr)?)
++            } else {
++                None
++            };
++
++        let extra_args: Option<serde_json::Value> = if let Some(obj) = extra_args {
++            Some(depythonize(obj.bind(py)).map_err(to_pyerr)?)
++        } else {
++            None
++        };
++
++        let block_mm_infos = block_mm_infos
++            .map(|obj| depythonize_block_mm_infos(obj.bind(py)))
++            .transpose()?;
++
++        let multi_modal_data: Option<llm_rs::protocols::common::preprocessor::MultimodalDataMap> =
++            if let Some(obj) = multi_modal_data {
++                Some(depythonize(obj.bind(py)).map_err(to_pyerr)?)
++            } else {
++                None
++            };
++
++        let mm_routing_info: Option<llm_rs::protocols::common::preprocessor::MmRoutingInfo> =
++            if let Some(obj) = mm_routing_info {
++                Some(depythonize(obj.bind(py)).map_err(to_pyerr)?)
++            } else {
++                block_mm_infos.map(
++                    |infos| llm_rs::protocols::common::preprocessor::MmRoutingInfo {
++                        routing_token_ids: token_ids.clone(),
++                        block_mm_infos: infos,
++                    },
++                )
++            };
++
++        // Create tracker to capture worker routing info from KvRouter
++        let tracker = Arc::new(RequestTracker::new());
++
++        // Build the PreprocessedRequest
++        let mut request_builder =
++            llm_rs::protocols::common::preprocessor::PreprocessedRequest::builder();
++        request_builder
++            .model(model)
++            .token_ids(token_ids)
++            .stop_conditions(stop_conditions)
++            .sampling_options(sampling_options)
++            .output_options(output_options)
++            .router_config_override(router_config_override)
++            .multi_modal_data(multi_modal_data)
++            .mm_routing_info(mm_routing_info)
++            .extra_args(extra_args)
++            .tracker(Some(tracker.clone()));
++
++        // Set routing hints if worker_id or dp_rank is provided
++        if worker_id.is_some() || dp_rank.is_some() {
++            let routing = llm_rs::protocols::common::preprocessor::RoutingHints {
++                backend_instance_id: worker_id,
++                dp_rank,
++                ..Default::default()
++            };
++            request_builder.routing(Some(routing));
++        }
++
++        let request = request_builder.build().map_err(to_pyerr)?;
++
++        // Use the helper method to process the request
++        Self::process_request_to_stream(
++            py,
++            self.inner.clone(),
++            request,
++            Some(tracker),
++            request_id,
++        )
++    }
++
++    fn generate_from_request<'p>(
++        &self,
++        py: Python<'p>,
++        request: PyObject,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        // Depythonize the request directly into PreprocessedRequest
++        let mut request: llm_rs::protocols::common::preprocessor::PreprocessedRequest =
++            depythonize(request.bind(py)).map_err(to_pyerr)?;
++
++        // Create tracker if not already set, to capture worker routing info
++        let tracker = match request.tracker {
++            Some(ref t) => t.clone(),
++            None => {
++                let t = Arc::new(RequestTracker::new());
++                request.tracker = Some(t.clone());
++                t
++            }
++        };
++
++        // Use the helper method to process the request
++        Self::process_request_to_stream(py, self.inner.clone(), request, Some(tracker), None)
++    }
++
++    #[allow(clippy::too_many_arguments)]
++    #[pyo3(signature = (token_ids, router_config_override=None, request_id=None, update_indexer=false, block_mm_infos=None, lora_name=None))]
++    fn best_worker<'p>(
++        &self,
++        py: Python<'p>,
++        token_ids: Vec<u32>,
++        router_config_override: Option<PyObject>,
++        request_id: Option<String>,
++        update_indexer: bool,
++        block_mm_infos: Option<PyObject>,
++        lora_name: Option<String>,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        let router_config_override = if let Some(obj) = router_config_override {
++            let override_config: RouterConfigOverride =
++                depythonize(obj.bind(py)).map_err(to_pyerr)?;
++            Some(override_config)
++        } else {
++            None
++        };
++
++        let block_mm_infos = block_mm_infos
++            .map(|obj| depythonize_block_mm_infos(obj.bind(py)))
++            .transpose()?;
++
++        let chooser = self.inner.chooser.clone();
++        let update_states = request_id.is_some();
++
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            let (best_worker, overlap_blocks) = chooser
++                .find_best_match(
++                    request_id.as_deref(),
++                    &token_ids,
++                    block_mm_infos.as_deref(),
++                    router_config_override.as_ref(),
++                    update_states,
++                    lora_name.clone(),
++                    0.0,
++                    None,
++                    None, // allowed_worker_ids: pass via RoutingHints in PreprocessedRequest path
++                )
++                .await
++                .map_err(to_pyerr)?;
++
++            if update_indexer && !chooser.kv_router_config().use_kv_events {
++                let mut tokens_with_hashes =
++                    TokensWithHashes::new(token_ids.clone(), chooser.block_size())
++                        .with_is_eagle(chooser.is_eagle());
++                if let Some(infos) = block_mm_infos.as_ref() {
++                    tokens_with_hashes = tokens_with_hashes.with_mm_infos(infos.clone());
++                }
++                if let Some(lora_name) = lora_name.as_ref() {
++                    tokens_with_hashes = tokens_with_hashes.with_lora_name(lora_name.clone());
++                }
++                chooser
++                    .record_routing_decision(tokens_with_hashes, best_worker)
++                    .await
++                    .map_err(to_pyerr)?;
++            }
++
++            Ok((best_worker.worker_id, best_worker.dp_rank, overlap_blocks))
++        })
++    }
++
++    /// Mark prefill as completed for a request
++    fn mark_prefill_complete<'p>(
++        &self,
++        py: Python<'p>,
++        request_id: String,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        let chooser = self.inner.chooser.clone();
++
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            chooser
++                .mark_prefill_completed(&request_id)
++                .await
++                .map_err(to_pyerr)?;
++            Ok(())
++        })
++    }
++
++    /// Free a request by its ID, signaling the router to release resources
++    fn free<'p>(&self, py: Python<'p>, request_id: String) -> PyResult<Bound<'p, PyAny>> {
++        let chooser = self.inner.chooser.clone();
++
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            chooser.free(&request_id).await.map_err(to_pyerr)?;
++            Ok(())
++        })
++    }
++
++    #[pyo3(signature = (token_ids, block_mm_infos=None, lora_name=None))]
++    fn get_potential_loads<'p>(
++        &self,
++        py: Python<'p>,
++        token_ids: Vec<u32>,
++        block_mm_infos: Option<PyObject>,
++        lora_name: Option<String>,
++    ) -> PyResult<Bound<'p, PyAny>> {
++        let block_mm_infos = block_mm_infos
++            .map(|obj| depythonize_block_mm_infos(obj.bind(py)))
++            .transpose()?;
++        let chooser = self.inner.chooser.clone();
++
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            let loads = chooser
++                .get_potential_loads(
++                    &token_ids,
++                    None,
++                    block_mm_infos.as_deref(),
++                    lora_name.as_deref(),
++                )
++                .await
++                .map_err(to_pyerr)?;
++
++            // Return loads without aggregation - each (worker_id, dp_rank) pair is a separate entry
++            // Use pythonize to convert Vec<PotentialLoad> to Python list of dicts
++            Python::with_gil(|py| {
++                pythonize(py, &loads)
++                    .map(|obj| obj.unbind())
++                    .map_err(to_pyerr)
++            })
++        })
++    }
++
++    /// Dump all events from the KV router's indexer as a JSON string
++    fn dump_events<'p>(&self, py: Python<'p>) -> PyResult<Bound<'p, PyAny>> {
++        let chooser = self.inner.chooser.clone();
++
++        pyo3_async_runtimes::tokio::future_into_py(py, async move {
++            let events = chooser.dump_events().await.map_err(to_pyerr)?;
++            // Serialize to JSON string
++            let json_str = serde_json::to_string(&events).map_err(to_pyerr)?;
++            Ok(json_str)
++        })
++    }
++}
+--- a/lib/kv-router/src/scheduling/selector.rs
++++ b/lib/kv-router/src/scheduling/selector.rs
+@@ -0,0 +1,673 @@
++// SPDX-FileCopyrightText: Copyright (c) 2024-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
++// SPDX-License-Identifier: Apache-2.0
++
++use std::collections::HashMap;
++use std::sync::OnceLock;
++
++use rand::Rng;
++use rustc_hash::FxHashMap;
++use serde_json::json;
++
++use super::config::KvRouterConfig;
++use super::types::{KvSchedulerError, SchedulingRequest, pinned_worker_config};
++use crate::protocols::{WorkerConfigLike, WorkerId, WorkerSelectionResult, WorkerWithDpRank};
++
++fn runtime_json_logs_enabled() -> bool {
++    static ENABLED: OnceLock<bool> = OnceLock::new();
++    *ENABLED.get_or_init(|| {
++        std::env::var("DYN_RUNTIME_JSON_LOGS")
++            .map(|value| {
++                let lowered = value.to_ascii_lowercase();
++                !matches!(lowered.as_str(), "" | "0" | "false")
++            })
++            .unwrap_or(false)
++    })
++}
++
++fn emit_runtime_router_event(
++    request: &SchedulingRequest,
++    worker_type: &str,
++    worker: WorkerWithDpRank,
++    logit: f64,
++    effective_overlap_blocks: f64,
++    cached_tokens: usize,
++    host_pinned_blocks: usize,
++    disk_blocks: usize,
++    total_blocks: Option<usize>,
++) {
++    if !runtime_json_logs_enabled() {
++        return;
++    }
++
++    let event = json!({
++        "event_type": "router.worker_selected",
++        "component": "router.kv_selector",
++        "request_id": request.maybe_request_id.as_deref(),
++        "worker_type": worker_type,
++        "worker_id": worker.worker_id,
++        "dp_rank": worker.dp_rank,
++        "logit": logit,
++        "effective_cached_blocks": effective_overlap_blocks,
++        "cached_tokens": cached_tokens,
++        "host_pinned_blocks": host_pinned_blocks,
++        "disk_blocks": disk_blocks,
++        "total_blocks": total_blocks,
++        "expected_output_tokens": request.expected_output_tokens,
++        "priority_jump": request.priority_jump,
++    });
++
++    tracing::info!("[RUNTIME_JSON] {}", event);
++}
++
++/// A trait that users can implement to define custom selection logic.
++///
++/// Generic over `C` so that the scheduling layer does not depend on a concrete config type.
++pub trait WorkerSelector<C: WorkerConfigLike> {
++    fn select_worker(
++        &self,
++        workers: &HashMap<WorkerId, C>,
++        request: &SchedulingRequest,
++        block_size: u32,
++    ) -> Result<WorkerSelectionResult, KvSchedulerError>;
++}
++
++/// Helper function for softmax sampling.
++/// Returns the selected worker and its logit.
++fn softmax_sample(
++    logits: &FxHashMap<WorkerWithDpRank, f64>,
++    temperature: f64,
++) -> (WorkerWithDpRank, f64) {
++    let mut rng = rand::rng();
++    softmax_sample_with_sample(logits, temperature, rng.random())
++}
++
++fn softmax_sample_with_sample(
++    logits: &FxHashMap<WorkerWithDpRank, f64>,
++    temperature: f64,
++    sample: f64,
++) -> (WorkerWithDpRank, f64) {
++    assert!(!logits.is_empty(), "Empty logits for softmax sampling");
++
++    if temperature == 0.0 {
++        let (worker, logit) = logits
++            .iter()
++            .min_by(|a, b| a.1.total_cmp(b.1))
++            .expect("logits non-empty");
++        return (*worker, *logit);
++    }
++
++    let entries: Vec<(WorkerWithDpRank, f64)> = logits.iter().map(|(w, l)| (*w, *l)).collect();
++
++    let (min_val, max_val) = entries
++        .iter()
++        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), (_, v)| {
++            (lo.min(*v), hi.max(*v))
++        });
++
++    let mut probs = if min_val == max_val {
++        vec![1.0 / entries.len() as f64; entries.len()]
++    } else {
++        // Negate logits and rescale to [−1/temperature, 0] for numerical stability
++        // before softmax. Subtracting the max (which maps to min_val) keeps exp() inputs ≤ 0.
++        let scale = -1.0 / ((max_val - min_val) * temperature);
++        let max_scaled = min_val * scale;
++        entries
++            .iter()
++            .map(|(_, v)| (v * scale - max_scaled).exp())
++            .collect::<Vec<f64>>()
++    };
++
++    let sum: f64 = probs.iter().sum();
++    probs.iter_mut().for_each(|p| *p /= sum);
++
++    let mut cumsum = 0.0;
++    for (i, &prob) in probs.iter().enumerate() {
++        cumsum += prob;
++        if sample <= cumsum {
++            return entries[i];
++        }
++    }
++
++    *entries.last().unwrap()
++}
++
++/// Read DYN_ROUTER_LOAD_BLOCK_SIZE once. When set to a positive integer it
++/// replaces `block_size` in the load-metric portion of `worker_logit`; the
++/// indexer / hash sequence / worker-event matching are untouched.
++fn load_block_size_override() -> Option<u32> {
++    use std::sync::OnceLock;
++    static OVERRIDE: OnceLock<Option<u32>> = OnceLock::new();
++    *OVERRIDE.get_or_init(|| {
++        std::env::var("DYN_ROUTER_LOAD_BLOCK_SIZE")
++            .ok()
++            .and_then(|v| v.parse::<u32>().ok())
++            .filter(|v| *v > 0)
++    })
++}
++
++/// Default implementation matching the Python _cost_function.
++#[derive(Debug, Clone)]
++pub struct DefaultWorkerSelector {
++    pub kv_router_config: KvRouterConfig,
++    pub worker_type: &'static str,
++}
++
++impl DefaultWorkerSelector {
++    pub fn new(kv_router_config: Option<KvRouterConfig>, worker_type: &'static str) -> Self {
++        Self {
++            kv_router_config: kv_router_config.unwrap_or_default(),
++            worker_type,
++        }
++    }
++
++    fn worker_logit(
++        &self,
++        request: &SchedulingRequest,
++        worker: WorkerWithDpRank,
++        block_size: u32,
++        overlap_weight: f64,
++        shared_cache_multiplier: f64,
++        formula_name: &'static str,
++    ) -> f64 {
++        let effective_overlap_blocks = request.effective_overlap_blocks_for(worker);
++        // `shared_cache_hits::hits_beyond` expects an integer block count, so
++        // round the weighted overlap for this comparison only.
++        let device_overlap_blocks = effective_overlap_blocks.round().max(0.0) as u32;
++        let prefill_token = request.prefill_tokens_for(worker);
++
++        // Adjust prefill tokens by shared cache hits beyond this worker's device prefix.
++        let (adjusted_prefill_token, shared_beyond) =
++            if let Some(ref shared_hits) = request.shared_cache_hits {
++                let beyond = shared_hits.hits_beyond(device_overlap_blocks);
++                let reduction = shared_cache_multiplier * (beyond as f64) * (block_size as f64);
++                let adjusted = (prefill_token as f64 - reduction).max(0.0) as usize;
++                (adjusted, beyond)
++            } else {
++                (prefill_token, 0)
++            };
++
++        // DYN_ROUTER_LOAD_BLOCK_SIZE: override the divisor used for the load
++        // metric only. When set, the score derives directly from the active
++        // prefill-token sum instead of the (coarser) tracker block count,
++        // giving finer ISL discrimination without re-hashing.
++        let load_block_size = load_block_size_override().unwrap_or(block_size);
++        let potential_prefill_block = (adjusted_prefill_token as f64) / (load_block_size as f64);
++        let decode_block = if load_block_size_override().is_some() {
++            (prefill_token as f64) / (load_block_size as f64)
++        } else {
++            let decode_block_fallback = (prefill_token as f64) / (block_size as f64);
++            request
++                .decode_blocks
++                .get(&worker)
++                .copied()
++                .unwrap_or(decode_block_fallback.floor() as usize) as f64
++        };
++        let logit = overlap_weight * potential_prefill_block + decode_block;
++
++        if shared_beyond > 0 {
++            tracing::debug!(
++                "{formula_name} for worker_id={} dp_rank={:?} with {effective_overlap_blocks:.2} effective device blocks, \
++                 {shared_beyond} shared blocks beyond device (multiplier={shared_cache_multiplier:.2}): {logit:.3} \
++                 = {overlap_weight:.1} * adjusted_prefill_blocks + decode_blocks \
++                 = {overlap_weight:.1} * {potential_prefill_block:.3} + {decode_block:.3} \
++                 (prefill_tokens: {prefill_token} -> {adjusted_prefill_token})",
++                worker.worker_id,
++                worker.dp_rank
++            );
++        } else {
++            tracing::debug!(
++                "{formula_name} for worker_id={} dp_rank={:?} with {effective_overlap_blocks:.2} effective cached blocks: {logit:.3} \
++                 = {overlap_weight:.1} * prefill_blocks + decode_blocks \
++                 = {overlap_weight:.1} * {potential_prefill_block:.3} + {decode_block:.3}",
++                worker.worker_id,
++                worker.dp_rank
++            );
++        }
++
++        logit
++    }
++}
++
++impl<C: WorkerConfigLike> WorkerSelector<C> for DefaultWorkerSelector {
++    fn select_worker(
++        &self,
++        workers: &HashMap<WorkerId, C>,
++        request: &SchedulingRequest,
++        block_size: u32,
++    ) -> Result<WorkerSelectionResult, KvSchedulerError> {
++        assert!(request.isl_tokens > 0);
++        request.validate_worker_constraints()?;
++
++        let pinned_worker = request.pinned_worker;
++
++        if pinned_worker.is_none()
++            && !workers
++                .keys()
++                .any(|worker_id| request.is_worker_allowed(*worker_id))
++        {
++            return Err(KvSchedulerError::NoEndpoints);
++        }
++
++        let request_blocks = request.request_blocks(block_size);
++
++        let overlap_weight = request
++            .router_config_override
++            .as_ref()
++            .and_then(|cfg| cfg.overlap_score_weight)
++            .unwrap_or(self.kv_router_config.overlap_score_weight);
++
++        let shared_cache_multiplier = request
++            .router_config_override
++            .as_ref()
++            .and_then(|cfg| cfg.shared_cache_multiplier)
++            .unwrap_or(self.kv_router_config.shared_cache_multiplier);
++
++        if let Some(worker) = pinned_worker {
++            pinned_worker_config(workers, worker)?;
++
++            let logit = self.worker_logit(
++                request,
++                worker,
++                block_size,
++                overlap_weight,
++                shared_cache_multiplier,
++                "Pinned formula",
++            );
++            let effective_overlap_blocks = request.effective_overlap_blocks_for(worker);
++            let cached_tokens = request.effective_cached_tokens_for(worker);
++
++            tracing::info!(
++                "Selected pinned worker: worker_type={}, worker_id={} dp_rank={:?}, logit: {:.3}, effective cached blocks: {:.2}",
++                self.worker_type,
++                worker.worker_id,
++                worker.dp_rank,
++                logit,
++                effective_overlap_blocks,
++            );
++
++            return Ok(WorkerSelectionResult {
++                worker,
++                required_blocks: request_blocks,
++                effective_overlap_blocks,
++                cached_tokens,
++            });
++        }
++
++        let temperature = request
++            .router_config_override
++            .as_ref()
++            .and_then(|cfg| cfg.router_temperature)
++            .unwrap_or(self.kv_router_config.router_temperature);
++
++        let get_score = |worker: WorkerWithDpRank| -> f64 {
++            self.worker_logit(
++                request,
++                worker,
++                block_size,
++                overlap_weight,
++                shared_cache_multiplier,
++                "Formula",
++            )
++        };
++
++        let worker_iter = workers
++            .iter()
++            .filter(move |(worker_id, _)| request.is_worker_allowed(**worker_id))
++            .flat_map(|(worker_id, config)| {
++                let data_parallel_size = config.data_parallel_size();
++                let data_parallel_start_rank = config.data_parallel_start_rank();
++                (data_parallel_start_rank..(data_parallel_start_rank + data_parallel_size))
++                    .map(move |dp_rank| WorkerWithDpRank::new(*worker_id, dp_rank))
++            });
++
++        let (best_worker, best_logit) = if temperature == 0.0 {
++            let mut min_workers = Vec::new();
++            let mut min_score = f64::INFINITY;
++            for worker in worker_iter {
++                let score = get_score(worker);
++                if score < min_score {
++                    min_workers.clear();
++                    min_workers.push(worker);
++                    min_score = score;
++                } else if score == min_score {
++                    min_workers.push(worker);
++                }
++            }
++
++            if min_workers.len() > 1 {
++                let idx = rand::rng().random_range(0..min_workers.len());
++                (min_workers[idx], min_score)
++            } else {
++                (min_workers[0], min_score)
++            }
++        } else {
++            let mut worker_logits = FxHashMap::default();
++            for worker in worker_iter {
++                let score = get_score(worker);
++                worker_logits.insert(worker, score);
++            }
++
++            softmax_sample(&worker_logits, temperature)
++        };
++
++        let best_host_pinned_overlap_blocks = request
++            .tier_overlap_blocks
++            .host_pinned
++            .get(&best_worker)
++            .copied()
++            .unwrap_or(0);
++        let best_disk_overlap_blocks = request
++            .tier_overlap_blocks
++            .disk
++            .get(&best_worker)
++            .copied()
++            .unwrap_or(0);
++
++        if self.worker_type == "decode" {
++            tracing::info!(
++                "Selected worker: worker_type={}, worker_id={} dp_rank={:?}, logit: {:.3}, host_pinned blocks: {}, disk blocks: {}",
++                self.worker_type,
++                best_worker.worker_id,
++                best_worker.dp_rank,
++                best_logit,
++                best_host_pinned_overlap_blocks,
++                best_disk_overlap_blocks,
++            );
++            let effective_overlap_blocks = request.effective_overlap_blocks_for(best_worker);
++            let cached_tokens = request.effective_cached_tokens_for(best_worker);
++            let total_blocks = workers
++                .get(&best_worker.worker_id)
++                .and_then(|cfg| cfg.total_kv_blocks());
++            emit_runtime_router_event(
++                request,
++                self.worker_type,
++                best_worker,
++                best_logit,
++                effective_overlap_blocks,
++                cached_tokens,
++                best_host_pinned_overlap_blocks,
++                best_disk_overlap_blocks,
++                total_blocks,
++            );
++
++            return Ok(WorkerSelectionResult {
++                worker: best_worker,
++                required_blocks: request_blocks,
++                effective_overlap_blocks,
++                cached_tokens,
++            });
++        }
++
++        let best_overlap = request.effective_overlap_blocks_for(best_worker);
++        let best_cached_tokens = request.effective_cached_tokens_for(best_worker);
++
++        let total_blocks_info = workers
++            .get(&best_worker.worker_id)
++            .and_then(|cfg| cfg.total_kv_blocks())
++            .map(|blocks| format!(", total blocks: {}", blocks))
++            .unwrap_or_default();
++
++        tracing::info!(
++            "Selected worker: worker_type={}, worker_id={} dp_rank={:?}, logit: {:.3}, effective cached blocks: {:.2}, host_pinned blocks: {}, disk blocks: {}{}",
++            self.worker_type,
++            best_worker.worker_id,
++            best_worker.dp_rank,
++            best_logit,
++            best_overlap,
++            best_host_pinned_overlap_blocks,
++            best_disk_overlap_blocks,
++            total_blocks_info
++        );
++        emit_runtime_router_event(
++            request,
++            self.worker_type,
++            best_worker,
++            best_logit,
++            best_overlap,
++            best_cached_tokens,
++            best_host_pinned_overlap_blocks,
++            best_disk_overlap_blocks,
++            workers
++                .get(&best_worker.worker_id)
++                .and_then(|cfg| cfg.total_kv_blocks()),
++        );
++
++        Ok(WorkerSelectionResult {
++            worker: best_worker,
++            required_blocks: request_blocks,
++            effective_overlap_blocks: best_overlap,
++            cached_tokens: best_cached_tokens,
++        })
++    }
++}
++
++#[cfg(test)]
++mod tests {
++    use super::*;
++    use crate::protocols::SharedCacheHits;
++
++    #[test]
++    fn test_softmax_sample_single_key() {
++        let mut logits = FxHashMap::default();
++        let worker = WorkerWithDpRank::from_worker_id(42);
++        for (logit, temperature) in [
++            (0.5, 0.1),
++            (0.5, 1.0),
++            (0.5, 10.0),
++            (-100.0, 1.0),
++            (100.0, 1.0),
++            (0.0, 1.0),
++            (0.0, 0.0),
++        ] {
++            logits.clear();
++            logits.insert(worker, logit);
++
++            let result = softmax_sample(&logits, temperature);
++            assert_eq!(result.0, worker, "Should return the only available worker");
++            assert_eq!(result.1, logit, "Should return the selected worker's logit");
++        }
++    }
++
++    #[test]
++    fn test_softmax_sample_zero_temperature() {
++        let mut logits = FxHashMap::default();
++        let worker1 = WorkerWithDpRank::from_worker_id(1);
++        let worker2 = WorkerWithDpRank::from_worker_id(2);
++        let worker3 = WorkerWithDpRank::from_worker_id(3);
++        let worker4 = WorkerWithDpRank::from_worker_id(4);
++        logits.insert(worker1, 5.0);
++        logits.insert(worker2, 3.0);
++        logits.insert(worker3, 7.0);
++        logits.insert(worker4, 3.5);
++
++        let result = softmax_sample(&logits, 0.0);
++        assert_eq!(
++            result.0, worker2,
++            "Should return worker with smallest logit when temperature is 0"
++        );
++        assert_eq!(
++            result.1, 3.0,
++            "Should return the smallest logit when temperature is 0"
++        );
++
++        logits.clear();
++        let worker5 = WorkerWithDpRank::from_worker_id(5);
++        let worker6 = WorkerWithDpRank::from_worker_id(6);
++        logits.insert(worker1, 5.0);
++        logits.insert(worker2, 3.0);
++        logits.insert(worker5, 3.0);
++        logits.insert(worker6, 7.0);
++
++        let result = softmax_sample(&logits, 0.0);
++        assert!(
++            result.0 == worker2 || result.0 == worker5,
++            "Should return one of the workers tied for the smallest logit"
++        );
++        assert_eq!(result.1, 3.0, "Should return the tied minimum logit");
++
++        logits.clear();
++        let worker10 = WorkerWithDpRank::from_worker_id(10);
++        let worker20 = WorkerWithDpRank::from_worker_id(20);
++        let worker30 = WorkerWithDpRank::from_worker_id(30);
++        logits.insert(worker10, -1.0);
++        logits.insert(worker20, -5.0);
++        logits.insert(worker30, 0.0);
++
++        let result = softmax_sample(&logits, 0.0);
++        assert_eq!(
++            result.0, worker20,
++            "Should handle negative logits correctly"
++        );
++        assert_eq!(result.1, -5.0, "Should return the minimum negative logit");
++    }
++
++    #[test]
++    fn test_softmax_sample_with_sample_returns_selected_logit() {
++        let worker1 = WorkerWithDpRank::from_worker_id(1);
++        let worker2 = WorkerWithDpRank::from_worker_id(2);
++        let worker3 = WorkerWithDpRank::from_worker_id(3);
++
++        let logits = FxHashMap::from_iter([(worker1, 0.0), (worker2, 3.0), (worker3, 9.0)]);
++        let entries: Vec<_> = logits
++            .iter()
++            .map(|(worker, logit)| (*worker, *logit))
++            .collect();
++        let values: Vec<_> = entries.iter().map(|(_, logit)| *logit).collect();
++
++        let min_val = values.iter().fold(f64::INFINITY, |a, &b| a.min(b));
++        let max_val = values.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
++        let temperature = 1.0;
++        let range = max_val - min_val;
++        let scaled: Vec<f64> = values.iter().map(|&v| -(v / range) / temperature).collect();
++        let max_scaled = scaled.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
++        let mut probabilities: Vec<f64> = scaled.iter().map(|&v| (v - max_scaled).exp()).collect();
++        let sum: f64 = probabilities.iter().sum();
++        probabilities.iter_mut().for_each(|p| *p /= sum);
++
++        let target_idx = entries
++            .iter()
++            .position(|(_, logit)| *logit > min_val)
++            .expect("expected at least one non-minimum logit");
++        let cumsum_before: f64 = probabilities.iter().take(target_idx).sum();
++        let sample = cumsum_before + probabilities[target_idx] / 2.0;
++
++        let result = softmax_sample_with_sample(&logits, temperature, sample);
++        assert_eq!(result, entries[target_idx]);
++    }
++
++    /// Test the scoring formula with shared cache hits.
++    ///
++    /// Request [A, B, C, D], shared_cache_multiplier=0.5, block_size=1
++    /// - Worker 0: device=[A,B] (overlap=2), shared has [A,B,C,D] -> shared_beyond=2
++    ///   adjusted_prefill = isl - 0.5*2*1 = 4-1 = 3, logit = 1.0 * 3 + 0 = 3.0
++    /// - Worker 1: device=[] (overlap=0), shared has [A,B,C,D] -> shared_beyond=4
++    ///   adjusted_prefill = isl - 0.5*4*1 = 4-2 = 2, logit = 1.0 * 2 + 0 = 2.0
++    ///
++    /// Worker 1 has lower logit (less work), so it wins.
++    #[test]
++    fn test_shared_cache_hits_scoring() {
++        use crate::test_utils::SimpleWorkerConfig;
++
++        let block_size = 1u32;
++        let isl = 4usize;
++        let worker0 = WorkerWithDpRank::from_worker_id(0);
++        let worker1 = WorkerWithDpRank::from_worker_id(1);
++
++        let mut effective_overlap_blocks = HashMap::new();
++        effective_overlap_blocks.insert(worker0, 2.0);
++        // worker1 has 0 overlap (not in map)
++
++        #[allow(clippy::single_range_in_vec_init)]
++        let shared_hits = SharedCacheHits::from_ranges(vec![0..4]);
++
++        let config = KvRouterConfig {
++            overlap_score_weight: 1.0,
++            shared_cache_multiplier: 0.5,
++            router_temperature: 0.0,
++            ..Default::default()
++        };
++
++        let selector = DefaultWorkerSelector::new(Some(config), "test");
++        let mut workers = HashMap::new();
++        workers.insert(0, SimpleWorkerConfig::default());
++        workers.insert(1, SimpleWorkerConfig::default());
++
++        let (tx, _rx) = tokio::sync::oneshot::channel();
++        let request = SchedulingRequest {
++            maybe_request_id: Some("test".into()),
++            token_seq: None,
++            isl_tokens: isl,
++            tier_overlap_blocks: Default::default(),
++            effective_overlap_blocks,
++            effective_cached_tokens: HashMap::new(),
++            decode_blocks: FxHashMap::default(),
++            prefill_tokens: FxHashMap::default(),
++            track_prefill_tokens: true,
++            router_config_override: None,
++            update_states: false,
++            lora_name: None,
++            priority_jump: 0.0,
++            expected_output_tokens: None,
++            pinned_worker: None,
++            allowed_worker_ids: None,
++            shared_cache_hits: Some(shared_hits),
++            resp_tx: Some(tx),
++        };
++
++        let result = selector
++            .select_worker(&workers, &request, block_size)
++            .unwrap();
++
++        // Worker 1 should win: logit 2.0 < 3.0
++        assert_eq!(
++            result.worker, worker1,
++            "Worker 1 should be selected (lower logit due to shared cache)"
++        );
++    }
++
++    /// Without shared cache hits, the scoring should be unchanged.
++    #[test]
++    fn test_no_shared_cache_unchanged() {
++        use crate::test_utils::SimpleWorkerConfig;
++
++        let block_size = 16u32;
++        let isl = 64usize;
++        let worker0 = WorkerWithDpRank::from_worker_id(0);
++
++        let mut effective_overlap_blocks = HashMap::new();
++        effective_overlap_blocks.insert(worker0, 2.0);
++
++        let config = KvRouterConfig::default();
++        let selector = DefaultWorkerSelector::new(Some(config), "test");
++        let mut workers = HashMap::new();
++        workers.insert(0, SimpleWorkerConfig::default());
++
++        let (tx, _rx) = tokio::sync::oneshot::channel();
++        let request = SchedulingRequest {
++            maybe_request_id: Some("test".into()),
++            token_seq: None,
++            isl_tokens: isl,
++            tier_overlap_blocks: Default::default(),
++            effective_overlap_blocks,
++            effective_cached_tokens: HashMap::new(),
++            decode_blocks: FxHashMap::default(),
++            prefill_tokens: FxHashMap::default(),
++            track_prefill_tokens: true,
++            router_config_override: None,
++            update_states: false,
++            lora_name: None,
++            priority_jump: 0.0,
++            expected_output_tokens: None,
++            pinned_worker: None,
++            allowed_worker_ids: None,
++            shared_cache_hits: None,
++            resp_tx: Some(tx),
++        };
++
++        let result = selector
++            .select_worker(&workers, &request, block_size)
++            .unwrap();
++
++        assert_eq!(result.worker, worker0);
++    }
++}

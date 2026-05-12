@@ -8,9 +8,16 @@ Start the single-host serving stack:
 
 ```bash
 cd ~/kv_cache_offloading
+export HF_TOKEN=your_token_here 
 ./run_dynamo_single_host.sh start
 ./run_dynamo_single_host.sh status
 ./run_dynamo_single_host.sh test
+```
+
+```bash
+cat ~/kv_cache_offloading/agentbench/model_config.sh
+env | grep -E 'AGENTBENCH_MODEL|DYNAMO_MODEL_PATH|DYNAMO_SERVED_MODEL_NAME'
+docker logs dynamo-sglang-worker --tail 100
 ```
 
 Install Python dependencies. `deepagents` requires Python `3.11+`:
@@ -21,6 +28,23 @@ sudo dnf install -y git
 cd ~/kv_cache_offloading
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
+
+Set the shared AgentBench model default in:
+
+- [agentbench/model_config.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/model_config.sh)
+
+It currently defaults to:
+
+- `meta-llama/Llama-2-7b-chat-hf`
+
+Keep this aligned with the model you start in your Dynamo/SGLang single-host stack.
+
+The single-host startup script now sources the same file by default, so:
+
+- [run_dynamo_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_single_host.sh)
+- [agentbench/run_upstream_deploy_coding_agent_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_upstream_deploy_coding_agent_single_host.sh)
+
+will both default to the model defined in `agentbench/model_config.sh` unless you override it explicitly in the shell.
 
 ## Instrumentation
 
@@ -83,6 +107,7 @@ Notes:
 - uses the cloned upstream `deploy-coding-agent` instructions and skills
 - still runs through your local single-host Dynamo path
 - defaults to `agentbench/sample_task.json` when no task source is passed
+- model defaults are shared through `agentbench/model_config.sh`
 - for real `SWE-bench Pro` dataset tasks, AgentBench now keeps a shared writable GitHub checkout under `agentbench/repos/<owner>__<repo>/`
 - each run uses that shared checkout directly and checks out the task base commit there when available
 - edits made during one run remain in that shared checkout unless you clean or reset it yourself

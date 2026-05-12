@@ -2,11 +2,19 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MODEL_CONFIG="${SCRIPT_DIR}/agentbench/model_config.sh"
+if [[ -f "${MODEL_CONFIG}" ]]; then
+  # Shared AgentBench defaults; explicit shell env still overrides these below.
+  # shellcheck disable=SC1090
+  source "${MODEL_CONFIG}"
+fi
+
 ACTION="${1:-start}"
 LOG_MODE="${2:-}"
 
 HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
-DYNAMO_MODEL_PATH="${DYNAMO_MODEL_PATH:-Qwen/Qwen2.5-0.5B}"
+DYNAMO_MODEL_PATH="${DYNAMO_MODEL_PATH:-${AGENTBENCH_MODEL:-Qwen/Qwen2.5-0.5B}}"
 DYNAMO_SERVED_MODEL_NAME="${DYNAMO_SERVED_MODEL_NAME:-${DYNAMO_MODEL_PATH}}"
 DYNAMO_FRONTEND_PORT="${DYNAMO_FRONTEND_PORT:-8000}"
 HEAD_PRIVATE_IP="${HEAD_PRIVATE_IP:-127.0.0.1}"

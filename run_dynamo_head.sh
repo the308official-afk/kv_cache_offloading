@@ -131,6 +131,7 @@ start_frontend() {
     --network host \
     -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}" \
     -e NATS_SERVER="${NATS_SERVER}" \
+    -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}" \
     -e HF_TOKEN="${HF_TOKEN:-}" \
     "${FRONTEND_IMAGE}" \
     bash -lc "python3 -m dynamo.frontend \

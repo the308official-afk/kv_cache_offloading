@@ -10,8 +10,10 @@ import json
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
+from collections.abc import Mapping
 
 from agentbench.log_utils import log_checkpoint
 
@@ -53,6 +55,133 @@ DEEPAGENTS_RUNTIME_SOURCE = (
     if CLONED_DEEPAGENTS_LIB_ROOT.exists()
     else "python_environment"
 )
+
+
+def build_request_context(
+    *,
+    parent_run_id: str | None,
+    task_instance_id: str | None,
+    phase: str,
+    app_variant: str | None,
+    step_index: int | None = None,
+    step_title: str | None = None,
+) -> dict[str, Any]:
+    request_id = f"{parent_run_id or 'run'}::{phase}"
+    if step_index is not None:
+        request_id += f"::{step_index}"
+    return {
+        "request_id": request_id,
+        "parent_run_id": parent_run_id,
+        "task_instance_id": task_instance_id,
+        "phase": phase,
+        "step_index": step_index,
+        "step_title": step_title,
+        "app_variant": app_variant,
+    }
+
+
+def _extract_last_ai_message(response: Any) -> Any:
+    messages = None
+    if isinstance(response, Mapping):
+        messages = response.get("messages")
+    elif hasattr(response, "get"):
+        try:
+            messages = response.get("messages")
+        except Exception:  # noqa: BLE001
+            messages = None
+    if messages is None:
+        messages = getattr(response, "messages", None)
+
+    if isinstance(messages, list):
+        for message in reversed(messages):
+            message_type = None
+            if isinstance(message, Mapping):
+                message_type = message.get("type")
+            if message_type is None:
+                message_type = getattr(message, "type", None)
+            if message_type == "ai":
+                return message
+    return response
+
+
+def _response_metadata(response: Any) -> dict[str, Any]:
+    message = _extract_last_ai_message(response)
+    metadata = getattr(message, "response_metadata", None)
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(message, dict):
+        raw = message.get("response_metadata")
+        if isinstance(raw, dict):
+            return raw
+    return {}
+
+
+def _usage_metadata(response: Any) -> dict[str, Any]:
+    message = _extract_last_ai_message(response)
+    metadata = getattr(message, "usage_metadata", None)
+    if isinstance(metadata, dict):
+        return metadata
+    if isinstance(message, dict):
+        raw = message.get("usage_metadata")
+        if isinstance(raw, dict):
+            return raw
+    return {}
+
+
+def build_measurement_record(
+    *,
+    phase: str,
+    model: str,
+    frontend_url: str,
+    prompt: str,
+    hints: dict[str, Any],
+    response: Any,
+    started_at_perf: float,
+    finished_at_perf: float,
+    task_index: int | None,
+    task_source: str | None,
+    task_metadata: dict[str, Any] | None,
+    request_context: dict[str, Any] | None = None,
+    step_index: int | None = None,
+    step_title: str | None = None,
+    app_variant: str | None = None,
+) -> dict[str, Any]:
+    response_metadata = _response_metadata(response)
+    usage_metadata = _usage_metadata(response)
+    token_usage = response_metadata.get("token_usage", {}) if isinstance(response_metadata, dict) else {}
+    prompt_token_details = token_usage.get("prompt_tokens_details", {}) if isinstance(token_usage, dict) else {}
+
+    return {
+        "task_index": task_index,
+        "task_source": task_source,
+        "task_metadata": task_metadata or {},
+        "app_variant": app_variant,
+        "request_context": request_context or {},
+        "phase": phase,
+        "step_index": step_index,
+        "step_title": step_title,
+        "frontend_url": frontend_url,
+        "model": model,
+        "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+        "hints": hints,
+        "latency_ms": round((finished_at_perf - started_at_perf) * 1000, 3),
+        "prompt_chars": len(prompt),
+        "prompt_lines": len(prompt.splitlines()),
+        "prompt_preview": _prompt_preview(prompt),
+        "finish_reason": response_metadata.get("finish_reason"),
+        "provider_response_id": response_metadata.get("id"),
+        "model_name_reported": response_metadata.get("model_name"),
+        "input_tokens": usage_metadata.get("input_tokens"),
+        "output_tokens": usage_metadata.get("output_tokens"),
+        "total_tokens": usage_metadata.get("total_tokens"),
+        "cached_input_tokens": (
+            usage_metadata.get("input_token_details", {}) or {}
+        ).get("cache_read"),
+        "prompt_tokens": token_usage.get("prompt_tokens") if isinstance(token_usage, dict) else None,
+        "completion_tokens": token_usage.get("completion_tokens") if isinstance(token_usage, dict) else None,
+        "total_tokens_reported": token_usage.get("total_tokens") if isinstance(token_usage, dict) else None,
+        "cached_prompt_tokens": prompt_token_details.get("cached_tokens") if isinstance(prompt_token_details, dict) else None,
+    }
 
 
 def _prompt_preview(prompt: str) -> str:
@@ -133,12 +262,18 @@ def build_dynamo_chat_model(
     frontend_url: str,
     model: str,
     hint_payload: dict[str, Any] | None = None,
+    request_context: dict[str, Any] | None = None,
     max_tokens: int = 2048,
 ) -> ChatOpenAI:
     # Debugging note: this is the Deep Agents -> Dynamo adaptation hook.
     # Instead of sending requests to a cloud model endpoint, the app points ChatOpenAI at local Dynamo.
     payload = hint_payload or dict(DEFAULT_DYNAMO_HINTS)
-    extra_body = {"nvext": {"agent_hints": payload}}
+    extra_body = {
+        "nvext": {
+            "agent_hints": payload,
+            "request_context": request_context or {},
+        }
+    }
     return ChatOpenAI(
         model=model,
         base_url=frontend_base_url(frontend_url),
@@ -157,6 +292,7 @@ def build_coding_agent(
     base_hints: dict[str, Any] | None = None,
     phase: str = "execution",
     app_variant: str = "local",
+    request_context: dict[str, Any] | None = None,
 ):
     """Create the Deep Agents coding harness backed by a local Dynamo endpoint.
     """
@@ -167,6 +303,7 @@ def build_coding_agent(
         frontend_url=frontend_url,
         model=model,
         hint_payload=build_phase_hints(base_hints, phase=phase),
+        request_context=request_context,
     )
     return create_deep_agent(
         model=llm,
@@ -175,13 +312,10 @@ def build_coding_agent(
 
 
 def response_text(response) -> str:
-    if isinstance(response, dict):
-        messages = response.get("messages")
-        if isinstance(messages, list):
-            for message in reversed(messages):
-                message_type = getattr(message, "type", None) or message.get("type") if isinstance(message, dict) else None
-                if message_type == "ai":
-                    return response_text(message)
+    if isinstance(response, Mapping):
+        message = _extract_last_ai_message(response)
+        if message is not response:
+            return response_text(message)
         content = response.get("content")
         if content is not None:
             return response_text(content)
@@ -279,6 +413,7 @@ def generate_decomposition_plan(
     task_index: int | None = None,
     task_source: str | None = None,
     task_metadata: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
 ) -> dict:
     # [CHECK_POINT 3] The harness explicitly decomposes the hard task into steps here.
     # [CHECK_POINT 3] Planning phase happens here.
@@ -287,10 +422,17 @@ def generate_decomposition_plan(
     planning_hints = build_phase_hints(base_hints, phase="planning")
     planning_hints["latency_sensitivity"] = 0.4
     planning_hints["expected_output_tokens"] = 512
+    request_context = build_request_context(
+        parent_run_id=parent_run_id,
+        task_instance_id=(task_metadata or {}).get("instance_id"),
+        phase="planning",
+        app_variant=(task_metadata or {}).get("app_variant"),
+    )
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
         hint_payload=planning_hints,
+        request_context=request_context,
         max_tokens=1024,
     )
     preferred_step_guidance = ""
@@ -344,11 +486,14 @@ Keep it to at most {step_limit} steps.{preferred_step_guidance}"""
             "prompt_preview": _prompt_preview(planning_prompt),
             "prompt": planning_prompt,
             "hints": planning_hints,
+            "request_context": request_context,
             "step_limit": step_limit,
             "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         },
     )
+    started_at_perf = time.perf_counter()
     response = llm.invoke(planning_prompt)
+    finished_at_perf = time.perf_counter()
     raw_text = response_text(response)
     steps = parse_decomposition_plan(raw_text, fallback_count=step_limit)
     return {
@@ -356,6 +501,21 @@ Keep it to at most {step_limit} steps.{preferred_step_guidance}"""
         "planning_prompt": planning_prompt,
         "planning_response_text": raw_text,
         "steps": steps,
+        "measurement": build_measurement_record(
+            phase="planning",
+            model=model,
+            frontend_url=frontend_url,
+            prompt=planning_prompt,
+            hints=planning_hints,
+            response=response,
+            started_at_perf=started_at_perf,
+            finished_at_perf=finished_at_perf,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            request_context=request_context,
+            app_variant=task_metadata.get("app_variant") if task_metadata else None,
+        ),
     }
 
 
@@ -371,6 +531,7 @@ def execute_plan_steps(
     task_index: int | None = None,
     task_source: str | None = None,
     task_metadata: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
 ) -> list[dict]:
     # [CHECK_POINT 4] The harness sends explicit step-level requests to the frontend here.
     # [CHECK_POINT 4] Step-by-step execution happens here.
@@ -388,12 +549,21 @@ def execute_plan_steps(
             # Debugging note: each iteration here becomes one Checkpoint 4 payload.
             step_hints = build_phase_hints(base_hints, phase=f"step_{idx}_execution")
             step_hints["expected_output_tokens"] = 768
+            request_context = build_request_context(
+                parent_run_id=parent_run_id,
+                task_instance_id=(task_metadata or {}).get("instance_id"),
+                phase=f"step_{idx}_execution",
+                app_variant=app_variant,
+                step_index=idx,
+                step_title=step.get("title"),
+            )
             agent = build_coding_agent(
                 frontend_url=frontend_url,
                 model=model,
                 base_hints=step_hints,
                 phase=f"step_{idx}_execution",
                 app_variant=app_variant,
+                request_context=request_context,
             )
             prior_context = "\n".join(
                 f"- Step {i + 1} summary: {summary}" for i, summary in enumerate(prior_step_summaries)
@@ -429,10 +599,13 @@ Your job for this step:
                     "prompt_preview": _prompt_preview(step_prompt),
                     "prompt": step_prompt,
                     "hints": step_hints,
+                    "request_context": request_context,
                     "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
                 },
             )
+            started_at_perf = time.perf_counter()
             response = agent.invoke({"messages": [{"role": "user", "content": step_prompt}]})
+            finished_at_perf = time.perf_counter()
             summary = response_text(response)
             prior_step_summaries.append(summary[:1200])
             step_results.append(
@@ -443,6 +616,23 @@ Your job for this step:
                     "step_prompt": step_prompt,
                     "response": response,
                     "response_text": summary,
+                    "measurement": build_measurement_record(
+                        phase=f"step_{idx}_execution",
+                        model=model,
+                        frontend_url=frontend_url,
+                        prompt=step_prompt,
+                        hints=step_hints,
+                        response=response,
+                        started_at_perf=started_at_perf,
+                        finished_at_perf=finished_at_perf,
+                        task_index=task_index,
+                        task_source=task_source,
+                        task_metadata=task_metadata,
+                        request_context=request_context,
+                        step_index=idx,
+                        step_title=step.get("title"),
+                        app_variant=app_variant,
+                    ),
                 }
             )
     finally:
@@ -462,6 +652,7 @@ def synthesize_final_summary(
     task_index: int | None = None,
     task_source: str | None = None,
     task_metadata: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
 ) -> dict:
     # [CHECK_POINT 5] The harness synthesizes the multi-step results into a final answer here.
     # [CHECK_POINT 5] Final synthesis happens here.
@@ -469,10 +660,17 @@ def synthesize_final_summary(
     # It collects all prior step outputs and asks the model for one combined answer.
     synthesis_hints = build_phase_hints(base_hints, phase="synthesis")
     synthesis_hints["expected_output_tokens"] = 768
+    request_context = build_request_context(
+        parent_run_id=parent_run_id,
+        task_instance_id=(task_metadata or {}).get("instance_id"),
+        phase="synthesis",
+        app_variant=(task_metadata or {}).get("app_variant"),
+    )
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
         hint_payload=synthesis_hints,
+        request_context=request_context,
         max_tokens=1024,
     )
     step_summaries = "\n\n".join(
@@ -504,16 +702,34 @@ Produce a final summary with these sections:
             "prompt_preview": _prompt_preview(synthesis_prompt),
             "prompt": synthesis_prompt,
             "hints": synthesis_hints,
+            "request_context": request_context,
             "step_count": len(step_results),
             "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         },
     )
+    started_at_perf = time.perf_counter()
     response = llm.invoke(synthesis_prompt)
+    finished_at_perf = time.perf_counter()
     return {
         "synthesis_hints": synthesis_hints,
         "synthesis_prompt": synthesis_prompt,
         "response": response,
         "response_text": response_text(response),
+        "measurement": build_measurement_record(
+            phase="synthesis",
+            model=model,
+            frontend_url=frontend_url,
+            prompt=synthesis_prompt,
+            hints=synthesis_hints,
+            response=response,
+            started_at_perf=started_at_perf,
+            finished_at_perf=finished_at_perf,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            request_context=request_context,
+            app_variant=task_metadata.get("app_variant") if task_metadata else None,
+        ),
     }
 
 
@@ -528,6 +744,7 @@ def run_task_workflow(
     app_variant: str = "local",
     task_index: int | None = None,
     task_source: str | None = None,
+    parent_run_id: str | None = None,
 ) -> dict:
     """Run the active multi-step Deep Agents workflow for one task."""
     # Debugging note: this is the app-layer orchestration entry point.
@@ -553,6 +770,7 @@ def run_task_workflow(
         task_index=task_index,
         task_source=task_source,
         task_metadata=task_metadata,
+        parent_run_id=parent_run_id,
     )
     step_results = execute_plan_steps(
         frontend_url=frontend_url,
@@ -565,6 +783,7 @@ def run_task_workflow(
         task_index=task_index,
         task_source=task_source,
         task_metadata=task_metadata,
+        parent_run_id=parent_run_id,
     )
     result = synthesize_final_summary(
         frontend_url=frontend_url,
@@ -576,7 +795,11 @@ def run_task_workflow(
         task_index=task_index,
         task_source=task_source,
         task_metadata=task_metadata,
+        parent_run_id=parent_run_id,
     )
+    measurements = [decomposition_plan["measurement"]]
+    measurements.extend(item["measurement"] for item in step_results)
+    measurements.append(result["measurement"])
     return {
         "prompt": prompt,
         "resolved_hints": resolved_hints,
@@ -585,4 +808,5 @@ def run_task_workflow(
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
         "result": result,
+        "measurements": measurements,
     }

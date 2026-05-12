@@ -3,9 +3,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+source agentbench/model_config.sh
+
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
-MODEL="${MODEL:-Qwen/Qwen2.5-0.5B}"
-FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1:8000/v1/chat/completions}"
+MODEL="${MODEL:-${AGENTBENCH_MODEL}}"
+FRONTEND_URL="${FRONTEND_URL:-${AGENTBENCH_FRONTEND_URL}}"
 
 exec "${PYTHON_BIN}" agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \

