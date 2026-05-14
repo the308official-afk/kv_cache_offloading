@@ -18,7 +18,6 @@ DYNAMO_HINT_NOTES = (
     "Treat planning, execution, and synthesis as separate phases."
 )
 
-
 def format_swebench_task_prompt(task: dict) -> str:
     """Build the main SWE-bench-style task prompt for the Deep Agents app."""
 

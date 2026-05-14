@@ -327,6 +327,26 @@ TASK_LIFECYCLE_STAGE_METADATA = {
         "component": "deepagents_app",
         "category": "workflow",
     },
+    "baseline_agent_system_prompt_loaded": {
+        "description": "The Deep Agents system and app instructions were loaded for the baseline agent invocation.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "baseline_agent_request_prepared": {
+        "description": "A single upstream-style baseline request context and hints were prepared.",
+        "component": "deepagents_app",
+        "category": "request_prep",
+    },
+    "baseline_agent_request_dispatched": {
+        "description": "The baseline Deep Agents request was sent from the app to the Dynamo frontend.",
+        "component": "request_dispatch",
+        "category": "dispatch",
+    },
+    "baseline_agent_response_received": {
+        "description": "The baseline Deep Agents response was received from the model.",
+        "component": "deepagents_app",
+        "category": "response",
+    },
     "planning_request_prepared": {
         "description": "Planning-phase request context and hint payload were prepared.",
         "component": "deepagents_app",
