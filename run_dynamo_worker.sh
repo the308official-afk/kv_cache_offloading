@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 ACTION="${1:-start}"
 LOG_MODE="${2:-}"
 
@@ -17,6 +19,9 @@ DYNAMO_PAGE_SIZE="${DYNAMO_PAGE_SIZE:-64}"
 ETCD_ENDPOINTS="${ETCD_ENDPOINTS:-}"
 NATS_SERVER="${NATS_SERVER:-}"
 WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru}"
+WORKER_DEV_MODE="${WORKER_DEV_MODE:-0}"
+WORKER_DEV_SOURCE_ROOT="${WORKER_DEV_SOURCE_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/components/src/dynamo}"
+WORKER_DEV_BINDINGS_ROOT="${WORKER_DEV_BINDINGS_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/lib/bindings/python/src/dynamo}"
 
 usage() {
   cat <<EOF
@@ -49,6 +54,9 @@ Environment overrides:
   ETCD_ENDPOINTS        Default: ${ETCD_ENDPOINTS:-<unset>}
   NATS_SERVER           Default: ${NATS_SERVER}
   WORKER_EXTRA_ARGS     Default: ${WORKER_EXTRA_ARGS}
+  WORKER_DEV_MODE       Default: ${WORKER_DEV_MODE}
+  WORKER_DEV_SOURCE_ROOT Default: ${WORKER_DEV_SOURCE_ROOT}
+  WORKER_DEV_BINDINGS_ROOT Default: ${WORKER_DEV_BINDINGS_ROOT}
 EOF
 }
 
@@ -107,6 +115,37 @@ initialize_endpoints() {
   fi
 }
 
+validate_worker_dev_source() {
+  local common_dir="${WORKER_DEV_SOURCE_ROOT}/common"
+  local sglang_dir="${WORKER_DEV_SOURCE_ROOT}/sglang"
+  local health_check_file="${WORKER_DEV_BINDINGS_ROOT}/health_check.py"
+  local runtime_dir="${WORKER_DEV_BINDINGS_ROOT}/runtime"
+
+  if [[ ! -d "${common_dir}" || ! -d "${sglang_dir}" ]]; then
+    cat >&2 <<EOF
+WORKER_DEV_MODE is enabled, but WORKER_DEV_SOURCE_ROOT does not look valid:
+  ${WORKER_DEV_SOURCE_ROOT}
+
+Expected to find:
+  ${common_dir}
+  ${sglang_dir}
+EOF
+    exit 1
+  fi
+
+  if [[ ! -f "${health_check_file}" || ! -d "${runtime_dir}" ]]; then
+    cat >&2 <<EOF
+WORKER_DEV_MODE is enabled, but WORKER_DEV_BINDINGS_ROOT does not look valid:
+  ${WORKER_DEV_BINDINGS_ROOT}
+
+Expected to find:
+  ${health_check_file}
+  ${runtime_dir}
+EOF
+    exit 1
+  fi
+}
+
 container_exists() {
   docker ps -a --format '{{.Names}}' | grep -Fxq "${WORKER_CONTAINER_NAME}"
 }
@@ -121,21 +160,40 @@ start_worker() {
   initialize_endpoints
   ensure_dirs
 
+  local -a docker_args
+  docker_args=(
+    -d
+    --gpus all
+    --network host
+    --name "${WORKER_CONTAINER_NAME}"
+    -v "${DYNAMO_CACHE_DIR}:/models/hfcache"
+    -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}"
+    -e NATS_SERVER="${NATS_SERVER}"
+    -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}"
+    -e HF_TOKEN="${HF_TOKEN:-}"
+  )
+
+  local worker_pythonpath_prefix=""
+  if [[ "${WORKER_DEV_MODE}" = "1" ]]; then
+    validate_worker_dev_source
+    # Override only the Python worker sources so compiled wheel extensions remain in use.
+    docker_args+=(
+      -v "${WORKER_DEV_SOURCE_ROOT}/common:/workspace/components/src/dynamo/common:ro"
+      -v "${WORKER_DEV_SOURCE_ROOT}/sglang:/workspace/components/src/dynamo/sglang:ro"
+      -v "${WORKER_DEV_BINDINGS_ROOT}/health_check.py:/workspace/lib/bindings/python/src/dynamo/health_check.py:ro"
+      -v "${WORKER_DEV_BINDINGS_ROOT}/runtime:/workspace/lib/bindings/python/src/dynamo/runtime:ro"
+    )
+    worker_pythonpath_prefix="/workspace/components/src:/workspace/lib/bindings/python/src:"
+  fi
+
   if container_exists; then
     docker rm -f "${WORKER_CONTAINER_NAME}" >/dev/null 2>&1 || true
   fi
 
-  docker run -d \
-    --gpus all \
-    --network host \
-    --name "${WORKER_CONTAINER_NAME}" \
-    -v "${DYNAMO_CACHE_DIR}:/models/hfcache" \
-    -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}" \
-    -e NATS_SERVER="${NATS_SERVER}" \
-    -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}" \
-    -e HF_TOKEN="${HF_TOKEN:-}" \
+  docker run \
+    "${docker_args[@]}" \
     "${WORKER_IMAGE}" \
-    bash -lc "python3 -m dynamo.sglang \
+    bash -lc "export PYTHONPATH='${worker_pythonpath_prefix}'\"\${PYTHONPATH:-}\"; python3 -m dynamo.sglang \
       --model-path '${DYNAMO_MODEL_PATH}' \
       --served-model-name '${DYNAMO_SERVED_MODEL_NAME}' \
       --discovery-backend '${DYNAMO_DISCOVERY_BACKEND}' \
@@ -158,6 +216,7 @@ Image:     ${WORKER_IMAGE}
 Model:     ${DYNAMO_MODEL_PATH}
 etcd:      ${ETCD_ENDPOINTS}
 page size: ${DYNAMO_PAGE_SIZE}
+dev mode:  ${WORKER_DEV_MODE}
 
 Next steps:
   $0 status

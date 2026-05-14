@@ -8,6 +8,15 @@ SOURCE_REPO="${SOURCE_REPO:-https://github.com/ai-dynamo/dynamo.git}"
 
 mkdir -p "$(dirname "${SOURCE_DIR}")"
 
+if [[ -d "${SOURCE_DIR}" && ! -d "${SOURCE_DIR}/.git" ]]; then
+  echo "Existing source directory is not a git clone: ${SOURCE_DIR}" >&2
+  echo "It is likely a partial copy or failed earlier attempt." >&2
+  echo "Remove it and rerun:" >&2
+  echo "  rm -rf ${SOURCE_DIR}" >&2
+  echo "  ${BASH_SOURCE[0]}" >&2
+  exit 1
+fi
+
 if [[ -d "${SOURCE_DIR}/.git" ]]; then
   if ! git -C "${SOURCE_DIR}" diff --quiet --ignore-submodules=all; then
     echo "Existing Dynamo source clone is dirty: ${SOURCE_DIR}" >&2

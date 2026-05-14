@@ -36,10 +36,23 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 try:
+    import openpyxl  # noqa: F401
+except ImportError as exc:  # pragma: no cover
+    raise SystemExit(
+        "openpyxl is required. Install with: python3 -m pip install -r agentbench/requirements.txt"
+    ) from exc
+
+try:
     from agentbench.deepagents_app.src.agent import (
         run_task_workflow,
     )
-    from agentbench.log_utils import log_checkpoint, set_checkpoint_log_file
+    from agentbench.log_utils import (
+        load_logged_events,
+        log_checkpoint,
+        log_lifecycle_event,
+        set_checkpoint_log_file,
+        set_lifecycle_log_file,
+    )
 except ImportError as exc:  # pragma: no cover
     raise SystemExit(
         "The Deep Agents app modules could not be imported. "
@@ -83,6 +96,503 @@ WORKER_DECODE_RE = re.compile(
     r"token usage: (?P<token_usage>\d+(?:\.\d+)?), cuda graph: (?P<cuda_graph>True|False), "
     r"gen throughput \(token/s\): (?P<gen_throughput>\d+(?:\.\d+)?), #queue-req: (?P<queue_req>\d+)"
 )
+PROVENANCE_LABELS = ("MEASURED", "DERIVED", "SPECULATIVE")
+PROVENANCE_SCHEMA = {"labels": list(PROVENANCE_LABELS), "version": 1}
+MEASURED_FIELDS = {
+    "task_index",
+    "task_source",
+    "task_metadata",
+    "instance_id",
+    "repo",
+    "app_variant",
+    "phase",
+    "step_index",
+    "step_title",
+    "model",
+    "model_name",
+    "model_name_reported",
+    "frontend_url",
+    "latency_ms",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+    "cached_input_tokens",
+    "prompt_tokens",
+    "completion_tokens",
+    "cached_prompt_tokens",
+    "finish_reason",
+    "prompt_chars",
+    "prompt_lines",
+    "prompt_preview",
+    "request_id",
+    "parent_run_id",
+    "task_instance_id",
+    "worker_id",
+    "worker_host",
+    "request_hints",
+    "cached_token_count",
+    "reused_prefix_tokens",
+    "actual_tier",
+    "stayed_on_gpu",
+    "moved_to_cpu",
+    "moved_to_nvme",
+    "fetched_from_cpu",
+    "fetched_from_nvme",
+    "recomputed_instead_of_fetch",
+    "eviction_happened",
+    "evicted_block_count",
+    "evicted_token_estimate",
+    "eviction_reason",
+    "ttft_ms",
+    "end_to_end_ms",
+    "prefill_ms",
+    "decode_ms",
+    "fetch_ms",
+    "recompute_ms",
+    "dp_rank",
+    "logit",
+    "cached_blocks",
+    "tree_size",
+    "total_blocks",
+    "prefill_timestamp",
+    "first_decode_timestamp",
+    "last_decode_timestamp",
+    "new_seq_count",
+    "new_token_count",
+    "prefill_token_usage",
+    "prefill_running_req",
+    "prefill_queue_req",
+    "input_throughput_tps",
+    "prefill_cuda_graph",
+    "decode_event_count",
+    "max_decode_tokens",
+    "max_decode_queue_req",
+    "max_gen_throughput_tps",
+    "decode_cuda_graph_seen",
+    "prompt",
+    "decomposition_plan",
+    "step_results",
+    "response_text",
+    "result",
+    "task",
+    "workspace",
+    "workspace_artifacts",
+    "hint_json",
+    "run_started_at",
+    "active_harness",
+    "deepagents_runtime_source",
+    "checkpoint_log_file",
+    "auto_repo_checkout",
+    "source",
+    "docker_available",
+    "frontend_log_file",
+    "worker_log_file",
+    "git_head",
+    "git_status",
+    "git_diff_stat",
+    "patch_file",
+    "patch_nonempty",
+    "workspace_present",
+    "workspace_path",
+    "git_repo",
+    "timestamp",
+    "stage",
+    "event_kind",
+    "artifact_name",
+    "artifact_path",
+    "artifact_format",
+    "artifact_size_bytes",
+    "payload_json",
+    "response_preview",
+    "system_prompt",
+    "system_prompt_chars",
+    "system_prompt_lines",
+    "system_prompt_preview",
+    "base_task_prompt",
+    "approved_plan",
+    "prior_step_summaries",
+    "step_summaries",
+    "workspace_dir",
+}
+DERIVED_FIELDS = {
+    "call_count",
+    "phase_counts",
+    "total_model_latency_ms",
+    "large_prompt_calls",
+    "prefill_decode_profile",
+    "reuse_signal",
+    "pressure_risk",
+    "most_prefill_heavy_phase",
+    "strongest_reuse_phase",
+    "highest_pressure_phase",
+    "highest_pressure_risk",
+    "slowest_phase",
+    "slowest_phase_latency_ms",
+    "reuse_score",
+    "priority_score",
+    "latency_value_score",
+    "size_penalty_score",
+    "cache_hit",
+    "recomputed_prefix_tokens",
+    "router_mode",
+    "runtime_reuse_strength",
+    "alignment_status",
+    "runtime_signal_source",
+    "frontend_event_found",
+    "worker_observation_found",
+    "direct_tier_verification_available",
+    "observed_worker_count",
+    "observed_workers",
+    "fully_aligned_runtime_events",
+    "indirect_support_count",
+    "unverifiable_row_count",
+    "best_supported_gpu_candidate",
+    "strategy",
+    "sequence_index",
+    "measurements_summary",
+    "event_count",
+    "stage_counts",
+    "stages_seen",
+    "phases_seen",
+    "prompt_event_count",
+    "request_event_count",
+    "response_event_count",
+    "artifact_event_count",
+    "stage_description",
+    "stage_component",
+    "stage_category",
+}
+SPECULATIVE_FIELDS = {
+    "recency_score",
+    "future_turn_score",
+    "cache_value_score",
+    "keep_recommendation",
+    "recommended_tier",
+    "movement_priority",
+    "reason",
+    "keep_candidates",
+    "evict_first_candidates",
+    "gpu_candidates",
+    "cpu_candidates",
+    "nvme_candidates",
+    "drop_candidates",
+    "highest_value_phase",
+    "lowest_value_phase",
+    "best_gpu_candidate_phase",
+}
+
+TASK_LIFECYCLE_STAGE_METADATA = {
+    "run_initialized": {
+        "description": "Run directory, ids, and top-level execution context were initialized.",
+        "component": "agentbench_runner",
+        "category": "workflow",
+    },
+    "task_retrieved": {
+        "description": "The sample task was loaded from SWE-bench, CSV, or JSON into AgentBench.",
+        "component": "agentbench_runner",
+        "category": "task_ingest",
+    },
+    "auto_repo_checkout_evaluated": {
+        "description": "The harness decided whether to infer and materialize the task repository automatically.",
+        "component": "workspace_manager",
+        "category": "workspace",
+    },
+    "workspace_prepared": {
+        "description": "The writable workspace or shared checkout was prepared for the task run.",
+        "component": "workspace_manager",
+        "category": "workspace",
+    },
+    "workspace_path_attached_to_task": {
+        "description": "The resolved workspace path was attached back onto the task payload.",
+        "component": "workspace_manager",
+        "category": "workspace",
+    },
+    "workflow_invocation_started": {
+        "description": "The outer runner began the handoff into the Deep Agents workflow.",
+        "component": "agentbench_runner",
+        "category": "workflow",
+    },
+    "task_workflow_started": {
+        "description": "The app-layer multi-step workflow started for this task.",
+        "component": "deepagents_app",
+        "category": "workflow",
+    },
+    "task_prompt_built": {
+        "description": "The canonical task prompt was constructed from the task payload.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "workflow_hints_resolved": {
+        "description": "Base Dynamo and agent hints were resolved for the workflow.",
+        "component": "deepagents_app",
+        "category": "workflow",
+    },
+    "planning_request_prepared": {
+        "description": "Planning-phase request context and hint payload were prepared.",
+        "component": "deepagents_app",
+        "category": "request_prep",
+    },
+    "planning_prompt_built": {
+        "description": "The planning prompt was assembled before being sent to the model.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "planning_request_dispatched": {
+        "description": "The planning request was sent from the app to the Dynamo frontend.",
+        "component": "request_dispatch",
+        "category": "dispatch",
+    },
+    "planning_response_received": {
+        "description": "The planning response came back and was parsed into step candidates.",
+        "component": "deepagents_app",
+        "category": "response",
+    },
+    "step_request_prepared": {
+        "description": "Per-step request context and hints were prepared for a decomposition step.",
+        "component": "deepagents_app",
+        "category": "request_prep",
+    },
+    "step_agent_system_prompt_loaded": {
+        "description": "The Deep Agents system and app instructions were loaded for a step agent invocation.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "step_prompt_built": {
+        "description": "The step execution prompt was assembled with plan and prior-step context.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "step_request_dispatched": {
+        "description": "A step execution request was sent from the app to the Dynamo frontend.",
+        "component": "request_dispatch",
+        "category": "dispatch",
+    },
+    "step_response_received": {
+        "description": "A step execution response was received and summarized.",
+        "component": "deepagents_app",
+        "category": "response",
+    },
+    "synthesis_request_prepared": {
+        "description": "Final synthesis request context and hints were prepared.",
+        "component": "deepagents_app",
+        "category": "request_prep",
+    },
+    "synthesis_prompt_built": {
+        "description": "The final synthesis prompt was built from the task, plan, and step results.",
+        "component": "prompt_builder",
+        "category": "prompt",
+    },
+    "synthesis_request_dispatched": {
+        "description": "The synthesis request was sent from the app to the Dynamo frontend.",
+        "component": "request_dispatch",
+        "category": "dispatch",
+    },
+    "synthesis_response_received": {
+        "description": "The final synthesis response was received from the model.",
+        "component": "deepagents_app",
+        "category": "response",
+    },
+    "task_workflow_completed": {
+        "description": "The app-layer workflow finished and returned plan, steps, result, and measurements.",
+        "component": "deepagents_app",
+        "category": "workflow",
+    },
+    "workflow_invocation_completed": {
+        "description": "Control returned from the Deep Agents workflow back to the outer runner.",
+        "component": "agentbench_runner",
+        "category": "workflow",
+    },
+    "artifact_written": {
+        "description": "A run artifact file was written to disk.",
+        "component": "artifact_writer",
+        "category": "artifact",
+    },
+    "runtime_logs_collected": {
+        "description": "Frontend and worker runtime logs were collected after the run.",
+        "component": "runtime_log_collector",
+        "category": "runtime",
+    },
+    "runtime_events_built": {
+        "description": "Runtime-side observations were transformed into structured runtime events.",
+        "component": "runtime_event_builder",
+        "category": "runtime",
+    },
+    "workspace_artifacts_collected": {
+        "description": "Workspace patch, git status, and diff artifacts were collected.",
+        "component": "workspace_manager",
+        "category": "workspace",
+    },
+    "frontend_dynamo_runtime_observed": {
+        "description": "A frontend-side runtime observation was aligned to this request from Dynamo logs.",
+        "component": "frontend_dynamo",
+        "category": "runtime",
+    },
+    "kv_router_worker_selected": {
+        "description": "The KV router selected a worker for this request using scheduler and cache signals.",
+        "component": "kv_router",
+        "category": "runtime",
+    },
+    "sglang_worker_prefill_observed": {
+        "description": "The SGLang worker emitted a prefill-batch observation for this request.",
+        "component": "sglang_worker",
+        "category": "runtime",
+    },
+    "sglang_worker_first_decode_observed": {
+        "description": "The SGLang worker emitted the first decode observation for this request.",
+        "component": "sglang_worker",
+        "category": "runtime",
+    },
+    "sglang_worker_decode_completed": {
+        "description": "The last decode observation currently available for this request was recorded from the SGLang worker.",
+        "component": "sglang_worker",
+        "category": "runtime",
+    },
+}
+
+
+def classify_provenance(artifact: str, path: tuple[str, ...], value) -> str:
+    leaf = path[-1] if path else artifact
+    if leaf in MEASURED_FIELDS:
+        return "MEASURED"
+    if leaf in DERIVED_FIELDS:
+        return "DERIVED"
+    if leaf in SPECULATIVE_FIELDS:
+        return "SPECULATIVE"
+
+    if artifact == "measurements":
+        return "MEASURED"
+    if artifact == "measurement_analysis":
+        return "DERIVED"
+    if artifact == "runtime_events":
+        return "MEASURED"
+    if artifact == "runtime_alignment_analysis":
+        return "DERIVED"
+    if artifact == "task_lifecycle_trace":
+        return "MEASURED"
+    if artifact == "cache_value_analysis":
+        return "SPECULATIVE"
+    if artifact == "kv_hierarchy_analysis":
+        return "SPECULATIVE"
+    if artifact in {"plan", "step_results", "result"}:
+        return "MEASURED"
+    return "MEASURED"
+
+
+def annotate_with_provenance(data, artifact: str, path: tuple[str, ...] = (), include_schema: bool = True):
+    if isinstance(data, dict):
+        annotated = {}
+        provenance = {}
+        for key, value in data.items():
+            if key in {"_provenance", "_provenance_schema"}:
+                continue
+            child_path = path + (str(key),)
+            annotated[key] = annotate_with_provenance(
+                value,
+                artifact,
+                child_path,
+                include_schema=False,
+            )
+            if isinstance(value, dict):
+                provenance[key] = {"_container": classify_provenance(artifact, child_path, value)}
+            elif isinstance(value, list):
+                provenance[key] = {"_container": classify_provenance(artifact, child_path, value)}
+            else:
+                provenance[key] = classify_provenance(artifact, child_path, value)
+        annotated["_provenance"] = provenance
+        if include_schema:
+            annotated["_provenance_schema"] = PROVENANCE_SCHEMA
+        return annotated
+    if isinstance(data, list):
+        return [
+            annotate_with_provenance(item, artifact, path + (str(index),), include_schema=False)
+            if isinstance(item, (dict, list))
+            else item
+            for index, item in enumerate(data)
+        ]
+    return data
+
+
+def write_json_artifact(run_dir: Path, filename: str, payload, artifact: str) -> Path:
+    output_path = run_dir / filename
+    annotated = annotate_with_provenance(payload, artifact)
+    output_path.write_text(
+        json.dumps(annotated, indent=2, default=stringify_unknown),
+        encoding="utf-8",
+    )
+    return output_path
+
+
+def row_with_provenance(row: dict, artifact: str) -> dict:
+    flattened = {}
+    for key, value in row.items():
+        flattened[key] = value
+        if isinstance(value, (str, int, float, bool)) or value is None:
+            flattened[f"{key}_provenance"] = classify_provenance(artifact, (key,), value)
+    return flattened
+
+
+def markdown_value(value) -> str:
+    if value is None or value == "":
+        return "-"
+    if isinstance(value, float):
+        return f"{value:.4f}"
+    if isinstance(value, list):
+        return ", ".join(str(item) for item in value) if value else "-"
+    return str(value)
+
+
+def markdown_field_table(record: dict, artifact: str, ordered_fields: list[tuple[str, str]]) -> list[str]:
+    lines = [
+        "| Field | Value | Provenance |",
+        "| --- | --- | --- |",
+    ]
+    for field, label in ordered_fields:
+        value = record.get(field)
+        provenance = classify_provenance(artifact, (field,), value)
+        lines.append(f"| {label} | {markdown_value(value)} | {provenance} |")
+    return lines
+
+
+def task_lifecycle_stage_metadata(stage: object) -> dict[str, str]:
+    if isinstance(stage, str):
+        metadata = TASK_LIFECYCLE_STAGE_METADATA.get(stage)
+        if metadata is not None:
+            return metadata
+    return {
+        "description": "No stage description has been defined for this lifecycle event yet.",
+        "component": "unknown",
+        "category": "unknown",
+    }
+
+
+def write_csv_table(run_dir: Path, filename: str, rows: list[dict]) -> Path:
+    output_path = run_dir / filename
+    pd.DataFrame(rows).to_csv(output_path, index=False)
+    return output_path
+
+
+def write_excel_workbook(run_dir: Path, workbook_name: str, sheet_rows: dict[str, list[dict]]) -> Path:
+    output_path = run_dir / workbook_name
+    with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
+        for sheet_name, rows in sheet_rows.items():
+            sanitized_name = sheet_name[:31]
+            pd.DataFrame(rows).to_excel(writer, sheet_name=sanitized_name, index=False)
+    return output_path
+
+
+def log_artifact_written_event(*, artifact_name: str, artifact_path: Path, related_phase: str | None = None) -> None:
+    size_bytes = artifact_path.stat().st_size if artifact_path.exists() else None
+    log_lifecycle_event(
+        stage="artifact_written",
+        payload={
+            "event_kind": "artifact",
+            "phase": related_phase,
+            "artifact_name": artifact_name,
+            "artifact_path": str(artifact_path),
+            "artifact_format": artifact_path.suffix.lstrip("."),
+            "artifact_size_bytes": size_bytes,
+        },
+    )
 
 
 def task_source_label(
@@ -833,6 +1343,381 @@ def build_cache_value_analysis(measurements: list[dict]) -> dict:
     }
 
 
+def build_measurements_table(measurements: list[dict]) -> list[dict]:
+    return [row_with_provenance(dict(item), "measurements") for item in measurements]
+
+
+def build_measurement_analysis_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(row), "measurement_analysis") for row in analysis.get("rows", [])]
+
+
+def build_measurement_summary_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(analysis.get("summary", {})), "measurement_analysis")]
+
+
+def build_cache_value_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(row), "cache_value_analysis") for row in analysis.get("rows", [])]
+
+
+def build_cache_value_summary_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(analysis.get("summary", {})), "cache_value_analysis")]
+
+
+def build_kv_hierarchy_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(row), "kv_hierarchy_analysis") for row in analysis.get("rows", [])]
+
+
+def build_kv_hierarchy_summary_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(analysis.get("summary", {})), "kv_hierarchy_analysis")]
+
+
+def build_runtime_events_table(runtime_events: list[dict]) -> list[dict]:
+    rows = []
+    for event in runtime_events:
+        cache = event.get("cache") or {}
+        placement = event.get("placement") or {}
+        eviction = event.get("eviction") or {}
+        latency = event.get("latency") or {}
+        scheduler = event.get("scheduler") or {}
+        worker_metrics = event.get("worker_metrics") or {}
+        row = {
+            "timestamp": event.get("timestamp"),
+            "request_id": event.get("request_id"),
+            "parent_run_id": event.get("parent_run_id"),
+            "task_instance_id": event.get("task_instance_id"),
+            "phase": event.get("phase"),
+            "step_index": event.get("step_index"),
+            "step_title": event.get("step_title"),
+            "worker_id": event.get("worker_id"),
+            "worker_host": event.get("worker_host"),
+            "model_name": event.get("model_name"),
+            "router_mode": event.get("router_mode"),
+            "cache_hit": cache.get("cache_hit"),
+            "cached_token_count": cache.get("cached_token_count"),
+            "reused_prefix_tokens": cache.get("reused_prefix_tokens"),
+            "recomputed_prefix_tokens": cache.get("recomputed_prefix_tokens"),
+            "actual_tier": placement.get("actual_tier"),
+            "stayed_on_gpu": placement.get("stayed_on_gpu"),
+            "moved_to_cpu": placement.get("moved_to_cpu"),
+            "moved_to_nvme": placement.get("moved_to_nvme"),
+            "fetched_from_cpu": placement.get("fetched_from_cpu"),
+            "fetched_from_nvme": placement.get("fetched_from_nvme"),
+            "recomputed_instead_of_fetch": placement.get("recomputed_instead_of_fetch"),
+            "eviction_happened": eviction.get("eviction_happened"),
+            "evicted_block_count": eviction.get("evicted_block_count"),
+            "evicted_token_estimate": eviction.get("evicted_token_estimate"),
+            "eviction_reason": eviction.get("eviction_reason"),
+            "ttft_ms": latency.get("ttft_ms"),
+            "end_to_end_ms": latency.get("end_to_end_ms"),
+            "prefill_ms": latency.get("prefill_ms"),
+            "decode_ms": latency.get("decode_ms"),
+            "fetch_ms": latency.get("fetch_ms"),
+            "recompute_ms": latency.get("recompute_ms"),
+            "scheduler_dp_rank": scheduler.get("dp_rank"),
+            "scheduler_logit": scheduler.get("logit"),
+            "scheduler_cached_blocks": scheduler.get("cached_blocks"),
+            "scheduler_tree_size": scheduler.get("tree_size"),
+            "scheduler_total_blocks": scheduler.get("total_blocks"),
+            "worker_prefill_timestamp": worker_metrics.get("prefill_timestamp"),
+            "worker_first_decode_timestamp": worker_metrics.get("first_decode_timestamp"),
+            "worker_last_decode_timestamp": worker_metrics.get("last_decode_timestamp"),
+            "worker_new_seq_count": worker_metrics.get("new_seq_count"),
+            "worker_new_token_count": worker_metrics.get("new_token_count"),
+            "worker_prefill_token_usage": worker_metrics.get("prefill_token_usage"),
+            "worker_input_throughput_tps": worker_metrics.get("input_throughput_tps"),
+            "worker_decode_event_count": worker_metrics.get("decode_event_count"),
+            "worker_max_decode_tokens": worker_metrics.get("max_decode_tokens"),
+            "worker_max_gen_throughput_tps": worker_metrics.get("max_gen_throughput_tps"),
+            "source": event.get("source"),
+        }
+        rows.append(row_with_provenance(row, "runtime_events"))
+    return rows
+
+
+def build_runtime_alignment_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(row), "runtime_alignment_analysis") for row in analysis.get("rows", [])]
+
+
+def build_runtime_alignment_summary_table(analysis: dict) -> list[dict]:
+    return [row_with_provenance(dict(analysis.get("summary", {})), "runtime_alignment_analysis")]
+
+
+def build_run_summary_table(
+    *,
+    parent_run_id: str,
+    task: dict,
+    model: str,
+    workspace_metadata: dict,
+    measurement_analysis: dict,
+    cache_value_analysis: dict,
+    kv_hierarchy_analysis: dict,
+    runtime_alignment_analysis: dict,
+    workspace_artifacts: dict,
+) -> list[dict]:
+    phase_rows = measurement_analysis.get("rows", [])
+    planning_latency = next((row.get("latency_ms") for row in phase_rows if row.get("phase") == "planning"), None)
+    synthesis_latency = next((row.get("latency_ms") for row in phase_rows if row.get("phase") == "synthesis"), None)
+    total_step_latency = round(
+        sum(
+            float(row.get("latency_ms") or 0.0)
+            for row in phase_rows
+            if str(row.get("phase") or "").startswith("step_")
+        ),
+        3,
+    )
+    row = {
+        "parent_run_id": parent_run_id,
+        "instance_id": task.get("instance_id"),
+        "repo": task.get("repo"),
+        "model": model,
+        "workspace_mode": workspace_metadata.get("workspace_mode"),
+        "planning_latency_ms": planning_latency,
+        "total_step_latency_ms": total_step_latency,
+        "synthesis_latency_ms": synthesis_latency,
+        "most_prefill_heavy_phase": measurement_analysis.get("summary", {}).get("most_prefill_heavy_phase"),
+        "highest_pressure_phase": measurement_analysis.get("summary", {}).get("highest_pressure_phase"),
+        "strongest_reuse_phase": measurement_analysis.get("summary", {}).get("strongest_reuse_phase"),
+        "best_cache_value_phase": cache_value_analysis.get("summary", {}).get("highest_value_phase"),
+        "best_gpu_candidate_phase": (kv_hierarchy_analysis.get("summary", {}).get("gpu_candidates") or [None])[0],
+        "runtime_alignment_status_summary": runtime_alignment_analysis.get("summary", {}).get("best_supported_gpu_candidate"),
+        "patch_nonempty": workspace_artifacts.get("patch_nonempty"),
+        "git_diff_nonempty": bool(workspace_artifacts.get("git_diff_stat")),
+    }
+    return [row_with_provenance(row, "runtime_alignment_analysis")]
+
+
+def build_runtime_lifecycle_events(runtime_events: list[dict]) -> list[dict]:
+    lifecycle_events: list[dict] = []
+    for runtime_event in runtime_events:
+        request_context = {
+            "request_id": runtime_event.get("request_id"),
+            "parent_run_id": runtime_event.get("parent_run_id"),
+            "task_instance_id": runtime_event.get("task_instance_id"),
+            "phase": runtime_event.get("phase"),
+            "step_index": runtime_event.get("step_index"),
+            "step_title": runtime_event.get("step_title"),
+        }
+        base_payload = {
+            "event_kind": "runtime_observation",
+            "phase": runtime_event.get("phase"),
+            "step_index": runtime_event.get("step_index"),
+            "step_title": runtime_event.get("step_title"),
+            "request_context": request_context,
+            "worker_id": runtime_event.get("worker_id"),
+            "router_mode": runtime_event.get("router_mode"),
+            "source": runtime_event.get("source"),
+            "scheduler": runtime_event.get("scheduler"),
+            "worker_metrics": runtime_event.get("worker_metrics"),
+            "cache": runtime_event.get("cache"),
+            "latency": runtime_event.get("latency"),
+            "alignment": runtime_event.get("alignment"),
+        }
+
+        if runtime_event.get("timestamp") is not None:
+            lifecycle_events.append(
+                {
+                    "timestamp": runtime_event.get("timestamp"),
+                    "stage": "frontend_dynamo_runtime_observed",
+                    **base_payload,
+                }
+            )
+
+        scheduler = runtime_event.get("scheduler") or {}
+        if scheduler:
+            lifecycle_events.append(
+                {
+                    "timestamp": runtime_event.get("timestamp"),
+                    "stage": "kv_router_worker_selected",
+                    **base_payload,
+                }
+            )
+
+        worker_metrics = runtime_event.get("worker_metrics") or {}
+        if worker_metrics.get("prefill_timestamp") is not None:
+            lifecycle_events.append(
+                {
+                    "timestamp": worker_metrics.get("prefill_timestamp"),
+                    "stage": "sglang_worker_prefill_observed",
+                    **base_payload,
+                }
+            )
+        if worker_metrics.get("first_decode_timestamp") is not None:
+            lifecycle_events.append(
+                {
+                    "timestamp": worker_metrics.get("first_decode_timestamp"),
+                    "stage": "sglang_worker_first_decode_observed",
+                    **base_payload,
+                }
+            )
+        if worker_metrics.get("last_decode_timestamp") is not None:
+            lifecycle_events.append(
+                {
+                    "timestamp": worker_metrics.get("last_decode_timestamp"),
+                    "stage": "sglang_worker_decode_completed",
+                    **base_payload,
+                }
+            )
+    return lifecycle_events
+
+
+def sort_lifecycle_events(events: list[dict]) -> list[dict]:
+    def event_sort_key(item: dict, index: int) -> tuple[int, float, int, int]:
+        timestamp = _parse_iso_timestamp(item.get("timestamp"))
+        if timestamp is None:
+            return (1, 0.0, int(item.get("sequence_index", 0) or 0), index)
+        return (0, timestamp.timestamp(), int(item.get("sequence_index", 0) or 0), index)
+
+    sorted_events = sorted(
+        enumerate(events),
+        key=lambda pair: event_sort_key(pair[1], pair[0]),
+    )
+    normalized: list[dict] = []
+    for new_index, (_, event) in enumerate(sorted_events, start=1):
+        normalized_event = dict(event)
+        normalized_event["sequence_index"] = new_index
+        normalized.append(normalized_event)
+    return normalized
+
+
+def build_task_lifecycle_trace(
+    events: list[dict],
+    *,
+    metadata: dict[str, object],
+    runtime_events: list[dict] | None = None,
+) -> dict:
+    all_events = list(events)
+    if runtime_events:
+        all_events.extend(build_runtime_lifecycle_events(runtime_events))
+    ordered_events = sort_lifecycle_events(all_events)
+    stage_counts: dict[str, int] = {}
+    phases_seen: list[str] = []
+    for event in ordered_events:
+        stage = str(event.get("stage") or "unknown")
+        stage_counts[stage] = stage_counts.get(stage, 0) + 1
+        phase = event.get("phase")
+        if isinstance(phase, str) and phase not in phases_seen:
+            phases_seen.append(phase)
+
+    return {
+        **metadata,
+        "summary": {
+            "event_count": len(ordered_events),
+            "stage_counts": stage_counts,
+            "stages_seen": list(stage_counts.keys()),
+            "phases_seen": phases_seen,
+            "prompt_event_count": sum(1 for event in ordered_events if event.get("event_kind") == "prompt"),
+            "request_event_count": sum(1 for event in ordered_events if event.get("event_kind") == "request_dispatch"),
+            "response_event_count": sum(1 for event in ordered_events if event.get("event_kind") == "response"),
+            "artifact_event_count": sum(1 for event in ordered_events if event.get("event_kind") == "artifact"),
+        },
+        "events": ordered_events,
+    }
+
+
+def build_task_lifecycle_table(trace: dict) -> list[dict]:
+    rows: list[dict] = []
+    for event in trace.get("events", []):
+        if not isinstance(event, dict):
+            continue
+        request_context = event.get("request_context") if isinstance(event.get("request_context"), dict) else {}
+        stage_metadata = task_lifecycle_stage_metadata(event.get("stage"))
+        row = {
+            "sequence_index": event.get("sequence_index"),
+            "timestamp": event.get("timestamp"),
+            "stage": event.get("stage"),
+            "stage_description": stage_metadata["description"],
+            "stage_component": stage_metadata["component"],
+            "stage_category": stage_metadata["category"],
+            "event_kind": event.get("event_kind"),
+            "phase": event.get("phase"),
+            "step_index": event.get("step_index"),
+            "step_title": event.get("step_title"),
+            "request_id": request_context.get("request_id"),
+            "parent_run_id": request_context.get("parent_run_id") or trace.get("parent_run_id"),
+            "prompt_chars": event.get("prompt_chars"),
+            "prompt_lines": event.get("prompt_lines"),
+            "prompt_preview": event.get("prompt_preview"),
+            "response_preview": event.get("response_preview"),
+            "artifact_name": event.get("artifact_name"),
+            "artifact_path": event.get("artifact_path"),
+            "artifact_size_bytes": event.get("artifact_size_bytes"),
+            "payload_json": json.dumps(event, default=stringify_unknown),
+        }
+        rows.append(row_with_provenance(row, "task_lifecycle_trace"))
+    return rows
+
+
+def render_task_lifecycle_markdown(trace: dict) -> str:
+    summary = trace.get("summary", {})
+    events = trace.get("events", [])
+    lines = [
+        "# Task Lifecycle Trace",
+        "",
+        "## Summary",
+        *markdown_field_table(
+            {
+                "parent_run_id": trace.get("parent_run_id"),
+                "task_instance_id": trace.get("task_instance_id"),
+                "task_source": trace.get("task_source"),
+                "app_variant": trace.get("app_variant"),
+                "model": trace.get("model"),
+                "frontend_url": trace.get("frontend_url"),
+                "event_count": summary.get("event_count"),
+                "stages_seen": summary.get("stages_seen"),
+                "phases_seen": summary.get("phases_seen"),
+                "prompt_event_count": summary.get("prompt_event_count"),
+                "request_event_count": summary.get("request_event_count"),
+                "response_event_count": summary.get("response_event_count"),
+                "artifact_event_count": summary.get("artifact_event_count"),
+            },
+            "task_lifecycle_trace",
+            [
+                ("parent_run_id", "Parent run id"),
+                ("task_instance_id", "Task instance id"),
+                ("task_source", "Task source"),
+                ("app_variant", "App variant"),
+                ("model", "Model"),
+                ("frontend_url", "Frontend URL"),
+                ("event_count", "Event count"),
+                ("stages_seen", "Stages seen"),
+                ("phases_seen", "Phases seen"),
+                ("prompt_event_count", "Prompt event count"),
+                ("request_event_count", "Request event count"),
+                ("response_event_count", "Response event count"),
+                ("artifact_event_count", "Artifact event count"),
+            ],
+        ),
+        "",
+        "## Event Table",
+        "",
+        "| Seq | Timestamp | Stage | Component | Category | Description | Kind | Phase | Step | Prompt preview | Response preview | Artifact |",
+        "| ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for event in events:
+        request_context = event.get("request_context") if isinstance(event.get("request_context"), dict) else {}
+        stage_metadata = task_lifecycle_stage_metadata(event.get("stage"))
+        step_value = event.get("step_index")
+        if step_value is None:
+            step_value = request_context.get("step_index")
+        lines.append(
+            "| {seq} | {ts} | {stage} | {component} | {category} | {description} | {kind} | {phase} | {step} | {prompt} | {response} | {artifact} |".format(
+                seq=markdown_value(event.get("sequence_index")),
+                ts=markdown_value(event.get("timestamp")),
+                stage=markdown_value(event.get("stage")),
+                component=markdown_value(stage_metadata["component"]),
+                category=markdown_value(stage_metadata["category"]),
+                description=markdown_value(stage_metadata["description"]),
+                kind=markdown_value(event.get("event_kind")),
+                phase=markdown_value(event.get("phase")),
+                step=markdown_value(step_value),
+                prompt=markdown_value(event.get("prompt_preview")),
+                response=markdown_value(event.get("response_preview")),
+                artifact=markdown_value(event.get("artifact_name")),
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
 def render_cache_value_markdown(analysis: dict) -> str:
     summary = analysis["summary"]
     notes = analysis["formula_notes"]
@@ -841,33 +1726,59 @@ def render_cache_value_markdown(analysis: dict) -> str:
         "# Cache Value Analysis",
         "",
         "## Summary",
-        f"- Highest-value phase: `{summary.get('highest_value_phase')}`",
-        f"- Lowest-value phase: `{summary.get('lowest_value_phase')}`",
-        f"- Keep candidates: `{', '.join(summary.get('keep_candidates') or [])}`",
-        f"- Evict-first candidates: `{', '.join(summary.get('evict_first_candidates') or [])}`",
+        *markdown_field_table(
+            summary,
+            "cache_value_analysis",
+            [
+                ("highest_value_phase", "Highest-value phase"),
+                ("lowest_value_phase", "Lowest-value phase"),
+                ("keep_candidates", "Keep candidates"),
+                ("evict_first_candidates", "Evict-first candidates"),
+            ],
+        ),
         "",
         "## Formula Notes",
-        f"- {notes['description']}",
-        "- Score inputs: reuse, priority, recency, future-turn likelihood, latency cost, and prompt-size penalty.",
+        *markdown_field_table(
+            {
+                "description": notes["description"],
+                "score_inputs": "reuse, priority, recency, future-turn likelihood, latency cost, and prompt-size penalty",
+            },
+            "cache_value_analysis",
+            [
+                ("description", "Formula description"),
+                ("score_inputs", "Score inputs"),
+            ],
+        ),
         "",
         "## Phase Table",
         "",
-        "| Phase | Step | Reuse | Priority | Recency | Future turn | Latency value | Size penalty | Cache value | Recommendation |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| Phase | Phase provenance | Step | Step provenance | Reuse | Reuse provenance | Priority | Priority provenance | Recency | Recency provenance | Future turn | Future-turn provenance | Latency value | Latency provenance | Size penalty | Size provenance | Cache value | Cache-value provenance | Recommendation | Recommendation provenance |",
+        "| --- | --- | --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | --- | --- |",
     ]
     for row in rows:
+        annotated = row_with_provenance(dict(row), "cache_value_analysis")
         lines.append(
-            "| {phase} | {step} | {reuse:.4f} | {priority:.4f} | {recency:.4f} | {future_turn:.4f} | {latency:.4f} | {size:.4f} | {value:.4f} | {recommendation} |".format(
-                phase=row["phase"],
-                step=row["step_index"] if row["step_index"] is not None else "-",
-                reuse=row["reuse_score"],
-                priority=row["priority_score"],
-                recency=row["recency_score"],
-                future_turn=row["future_turn_score"],
-                latency=row["latency_value_score"],
-                size=row["size_penalty_score"],
-                value=row["cache_value_score"],
-                recommendation=row["keep_recommendation"],
+            "| {phase} | {phase_p} | {step} | {step_p} | {reuse} | {reuse_p} | {priority} | {priority_p} | {recency} | {recency_p} | {future_turn} | {future_turn_p} | {latency} | {latency_p} | {size} | {size_p} | {value} | {value_p} | {recommendation} | {recommendation_p} |".format(
+                phase=markdown_value(annotated.get("phase")),
+                phase_p=annotated.get("phase_provenance", "-"),
+                step=markdown_value(annotated.get("step_index")),
+                step_p=annotated.get("step_index_provenance", "-"),
+                reuse=markdown_value(annotated.get("reuse_score")),
+                reuse_p=annotated.get("reuse_score_provenance", "-"),
+                priority=markdown_value(annotated.get("priority_score")),
+                priority_p=annotated.get("priority_score_provenance", "-"),
+                recency=markdown_value(annotated.get("recency_score")),
+                recency_p=annotated.get("recency_score_provenance", "-"),
+                future_turn=markdown_value(annotated.get("future_turn_score")),
+                future_turn_p=annotated.get("future_turn_score_provenance", "-"),
+                latency=markdown_value(annotated.get("latency_value_score")),
+                latency_p=annotated.get("latency_value_score_provenance", "-"),
+                size=markdown_value(annotated.get("size_penalty_score")),
+                size_p=annotated.get("size_penalty_score_provenance", "-"),
+                value=markdown_value(annotated.get("cache_value_score")),
+                value_p=annotated.get("cache_value_score_provenance", "-"),
+                recommendation=markdown_value(annotated.get("keep_recommendation")),
+                recommendation_p=annotated.get("keep_recommendation_provenance", "-"),
             )
         )
     return "\n".join(lines) + "\n"
@@ -943,28 +1854,44 @@ def render_kv_hierarchy_markdown(analysis: dict) -> str:
         "# KV Hierarchy Analysis",
         "",
         "## Summary",
-        f"- GPU candidates: `{', '.join(summary.get('gpu_candidates') or [])}`",
-        f"- CPU candidates: `{', '.join(summary.get('cpu_candidates') or [])}`",
-        f"- NVMe candidates: `{', '.join(summary.get('nvme_candidates') or [])}`",
-        f"- Drop candidates: `{', '.join(summary.get('drop_candidates') or [])}`",
+        *markdown_field_table(
+            summary,
+            "kv_hierarchy_analysis",
+            [
+                ("gpu_candidates", "GPU candidates"),
+                ("cpu_candidates", "CPU candidates"),
+                ("nvme_candidates", "NVMe candidates"),
+                ("drop_candidates", "Drop candidates"),
+            ],
+        ),
         "",
         "## Phase Table",
         "",
-        "| Phase | Step | Prompt tokens | Pressure | Reuse | Cache value | Recommended tier | Movement priority | Reason |",
-        "| --- | --- | ---: | --- | ---: | ---: | --- | --- | --- |",
+        "| Phase | Phase provenance | Step | Step provenance | Prompt tokens | Prompt-token provenance | Pressure | Pressure provenance | Reuse | Reuse provenance | Cache value | Cache-value provenance | Recommended tier | Tier provenance | Movement priority | Movement provenance | Reason | Reason provenance |",
+        "| --- | --- | --- | --- | ---: | --- | --- | --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
+        annotated = row_with_provenance(dict(row), "kv_hierarchy_analysis")
         lines.append(
-            "| {phase} | {step} | {prompt_tokens} | {pressure} | {reuse:.4f} | {value:.4f} | {tier} | {priority} | {reason} |".format(
-                phase=row["phase"],
-                step=row["step_index"] if row["step_index"] is not None else "-",
-                prompt_tokens=row["prompt_tokens"] if row["prompt_tokens"] is not None else "-",
-                pressure=row["pressure_risk"],
-                reuse=row["reuse_score"],
-                value=row["cache_value_score"],
-                tier=row["recommended_tier"],
-                priority=row["movement_priority"],
-                reason=row["reason"],
+            "| {phase} | {phase_p} | {step} | {step_p} | {prompt_tokens} | {prompt_p} | {pressure} | {pressure_p} | {reuse} | {reuse_p} | {value} | {value_p} | {tier} | {tier_p} | {priority} | {priority_p} | {reason} | {reason_p} |".format(
+                phase=markdown_value(annotated.get("phase")),
+                phase_p=annotated.get("phase_provenance", "-"),
+                step=markdown_value(annotated.get("step_index")),
+                step_p=annotated.get("step_index_provenance", "-"),
+                prompt_tokens=markdown_value(annotated.get("prompt_tokens")),
+                prompt_p=annotated.get("prompt_tokens_provenance", "-"),
+                pressure=markdown_value(annotated.get("pressure_risk")),
+                pressure_p=annotated.get("pressure_risk_provenance", "-"),
+                reuse=markdown_value(annotated.get("reuse_score")),
+                reuse_p=annotated.get("reuse_score_provenance", "-"),
+                value=markdown_value(annotated.get("cache_value_score")),
+                value_p=annotated.get("cache_value_score_provenance", "-"),
+                tier=markdown_value(annotated.get("recommended_tier")),
+                tier_p=annotated.get("recommended_tier_provenance", "-"),
+                priority=markdown_value(annotated.get("movement_priority")),
+                priority_p=annotated.get("movement_priority_provenance", "-"),
+                reason=markdown_value(annotated.get("reason")),
+                reason_p=annotated.get("reason_provenance", "-"),
             )
         )
     return "\n".join(lines) + "\n"
@@ -1115,13 +2042,19 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
         "# Runtime Alignment Analysis",
         "",
         "## Summary",
-        f"- Direct tier verification available: `{summary.get('direct_tier_verification_available')}`",
-        f"- Observed worker count: `{summary.get('observed_worker_count')}`",
-        f"- Observed workers: `{', '.join(summary.get('observed_workers') or [])}`",
-        f"- Fully aligned runtime events: `{summary.get('fully_aligned_runtime_events')}`",
-        f"- Indirect-support rows: `{summary.get('indirect_support_count')}`",
-        f"- Unverifiable rows: `{summary.get('unverifiable_row_count')}`",
-        f"- Best-supported GPU candidate: `{summary.get('best_supported_gpu_candidate')}`",
+        *markdown_field_table(
+            summary,
+            "runtime_alignment_analysis",
+            [
+                ("direct_tier_verification_available", "Direct tier verification available"),
+                ("observed_worker_count", "Observed worker count"),
+                ("observed_workers", "Observed workers"),
+                ("fully_aligned_runtime_events", "Fully aligned runtime events"),
+                ("indirect_support_count", "Indirect-support rows"),
+                ("unverifiable_row_count", "Unverifiable rows"),
+                ("best_supported_gpu_candidate", "Best-supported GPU candidate"),
+            ],
+        ),
         "",
         "## Notes",
         "- This report compares AgentBench recommendations with runtime-side scheduler and worker log signals.",
@@ -1129,32 +2062,43 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
         "",
         "## Phase Table",
         "",
-        "| Phase | Step | Recommended tier | Keep recommendation | Cache value | Worker | Cached blocks | Tree size | Cached tokens | Recomputed tokens | TTFT (ms) | Decode (ms) | Reuse strength | Alignment status | Source |",
-        "| --- | --- | --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+        "| Phase | Phase provenance | Step | Step provenance | Recommended tier | Tier provenance | Keep recommendation | Keep provenance | Cache value | Cache-value provenance | Worker | Worker provenance | Cached blocks | Cached-block provenance | Tree size | Tree-size provenance | Cached tokens | Cached-token provenance | Recomputed tokens | Recomputed provenance | TTFT (ms) | TTFT provenance | Decode (ms) | Decode provenance | Reuse strength | Reuse provenance | Alignment status | Alignment provenance | Source | Source provenance |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
-        value_display = (
-            f"{row.get('cache_value_score'):.4f}"
-            if isinstance(row.get("cache_value_score"), (int, float))
-            else "-"
-        )
+        annotated = row_with_provenance(dict(row), "runtime_alignment_analysis")
         lines.append(
-            "| {phase} | {step} | {tier} | {keep} | {value} | {worker} | {blocks} | {tree} | {cached} | {recomputed} | {ttft} | {decode} | {reuse} | {status} | {source} |".format(
-                phase=row.get("phase"),
-                step=row.get("step_index") if row.get("step_index") is not None else "-",
-                tier=row.get("recommended_tier") or "-",
-                keep=row.get("keep_recommendation") or "-",
-                value=value_display,
-                worker=row.get("worker_id") or "-",
-                blocks=row.get("scheduler_cached_blocks") if row.get("scheduler_cached_blocks") is not None else "-",
-                tree=row.get("scheduler_tree_size") if row.get("scheduler_tree_size") is not None else "-",
-                cached=row.get("cached_token_count") if row.get("cached_token_count") is not None else "-",
-                recomputed=row.get("recomputed_prefix_tokens") if row.get("recomputed_prefix_tokens") is not None else "-",
-                ttft=row.get("ttft_ms") if row.get("ttft_ms") is not None else "-",
-                decode=row.get("decode_ms") if row.get("decode_ms") is not None else "-",
-                reuse=row.get("runtime_reuse_strength") or "-",
-                status=row.get("alignment_status") or "-",
-                source=row.get("runtime_signal_source") or "-",
+            "| {phase} | {phase_p} | {step} | {step_p} | {tier} | {tier_p} | {keep} | {keep_p} | {value} | {value_p} | {worker} | {worker_p} | {blocks} | {blocks_p} | {tree} | {tree_p} | {cached} | {cached_p} | {recomputed} | {recomputed_p} | {ttft} | {ttft_p} | {decode} | {decode_p} | {reuse} | {reuse_p} | {status} | {status_p} | {source} | {source_p} |".format(
+                phase=markdown_value(annotated.get("phase")),
+                phase_p=annotated.get("phase_provenance", "-"),
+                step=markdown_value(annotated.get("step_index")),
+                step_p=annotated.get("step_index_provenance", "-"),
+                tier=markdown_value(annotated.get("recommended_tier")),
+                tier_p=annotated.get("recommended_tier_provenance", "-"),
+                keep=markdown_value(annotated.get("keep_recommendation")),
+                keep_p=annotated.get("keep_recommendation_provenance", "-"),
+                value=markdown_value(annotated.get("cache_value_score")),
+                value_p=annotated.get("cache_value_score_provenance", "-"),
+                worker=markdown_value(annotated.get("worker_id")),
+                worker_p=annotated.get("worker_id_provenance", "-"),
+                blocks=markdown_value(annotated.get("scheduler_cached_blocks")),
+                blocks_p=annotated.get("scheduler_cached_blocks_provenance", "-"),
+                tree=markdown_value(annotated.get("scheduler_tree_size")),
+                tree_p=annotated.get("scheduler_tree_size_provenance", "-"),
+                cached=markdown_value(annotated.get("cached_token_count")),
+                cached_p=annotated.get("cached_token_count_provenance", "-"),
+                recomputed=markdown_value(annotated.get("recomputed_prefix_tokens")),
+                recomputed_p=annotated.get("recomputed_prefix_tokens_provenance", "-"),
+                ttft=markdown_value(annotated.get("ttft_ms")),
+                ttft_p=annotated.get("ttft_ms_provenance", "-"),
+                decode=markdown_value(annotated.get("decode_ms")),
+                decode_p=annotated.get("decode_ms_provenance", "-"),
+                reuse=markdown_value(annotated.get("runtime_reuse_strength")),
+                reuse_p=annotated.get("runtime_reuse_strength_provenance", "-"),
+                status=markdown_value(annotated.get("alignment_status")),
+                status_p=annotated.get("alignment_status_provenance", "-"),
+                source=markdown_value(annotated.get("runtime_signal_source")),
+                source_p=annotated.get("runtime_signal_source_provenance", "-"),
             )
         )
     return "\n".join(lines) + "\n"
@@ -1167,29 +2111,48 @@ def render_measurement_analysis_markdown(analysis: dict) -> str:
         "# Measurement Analysis",
         "",
         "## Summary",
-        f"- Most prefill-heavy phase: `{summary.get('most_prefill_heavy_phase')}`",
-        f"- Strongest reuse phase: `{summary.get('strongest_reuse_phase')}`",
-        f"- Highest pressure phase: `{summary.get('highest_pressure_phase')}` (`{summary.get('highest_pressure_risk')}`)",
-        f"- Slowest phase: `{summary.get('slowest_phase')}` (`{summary.get('slowest_phase_latency_ms')} ms`)",
+        *markdown_field_table(
+            summary,
+            "measurement_analysis",
+            [
+                ("most_prefill_heavy_phase", "Most prefill-heavy phase"),
+                ("strongest_reuse_phase", "Strongest reuse phase"),
+                ("highest_pressure_phase", "Highest pressure phase"),
+                ("highest_pressure_risk", "Highest pressure risk"),
+                ("slowest_phase", "Slowest phase"),
+                ("slowest_phase_latency_ms", "Slowest phase latency (ms)"),
+            ],
+        ),
         "",
         "## Phase Table",
         "",
-        "| Phase | Step | Latency (ms) | Input tokens | Output tokens | Cached input | Finish | Profile | Reuse | Pressure |",
-        "| --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
+        "| Phase | Phase provenance | Step | Step provenance | Latency (ms) | Latency provenance | Input tokens | Input provenance | Output tokens | Output provenance | Cached input | Cached-input provenance | Finish | Finish provenance | Profile | Profile provenance | Reuse | Reuse provenance | Pressure | Pressure provenance |",
+        "| --- | --- | --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     for row in rows:
+        annotated = row_with_provenance(dict(row), "measurement_analysis")
         lines.append(
-            "| {phase} | {step} | {latency} | {input_tokens} | {output_tokens} | {cached_input_tokens} | {finish_reason} | {profile} | {reuse} | {pressure} |".format(
-                phase=row.get("phase"),
-                step=row.get("step_index") if row.get("step_index") is not None else "-",
-                latency=row.get("latency_ms"),
-                input_tokens=row.get("input_tokens") if row.get("input_tokens") is not None else "-",
-                output_tokens=row.get("output_tokens") if row.get("output_tokens") is not None else "-",
-                cached_input_tokens=row.get("cached_input_tokens") if row.get("cached_input_tokens") is not None else "-",
-                finish_reason=row.get("finish_reason") or "-",
-                profile=row.get("prefill_decode_profile"),
-                reuse=row.get("reuse_signal"),
-                pressure=row.get("pressure_risk"),
+            "| {phase} | {phase_p} | {step} | {step_p} | {latency} | {latency_p} | {input_tokens} | {input_p} | {output_tokens} | {output_p} | {cached_input_tokens} | {cached_input_p} | {finish_reason} | {finish_p} | {profile} | {profile_p} | {reuse} | {reuse_p} | {pressure} | {pressure_p} |".format(
+                phase=markdown_value(annotated.get("phase")),
+                phase_p=annotated.get("phase_provenance", "-"),
+                step=markdown_value(annotated.get("step_index")),
+                step_p=annotated.get("step_index_provenance", "-"),
+                latency=markdown_value(annotated.get("latency_ms")),
+                latency_p=annotated.get("latency_ms_provenance", "-"),
+                input_tokens=markdown_value(annotated.get("input_tokens")),
+                input_p=annotated.get("input_tokens_provenance", "-"),
+                output_tokens=markdown_value(annotated.get("output_tokens")),
+                output_p=annotated.get("output_tokens_provenance", "-"),
+                cached_input_tokens=markdown_value(annotated.get("cached_input_tokens")),
+                cached_input_p=annotated.get("cached_input_tokens_provenance", "-"),
+                finish_reason=markdown_value(annotated.get("finish_reason")),
+                finish_p=annotated.get("finish_reason_provenance", "-"),
+                profile=markdown_value(annotated.get("prefill_decode_profile")),
+                profile_p=annotated.get("prefill_decode_profile_provenance", "-"),
+                reuse=markdown_value(annotated.get("reuse_signal")),
+                reuse_p=annotated.get("reuse_signal_provenance", "-"),
+                pressure=markdown_value(annotated.get("pressure_risk")),
+                pressure_p=annotated.get("pressure_risk_provenance", "-"),
             )
         )
     return "\n".join(lines) + "\n"
@@ -1383,6 +2346,12 @@ def main() -> None:
     run_started_at = datetime.now(results_tz)
     run_id = run_started_at.strftime("%Y%m%d_%H%M%S")
 
+    task_source = task_source_label(
+        dataset_name=args.dataset,
+        split=args.split,
+        csv_path=args.csv_path,
+        json_path=args.json_path,
+    )
     task = load_swebench_task(
         dataset_name=args.dataset,
         split=args.split,
@@ -1396,19 +2365,44 @@ def main() -> None:
     run_dir = RESULTS_DIR / parent_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_log_path = run_dir / "checkpoints.json"
+    lifecycle_log_path = run_dir / "task_lifecycle_trace.json"
     set_checkpoint_log_file(checkpoint_log_path)
+    set_lifecycle_log_file(lifecycle_log_path)
+    log_lifecycle_event(
+        stage="run_initialized",
+        payload={
+            "event_kind": "workflow",
+            "parent_run_id": parent_run_id,
+            "task_index": args.index,
+            "task_source": task_source,
+            "app_variant": args.app_variant,
+            "frontend_url": args.frontend_url,
+            "model": args.model,
+            "dataset": args.dataset,
+            "split": args.split,
+            "instance_id": task.get("instance_id"),
+            "results_timezone": args.results_timezone,
+            "step_limit": args.step_limit,
+            "run_started_at": run_started_at.isoformat(),
+        },
+    )
+    log_lifecycle_event(
+        stage="task_retrieved",
+        payload={
+            "event_kind": "task_state",
+            "parent_run_id": parent_run_id,
+            "task_source": task_source,
+            "task_index": args.index,
+            "task": task,
+        },
+    )
     # [CHECK_POINT 1] SWE-bench task loaded before entering the Deep Agents harness.
     # [CHECK_POINT 1] Normalized task payload logged here before prompt expansion.
     log_checkpoint(
         check_point="1. SWE-bench task loaded before Deep Agents harness",
         task_index=args.index,
         payload={
-            "task_source": task_source_label(
-                dataset_name=args.dataset,
-                split=args.split,
-                csv_path=args.csv_path,
-                json_path=args.json_path,
-            ),
+            "task_source": task_source,
             "parent_run_id": parent_run_id,
             "app_variant": args.app_variant,
             "task": task,
@@ -1451,6 +2445,19 @@ def main() -> None:
             repo_url = inferred_repo_url
             inferred_from_task = True
             shared_repo_source = ensure_shared_repo_checkout(inferred_repo_url)
+    log_lifecycle_event(
+        stage="auto_repo_checkout_evaluated",
+        payload={
+            "event_kind": "workspace",
+            "parent_run_id": parent_run_id,
+            "task_source": task_source,
+            "auto_repo_checkout": auto_repo_checkout,
+            "repo_path": repo_path,
+            "repo_url": repo_url,
+            "inferred_from_task": inferred_from_task,
+            "shared_repo_source": str(shared_repo_source) if shared_repo_source is not None else None,
+        },
+    )
 
     workspace_dir, workspace_metadata = prepare_workspace(
         run_dir=run_dir,
@@ -1460,11 +2467,39 @@ def main() -> None:
         inferred_from_task=inferred_from_task,
         shared_repo_source=shared_repo_source,
     )
+    log_lifecycle_event(
+        stage="workspace_prepared",
+        payload={
+            "event_kind": "workspace",
+            "parent_run_id": parent_run_id,
+            "workspace": workspace_metadata,
+            "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
+        },
+    )
     task = dict(task)
     if workspace_dir is not None:
         task["workspace_path"] = str(workspace_dir)
+        log_lifecycle_event(
+            stage="workspace_path_attached_to_task",
+            payload={
+                "event_kind": "task_state",
+                "parent_run_id": parent_run_id,
+                "workspace_path": str(workspace_dir),
+                "task": task,
+            },
+        )
 
     base_hints = json.loads(args.hint_json)
+    log_lifecycle_event(
+        stage="workflow_invocation_started",
+        payload={
+            "event_kind": "workflow",
+            "parent_run_id": parent_run_id,
+            "task_source": task_source,
+            "base_hints": base_hints,
+            "app_variant": args.app_variant,
+        },
+    )
     workflow = run_task_workflow(
         # Debugging note: this is the exact hand-off from the outer wrapper
         # into the Deep Agents app layer.
@@ -1476,59 +2511,73 @@ def main() -> None:
         workspace_dir=workspace_dir,
         app_variant=args.app_variant,
         task_index=args.index,
-        task_source=task_source_label(
-            dataset_name=args.dataset,
-            split=args.split,
-            csv_path=args.csv_path,
-            json_path=args.json_path,
-        ),
+        task_source=task_source,
         parent_run_id=parent_run_id,
+    )
+    log_lifecycle_event(
+        stage="workflow_invocation_completed",
+        payload={
+            "event_kind": "workflow",
+            "parent_run_id": parent_run_id,
+            "task_source": task_source,
+            "measurement_count": len(workflow["measurements"]),
+            "step_count": len(workflow["step_results"]),
+            "final_response_preview": workflow["result"]["response_text"][:300],
+        },
     )
     prompt = workflow["prompt"]
     decomposition_plan = workflow["decomposition_plan"]
-    (run_dir / "plan.json").write_text(
-        json.dumps(decomposition_plan, indent=2, default=stringify_unknown),
-        encoding="utf-8",
-    )
+    plan_file = write_json_artifact(run_dir, "plan.json", decomposition_plan, "plan")
+    log_artifact_written_event(artifact_name="plan", artifact_path=plan_file, related_phase="planning")
 
     step_results = workflow["step_results"]
-    (run_dir / "step_results.json").write_text(
-        json.dumps(step_results, indent=2, default=stringify_unknown),
-        encoding="utf-8",
-    )
+    step_results_file = write_json_artifact(run_dir, "step_results.json", step_results, "step_results")
+    log_artifact_written_event(artifact_name="step_results", artifact_path=step_results_file)
     measurements = workflow["measurements"]
-    (run_dir / "measurements.json").write_text(
-        json.dumps(measurements, indent=2, default=stringify_unknown),
-        encoding="utf-8",
-    )
+    measurements_file = write_json_artifact(run_dir, "measurements.json", measurements, "measurements")
+    log_artifact_written_event(artifact_name="measurements", artifact_path=measurements_file)
     measurement_analysis = build_measurement_analysis(measurements)
-    (run_dir / "measurement_analysis.json").write_text(
-        json.dumps(measurement_analysis, indent=2, default=stringify_unknown),
-        encoding="utf-8",
+    measurement_analysis_file = write_json_artifact(
+        run_dir, "measurement_analysis.json", measurement_analysis, "measurement_analysis"
     )
-    (run_dir / "measurement_analysis.md").write_text(
+    log_artifact_written_event(artifact_name="measurement_analysis", artifact_path=measurement_analysis_file)
+    measurement_analysis_markdown_file = run_dir / "measurement_analysis.md"
+    measurement_analysis_markdown_file.write_text(
         render_measurement_analysis_markdown(measurement_analysis),
         encoding="utf-8",
     )
+    log_artifact_written_event(artifact_name="measurement_analysis_markdown", artifact_path=measurement_analysis_markdown_file)
     cache_value_analysis = build_cache_value_analysis(measurements)
-    (run_dir / "cache_value_analysis.json").write_text(
-        json.dumps(cache_value_analysis, indent=2, default=stringify_unknown),
-        encoding="utf-8",
+    cache_value_analysis_file = write_json_artifact(
+        run_dir, "cache_value_analysis.json", cache_value_analysis, "cache_value_analysis"
     )
-    (run_dir / "cache_value_analysis.md").write_text(
+    log_artifact_written_event(artifact_name="cache_value_analysis", artifact_path=cache_value_analysis_file)
+    cache_value_analysis_markdown_file = run_dir / "cache_value_analysis.md"
+    cache_value_analysis_markdown_file.write_text(
         render_cache_value_markdown(cache_value_analysis),
         encoding="utf-8",
     )
+    log_artifact_written_event(artifact_name="cache_value_analysis_markdown", artifact_path=cache_value_analysis_markdown_file)
     kv_hierarchy_analysis = build_kv_hierarchy_analysis(measurements, cache_value_analysis)
-    (run_dir / "kv_hierarchy_analysis.json").write_text(
-        json.dumps(kv_hierarchy_analysis, indent=2, default=stringify_unknown),
-        encoding="utf-8",
+    kv_hierarchy_analysis_file = write_json_artifact(
+        run_dir, "kv_hierarchy_analysis.json", kv_hierarchy_analysis, "kv_hierarchy_analysis"
     )
-    (run_dir / "kv_hierarchy_analysis.md").write_text(
+    log_artifact_written_event(artifact_name="kv_hierarchy_analysis", artifact_path=kv_hierarchy_analysis_file)
+    kv_hierarchy_analysis_markdown_file = run_dir / "kv_hierarchy_analysis.md"
+    kv_hierarchy_analysis_markdown_file.write_text(
         render_kv_hierarchy_markdown(kv_hierarchy_analysis),
         encoding="utf-8",
     )
+    log_artifact_written_event(artifact_name="kv_hierarchy_analysis_markdown", artifact_path=kv_hierarchy_analysis_markdown_file)
     runtime_log_artifacts = collect_runtime_logs(run_dir, since_iso=run_started_at.isoformat())
+    log_lifecycle_event(
+        stage="runtime_logs_collected",
+        payload={
+            "event_kind": "runtime_observation",
+            "parent_run_id": parent_run_id,
+            "runtime_log_artifacts": runtime_log_artifacts,
+        },
+    )
     frontend_scheduler_events = parse_frontend_scheduler_events(
         runtime_log_artifacts.get("frontend_log_file")
         if isinstance(runtime_log_artifacts.get("frontend_log_file"), str)
@@ -1544,26 +2593,171 @@ def main() -> None:
         frontend_scheduler_events=frontend_scheduler_events,
         worker_request_observations=worker_request_observations,
     )
+    log_lifecycle_event(
+        stage="runtime_events_built",
+        payload={
+            "event_kind": "runtime_observation",
+            "parent_run_id": parent_run_id,
+            "runtime_event_count": len(runtime_events),
+        },
+    )
     runtime_events_file = write_runtime_events_jsonl(run_dir, runtime_events)
-    runtime_events_pretty_file = write_runtime_events_json(run_dir, runtime_events)
+    log_artifact_written_event(artifact_name="runtime_events_jsonl", artifact_path=runtime_events_file)
+    runtime_events_pretty_file = write_json_artifact(
+        run_dir, "runtime_events.json", runtime_events, "runtime_events"
+    )
+    log_artifact_written_event(artifact_name="runtime_events", artifact_path=runtime_events_pretty_file)
     runtime_alignment_analysis = build_runtime_alignment_analysis(
         runtime_events,
         cache_value_analysis,
         kv_hierarchy_analysis,
     )
-    (run_dir / "runtime_alignment_analysis.json").write_text(
-        json.dumps(runtime_alignment_analysis, indent=2, default=stringify_unknown),
-        encoding="utf-8",
+    runtime_alignment_analysis_file = write_json_artifact(
+        run_dir,
+        "runtime_alignment_analysis.json",
+        runtime_alignment_analysis,
+        "runtime_alignment_analysis",
     )
-    (run_dir / "runtime_alignment_analysis.md").write_text(
+    log_artifact_written_event(artifact_name="runtime_alignment_analysis", artifact_path=runtime_alignment_analysis_file)
+    runtime_alignment_analysis_markdown_file = run_dir / "runtime_alignment_analysis.md"
+    runtime_alignment_analysis_markdown_file.write_text(
         render_runtime_alignment_markdown(runtime_alignment_analysis),
         encoding="utf-8",
     )
+    log_artifact_written_event(artifact_name="runtime_alignment_analysis_markdown", artifact_path=runtime_alignment_analysis_markdown_file)
 
     result = workflow["result"]
-    (run_dir / "final_summary.txt").write_text(result["response_text"], encoding="utf-8")
+    final_summary_file = run_dir / "final_summary.txt"
+    final_summary_file.write_text(result["response_text"], encoding="utf-8")
+    log_artifact_written_event(artifact_name="final_summary", artifact_path=final_summary_file, related_phase="synthesis")
 
     workspace_artifacts = collect_workspace_artifacts(run_dir, workspace_dir)
+    log_lifecycle_event(
+        stage="workspace_artifacts_collected",
+        payload={
+            "event_kind": "workspace",
+            "parent_run_id": parent_run_id,
+            "workspace_artifacts": workspace_artifacts,
+        },
+    )
+    run_summary_table = build_run_summary_table(
+        parent_run_id=parent_run_id,
+        task=task,
+        model=args.model,
+        workspace_metadata=workspace_metadata,
+        measurement_analysis=measurement_analysis,
+        cache_value_analysis=cache_value_analysis,
+        kv_hierarchy_analysis=kv_hierarchy_analysis,
+        runtime_alignment_analysis=runtime_alignment_analysis,
+        workspace_artifacts=workspace_artifacts,
+    )
+    measurements_table_file = write_csv_table(run_dir, "measurements_table.csv", build_measurements_table(measurements))
+    log_artifact_written_event(artifact_name="measurements_table", artifact_path=measurements_table_file)
+    measurement_analysis_table_file = write_csv_table(
+        run_dir,
+        "measurement_analysis_table.csv",
+        build_measurement_analysis_table(measurement_analysis),
+    )
+    log_artifact_written_event(artifact_name="measurement_analysis_table", artifact_path=measurement_analysis_table_file)
+    measurement_summary_table_file = write_csv_table(
+        run_dir,
+        "measurement_summary_table.csv",
+        build_measurement_summary_table(measurement_analysis),
+    )
+    log_artifact_written_event(artifact_name="measurement_summary_table", artifact_path=measurement_summary_table_file)
+    cache_value_table_file = write_csv_table(
+        run_dir,
+        "cache_value_table.csv",
+        build_cache_value_table(cache_value_analysis),
+    )
+    log_artifact_written_event(artifact_name="cache_value_table", artifact_path=cache_value_table_file)
+    cache_value_summary_table_file = write_csv_table(
+        run_dir,
+        "cache_value_summary_table.csv",
+        build_cache_value_summary_table(cache_value_analysis),
+    )
+    log_artifact_written_event(artifact_name="cache_value_summary_table", artifact_path=cache_value_summary_table_file)
+    kv_hierarchy_table_file = write_csv_table(
+        run_dir,
+        "kv_hierarchy_table.csv",
+        build_kv_hierarchy_table(kv_hierarchy_analysis),
+    )
+    log_artifact_written_event(artifact_name="kv_hierarchy_table", artifact_path=kv_hierarchy_table_file)
+    kv_hierarchy_summary_table_file = write_csv_table(
+        run_dir,
+        "kv_hierarchy_summary_table.csv",
+        build_kv_hierarchy_summary_table(kv_hierarchy_analysis),
+    )
+    log_artifact_written_event(artifact_name="kv_hierarchy_summary_table", artifact_path=kv_hierarchy_summary_table_file)
+    runtime_events_table_file = write_csv_table(
+        run_dir,
+        "runtime_events_table.csv",
+        build_runtime_events_table(runtime_events),
+    )
+    log_artifact_written_event(artifact_name="runtime_events_table", artifact_path=runtime_events_table_file)
+    runtime_alignment_table_file = write_csv_table(
+        run_dir,
+        "runtime_alignment_table.csv",
+        build_runtime_alignment_table(runtime_alignment_analysis),
+    )
+    log_artifact_written_event(artifact_name="runtime_alignment_table", artifact_path=runtime_alignment_table_file)
+    runtime_alignment_summary_table_file = write_csv_table(
+        run_dir,
+        "runtime_alignment_summary_table.csv",
+        build_runtime_alignment_summary_table(runtime_alignment_analysis),
+    )
+    log_artifact_written_event(artifact_name="runtime_alignment_summary_table", artifact_path=runtime_alignment_summary_table_file)
+    run_summary_table_file = write_csv_table(run_dir, "run_summary_table.csv", run_summary_table)
+    log_artifact_written_event(artifact_name="run_summary_table", artifact_path=run_summary_table_file)
+    raw_lifecycle_events = load_logged_events(lifecycle_log_path)
+    set_lifecycle_log_file(None)
+    task_lifecycle_trace = build_task_lifecycle_trace(
+        raw_lifecycle_events,
+        metadata={
+            "parent_run_id": parent_run_id,
+            "task_instance_id": task.get("instance_id"),
+            "task_source": task_source,
+            "app_variant": args.app_variant,
+            "frontend_url": args.frontend_url,
+            "model": args.model,
+        },
+        runtime_events=runtime_events,
+    )
+    task_lifecycle_trace_file = write_json_artifact(
+        run_dir,
+        "task_lifecycle_trace.json",
+        task_lifecycle_trace,
+        "task_lifecycle_trace",
+    )
+    task_lifecycle_markdown_file = run_dir / "task_lifecycle_trace.md"
+    task_lifecycle_markdown_file.write_text(
+        render_task_lifecycle_markdown(task_lifecycle_trace),
+        encoding="utf-8",
+    )
+    task_lifecycle_table = build_task_lifecycle_table(task_lifecycle_trace)
+    task_lifecycle_table_file = write_csv_table(
+        run_dir,
+        "task_lifecycle_table.csv",
+        task_lifecycle_table,
+    )
+    workbook_file = write_excel_workbook(
+        run_dir,
+        "run_analysis.xlsx",
+        {
+            "measurements": build_measurements_table(measurements),
+            "measurement_summary": build_measurement_summary_table(measurement_analysis),
+            "measurement_analysis": build_measurement_analysis_table(measurement_analysis),
+            "cache_value": build_cache_value_table(cache_value_analysis),
+            "cache_summary": build_cache_value_summary_table(cache_value_analysis),
+            "kv_hierarchy": build_kv_hierarchy_table(kv_hierarchy_analysis),
+            "kv_summary": build_kv_hierarchy_summary_table(kv_hierarchy_analysis),
+            "runtime_events": build_runtime_events_table(runtime_events),
+            "runtime_alignment": build_runtime_alignment_table(runtime_alignment_analysis),
+            "runtime_summary": build_runtime_alignment_summary_table(runtime_alignment_analysis),
+            "task_lifecycle": task_lifecycle_table,
+            "run_summary": run_summary_table,
+        },
+    )
 
     payload = {
         "run_started_at": run_started_at.isoformat(),
@@ -1582,28 +2776,46 @@ def main() -> None:
         "prompt": prompt,
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
-        "measurements_file": str(run_dir / "measurements.json"),
+        "plan_file": str(plan_file),
+        "step_results_file": str(step_results_file),
+        "measurements_file": str(measurements_file),
         "measurements_summary": summarize_measurements(measurements),
-        "measurement_analysis_file": str(run_dir / "measurement_analysis.json"),
-        "measurement_analysis_markdown_file": str(run_dir / "measurement_analysis.md"),
+        "measurements_table_file": str(measurements_table_file),
+        "measurement_analysis_file": str(measurement_analysis_file),
+        "measurement_analysis_markdown_file": str(measurement_analysis_markdown_file),
+        "measurement_analysis_table_file": str(measurement_analysis_table_file),
+        "measurement_summary_table_file": str(measurement_summary_table_file),
         "measurement_analysis": measurement_analysis,
         "runtime_events_file": str(runtime_events_file),
         "runtime_events_pretty_file": str(runtime_events_pretty_file),
+        "runtime_events_table_file": str(runtime_events_table_file),
         "runtime_events": runtime_events,
         "runtime_log_artifacts": runtime_log_artifacts,
-        "runtime_alignment_analysis_file": str(run_dir / "runtime_alignment_analysis.json"),
-        "runtime_alignment_analysis_markdown_file": str(run_dir / "runtime_alignment_analysis.md"),
+        "runtime_alignment_analysis_file": str(runtime_alignment_analysis_file),
+        "runtime_alignment_analysis_markdown_file": str(runtime_alignment_analysis_markdown_file),
+        "runtime_alignment_table_file": str(runtime_alignment_table_file),
+        "runtime_alignment_summary_table_file": str(runtime_alignment_summary_table_file),
         "runtime_alignment_analysis": runtime_alignment_analysis,
-        "cache_value_analysis_file": str(run_dir / "cache_value_analysis.json"),
-        "cache_value_analysis_markdown_file": str(run_dir / "cache_value_analysis.md"),
+        "task_lifecycle_trace_file": str(task_lifecycle_trace_file),
+        "task_lifecycle_markdown_file": str(task_lifecycle_markdown_file),
+        "task_lifecycle_table_file": str(task_lifecycle_table_file),
+        "task_lifecycle_trace": task_lifecycle_trace,
+        "cache_value_analysis_file": str(cache_value_analysis_file),
+        "cache_value_analysis_markdown_file": str(cache_value_analysis_markdown_file),
+        "cache_value_table_file": str(cache_value_table_file),
+        "cache_value_summary_table_file": str(cache_value_summary_table_file),
         "cache_value_analysis": cache_value_analysis,
-        "kv_hierarchy_analysis_file": str(run_dir / "kv_hierarchy_analysis.json"),
-        "kv_hierarchy_analysis_markdown_file": str(run_dir / "kv_hierarchy_analysis.md"),
+        "kv_hierarchy_analysis_file": str(kv_hierarchy_analysis_file),
+        "kv_hierarchy_analysis_markdown_file": str(kv_hierarchy_analysis_markdown_file),
+        "kv_hierarchy_table_file": str(kv_hierarchy_table_file),
+        "kv_hierarchy_summary_table_file": str(kv_hierarchy_summary_table_file),
         "kv_hierarchy_analysis": kv_hierarchy_analysis,
+        "run_summary_table_file": str(run_summary_table_file),
+        "analysis_workbook_file": str(workbook_file),
         "measurements": measurements,
         "result": result,
     }
-    save_result(run_dir, payload)
+    save_result(run_dir, annotate_with_provenance(payload, "result"))
     set_checkpoint_log_file(None)
 
     print(f"AgentBench run complete: {safe_instance}")

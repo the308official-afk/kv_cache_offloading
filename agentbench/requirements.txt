@@ -1,5 +1,6 @@
-deepagents
+-e ./agentbench/upstream/deepagents/libs/deepagents
 langchain-openai
 langchain-core
 datasets
 pandas
+openpyxl

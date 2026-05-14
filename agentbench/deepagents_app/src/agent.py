@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from collections.abc import Mapping
 
-from agentbench.log_utils import log_checkpoint
+from agentbench.log_utils import log_checkpoint, log_lifecycle_event
 
 THIS_FILE = Path(__file__).resolve()
 APP_ROOT = THIS_FILE.parents[1]
@@ -184,6 +184,27 @@ def build_measurement_record(
     }
 
 
+def build_prompt_snapshot(prompt: str) -> dict[str, Any]:
+    return {
+        "prompt": prompt,
+        "prompt_chars": len(prompt),
+        "prompt_lines": len(prompt.splitlines()),
+        "prompt_preview": _prompt_preview(prompt),
+    }
+
+
+def build_response_snapshot(response: Any) -> dict[str, Any]:
+    response_metadata = _response_metadata(response)
+    usage_metadata = _usage_metadata(response)
+    text = response_text(response)
+    return {
+        "response_text": text,
+        "response_preview": _prompt_preview(text),
+        "response_metadata": response_metadata,
+        "usage_metadata": usage_metadata,
+    }
+
+
 def _prompt_preview(prompt: str) -> str:
     lines = [line.strip() for line in prompt.splitlines() if line.strip()]
     if not lines:
@@ -299,6 +320,20 @@ def build_coding_agent(
     # Debugging note: this is the Deep Agents harness construction point.
     # The returned agent is powered by create_deep_agent(...) but wired to local Dynamo.
 
+    system_prompt = load_agent_instructions(app_variant)
+    log_lifecycle_event(
+        stage="step_agent_system_prompt_loaded",
+        payload={
+            "event_kind": "prompt_context",
+            "phase": phase,
+            "app_variant": app_variant,
+            "request_context": request_context or {},
+            "system_prompt": system_prompt,
+            "system_prompt_chars": len(system_prompt),
+            "system_prompt_lines": len(system_prompt.splitlines()),
+            "system_prompt_preview": _prompt_preview(system_prompt),
+        },
+    )
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
@@ -307,7 +342,7 @@ def build_coding_agent(
     )
     return create_deep_agent(
         model=llm,
-        system_prompt=load_agent_instructions(app_variant),
+        system_prompt=system_prompt,
     )
 
 
@@ -428,6 +463,20 @@ def generate_decomposition_plan(
         phase="planning",
         app_variant=(task_metadata or {}).get("app_variant"),
     )
+    log_lifecycle_event(
+        stage="planning_request_prepared",
+        payload={
+            "event_kind": "request_context",
+            "phase": "planning",
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": planning_hints,
+            "request_context": request_context,
+            "step_limit": step_limit,
+        },
+    )
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
@@ -475,6 +524,19 @@ Return only valid JSON in this exact shape:
 Keep it to at most {step_limit} steps.{preferred_step_guidance}"""
 
     planning_prompt += "\n\nDo not include markdown, bullet points, commentary, or code fences.\nStart with `{` and end with `}`."
+    log_lifecycle_event(
+        stage="planning_prompt_built",
+        payload={
+            "event_kind": "prompt",
+            "phase": "planning",
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "request_context": request_context,
+            "step_limit": step_limit,
+            "base_task_prompt": prompt,
+            **build_prompt_snapshot(planning_prompt),
+        },
+    )
     # [CHECK_POINT 3] Planning request leaving the Deep Agents harness for Dynamo.
     log_outbound_harness_request(
         check_point="3. Planning request leaving Deep Agents harness",
@@ -491,31 +553,57 @@ Keep it to at most {step_limit} steps.{preferred_step_guidance}"""
             "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         },
     )
+    log_lifecycle_event(
+        stage="planning_request_dispatched",
+        payload={
+            "event_kind": "request_dispatch",
+            "phase": "planning",
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": planning_hints,
+            "request_context": request_context,
+            **build_prompt_snapshot(planning_prompt),
+        },
+    )
     started_at_perf = time.perf_counter()
     response = llm.invoke(planning_prompt)
     finished_at_perf = time.perf_counter()
     raw_text = response_text(response)
     steps = parse_decomposition_plan(raw_text, fallback_count=step_limit)
+    measurement = build_measurement_record(
+        phase="planning",
+        model=model,
+        frontend_url=frontend_url,
+        prompt=planning_prompt,
+        hints=planning_hints,
+        response=response,
+        started_at_perf=started_at_perf,
+        finished_at_perf=finished_at_perf,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
+        request_context=request_context,
+        app_variant=task_metadata.get("app_variant") if task_metadata else None,
+    )
+    log_lifecycle_event(
+        stage="planning_response_received",
+        payload={
+            "event_kind": "response",
+            "phase": "planning",
+            "request_context": request_context,
+            "step_limit": step_limit,
+            "parsed_step_count": len(steps),
+            "steps": steps,
+            "measurement": measurement,
+            **build_response_snapshot(response),
+        },
+    )
     return {
         "planning_hints": planning_hints,
         "planning_prompt": planning_prompt,
         "planning_response_text": raw_text,
         "steps": steps,
-        "measurement": build_measurement_record(
-            phase="planning",
-            model=model,
-            frontend_url=frontend_url,
-            prompt=planning_prompt,
-            hints=planning_hints,
-            response=response,
-            started_at_perf=started_at_perf,
-            finished_at_perf=finished_at_perf,
-            task_index=task_index,
-            task_source=task_source,
-            task_metadata=task_metadata,
-            request_context=request_context,
-            app_variant=task_metadata.get("app_variant") if task_metadata else None,
-        ),
+        "measurement": measurement,
     }
 
 
@@ -557,6 +645,22 @@ def execute_plan_steps(
                 step_index=idx,
                 step_title=step.get("title"),
             )
+            log_lifecycle_event(
+                stage="step_request_prepared",
+                payload={
+                    "event_kind": "request_context",
+                    "phase": f"step_{idx}_execution",
+                    "step_index": idx,
+                    "step_title": step.get("title"),
+                    "step": step,
+                    "task_source": task_source,
+                    "task_metadata": task_metadata or {},
+                    "frontend_url": frontend_url,
+                    "model": model,
+                    "hints": step_hints,
+                    "request_context": request_context,
+                },
+            )
             agent = build_coding_agent(
                 frontend_url=frontend_url,
                 model=model,
@@ -585,6 +689,20 @@ Your job for this step:
 3. Produce a concise step summary.
 4. Say exactly what files or code locations mattered for this step.
 5. Do not invent test runs or edits you did not perform."""
+            log_lifecycle_event(
+                stage="step_prompt_built",
+                payload={
+                    "event_kind": "prompt",
+                    "phase": f"step_{idx}_execution",
+                    "step_index": idx,
+                    "step_title": step.get("title"),
+                    "step": step,
+                    "request_context": request_context,
+                    "approved_plan": plan_steps,
+                    "prior_step_summaries": list(prior_step_summaries),
+                    **build_prompt_snapshot(step_prompt),
+                },
+            )
             # [CHECK_POINT 4] Step execution request leaving the Deep Agents harness for Dynamo.
             log_outbound_harness_request(
                 check_point="4. Step execution request leaving Deep Agents harness",
@@ -603,11 +721,55 @@ Your job for this step:
                     "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
                 },
             )
+            log_lifecycle_event(
+                stage="step_request_dispatched",
+                payload={
+                    "event_kind": "request_dispatch",
+                    "phase": f"step_{idx}_execution",
+                    "step_index": idx,
+                    "step_title": step.get("title"),
+                    "frontend_url": frontend_url,
+                    "model": model,
+                    "hints": step_hints,
+                    "request_context": request_context,
+                    **build_prompt_snapshot(step_prompt),
+                },
+            )
             started_at_perf = time.perf_counter()
             response = agent.invoke({"messages": [{"role": "user", "content": step_prompt}]})
             finished_at_perf = time.perf_counter()
             summary = response_text(response)
             prior_step_summaries.append(summary[:1200])
+            measurement = build_measurement_record(
+                phase=f"step_{idx}_execution",
+                model=model,
+                frontend_url=frontend_url,
+                prompt=step_prompt,
+                hints=step_hints,
+                response=response,
+                started_at_perf=started_at_perf,
+                finished_at_perf=finished_at_perf,
+                task_index=task_index,
+                task_source=task_source,
+                task_metadata=task_metadata,
+                request_context=request_context,
+                step_index=idx,
+                step_title=step.get("title"),
+                app_variant=app_variant,
+            )
+            log_lifecycle_event(
+                stage="step_response_received",
+                payload={
+                    "event_kind": "response",
+                    "phase": f"step_{idx}_execution",
+                    "step_index": idx,
+                    "step_title": step.get("title"),
+                    "request_context": request_context,
+                    "step": step,
+                    "measurement": measurement,
+                    **build_response_snapshot(response),
+                },
+            )
             step_results.append(
                 {
                     "step_index": idx,
@@ -616,23 +778,7 @@ Your job for this step:
                     "step_prompt": step_prompt,
                     "response": response,
                     "response_text": summary,
-                    "measurement": build_measurement_record(
-                        phase=f"step_{idx}_execution",
-                        model=model,
-                        frontend_url=frontend_url,
-                        prompt=step_prompt,
-                        hints=step_hints,
-                        response=response,
-                        started_at_perf=started_at_perf,
-                        finished_at_perf=finished_at_perf,
-                        task_index=task_index,
-                        task_source=task_source,
-                        task_metadata=task_metadata,
-                        request_context=request_context,
-                        step_index=idx,
-                        step_title=step.get("title"),
-                        app_variant=app_variant,
-                    ),
+                    "measurement": measurement,
                 }
             )
     finally:
@@ -666,6 +812,20 @@ def synthesize_final_summary(
         phase="synthesis",
         app_variant=(task_metadata or {}).get("app_variant"),
     )
+    log_lifecycle_event(
+        stage="synthesis_request_prepared",
+        payload={
+            "event_kind": "request_context",
+            "phase": "synthesis",
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": synthesis_hints,
+            "request_context": request_context,
+            "step_count": len(step_results),
+        },
+    )
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
@@ -691,6 +851,18 @@ Produce a final summary with these sections:
 3. Files or code areas that matter most
 4. Validation steps still needed
 5. What actually changed in the workspace, if anything"""
+    log_lifecycle_event(
+        stage="synthesis_prompt_built",
+        payload={
+            "event_kind": "prompt",
+            "phase": "synthesis",
+            "request_context": request_context,
+            "approved_plan": plan_steps,
+            "step_count": len(step_results),
+            "step_summaries": step_summaries,
+            **build_prompt_snapshot(synthesis_prompt),
+        },
+    )
     # [CHECK_POINT 5] Final synthesis request leaving the Deep Agents harness for Dynamo.
     log_outbound_harness_request(
         check_point="5. Final synthesis request leaving Deep Agents harness",
@@ -707,29 +879,52 @@ Produce a final summary with these sections:
             "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         },
     )
+    log_lifecycle_event(
+        stage="synthesis_request_dispatched",
+        payload={
+            "event_kind": "request_dispatch",
+            "phase": "synthesis",
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": synthesis_hints,
+            "request_context": request_context,
+            **build_prompt_snapshot(synthesis_prompt),
+        },
+    )
     started_at_perf = time.perf_counter()
     response = llm.invoke(synthesis_prompt)
     finished_at_perf = time.perf_counter()
+    measurement = build_measurement_record(
+        phase="synthesis",
+        model=model,
+        frontend_url=frontend_url,
+        prompt=synthesis_prompt,
+        hints=synthesis_hints,
+        response=response,
+        started_at_perf=started_at_perf,
+        finished_at_perf=finished_at_perf,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
+        request_context=request_context,
+        app_variant=task_metadata.get("app_variant") if task_metadata else None,
+    )
+    log_lifecycle_event(
+        stage="synthesis_response_received",
+        payload={
+            "event_kind": "response",
+            "phase": "synthesis",
+            "request_context": request_context,
+            "measurement": measurement,
+            **build_response_snapshot(response),
+        },
+    )
     return {
         "synthesis_hints": synthesis_hints,
         "synthesis_prompt": synthesis_prompt,
         "response": response,
         "response_text": response_text(response),
-        "measurement": build_measurement_record(
-            phase="synthesis",
-            model=model,
-            frontend_url=frontend_url,
-            prompt=synthesis_prompt,
-            hints=synthesis_hints,
-            response=response,
-            started_at_perf=started_at_perf,
-            finished_at_perf=finished_at_perf,
-            task_index=task_index,
-            task_source=task_source,
-            task_metadata=task_metadata,
-            request_context=request_context,
-            app_variant=task_metadata.get("app_variant") if task_metadata else None,
-        ),
+        "measurement": measurement,
     }
 
 
@@ -760,6 +955,40 @@ def run_task_workflow(
         "repo": task.get("repo"),
         "app_variant": app_variant,
     }
+    log_lifecycle_event(
+        stage="task_workflow_started",
+        payload={
+            "event_kind": "workflow",
+            "task_source": task_source,
+            "task_metadata": task_metadata,
+            "parent_run_id": parent_run_id,
+            "frontend_url": frontend_url,
+            "model": model,
+            "step_limit": step_limit,
+            "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
+            "app_variant": app_variant,
+        },
+    )
+    log_lifecycle_event(
+        stage="task_prompt_built",
+        payload={
+            "event_kind": "prompt",
+            "task_source": task_source,
+            "task_metadata": task_metadata,
+            "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
+            **build_prompt_snapshot(prompt),
+        },
+    )
+    log_lifecycle_event(
+        stage="workflow_hints_resolved",
+        payload={
+            "event_kind": "hints",
+            "task_source": task_source,
+            "task_metadata": task_metadata,
+            "resolved_hints": resolved_hints,
+            "step_limit": step_limit,
+        },
+    )
 
     decomposition_plan = generate_decomposition_plan(
         frontend_url=frontend_url,
@@ -800,6 +1029,19 @@ def run_task_workflow(
     measurements = [decomposition_plan["measurement"]]
     measurements.extend(item["measurement"] for item in step_results)
     measurements.append(result["measurement"])
+    log_lifecycle_event(
+        stage="task_workflow_completed",
+        payload={
+            "event_kind": "workflow",
+            "task_source": task_source,
+            "task_metadata": task_metadata,
+            "parent_run_id": parent_run_id,
+            "step_count": len(step_results),
+            "measurement_count": len(measurements),
+            "plan_steps": decomposition_plan["steps"],
+            "final_response_preview": _prompt_preview(result["response_text"]),
+        },
+    )
     return {
         "prompt": prompt,
         "resolved_hints": resolved_hints,

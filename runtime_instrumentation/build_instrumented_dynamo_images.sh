@@ -10,11 +10,50 @@ WORKER_IMAGE_TAG="${WORKER_IMAGE_TAG:-local/dynamo-sglang:runtime-json-logs}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 SKIP_WORKER="${SKIP_WORKER:-0}"
 
-if [[ ! -d "${SOURCE_DIR}" ]]; then
-  echo "Dynamo source directory not found: ${SOURCE_DIR}" >&2
-  echo "Run: ${SCRIPT_DIR}/fetch_dynamo_source.sh" >&2
-  exit 1
-fi
+require_valid_source_repo() {
+  if [[ ! -d "${SOURCE_DIR}" ]]; then
+    echo "Dynamo source directory not found: ${SOURCE_DIR}" >&2
+    echo "Run: ${SCRIPT_DIR}/fetch_dynamo_source.sh" >&2
+    exit 1
+  fi
+
+  if [[ ! -d "${SOURCE_DIR}/.git" ]]; then
+    echo "Dynamo source directory exists but is not a git clone: ${SOURCE_DIR}" >&2
+    echo "It is likely a partial copy or failed earlier attempt." >&2
+    echo "Remove it and rerun:" >&2
+    echo "  rm -rf ${SOURCE_DIR}" >&2
+    echo "  ${SCRIPT_DIR}/fetch_dynamo_source.sh" >&2
+    exit 1
+  fi
+
+  local required_files=(
+    "pyproject.toml"
+    "Cargo.toml"
+    "rust-toolchain.toml"
+    "container/render.py"
+  )
+
+  local missing=0
+  for relpath in "${required_files[@]}"; do
+    if [[ ! -e "${SOURCE_DIR}/${relpath}" ]]; then
+      if [[ "${missing}" -eq 0 ]]; then
+        echo "Dynamo source clone is incomplete: ${SOURCE_DIR}" >&2
+        echo "Missing required files:" >&2
+      fi
+      echo "  ${relpath}" >&2
+      missing=1
+    fi
+  done
+
+  if [[ "${missing}" -eq 1 ]]; then
+    echo "Recreate the source clone and rerun:" >&2
+    echo "  rm -rf ${SOURCE_DIR}" >&2
+    echo "  ${SCRIPT_DIR}/fetch_dynamo_source.sh" >&2
+    exit 1
+  fi
+}
+
+require_valid_source_repo
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required but not available on PATH" >&2

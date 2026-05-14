@@ -79,6 +79,126 @@ Default output tags:
 - `local/dynamo-frontend:runtime-json-logs`
 - `local/dynamo-sglang:runtime-json-logs`
 
+### 3a. Worker-first activation
+
+If you want to validate worker-side instrumentation before rebuilding the frontend, you can build and run only the worker image first.
+
+Build only the worker image:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+SKIP_FRONTEND=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+Then run the normal frontend image with the instrumented worker image:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+DYN_RUNTIME_JSON_LOGS=1 \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+./run_dynamo_single_host.sh start
+```
+
+This lets you test:
+
+- worker request lifecycle events
+- worker prefill/decode observations
+- worker log stability
+
+without also rebuilding the frontend first.
+
+To inspect the worker-side structured logs:
+
+```bash
+docker logs dynamo-sglang-worker 2>&1 | rg '\[RUNTIME_JSON\]'
+```
+
+Important limitation:
+
+- worker-first activation is useful for validating worker instrumentation
+- but full end-to-end external `request_id` propagation and frontend/router structured events still require the instrumented frontend image too
+
+### 3b. Python-only worker dev mode
+
+If you want to iterate on worker Python files without rebuilding the worker image every time, you can bind-mount the local worker source into the stock worker container.
+
+This mode overrides only:
+
+- `components/src/dynamo/common`
+- `components/src/dynamo/sglang`
+- `lib/bindings/python/src/dynamo/health_check.py`
+- `lib/bindings/python/src/dynamo/runtime`
+
+inside the worker container, while leaving compiled runtime pieces such as `dynamo._core` in the installed wheel untouched.
+
+Example:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+WORKER_DEV_MODE=1 \
+WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/components/src/dynamo \
+WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/lib/bindings/python/src/dynamo \
+DYN_RUNTIME_JSON_LOGS=1 \
+./run_dynamo_worker.sh start
+```
+
+Single-host example:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+WORKER_DEV_MODE=1 \
+WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/components/src/dynamo \
+WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/lib/bindings/python/src/dynamo \
+DYN_RUNTIME_JSON_LOGS=1 \
+./run_dynamo_single_host.sh start
+```
+
+This is best for:
+
+- Python-only worker logging changes
+- faster iteration on `decode_handler.py`, `prefill_handler.py`, and `common/` helpers
+
+This is not enough for:
+
+- Rust changes like `kv.rs` or `selector.rs`
+- frontend runtime instrumentation
+- changes that require a rebuilt wheel or native extension
+
+## Troubleshooting
+
+### `apply_runtime_json_logging_patch.sh` fails after a fresh clone
+
+If:
+
+- `fetch_dynamo_source.sh` succeeded on a fresh upstream clone
+- but `apply_runtime_json_logging_patch.sh` says the patch could not be applied cleanly
+
+the most likely cause is that your local repo copy is stale and does not yet include the latest tracked patch file.
+
+Fix:
+
+1. update or re-upload this repo so EC2 has the latest:
+   - [patches/dynamo_runtime_json_logging.patch](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/patches/dynamo_runtime_json_logging.patch)
+2. remove the fresh clone and rerun:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+rm -rf runtime_upstream/dynamo
+
+./runtime_instrumentation/fetch_dynamo_source.sh
+./runtime_instrumentation/apply_runtime_json_logging_patch.sh
+```
+
+### `runtime_upstream/dynamo` exists but is not a valid git clone
+
+If the scripts complain that `runtime_upstream/dynamo` exists but is not a git repo or is incomplete, remove it and rerun:
+
+```bash
+cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
+rm -rf runtime_upstream/dynamo
+./runtime_instrumentation/fetch_dynamo_source.sh
+```
+
 ### 4. Run your existing local workflow against the custom images
 
 Single-host:

