@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
 import re
@@ -44,6 +45,8 @@ except ImportError as exc:  # pragma: no cover
 
 try:
     from agentbench.deepagents_app.src.agent import (
+        frontend_base_url,
+        load_agent_instructions,
         run_task_workflow,
     )
     from agentbench.log_utils import (
@@ -487,7 +490,7 @@ def classify_provenance(artifact: str, path: tuple[str, ...], value) -> str:
         return "MEASURED"
     if artifact == "runtime_alignment_analysis":
         return "DERIVED"
-    if artifact == "task_lifecycle_trace":
+    if artifact == "stage_lifecycle_trace":
         return "MEASURED"
     if artifact == "cache_value_analysis":
         return "SPECULATIVE"
@@ -532,11 +535,11 @@ def annotate_with_provenance(data, artifact: str, path: tuple[str, ...] = (), in
     return data
 
 
-def write_json_artifact(run_dir: Path, filename: str, payload, artifact: str) -> Path:
+def write_json_artifact(run_dir: Path, filename: str, payload, artifact: str, *, annotate: bool = True) -> Path:
     output_path = run_dir / filename
-    annotated = annotate_with_provenance(payload, artifact)
+    body = annotate_with_provenance(payload, artifact) if annotate else payload
     output_path.write_text(
-        json.dumps(annotated, indent=2, default=stringify_unknown),
+        json.dumps(body, indent=2, default=stringify_unknown),
         encoding="utf-8",
     )
     return output_path
@@ -561,15 +564,30 @@ def markdown_value(value) -> str:
     return str(value)
 
 
-def markdown_field_table(record: dict, artifact: str, ordered_fields: list[tuple[str, str]]) -> list[str]:
-    lines = [
-        "| Field | Value | Provenance |",
-        "| --- | --- | --- |",
-    ]
+def markdown_field_table(
+    record: dict,
+    artifact: str,
+    ordered_fields: list[tuple[str, str]],
+    *,
+    include_provenance: bool = True,
+) -> list[str]:
+    if include_provenance:
+        lines = [
+            "| Field | Value | Provenance |",
+            "| --- | --- | --- |",
+        ]
+    else:
+        lines = [
+            "| Field | Value |",
+            "| --- | --- |",
+        ]
     for field, label in ordered_fields:
         value = record.get(field)
-        provenance = classify_provenance(artifact, (field,), value)
-        lines.append(f"| {label} | {markdown_value(value)} | {provenance} |")
+        if include_provenance:
+            provenance = classify_provenance(artifact, (field,), value)
+            lines.append(f"| {label} | {markdown_value(value)} | {provenance} |")
+        else:
+            lines.append(f"| {label} | {markdown_value(value)} |")
     return lines
 
 
@@ -589,6 +607,364 @@ def write_csv_table(run_dir: Path, filename: str, rows: list[dict]) -> Path:
     output_path = run_dir / filename
     pd.DataFrame(rows).to_csv(output_path, index=False)
     return output_path
+
+
+def _lineage_message_text(message: Any) -> str:
+    content = None
+    if isinstance(message, dict):
+        content = message.get("content")
+    else:
+        content = getattr(message, "content", None)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        chunks = []
+        for item in content:
+            if isinstance(item, dict) and "text" in item:
+                chunks.append(str(item["text"]))
+            else:
+                chunks.append(str(item))
+        return "\n".join(chunks)
+    if content is None:
+        return ""
+    return str(content)
+
+
+def _lineage_messages(response: Any) -> list[dict[str, Any]]:
+    messages = None
+    if isinstance(response, dict):
+        messages = response.get("messages")
+    else:
+        messages = getattr(response, "messages", None)
+    if not isinstance(messages, list):
+        return []
+
+    normalized: list[dict[str, Any]] = []
+    for index, message in enumerate(messages):
+        if isinstance(message, dict):
+            tool_calls = message.get("tool_calls") or []
+            invalid_tool_calls = message.get("invalid_tool_calls") or []
+            name = message.get("name")
+            message_type = message.get("type")
+            message_id = message.get("id")
+        else:
+            tool_calls = getattr(message, "tool_calls", None) or []
+            invalid_tool_calls = getattr(message, "invalid_tool_calls", None) or []
+            name = getattr(message, "name", None)
+            message_type = getattr(message, "type", None)
+            message_id = getattr(message, "id", None)
+
+        normalized.append(
+            {
+                "index": index,
+                "type": message_type,
+                "name": name,
+                "id": message_id,
+                "text": _lineage_message_text(message),
+                "text_preview": _prompt_preview(_lineage_message_text(message)),
+                "tool_calls": tool_calls,
+                "invalid_tool_calls": invalid_tool_calls,
+                "tool_call_count": len(tool_calls),
+                "invalid_tool_call_count": len(invalid_tool_calls),
+                "tool_call_names": [
+                    call.get("name")
+                    for call in tool_calls
+                    if isinstance(call, dict) and call.get("name")
+                ],
+            }
+        )
+    return normalized
+
+
+def _extract_tool_parser_usage(frontend_log_file: str | None) -> dict[str, Any]:
+    if not frontend_log_file:
+        return {
+            "tool_parser_names_seen": [],
+            "tool_parser_observed": False,
+        }
+
+    log_path = Path(frontend_log_file)
+    if not log_path.exists():
+        return {
+            "tool_parser_names_seen": [],
+            "tool_parser_observed": False,
+        }
+
+    parser_names: list[str] = []
+    pattern = re.compile(r'Using tool parser: Some\("(?P<name>[^"]+)"\)')
+    for line in log_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        match = pattern.search(line)
+        if match:
+            parser_names.append(match.group("name"))
+
+    unique_names = sorted(set(parser_names))
+    return {
+        "tool_parser_names_seen": unique_names,
+        "tool_parser_observed": bool(unique_names),
+    }
+
+
+def build_prompt_evolution_report(
+    *,
+    task: dict,
+    workflow: dict,
+    frontend_url: str,
+    model: str,
+    app_variant: str,
+    runtime_log_artifacts: dict[str, Any],
+    workspace_metadata: dict[str, Any],
+    workspace_artifacts: dict[str, Any],
+) -> dict[str, Any]:
+    baseline_result = workflow["result"]
+    response = baseline_result.get("response")
+    messages = _lineage_messages(response)
+    system_prompt = load_agent_instructions(app_variant)
+    tool_parser_usage = _extract_tool_parser_usage(
+        runtime_log_artifacts.get("frontend_log_file")
+        if isinstance(runtime_log_artifacts.get("frontend_log_file"), str)
+        else None
+    )
+    observed_tool_call_names = sorted(
+        {
+            name
+            for message in messages
+            for name in message.get("tool_call_names", [])
+            if isinstance(name, str) and name
+        }
+    )
+    observed_tool_result_names = sorted(
+        {
+            message.get("name")
+            for message in messages
+            if message.get("type") == "tool" and isinstance(message.get("name"), str)
+        }
+    )
+    measurement = baseline_result.get("measurement", {})
+    request_context = measurement.get("request_context", {})
+    baseline_hints = baseline_result.get("baseline_hints", {})
+    prompt = workflow.get("prompt", "")
+
+    requirements_text = str(task.get("requirements") or "")
+    selected_tests = task.get("selected_test_files_to_run")
+    selected_tests_text = (
+        ", ".join(selected_tests) if isinstance(selected_tests, list) else str(selected_tests or "")
+    )
+    expected_tools = [
+        "write_todos",
+        "ls",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "glob",
+        "grep",
+        "execute",
+        "task",
+    ]
+    observed_tool_call_count = sum(int(message.get("tool_call_count", 0)) for message in messages)
+    response_text = baseline_result.get("response_text", "")
+
+    return {
+        "stages": [
+            {
+                "stage": "task_input",
+                "question_answered": "what task did we start with?",
+                "changed_from": "-",
+                "change_summary": "Loaded the raw SWE-bench task payload with repo metadata, bug description, requirements, and test targets.",
+                "result_summary": (
+                    f"repo={task.get('repo')} | base_commit={task.get('base_commit')} | "
+                    f"tests={selected_tests_text or '-'} | workspace={workspace_metadata.get('workspace_path') or '-'}"
+                ),
+                "prompt_preview": _prompt_preview(str(task.get("problem_statement") or "")),
+                "prompt_chars": len(str(task.get("problem_statement") or "")),
+                "major_additions": "Task metadata, problem statement, requirements, selected tests, workspace path.",
+            },
+            {
+                "stage": "formatted_prompt",
+                "question_answered": "what exact prompt did we build?",
+                "changed_from": "task_input",
+                "change_summary": (
+                    "Merged the task fields into one action-oriented user prompt and added workspace instructions plus execution expectations."
+                ),
+                "result_summary": f"user_prompt_lines={len(prompt.splitlines())} | user_prompt_chars={len(prompt)}",
+                "prompt_preview": _prompt_preview(prompt),
+                "prompt_chars": len(prompt),
+                "major_additions": (
+                    "Combined repo metadata, bug description, requirements, interface notes, selected tests, workspace instructions, and expectations."
+                ),
+                "full_text": prompt,
+            },
+            {
+                "stage": "final_model_request",
+                "question_answered": "what exact request shape did we send?",
+                "changed_from": "formatted_prompt",
+                "change_summary": (
+                    "Wrapped the formatted prompt as the initial user message, selected the model endpoint, and attached request context plus agent hints."
+                ),
+                "result_summary": (
+                    f"model={model} | frontend={frontend_url} | tool_choice=auto | "
+                    f"request_id={request_context.get('request_id') or '-'}"
+                ),
+                "prompt_preview": _prompt_preview(prompt),
+                "prompt_chars": len(prompt),
+                "major_additions": "Initial chat message envelope, request context ids, Dynamo hints, model selection.",
+                "initial_messages": [{"role": "user", "content": prompt}],
+                "request_context": request_context,
+                "agent_hints": baseline_hints,
+            },
+            {
+                "stage": "tool_runtime_context",
+                "question_answered": "what parser/runtime behavior was actually active?",
+                "changed_from": "final_model_request",
+                "change_summary": (
+                    "The runtime attached the tool-capable surface and frontend parsing behavior before inference."
+                ),
+                "result_summary": (
+                    f"expected_tools={', '.join(expected_tools)} | parser={', '.join(tool_parser_usage['tool_parser_names_seen']) or '-'} | "
+                    f"prompt_tokens={measurement.get('prompt_tokens') or '-'} | cached_prompt_tokens={measurement.get('cached_prompt_tokens') or '-'}"
+                ),
+                "prompt_preview": _prompt_preview(prompt),
+                "prompt_chars": len(prompt),
+                "major_additions": "Built-in tool surface, tool parser selection, tokenizer work, and prompt-cache context.",
+                "expected_builtin_tools": expected_tools,
+                "tool_parser_names_seen": tool_parser_usage["tool_parser_names_seen"],
+                "tool_parser_observed": tool_parser_usage["tool_parser_observed"],
+            },
+            {
+                "stage": "model_behavior",
+                "question_answered": "what did the model actually do?",
+                "changed_from": "tool_runtime_context",
+                "change_summary": (
+                    "Captured the model transcript, observed tool calls, and recorded whether the run actually changed the workspace."
+                ),
+                "result_summary": (
+                    f"observed_tool_calls={observed_tool_call_count} | tools_used={', '.join(observed_tool_call_names) or '-'} | "
+                    f"workspace_changed={bool(workspace_artifacts.get('patch_nonempty'))}"
+                ),
+                "prompt_preview": _prompt_preview(response_text),
+                "prompt_chars": len(response_text),
+                "major_additions": "Model transcript, tool-call outcomes, finish reason, and workspace-change status.",
+                "observed_tool_call_names": observed_tool_call_names,
+                "observed_tool_result_names": observed_tool_result_names,
+                "observed_tool_call_count": observed_tool_call_count,
+                "finish_reason": measurement.get("finish_reason"),
+                "response_text": response_text,
+            },
+        ],
+        "supporting_data": {
+            "system_prompt_preview": _prompt_preview(system_prompt),
+            "system_prompt_chars": len(system_prompt),
+            "requirements_preview": _prompt_preview(requirements_text),
+            "selected_tests": selected_tests_text,
+            "provider_response_id": measurement.get("provider_response_id"),
+            "latency_ms": measurement.get("latency_ms"),
+            "input_tokens": measurement.get("input_tokens"),
+            "output_tokens": measurement.get("output_tokens"),
+            "cached_input_tokens": measurement.get("cached_input_tokens"),
+            "workspace_patch_nonempty": workspace_artifacts.get("patch_nonempty"),
+            "git_status_nonempty": bool(str(workspace_artifacts.get("git_status") or "").strip()),
+            "git_diff_stat_nonempty": bool(str(workspace_artifacts.get("git_diff_stat") or "").strip()),
+            "message_count": len(messages),
+        },
+    }
+
+
+def render_prompt_evolution_markdown(report: dict) -> str:
+    lines = ["# Prompt Evolution Report", ""]
+    lines.extend(
+        [
+            "| Stage | Answers | Changed from | What changed | Result summary | Preview |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+    )
+    for stage in report.get("stages", []):
+        lines.append(
+            "| {stage_name} | {question} | {changed_from} | {change_summary} | {result_summary} | {preview} |".format(
+                stage_name=markdown_value(stage.get("stage")),
+                question=markdown_value(stage.get("question_answered")),
+                changed_from=markdown_value(stage.get("changed_from")),
+                change_summary=markdown_value(stage.get("change_summary")),
+                result_summary=markdown_value(stage.get("result_summary")),
+                preview=markdown_value(stage.get("prompt_preview")),
+            )
+        )
+
+    for stage in report.get("stages", []):
+        lines.extend(["", f"## {str(stage.get('stage') or '').replace('_', ' ').title()}"])
+        lines.extend(
+            markdown_field_table(
+                {
+                    "question_answered": stage.get("question_answered"),
+                    "changed_from": stage.get("changed_from"),
+                    "change_summary": stage.get("change_summary"),
+                    "major_additions": stage.get("major_additions"),
+                    "result_summary": stage.get("result_summary"),
+                    "prompt_chars": stage.get("prompt_chars"),
+                },
+                "prompt_evolution_report",
+                [
+                    ("question_answered", "Question answered"),
+                    ("changed_from", "Changed from"),
+                    ("change_summary", "What changed"),
+                    ("major_additions", "Major additions"),
+                    ("result_summary", "Result summary"),
+                    ("prompt_chars", "Prompt chars"),
+                ],
+                include_provenance=False,
+            )
+        )
+        if stage.get("stage") == "formatted_prompt":
+            lines.extend(["", "### Full Formatted Prompt", "```text", stage.get("full_text", ""), "```"])
+        elif stage.get("stage") == "final_model_request":
+            lines.extend(
+                [
+                    "",
+                    "### Initial Messages",
+                    "```json",
+                    json.dumps(stage.get("initial_messages", []), indent=2, default=stringify_unknown),
+                    "```",
+                    "",
+                    "### Request Context",
+                    "```json",
+                    json.dumps(stage.get("request_context", {}), indent=2, default=stringify_unknown),
+                    "```",
+                    "",
+                    "### Agent Hints",
+                    "```json",
+                    json.dumps(stage.get("agent_hints", {}), indent=2, default=stringify_unknown),
+                    "```",
+                ]
+            )
+        elif stage.get("stage") == "model_behavior":
+            lines.extend(["", "### Final Response Text", "```text", stage.get("response_text", ""), "```"])
+
+    lines.extend(["", "## Supporting Data"])
+    lines.extend(
+        markdown_field_table(
+            report.get("supporting_data", {}),
+            "prompt_evolution_report",
+            [(field, field.replace("_", " ").title()) for field in report.get("supporting_data", {}).keys()],
+            include_provenance=False,
+        )
+    )
+    return "\n".join(lines) + "\n"
+
+
+def build_prompt_evolution_csv_rows(report: dict) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for stage in report.get("stages", []):
+        rows.append(
+            {
+                "stage": stage.get("stage"),
+                "question_answered": stage.get("question_answered"),
+                "changed_from": stage.get("changed_from"),
+                "change_summary": stage.get("change_summary"),
+                "major_additions": stage.get("major_additions"),
+                "result_summary": stage.get("result_summary"),
+                "prompt_preview": stage.get("prompt_preview"),
+                "prompt_chars": stage.get("prompt_chars"),
+            }
+        )
+    return rows
 
 
 def write_excel_workbook(run_dir: Path, workbook_name: str, sheet_rows: dict[str, list[dict]]) -> Path:
@@ -745,11 +1121,11 @@ def load_swebench_task(
     return dict(ds[index])
 
 
-def save_result(run_dir: Path, payload: dict) -> None:
+def save_result(run_dir: Path, payload: dict, *, filename: str = "result.json") -> None:
     # Debugging note: this is the saved-artifacts hook for the benchmark wrapper.
     # The final run summary is always materialized as result.json here.
     run_dir.mkdir(parents=True, exist_ok=True)
-    (run_dir / "result.json").write_text(
+    (run_dir / filename).write_text(
         json.dumps(payload, indent=2, default=stringify_unknown),
         encoding="utf-8",
     )
@@ -1455,7 +1831,23 @@ def build_runtime_events_table(runtime_events: list[dict]) -> list[dict]:
 
 
 def build_runtime_alignment_table(analysis: dict) -> list[dict]:
-    return [row_with_provenance(dict(row), "runtime_alignment_analysis") for row in analysis.get("rows", [])]
+    return [
+        {
+            "phase": row.get("phase"),
+            "worker_id": row.get("worker_id"),
+            "alignment_status": row.get("alignment_status"),
+            "prefill_seen": row.get("prefill_seen"),
+            "decode_seen": row.get("decode_seen"),
+            "decode_event_count": row.get("decode_event_count"),
+            "cached_token_count": row.get("cached_token_count"),
+            "recomputed_prefix_tokens": row.get("recomputed_prefix_tokens"),
+            "ttft_ms": row.get("ttft_ms"),
+            "decode_ms": row.get("decode_ms"),
+            "end_to_end_ms": row.get("end_to_end_ms"),
+            "max_gen_throughput_tps": row.get("max_gen_throughput_tps"),
+        }
+        for row in analysis.get("rows", [])
+    ]
 
 
 def build_runtime_alignment_summary_table(analysis: dict) -> list[dict]:
@@ -1635,35 +2027,37 @@ def build_task_lifecycle_trace(
 
 
 def build_task_lifecycle_table(trace: dict) -> list[dict]:
+    def build_summary(event: dict, stage_metadata: dict[str, str]) -> str:
+        artifact_name = event.get("artifact_name")
+        if artifact_name:
+            return f"Artifact written: {artifact_name}"
+
+        response_preview = event.get("response_preview")
+        if isinstance(response_preview, str) and response_preview.strip():
+            return f"{stage_metadata['description']} Response preview: {_prompt_preview(response_preview, 140)}"
+
+        prompt_preview = event.get("prompt_preview")
+        if isinstance(prompt_preview, str) and prompt_preview.strip():
+            return f"{stage_metadata['description']} Prompt preview: {_prompt_preview(prompt_preview, 140)}"
+
+        return stage_metadata["description"]
+
     rows: list[dict] = []
     for event in trace.get("events", []):
         if not isinstance(event, dict):
             continue
-        request_context = event.get("request_context") if isinstance(event.get("request_context"), dict) else {}
         stage_metadata = task_lifecycle_stage_metadata(event.get("stage"))
         row = {
-            "sequence_index": event.get("sequence_index"),
+            "seq": event.get("sequence_index"),
             "timestamp": event.get("timestamp"),
             "stage": event.get("stage"),
             "stage_description": stage_metadata["description"],
-            "stage_component": stage_metadata["component"],
-            "stage_category": stage_metadata["category"],
-            "event_kind": event.get("event_kind"),
+            "component": stage_metadata["component"],
+            "kind": event.get("event_kind"),
             "phase": event.get("phase"),
-            "step_index": event.get("step_index"),
-            "step_title": event.get("step_title"),
-            "request_id": request_context.get("request_id"),
-            "parent_run_id": request_context.get("parent_run_id") or trace.get("parent_run_id"),
-            "prompt_chars": event.get("prompt_chars"),
-            "prompt_lines": event.get("prompt_lines"),
-            "prompt_preview": event.get("prompt_preview"),
-            "response_preview": event.get("response_preview"),
-            "artifact_name": event.get("artifact_name"),
-            "artifact_path": event.get("artifact_path"),
-            "artifact_size_bytes": event.get("artifact_size_bytes"),
-            "payload_json": json.dumps(event, default=stringify_unknown),
+            "summary": build_summary(event, stage_metadata),
         }
-        rows.append(row_with_provenance(row, "task_lifecycle_trace"))
+        rows.append(row)
     return rows
 
 
@@ -1690,7 +2084,7 @@ def render_task_lifecycle_markdown(trace: dict) -> str:
                 "response_event_count": summary.get("response_event_count"),
                 "artifact_event_count": summary.get("artifact_event_count"),
             },
-            "task_lifecycle_trace",
+            "stage_lifecycle_trace",
             [
                 ("parent_run_id", "Parent run id"),
                 ("task_instance_id", "Task instance id"),
@@ -1706,6 +2100,7 @@ def render_task_lifecycle_markdown(trace: dict) -> str:
                 ("response_event_count", "Response event count"),
                 ("artifact_event_count", "Artifact event count"),
             ],
+            include_provenance=False,
         ),
         "",
         "## Event Table",
@@ -2020,10 +2415,18 @@ def build_runtime_alignment_analysis(
                 "router_mode": event.get("router_mode"),
                 "scheduler_cached_blocks": scheduler.get("cached_blocks"),
                 "scheduler_tree_size": scheduler.get("tree_size"),
+                "prefill_seen": bool(worker_metrics.get("prefill_timestamp")),
+                "decode_seen": bool(
+                    worker_metrics.get("first_decode_timestamp")
+                    or worker_metrics.get("last_decode_timestamp")
+                    or worker_metrics.get("decode_event_count")
+                ),
                 "cached_token_count": (event.get("cache") or {}).get("cached_token_count"),
                 "recomputed_prefix_tokens": (event.get("cache") or {}).get("recomputed_prefix_tokens"),
+                "end_to_end_ms": (event.get("latency") or {}).get("end_to_end_ms"),
                 "ttft_ms": (event.get("latency") or {}).get("ttft_ms"),
                 "decode_ms": (event.get("latency") or {}).get("decode_ms"),
+                "decode_event_count": worker_metrics.get("decode_event_count"),
                 "max_gen_throughput_tps": worker_metrics.get("max_gen_throughput_tps"),
                 "runtime_reuse_strength": reuse_strength,
                 "alignment_status": alignment_status,
@@ -2074,6 +2477,7 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
                 ("unverifiable_row_count", "Unverifiable rows"),
                 ("best_supported_gpu_candidate", "Best-supported GPU candidate"),
             ],
+            include_provenance=False,
         ),
         "",
         "## Notes",
@@ -2082,43 +2486,24 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
         "",
         "## Phase Table",
         "",
-        "| Phase | Phase provenance | Step | Step provenance | Recommended tier | Tier provenance | Keep recommendation | Keep provenance | Cache value | Cache-value provenance | Worker | Worker provenance | Cached blocks | Cached-block provenance | Tree size | Tree-size provenance | Cached tokens | Cached-token provenance | Recomputed tokens | Recomputed provenance | TTFT (ms) | TTFT provenance | Decode (ms) | Decode provenance | Reuse strength | Reuse provenance | Alignment status | Alignment provenance | Source | Source provenance |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | --- | --- | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | ---: | --- | --- | --- | --- | --- | --- | --- |",
+        "| Phase | Worker | Alignment status | Prefill seen | Decode seen | Decode events | Cached tokens | Recomputed tokens | TTFT (ms) | Decode (ms) | End to end (ms) | Max gen throughput (tps) |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
-        annotated = row_with_provenance(dict(row), "runtime_alignment_analysis")
         lines.append(
-            "| {phase} | {phase_p} | {step} | {step_p} | {tier} | {tier_p} | {keep} | {keep_p} | {value} | {value_p} | {worker} | {worker_p} | {blocks} | {blocks_p} | {tree} | {tree_p} | {cached} | {cached_p} | {recomputed} | {recomputed_p} | {ttft} | {ttft_p} | {decode} | {decode_p} | {reuse} | {reuse_p} | {status} | {status_p} | {source} | {source_p} |".format(
-                phase=markdown_value(annotated.get("phase")),
-                phase_p=annotated.get("phase_provenance", "-"),
-                step=markdown_value(annotated.get("step_index")),
-                step_p=annotated.get("step_index_provenance", "-"),
-                tier=markdown_value(annotated.get("recommended_tier")),
-                tier_p=annotated.get("recommended_tier_provenance", "-"),
-                keep=markdown_value(annotated.get("keep_recommendation")),
-                keep_p=annotated.get("keep_recommendation_provenance", "-"),
-                value=markdown_value(annotated.get("cache_value_score")),
-                value_p=annotated.get("cache_value_score_provenance", "-"),
-                worker=markdown_value(annotated.get("worker_id")),
-                worker_p=annotated.get("worker_id_provenance", "-"),
-                blocks=markdown_value(annotated.get("scheduler_cached_blocks")),
-                blocks_p=annotated.get("scheduler_cached_blocks_provenance", "-"),
-                tree=markdown_value(annotated.get("scheduler_tree_size")),
-                tree_p=annotated.get("scheduler_tree_size_provenance", "-"),
-                cached=markdown_value(annotated.get("cached_token_count")),
-                cached_p=annotated.get("cached_token_count_provenance", "-"),
-                recomputed=markdown_value(annotated.get("recomputed_prefix_tokens")),
-                recomputed_p=annotated.get("recomputed_prefix_tokens_provenance", "-"),
-                ttft=markdown_value(annotated.get("ttft_ms")),
-                ttft_p=annotated.get("ttft_ms_provenance", "-"),
-                decode=markdown_value(annotated.get("decode_ms")),
-                decode_p=annotated.get("decode_ms_provenance", "-"),
-                reuse=markdown_value(annotated.get("runtime_reuse_strength")),
-                reuse_p=annotated.get("runtime_reuse_strength_provenance", "-"),
-                status=markdown_value(annotated.get("alignment_status")),
-                status_p=annotated.get("alignment_status_provenance", "-"),
-                source=markdown_value(annotated.get("runtime_signal_source")),
-                source_p=annotated.get("runtime_signal_source_provenance", "-"),
+            "| {phase} | {worker} | {status} | {prefill_seen} | {decode_seen} | {decode_events} | {cached} | {recomputed} | {ttft} | {decode} | {e2e} | {throughput} |".format(
+                phase=markdown_value(row.get("phase")),
+                worker=markdown_value(row.get("worker_id")),
+                status=markdown_value(row.get("alignment_status")),
+                prefill_seen=markdown_value(row.get("prefill_seen")),
+                decode_seen=markdown_value(row.get("decode_seen")),
+                decode_events=markdown_value(row.get("decode_event_count")),
+                cached=markdown_value(row.get("cached_token_count")),
+                recomputed=markdown_value(row.get("recomputed_prefix_tokens")),
+                ttft=markdown_value(row.get("ttft_ms")),
+                decode=markdown_value(row.get("decode_ms")),
+                e2e=markdown_value(row.get("end_to_end_ms")),
+                throughput=markdown_value(row.get("max_gen_throughput_tps")),
             )
         )
     return "\n".join(lines) + "\n"
@@ -2190,6 +2575,16 @@ def stringify_unknown(value):
         except Exception:  # noqa: BLE001
             pass
     return repr(value)
+
+
+def _prompt_preview(text: str | None, limit: int = 240) -> str:
+    """Create a short single-line preview for long prompt or response text."""
+    if not text:
+        return ""
+    normalized = " ".join(str(text).split())
+    if len(normalized) <= limit:
+        return normalized
+    return normalized[: limit - 3] + "..."
 
 
 def prepare_workspace(
@@ -2384,8 +2779,10 @@ def main() -> None:
     parent_run_id = f"{safe_instance}_{run_id}"
     run_dir = RESULTS_DIR / parent_run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    checkpoint_log_path = run_dir / "checkpoints.json"
-    lifecycle_log_path = run_dir / "task_lifecycle_trace.json"
+    others_dir = run_dir / "others"
+    others_dir.mkdir(parents=True, exist_ok=True)
+    checkpoint_log_path = others_dir / "checkpoints.json"
+    lifecycle_log_path = others_dir / "stage_lifecycle_trace_raw.json"
     set_checkpoint_log_file(checkpoint_log_path)
     set_lifecycle_log_file(lifecycle_log_path)
     log_lifecycle_event(
@@ -2547,21 +2944,21 @@ def main() -> None:
     )
     prompt = workflow["prompt"]
     decomposition_plan = workflow["decomposition_plan"]
-    plan_file = write_json_artifact(run_dir, "plan.json", decomposition_plan, "plan")
+    plan_file = write_json_artifact(others_dir, "plan.json", decomposition_plan, "plan")
     log_artifact_written_event(artifact_name="plan", artifact_path=plan_file, related_phase="planning")
 
     step_results = workflow["step_results"]
-    step_results_file = write_json_artifact(run_dir, "step_results.json", step_results, "step_results")
+    step_results_file = write_json_artifact(others_dir, "step_results.json", step_results, "step_results")
     log_artifact_written_event(artifact_name="step_results", artifact_path=step_results_file)
     measurements = workflow["measurements"]
-    measurements_file = write_json_artifact(run_dir, "measurements.json", measurements, "measurements")
+    measurements_file = write_json_artifact(others_dir, "measurements.json", measurements, "measurements")
     log_artifact_written_event(artifact_name="measurements", artifact_path=measurements_file)
     measurement_analysis = build_measurement_analysis(measurements)
     measurement_analysis_file = write_json_artifact(
-        run_dir, "measurement_analysis.json", measurement_analysis, "measurement_analysis"
+        others_dir, "measurement_analysis.json", measurement_analysis, "measurement_analysis"
     )
     log_artifact_written_event(artifact_name="measurement_analysis", artifact_path=measurement_analysis_file)
-    measurement_analysis_markdown_file = run_dir / "measurement_analysis.md"
+    measurement_analysis_markdown_file = others_dir / "measurement_analysis.md"
     measurement_analysis_markdown_file.write_text(
         render_measurement_analysis_markdown(measurement_analysis),
         encoding="utf-8",
@@ -2569,10 +2966,10 @@ def main() -> None:
     log_artifact_written_event(artifact_name="measurement_analysis_markdown", artifact_path=measurement_analysis_markdown_file)
     cache_value_analysis = build_cache_value_analysis(measurements)
     cache_value_analysis_file = write_json_artifact(
-        run_dir, "cache_value_analysis.json", cache_value_analysis, "cache_value_analysis"
+        others_dir, "cache_value_analysis.json", cache_value_analysis, "cache_value_analysis"
     )
     log_artifact_written_event(artifact_name="cache_value_analysis", artifact_path=cache_value_analysis_file)
-    cache_value_analysis_markdown_file = run_dir / "cache_value_analysis.md"
+    cache_value_analysis_markdown_file = others_dir / "cache_value_analysis.md"
     cache_value_analysis_markdown_file.write_text(
         render_cache_value_markdown(cache_value_analysis),
         encoding="utf-8",
@@ -2580,16 +2977,16 @@ def main() -> None:
     log_artifact_written_event(artifact_name="cache_value_analysis_markdown", artifact_path=cache_value_analysis_markdown_file)
     kv_hierarchy_analysis = build_kv_hierarchy_analysis(measurements, cache_value_analysis)
     kv_hierarchy_analysis_file = write_json_artifact(
-        run_dir, "kv_hierarchy_analysis.json", kv_hierarchy_analysis, "kv_hierarchy_analysis"
+        others_dir, "kv_hierarchy_analysis.json", kv_hierarchy_analysis, "kv_hierarchy_analysis"
     )
     log_artifact_written_event(artifact_name="kv_hierarchy_analysis", artifact_path=kv_hierarchy_analysis_file)
-    kv_hierarchy_analysis_markdown_file = run_dir / "kv_hierarchy_analysis.md"
+    kv_hierarchy_analysis_markdown_file = others_dir / "kv_hierarchy_analysis.md"
     kv_hierarchy_analysis_markdown_file.write_text(
         render_kv_hierarchy_markdown(kv_hierarchy_analysis),
         encoding="utf-8",
     )
     log_artifact_written_event(artifact_name="kv_hierarchy_analysis_markdown", artifact_path=kv_hierarchy_analysis_markdown_file)
-    runtime_log_artifacts = collect_runtime_logs(run_dir, since_iso=run_started_at.isoformat())
+    runtime_log_artifacts = collect_runtime_logs(others_dir, since_iso=run_started_at.isoformat())
     log_lifecycle_event(
         stage="runtime_logs_collected",
         payload={
@@ -2621,10 +3018,10 @@ def main() -> None:
             "runtime_event_count": len(runtime_events),
         },
     )
-    runtime_events_file = write_runtime_events_jsonl(run_dir, runtime_events)
+    runtime_events_file = write_runtime_events_jsonl(others_dir, runtime_events)
     log_artifact_written_event(artifact_name="runtime_events_jsonl", artifact_path=runtime_events_file)
     runtime_events_pretty_file = write_json_artifact(
-        run_dir, "runtime_events.json", runtime_events, "runtime_events"
+        others_dir, "runtime_events.json", runtime_events, "runtime_events"
     )
     log_artifact_written_event(artifact_name="runtime_events", artifact_path=runtime_events_pretty_file)
     runtime_alignment_analysis = build_runtime_alignment_analysis(
@@ -2637,6 +3034,7 @@ def main() -> None:
         "runtime_alignment_analysis.json",
         runtime_alignment_analysis,
         "runtime_alignment_analysis",
+        annotate=False,
     )
     log_artifact_written_event(artifact_name="runtime_alignment_analysis", artifact_path=runtime_alignment_analysis_file)
     runtime_alignment_analysis_markdown_file = run_dir / "runtime_alignment_analysis.md"
@@ -2651,7 +3049,7 @@ def main() -> None:
     final_summary_file.write_text(result["response_text"], encoding="utf-8")
     log_artifact_written_event(artifact_name="final_summary", artifact_path=final_summary_file, related_phase="synthesis")
 
-    workspace_artifacts = collect_workspace_artifacts(run_dir, workspace_dir)
+    workspace_artifacts = collect_workspace_artifacts(others_dir, workspace_dir)
     log_lifecycle_event(
         stage="workspace_artifacts_collected",
         payload={
@@ -2659,6 +3057,42 @@ def main() -> None:
             "parent_run_id": parent_run_id,
             "workspace_artifacts": workspace_artifacts,
         },
+    )
+    prompt_evolution_report = build_prompt_evolution_report(
+        task=task,
+        workflow=workflow,
+        frontend_url=args.frontend_url,
+        model=args.model,
+        app_variant=args.app_variant,
+        runtime_log_artifacts=runtime_log_artifacts,
+        workspace_metadata=workspace_metadata,
+        workspace_artifacts=workspace_artifacts,
+    )
+    prompt_evolution_report_file = write_json_artifact(
+        run_dir,
+        "prompt_evolution_report.json",
+        prompt_evolution_report,
+        "prompt_evolution_report",
+        annotate=False,
+    )
+    log_artifact_written_event(artifact_name="prompt_evolution_report", artifact_path=prompt_evolution_report_file)
+    prompt_evolution_report_markdown_file = run_dir / "prompt_evolution_report.md"
+    prompt_evolution_report_markdown_file.write_text(
+        render_prompt_evolution_markdown(prompt_evolution_report),
+        encoding="utf-8",
+    )
+    log_artifact_written_event(
+        artifact_name="prompt_evolution_report_markdown",
+        artifact_path=prompt_evolution_report_markdown_file,
+    )
+    prompt_evolution_report_table_file = write_csv_table(
+        run_dir,
+        "prompt_evolution_report.csv",
+        build_prompt_evolution_csv_rows(prompt_evolution_report),
+    )
+    log_artifact_written_event(
+        artifact_name="prompt_evolution_report_table",
+        artifact_path=prompt_evolution_report_table_file,
     )
     run_summary_table = build_run_summary_table(
         parent_run_id=parent_run_id,
@@ -2671,46 +3105,46 @@ def main() -> None:
         runtime_alignment_analysis=runtime_alignment_analysis,
         workspace_artifacts=workspace_artifacts,
     )
-    measurements_table_file = write_csv_table(run_dir, "measurements_table.csv", build_measurements_table(measurements))
+    measurements_table_file = write_csv_table(others_dir, "measurements_table.csv", build_measurements_table(measurements))
     log_artifact_written_event(artifact_name="measurements_table", artifact_path=measurements_table_file)
     measurement_analysis_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "measurement_analysis_table.csv",
         build_measurement_analysis_table(measurement_analysis),
     )
     log_artifact_written_event(artifact_name="measurement_analysis_table", artifact_path=measurement_analysis_table_file)
     measurement_summary_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "measurement_summary_table.csv",
         build_measurement_summary_table(measurement_analysis),
     )
     log_artifact_written_event(artifact_name="measurement_summary_table", artifact_path=measurement_summary_table_file)
     cache_value_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "cache_value_table.csv",
         build_cache_value_table(cache_value_analysis),
     )
     log_artifact_written_event(artifact_name="cache_value_table", artifact_path=cache_value_table_file)
     cache_value_summary_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "cache_value_summary_table.csv",
         build_cache_value_summary_table(cache_value_analysis),
     )
     log_artifact_written_event(artifact_name="cache_value_summary_table", artifact_path=cache_value_summary_table_file)
     kv_hierarchy_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "kv_hierarchy_table.csv",
         build_kv_hierarchy_table(kv_hierarchy_analysis),
     )
     log_artifact_written_event(artifact_name="kv_hierarchy_table", artifact_path=kv_hierarchy_table_file)
     kv_hierarchy_summary_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "kv_hierarchy_summary_table.csv",
         build_kv_hierarchy_summary_table(kv_hierarchy_analysis),
     )
     log_artifact_written_event(artifact_name="kv_hierarchy_summary_table", artifact_path=kv_hierarchy_summary_table_file)
     runtime_events_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "runtime_events_table.csv",
         build_runtime_events_table(runtime_events),
     )
@@ -2722,16 +3156,16 @@ def main() -> None:
     )
     log_artifact_written_event(artifact_name="runtime_alignment_table", artifact_path=runtime_alignment_table_file)
     runtime_alignment_summary_table_file = write_csv_table(
-        run_dir,
+        others_dir,
         "runtime_alignment_summary_table.csv",
         build_runtime_alignment_summary_table(runtime_alignment_analysis),
     )
     log_artifact_written_event(artifact_name="runtime_alignment_summary_table", artifact_path=runtime_alignment_summary_table_file)
-    run_summary_table_file = write_csv_table(run_dir, "run_summary_table.csv", run_summary_table)
+    run_summary_table_file = write_csv_table(others_dir, "run_summary_table.csv", run_summary_table)
     log_artifact_written_event(artifact_name="run_summary_table", artifact_path=run_summary_table_file)
     raw_lifecycle_events = load_logged_events(lifecycle_log_path)
     set_lifecycle_log_file(None)
-    task_lifecycle_trace = build_task_lifecycle_trace(
+    stage_lifecycle_trace = build_task_lifecycle_trace(
         raw_lifecycle_events,
         metadata={
             "parent_run_id": parent_run_id,
@@ -2743,25 +3177,26 @@ def main() -> None:
         },
         runtime_events=runtime_events,
     )
-    task_lifecycle_trace_file = write_json_artifact(
+    stage_lifecycle_trace_file = write_json_artifact(
         run_dir,
-        "task_lifecycle_trace.json",
-        task_lifecycle_trace,
-        "task_lifecycle_trace",
+        "stage_lifecycle_trace.json",
+        stage_lifecycle_trace,
+        "stage_lifecycle_trace",
+        annotate=False,
     )
-    task_lifecycle_markdown_file = run_dir / "task_lifecycle_trace.md"
-    task_lifecycle_markdown_file.write_text(
-        render_task_lifecycle_markdown(task_lifecycle_trace),
+    stage_lifecycle_markdown_file = run_dir / "stage_lifecycle_trace.md"
+    stage_lifecycle_markdown_file.write_text(
+        render_task_lifecycle_markdown(stage_lifecycle_trace),
         encoding="utf-8",
     )
-    task_lifecycle_table = build_task_lifecycle_table(task_lifecycle_trace)
-    task_lifecycle_table_file = write_csv_table(
+    stage_lifecycle_table = build_task_lifecycle_table(stage_lifecycle_trace)
+    stage_lifecycle_table_file = write_csv_table(
         run_dir,
-        "task_lifecycle_table.csv",
-        task_lifecycle_table,
+        "stage_lifecycle_table.csv",
+        stage_lifecycle_table,
     )
     workbook_file = write_excel_workbook(
-        run_dir,
+        others_dir,
         "run_analysis.xlsx",
         {
             "measurements": build_measurements_table(measurements),
@@ -2774,7 +3209,8 @@ def main() -> None:
             "runtime_events": build_runtime_events_table(runtime_events),
             "runtime_alignment": build_runtime_alignment_table(runtime_alignment_analysis),
             "runtime_summary": build_runtime_alignment_summary_table(runtime_alignment_analysis),
-            "task_lifecycle": task_lifecycle_table,
+            "stage_lifecycle": stage_lifecycle_table,
+            "prompt_evolution_report": build_prompt_evolution_csv_rows(prompt_evolution_report),
             "run_summary": run_summary_table,
         },
     )
@@ -2793,6 +3229,10 @@ def main() -> None:
         "auto_repo_checkout": auto_repo_checkout,
         "workspace": workspace_metadata,
         "workspace_artifacts": workspace_artifacts,
+        "prompt_evolution_report_file": str(prompt_evolution_report_file),
+        "prompt_evolution_report_markdown_file": str(prompt_evolution_report_markdown_file),
+        "prompt_evolution_report_table_file": str(prompt_evolution_report_table_file),
+        "prompt_evolution_report": prompt_evolution_report,
         "prompt": prompt,
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
@@ -2816,10 +3256,10 @@ def main() -> None:
         "runtime_alignment_table_file": str(runtime_alignment_table_file),
         "runtime_alignment_summary_table_file": str(runtime_alignment_summary_table_file),
         "runtime_alignment_analysis": runtime_alignment_analysis,
-        "task_lifecycle_trace_file": str(task_lifecycle_trace_file),
-        "task_lifecycle_markdown_file": str(task_lifecycle_markdown_file),
-        "task_lifecycle_table_file": str(task_lifecycle_table_file),
-        "task_lifecycle_trace": task_lifecycle_trace,
+        "stage_lifecycle_trace_file": str(stage_lifecycle_trace_file),
+        "stage_lifecycle_markdown_file": str(stage_lifecycle_markdown_file),
+        "stage_lifecycle_table_file": str(stage_lifecycle_table_file),
+        "stage_lifecycle_trace": stage_lifecycle_trace,
         "cache_value_analysis_file": str(cache_value_analysis_file),
         "cache_value_analysis_markdown_file": str(cache_value_analysis_markdown_file),
         "cache_value_table_file": str(cache_value_table_file),
@@ -2835,12 +3275,12 @@ def main() -> None:
         "measurements": measurements,
         "result": result,
     }
-    save_result(run_dir, annotate_with_provenance(payload, "result"))
+    save_result(others_dir, annotate_with_provenance(payload, "result"))
     set_checkpoint_log_file(None)
 
     print(f"AgentBench run complete: {safe_instance}")
     print(f"Run directory: {run_dir}")
-    print(f"Result file: {run_dir / 'result.json'}")
+    print(f"Result file: {others_dir / 'result.json'}")
 
 
 if __name__ == "__main__":

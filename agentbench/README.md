@@ -111,7 +111,8 @@ WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 
 ## Artifacts
 
-- `task_lifecycle_trace`
+- `stage_lifecycle_trace`
+- `prompt_evolution_report`
 - `measurement_analysis`
 - `cache_value_analysis`
 - `kv_hierarchy_analysis`
