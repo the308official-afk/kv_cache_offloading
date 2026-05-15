@@ -25,6 +25,7 @@ if CLONED_DEEPAGENTS_LIB_ROOT.exists() and str(CLONED_DEEPAGENTS_LIB_ROOT) not i
     sys.path.insert(0, str(CLONED_DEEPAGENTS_LIB_ROOT))
 
 from deepagents import create_deep_agent
+from deepagents.backends import CompositeBackend, LocalShellBackend, StateBackend
 from langchain_openai import ChatOpenAI
 
 from .prompts import (
@@ -54,7 +55,7 @@ DEEPAGENTS_RUNTIME_SOURCE = (
     else "python_environment"
 )
 
-
+# Builds the per-request tracking payload that we send through logs and Dynamo hints.
 def build_request_context(
     *,
     parent_run_id: str | None,
@@ -78,6 +79,7 @@ def build_request_context(
     }
 
 
+# Pulls out the final AI message from a LangChain / Deep Agents response object.
 def _extract_last_ai_message(response: Any) -> Any:
     messages = None
     if isinstance(response, Mapping):
@@ -102,6 +104,7 @@ def _extract_last_ai_message(response: Any) -> Any:
     return response
 
 
+# Reads provider metadata like finish reason and token usage from the final AI message.
 def _response_metadata(response: Any) -> dict[str, Any]:
     message = _extract_last_ai_message(response)
     metadata = getattr(message, "response_metadata", None)
@@ -114,6 +117,7 @@ def _response_metadata(response: Any) -> dict[str, Any]:
     return {}
 
 
+# Reads normalized usage numbers from the final AI message when they are present.
 def _usage_metadata(response: Any) -> dict[str, Any]:
     message = _extract_last_ai_message(response)
     metadata = getattr(message, "usage_metadata", None)
@@ -126,6 +130,7 @@ def _usage_metadata(response: Any) -> dict[str, Any]:
     return {}
 
 
+# Builds the measurement row we save for one model call.
 def build_measurement_record(
     *,
     phase: str,
@@ -182,6 +187,7 @@ def build_measurement_record(
     }
 
 
+# Stores the full prompt plus a few lightweight prompt stats for debugging.
 def build_prompt_snapshot(prompt: str) -> dict[str, Any]:
     return {
         "prompt": prompt,
@@ -191,6 +197,7 @@ def build_prompt_snapshot(prompt: str) -> dict[str, Any]:
     }
 
 
+# Stores the final response text plus the metadata we may want to inspect later.
 def build_response_snapshot(response: Any) -> dict[str, Any]:
     response_metadata = _response_metadata(response)
     usage_metadata = _usage_metadata(response)
@@ -203,6 +210,7 @@ def build_response_snapshot(response: Any) -> dict[str, Any]:
     }
 
 
+# Creates a short one-line preview so logs stay readable.
 def _prompt_preview(prompt: str) -> str:
     lines = [line.strip() for line in prompt.splitlines() if line.strip()]
     if not lines:
@@ -210,6 +218,7 @@ def _prompt_preview(prompt: str) -> str:
     return " ".join(lines[:3])
 
 
+# Writes a structured checkpoint entry for major harness events.
 def log_outbound_harness_request(
     *,
     check_point: str,
@@ -223,6 +232,7 @@ def log_outbound_harness_request(
     )
 
 
+# Chooses which instruction bundle to use: our local app or the upstream example app.
 def resolve_app_root(app_variant: str = "local") -> Path:
     # Debugging note: this selects which instruction/skill surface the run uses.
     # "local" = our adapted app; "upstream_deploy_coding_agent" = cloned upstream example content.
@@ -233,6 +243,7 @@ def resolve_app_root(app_variant: str = "local") -> Path:
     raise ValueError(f"Unsupported app_variant: {app_variant}")
 
 
+# Loads AGENTS.md and skills text into one system prompt for the selected app variant.
 def load_agent_instructions(app_variant: str = "local") -> str:
     """Load the app-level instructions from AGENTS.md and skill docs.
 
@@ -245,7 +256,10 @@ def load_agent_instructions(app_variant: str = "local") -> str:
     agents_file = app_root / "AGENTS.md"
     skills_dir = app_root / "skills"
 
-    parts = [SYSTEM_PROMPT, PLANNING_NOTES, DYNAMO_HINT_NOTES]
+    if app_variant == "local":
+        parts = [SYSTEM_PROMPT, PLANNING_NOTES, DYNAMO_HINT_NOTES]
+    else:
+        parts = []
     if agents_file.exists():
         parts.append(agents_file.read_text(encoding="utf-8").strip())
 
@@ -258,6 +272,7 @@ def load_agent_instructions(app_variant: str = "local") -> str:
     return "\n\n".join(part for part in parts if part)
 
 
+# Converts a full chat-completions URL into the base /v1 URL expected by ChatOpenAI.
 def frontend_base_url(frontend_url: str) -> str:
     # Debugging note: AgentBench receives a chat-completions URL,
     # but the OpenAI-compatible client wants the /v1 base URL.
@@ -266,6 +281,7 @@ def frontend_base_url(frontend_url: str) -> str:
     return frontend_url.rstrip("/")
 
 
+# Merges default Dynamo hints with caller overrides and stamps the current phase on them.
 def build_phase_hints(base_hints: dict[str, Any] | None = None, *, phase: str = "execution") -> dict[str, Any]:
     # Debugging note: this is the hint adaptation hook for Dynamo.
     # Every planning/step/synthesis request gets its own phase-tagged hint payload.
@@ -276,6 +292,7 @@ def build_phase_hints(base_hints: dict[str, Any] | None = None, *, phase: str = 
     return hints
 
 
+# Builds the ChatOpenAI client that sends requests to the local Dynamo frontend.
 def build_dynamo_chat_model(
     *,
     frontend_url: str,
@@ -304,10 +321,30 @@ def build_dynamo_chat_model(
     )
 
 
+# Builds the Deep Agents filesystem/shell backend rooted at the task workspace.
+def build_agent_backend(workspace_dir: Path | None):
+    root_dir = str(workspace_dir or Path.cwd())
+    ephemeral_backend = StateBackend()
+    shell_backend = LocalShellBackend(
+        root_dir=root_dir,
+        inherit_env=True,
+        env=os.environ.copy(),
+    )
+    return CompositeBackend(
+        default=shell_backend,
+        routes={
+            "/memories/": ephemeral_backend,
+            "/conversation_history/": ephemeral_backend,
+        },
+    )
+
+
+# Creates the actual Deep Agents coding agent wired to local Dynamo.
 def build_coding_agent(
     *,
     frontend_url: str,
     model: str,
+    workspace_dir: Path | None,
     base_hints: dict[str, Any] | None = None,
     phase: str = "execution",
     app_variant: str = "local",
@@ -339,12 +376,15 @@ def build_coding_agent(
         hint_payload=build_phase_hints(base_hints, phase=phase),
         request_context=request_context,
     )
+    backend = build_agent_backend(workspace_dir)
     return create_deep_agent(
         model=llm,
         system_prompt=system_prompt,
+        backend=backend,
     )
 
 
+# Extracts plain text from the final response object no matter how it is nested.
 def response_text(response) -> str:
     if isinstance(response, Mapping):
         message = _extract_last_ai_message(response)
@@ -368,6 +408,8 @@ def response_text(response) -> str:
         return response
     return str(content if content is not None else response)
 
+
+# Runs one end-to-end baseline Deep Agents call for a single SWE-bench task.
 def execute_baseline_agent(
     *,
     frontend_url: str,
@@ -406,6 +448,7 @@ def execute_baseline_agent(
     agent = build_coding_agent(
         frontend_url=frontend_url,
         model=model,
+        workspace_dir=workspace_dir,
         base_hints=baseline_hints,
         phase="baseline_execution",
         app_variant=app_variant,
@@ -481,6 +524,7 @@ def execute_baseline_agent(
     }
 
 
+# Main entry point for one task: build the prompt, run the baseline agent, and package artifacts.
 def run_task_workflow(
     *,
     frontend_url: str,

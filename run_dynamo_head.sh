@@ -60,6 +60,7 @@ Environment overrides:
   DYNAMO_MODEL_PATH      Default: ${DYNAMO_MODEL_PATH}
   DYNAMO_FRONTEND_PORT   Default: ${DYNAMO_FRONTEND_PORT}
   DYNAMO_KV_CACHE_BLOCK_SIZE Default: ${DYNAMO_KV_CACHE_BLOCK_SIZE}
+  DYN_TOOL_CALL_PARSER   Default: ${DYN_TOOL_CALL_PARSER:-<unset>}
   HEAD_PRIVATE_IP        Default: auto-detected from hostname -I
   ETCD_ENDPOINTS         Default: auto-derived as http://<head-private-ip>:2379
   NATS_SERVER            Default: auto-derived as nats://<head-private-ip>:4222
@@ -131,6 +132,7 @@ start_frontend() {
     --network host \
     -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}" \
     -e NATS_SERVER="${NATS_SERVER}" \
+    -e DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-}" \
     -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}" \
     -e HF_TOKEN="${HF_TOKEN:-}" \
     "${FRONTEND_IMAGE}" \

@@ -41,14 +41,19 @@ WORKER_DEV_MODE=1 \
 WORKER_DEV_SOURCE_ROOT=~/kv_cache_offloading/runtime_upstream/dynamo/components/src/dynamo \
 WORKER_DEV_BINDINGS_ROOT=~/kv_cache_offloading/runtime_upstream/dynamo/lib/bindings/python/src/dynamo \
 DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
 DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
 ./run_dynamo_single_host.sh start
 ```
 
-Use `~/kv_cache_offloading/...` on EC2, not `/Users/...`.
-
 ## Experiments
+
+```bash
+python3.11 agentbench/diagnose_dynamo_tool_calls.py \
+  --frontend-url http://127.0.0.1:8000/v1/chat/completions \
+  --model Qwen/Qwen2.5-7B-Instruct
+```
 
 ```bash
 cd ~/kv_cache_offloading
@@ -83,6 +88,7 @@ rm -rf runtime_upstream/dynamo
 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 
 DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
 FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
 WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 ./run_dynamo_single_host.sh start
@@ -98,6 +104,7 @@ rm -rf runtime_upstream/dynamo
 SKIP_FRONTEND=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 
 DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
 WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 ./run_dynamo_single_host.sh start
 ```

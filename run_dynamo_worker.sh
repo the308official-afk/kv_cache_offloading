@@ -53,6 +53,7 @@ Environment overrides:
   WORKER_CONTAINER_NAME Default: ${WORKER_CONTAINER_NAME}
   ETCD_ENDPOINTS        Default: ${ETCD_ENDPOINTS:-<unset>}
   NATS_SERVER           Default: ${NATS_SERVER}
+  DYN_TOOL_CALL_PARSER  Default: ${DYN_TOOL_CALL_PARSER:-<unset>}
   WORKER_EXTRA_ARGS     Default: ${WORKER_EXTRA_ARGS}
   WORKER_DEV_MODE       Default: ${WORKER_DEV_MODE}
   WORKER_DEV_SOURCE_ROOT Default: ${WORKER_DEV_SOURCE_ROOT}
@@ -169,6 +170,7 @@ start_worker() {
     -v "${DYNAMO_CACHE_DIR}:/models/hfcache"
     -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}"
     -e NATS_SERVER="${NATS_SERVER}"
+    -e DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-}"
     -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}"
     -e HF_TOKEN="${HF_TOKEN:-}"
   )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 SYSTEM_PROMPT = (
     "You are a careful software engineering agent. "
     "Plan first, inspect real files when available, keep changes minimal, "
@@ -18,21 +20,58 @@ DYNAMO_HINT_NOTES = (
     "Treat planning, execution, and synthesis as separate phases."
 )
 
+
+def _decode_task_field(value: object) -> object:
+    if not isinstance(value, str):
+        return value
+    text = value.strip()
+    if not text:
+        return ""
+    if text[:1] in {'"', "[", "{"}:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            return text
+    return text
+
+
+def _normalize_text(value: object, *, fallback: str) -> str:
+    decoded = _decode_task_field(value)
+    if decoded is None:
+        return fallback
+    if isinstance(decoded, list):
+        lines = [str(item).strip() for item in decoded if str(item).strip()]
+        return "\n".join(f"- {line}" for line in lines) or fallback
+    text = str(decoded).strip()
+    return text or fallback
+
 def format_swebench_task_prompt(task: dict) -> str:
     """Build the main SWE-bench-style task prompt for the Deep Agents app."""
 
     repo = task.get("repo", "unknown_repo")
     instance_id = task.get("instance_id", "unknown_instance")
-    problem_statement = str(task.get("problem_statement", "")).strip()
-    requirements = str(task.get("requirements", "")).strip()
-    interface = str(task.get("interface", "")).strip()
-    selected_tests = str(task.get("selected_test_files_to_run", "")).strip()
+    problem_statement = _normalize_text(
+        task.get("problem_statement", ""),
+        fallback="None provided.",
+    )
+    requirements = _normalize_text(
+        task.get("requirements", ""),
+        fallback="None provided.",
+    )
+    interface = _normalize_text(
+        task.get("interface", ""),
+        fallback="None provided.",
+    )
+    selected_tests = _normalize_text(
+        task.get("selected_test_files_to_run", ""),
+        fallback="Not provided.",
+    )
 
     workspace_path = str(task.get("workspace_path", "")).strip()
     workspace_notes = (
         f"You have a writable local workspace at:\n{workspace_path}\n\n"
-        "Use the available filesystem and shell tools to inspect the repo, make changes if needed, "
-        "and leave the workspace in a state where a git diff can be captured."
+        "Use the available filesystem and shell tools to inspect the repo, edit files when needed, "
+        "run focused validation, and leave the workspace in a state where a git diff can be captured."
         if workspace_path
         else "No local repo workspace was provided for this run."
     )
@@ -47,24 +86,22 @@ Problem statement:
 {problem_statement}
 
 Requirements:
-{requirements if requirements else "None provided."}
+{requirements}
 
 Interface / environment notes:
-{interface if interface else "None provided."}
+{interface}
 
 Selected tests to run:
-{selected_tests if selected_tests else "Not provided."}
+{selected_tests}
 
 Workspace:
 {workspace_notes}
 
-Your job:
-1. Break this task into concrete steps.
-2. Identify what information would be needed to solve it well.
-3. Inspect the local repo if a workspace is available.
-4. Produce a structured plan for solving it.
-5. If the workspace is available, make a safe first-pass fix in the repo.
-6. Summarize what changed and what should be validated next.
+Solve the issue in the workspace if you can.
 
-Do not claim that code was changed or tests were run unless you actually did so.
-Focus on decomposition, reasoning, and a clear action plan."""
+Expectations:
+- Inspect the real repo before deciding on changes.
+- Use the available tools to read files, edit code, and run focused commands or tests when useful.
+- Do not stop at a plan if you can make progress on the fix.
+- Report only what you actually changed and actually validated.
+- If you are blocked, explain the specific blocker briefly."""
