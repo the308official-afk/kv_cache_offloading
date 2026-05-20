@@ -144,13 +144,13 @@ Once etcd, nats, frontend, and worker are up, first confirm the model is
 registered:
 
 ```bash
-curl -fsS http://127.0.0.1:8000/v1/models
+curl -fsS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/models
 ```
 
 Then send a tiny chat completion:
 
 ```bash
-curl -sS http://127.0.0.1:8000/v1/chat/completions \
+curl -sS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
   -H 'Content-Type: application/json' \
   -d '{
     "model": "Qwen/Qwen2.5-7B-Instruct",
@@ -168,8 +168,16 @@ Expected response: JSON with a `choices[0].message.content` value similar to
 You can also use the built-in script test:
 
 ```bash
-./run_dynamo_single_host.sh test
+DYNAMO_FRONTEND_PORT="${DYNAMO_FRONTEND_PORT:-8000}" ./run_dynamo_single_host.sh test
 ```
+
+If this run uses port `8001`, either export it once:
+
+```bash
+export DYNAMO_FRONTEND_PORT=8001
+```
+
+or replace the URLs with `http://127.0.0.1:8001/...`.
 
 ## GPU Or Docker Problems
 
