@@ -81,6 +81,36 @@ x86_64 host -> amd64 images
 aarch64 host -> arm64 images
 ```
 
+## Smoke Test Without Rebuild
+
+Use the published Dynamo image first when you only want to prove Docker, GPU,
+model loading, and the basic OpenAI-compatible request path.
+
+```bash
+cd ~/kv_cache_offloading
+chmod +x run_dynamo_head.sh run_dynamo_single_host.sh run_dynamo_worker.sh
+
+./run_dynamo_single_host.sh stop
+
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+./run_dynamo_single_host.sh start
+```
+
+Do not set `FRONTEND_IMAGE` or `WORKER_IMAGE` for this smoke test; leaving them
+unset uses the published default image instead of local instrumented images.
+
+Verify:
+
+```bash
+curl -fsS http://127.0.0.1:8000/v1/models
+./run_dynamo_single_host.sh test
+```
+
+This does not prove `agent_hints` reach worker logs. That proof requires the
+instrumented build below.
+
 ## Patch And Build Dynamo
 
 ```bash
