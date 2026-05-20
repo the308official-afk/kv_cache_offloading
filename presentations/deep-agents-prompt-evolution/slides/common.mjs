@@ -1,7 +1,9 @@
 import fs from "node:fs";
 
-const CSV_PATH = "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/results/instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260518_170604/prompt_evolution_report.csv";
-const RESULT_PATH = "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/results/instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260518_170604/others/result.json";
+const REPORT_DIR = "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/results/agentbench-nodebb_20260519_232042";
+const CSV_PATH = `${REPORT_DIR}/prompt_evolution_report.csv`;
+const RESULT_PATH = `${REPORT_DIR}/others/result.json`;
+const VALUES_DIR = `${REPORT_DIR}/prompt_evolution_values`;
 
 const C = {
   ink: "#101820",
@@ -141,7 +143,7 @@ const DEEP_DIVES = [
   {
     number: 1,
     slide: 6,
-    range: "Slides 6-8",
+    range: "Slides 6-9",
     title: "Task -> Prompt",
     stage: "formatted_prompt",
     color: C.blue,
@@ -156,8 +158,8 @@ const DEEP_DIVES = [
   },
   {
     number: 2,
-    slide: 9,
-    range: "Slides 9-11",
+    slide: 10,
+    range: "Slides 10-12",
     title: "Prompt -> Request",
     stage: "final_model_request",
     color: C.blue2,
@@ -172,8 +174,8 @@ const DEEP_DIVES = [
   },
   {
     number: 3,
-    slide: 12,
-    range: "Slides 12-13",
+    slide: 13,
+    range: "Slides 13-14",
     title: "Request -> Agent Rules",
     stage: "system_context",
     color: C.amber,
@@ -188,8 +190,8 @@ const DEEP_DIVES = [
   },
   {
     number: 4,
-    slide: 14,
-    range: "Slides 14-17",
+    slide: 15,
+    range: "Slides 15-18",
     title: "Tools -> Runtime Prepared",
     stage: "runtime_preprocessing",
     color: C.green,
@@ -204,8 +206,8 @@ const DEEP_DIVES = [
   },
   {
     number: 5,
-    slide: 18,
-    range: "Slides 18-21",
+    slide: 19,
+    range: "Slides 19-28",
     title: "Runtime -> Behavior",
     stage: "model_behavior",
     color: C.red,
@@ -219,6 +221,58 @@ const DEEP_DIVES = [
     size: "+2,066",
   },
 ];
+
+const STAGE_VALUE_PROOFS = {
+  task_input: {
+    file: "01_task_input.json",
+    accent: C.blue,
+    startPage: 7,
+    fixedSlides: 1,
+    title: "TASK INPUT JSON",
+  },
+  formatted_prompt: {
+    file: "02_formatted_prompt.json",
+    accent: C.blue,
+    startPage: 8,
+    fixedSlides: 2,
+    title: "FORMATTED PROMPT JSON",
+  },
+  final_model_request: {
+    file: "03_final_model_request.json",
+    accent: C.blue2,
+    startPage: 11,
+    fixedSlides: 2,
+    title: "FINAL MODEL REQUEST JSON",
+  },
+  system_context: {
+    file: "04_system_context.json",
+    accent: C.amber,
+    startPage: 14,
+    fixedSlides: 1,
+    title: "SYSTEM CONTEXT JSON",
+  },
+  tool_runtime_context: {
+    file: "05_tool_runtime_context.json",
+    accent: C.green,
+    startPage: 16,
+    fixedSlides: 3,
+    title: "TOOL RUNTIME CONTEXT JSON",
+  },
+  runtime_preprocessing: {
+    file: "06_runtime_preprocessing.json",
+    accent: C.green,
+    startPage: 20,
+    fixedSlides: 3,
+    title: "RUNTIME PREPROCESSING JSON",
+  },
+  model_behavior: {
+    file: "07_model_behavior.json",
+    accent: C.red,
+    startPage: 23,
+    maxWrappedRowsPerSlide: 70,
+    title: "MODEL BEHAVIOR JSON",
+  },
+};
 
 const TASK_BRIEF = {
   repo: "NodeBB/NodeBB",
@@ -243,6 +297,9 @@ const TASK_BRIEF = {
 };
 
 let cachedRows;
+let _stageValueIndex;
+const _stageValueTexts = new Map();
+const _stageValueChunks = new Map();
 
 function parseCsv(input) {
   const rows = [];
@@ -339,6 +396,85 @@ function stripProvenance(value) {
     );
   }
   return value;
+}
+
+function stageValueIndex() {
+  if (_stageValueIndex) return _stageValueIndex;
+  try {
+    _stageValueIndex = JSON.parse(fs.readFileSync(`${VALUES_DIR}/index.json`, "utf8"));
+  } catch {
+    _stageValueIndex = { stages: [] };
+  }
+  return _stageValueIndex;
+}
+
+function stageValueText(file) {
+  if (_stageValueTexts.has(file)) return _stageValueTexts.get(file);
+  const text = fs.readFileSync(`${VALUES_DIR}/${file}`, "utf8");
+  _stageValueTexts.set(file, text);
+  return text;
+}
+
+function stageValueLines(file) {
+  return stageValueText(file).split(/\r?\n/);
+}
+
+function wrappedRowCount(lines, width = 138) {
+  return lines.reduce((sum, line) => sum + wrapArtifactViewerLine(line, width).length, 0);
+}
+
+function splitLinesBalanced(lines, slideCount, width = 138) {
+  if (slideCount <= 1) return [lines];
+  const rowCounts = lines.map((line) => wrapArtifactViewerLine(line, width).length);
+  const totalRows = rowCounts.reduce((sum, count) => sum + count, 0);
+  const chunks = [];
+  let current = [];
+  let currentRows = 0;
+  let remainingRows = totalRows;
+  let remainingSlides = slideCount;
+
+  lines.forEach((line, index) => {
+    const rowCount = rowCounts[index];
+    const threshold = remainingRows / remainingSlides;
+    if (current.length && chunks.length < slideCount - 1 && currentRows + rowCount > threshold) {
+      chunks.push(current);
+      remainingRows -= currentRows;
+      remainingSlides -= 1;
+      current = [];
+      currentRows = 0;
+    }
+    current.push(line);
+    currentRows += rowCount;
+  });
+
+  if (current.length) {
+    chunks.push(current);
+  }
+  return chunks;
+}
+
+function stageValueChunks(stageKey) {
+  if (_stageValueChunks.has(stageKey)) return _stageValueChunks.get(stageKey);
+  const spec = STAGE_VALUE_PROOFS[stageKey];
+  const lines = stageValueLines(spec.file);
+  const totalRows = wrappedRowCount(lines, 138);
+  const slideCount = spec.fixedSlides ?? Math.max(1, Math.ceil(totalRows / spec.maxWrappedRowsPerSlide));
+  const chunks = splitLinesBalanced(lines, slideCount, 138);
+  _stageValueChunks.set(stageKey, chunks);
+  return chunks;
+}
+
+function stageValueFilePath(file) {
+  return `prompt_evolution_values/${file}`;
+}
+
+function stageFileViewerStyle(lines) {
+  const rows = wrappedRowCount(lines, 138);
+  if (rows <= 45) return { size: 8.8, lineStep: 9.2, wrapWidth: 138 };
+  if (rows <= 60) return { size: 8.1, lineStep: 8.0, wrapWidth: 138 };
+  if (rows <= 72) return { size: 7.6, lineStep: 7.25, wrapWidth: 138 };
+  if (rows <= 90) return { size: 6.5, lineStep: 5.85, wrapWidth: 144 };
+  return { size: 6.0, lineStep: 5.25, wrapWidth: 144 };
 }
 
 function promptLineCount() {
@@ -538,6 +674,10 @@ function jsonArtifactEntries(value, ranges) {
   );
 }
 
+function rawArtifactEntries(lines, startNumber = 1) {
+  return lines.map((line, idx) => ({ number: startNumber + idx, line }));
+}
+
 function isJsonKeyLine(line) {
   const trimmed = line.trimStart();
   return /^"[^"]+":/.test(trimmed) && !trimmed.startsWith('"_provenance"');
@@ -548,51 +688,98 @@ function drawJsonArtifactViewer(slide, ctx, options) {
     accent,
     page,
     titleText,
-    subtitleText,
+    subtitleText = "",
     entries,
     fileLabel = "others/result.json",
     pathLabel = "",
     showLineNumbers = false,
+    bodySize = 7.7,
+    lineStep = 8.1,
+    wrapWidth = 126,
+    titleSize = 28,
+    panelX = 24,
+    panelY = 118,
+    panelW = 1232,
+    panelH = 540,
+    contentX = 40,
+    contentY = 160,
+    contentW = 1200,
+    contentH = 486,
   } = options;
 
   bg(slide, ctx);
   text(slide, ctx, titleText, 42, 50, 560, 18, { size: 12, color: C.muted, bold: true });
-  text(slide, ctx, subtitleText, 42, 78, 1060, 34, { size: 28, color: C.ink, bold: true, title: true });
-  rect(slide, ctx, 24, 118, 1232, 540, accent === C.violet ? "#FAF5FF" : "#F7FAFC", { fill: accent, width: 1.9, style: "solid" }, "jsonArtifactPanel");
-  rect(slide, ctx, 24, 118, 1232, 10, accent);
-  text(slide, ctx, fileLabel, 50, 138, 260, 14, { size: 9.8, color: C.muted, bold: true });
-  text(slide, ctx, pathLabel, 736, 138, 490, 14, { size: 9.8, color: C.muted, bold: true, align: "right" });
-  rect(slide, ctx, 40, 160, 1200, 486, "#FFFFFF", { fill: accent, width: 1.2, style: "solid" }, "jsonArtifactContent");
+  if (subtitleText) {
+    text(slide, ctx, subtitleText, 42, 78, 1060, 34, { size: titleSize, color: C.ink, bold: true, title: true });
+  }
+  rect(slide, ctx, panelX, panelY, panelW, panelH, accent === C.violet ? "#FAF5FF" : "#F7FAFC", { fill: accent, width: 1.9, style: "solid" }, "jsonArtifactPanel");
+  rect(slide, ctx, panelX, panelY, panelW, 10, accent);
+  text(slide, ctx, fileLabel, panelX + 26, panelY + 20, 320, 14, { size: 9.8, color: C.muted, bold: true });
+  text(slide, ctx, pathLabel, panelX + panelW - 520, panelY + 20, 490, 14, { size: 9.8, color: C.muted, bold: true, align: "right" });
+  rect(slide, ctx, contentX, contentY, contentW, contentH, "#FFFFFF", { fill: accent, width: 1.2, style: "solid" }, "jsonArtifactContent");
 
-  let y = 182;
+  let y = contentY + 22;
   let lastNumber = null;
   entries.forEach(({ number, line }) => {
     if (lastNumber !== null && number - lastNumber > 1) {
       y += 7;
     }
-    const wrapped = wrapArtifactViewerLine(line, 126);
+    const wrapped = wrapArtifactViewerLine(line, wrapWidth);
     const keyLine = isJsonKeyLine(line);
     wrapped.forEach((piece, idx) => {
       if (showLineNumbers) {
-        text(slide, ctx, idx === 0 ? String(number).padStart(3, "0") : "", 62, y, 34, 12, {
+        text(slide, ctx, idx === 0 ? String(number).padStart(3, "0") : "", contentX + 22, y, 34, 12, {
           size: 7.3,
           color: C.muted,
           mono: true,
           align: "right",
         });
       }
-      text(slide, ctx, piece, showLineNumbers ? 110 : 78, y, showLineNumbers ? 1098 : 1130, 12, {
-        size: 7.7,
+      text(slide, ctx, piece, showLineNumbers ? contentX + 70 : contentX + 38, y, showLineNumbers ? contentW - 102 : contentW - 70, 12, {
+        size: bodySize,
         color: keyLine ? accent : C.ink2,
         mono: true,
         bold: keyLine,
       });
-      y += 8.1;
+      y += lineStep;
     });
     lastNumber = number;
   });
 
   footer(slide, ctx, "PROMPT EVOLUTION", "light", page);
+}
+
+function drawStageFileArtifactViewer(slide, ctx, options) {
+  const {
+    stageKey,
+    chunkIndex,
+  } = options;
+  const spec = STAGE_VALUE_PROOFS[stageKey];
+  const chunks = stageValueChunks(stageKey);
+  const chunk = chunks[chunkIndex];
+  const style = stageFileViewerStyle(chunk);
+  const titleSuffix = chunks.length > 1 ? ` (${chunkIndex + 1} OF ${chunks.length})` : "";
+  drawJsonArtifactViewer(slide, ctx, {
+    accent: spec.accent,
+    page: spec.startPage + chunkIndex,
+    titleText: `${spec.title}${titleSuffix}`,
+    subtitleText: "",
+    fileLabel: stageValueFilePath(spec.file),
+    pathLabel: "",
+    entries: rawArtifactEntries(chunk, 1 + chunks.slice(0, chunkIndex).reduce((sum, lines) => sum + lines.length, 0)),
+    showLineNumbers: false,
+    bodySize: style.size,
+    lineStep: style.lineStep,
+    wrapWidth: style.wrapWidth,
+    panelX: 18,
+    panelY: 90,
+    panelW: 1244,
+    panelH: 572,
+    contentX: 30,
+    contentY: 124,
+    contentW: 1220,
+    contentH: 520,
+  });
 }
 
 function drawSectionedJsonArtifactViewer(slide, ctx, options) {
@@ -1499,92 +1686,49 @@ function drawJsonTaskPrompt(p, ctx) {
   return slide;
 }
 
+function drawTaskInputDetail(p, ctx) {
+  const slide = p.slides.add();
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "task_input", chunkIndex: 0 });
+  return slide;
+}
+
 function drawPromptFieldDetail1(p, ctx) {
   const slide = p.slides.add();
-  drawPromptArtifactViewer(slide, ctx, {
-    accent: C.blue,
-    page: 7,
-    titleText: "PROMPT FIELD (1 OF 2)",
-    subtitleText: "Verbatim artifact view of the prompt value",
-    entries: promptArtifactEntries([[1, 42]]),
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "formatted_prompt", chunkIndex: 0 });
   return slide;
 }
 
 function drawPromptFieldDetail2(p, ctx) {
   const slide = p.slides.add();
-  drawPromptArtifactViewer(slide, ctx, {
-    accent: C.violet,
-    page: 8,
-    titleText: "PROMPT FIELD (2 OF 2)",
-    subtitleText: "Verbatim continuation of the same prompt value",
-    entries: promptArtifactEntries([[44, 57], [96, 114]]),
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "formatted_prompt", chunkIndex: 1 });
   return slide;
 }
 
 function drawJsonPromptRequest(p, ctx) {
   const rows = csvRows();
-  return drawJsonTransition(p, ctx, rows[2], "JSON: Prompt To Request", "Next, the prompt is wrapped for the model.", 9, DEEP_DIVES[1]);
+  return drawJsonTransition(p, ctx, rows[2], "JSON: Prompt To Request", "Next, the prompt is wrapped for the model.", 10, DEEP_DIVES[1]);
 }
 
 function drawRequestPayloadDetail1(p, ctx) {
   const slide = p.slides.add();
-  drawPromptArtifactViewer(slide, ctx, {
-    accent: C.blue2,
-    page: 10,
-    titleText: "REQUEST PAYLOAD (1 OF 2)",
-    subtitleText: "Verbatim prompt content inside the packaged message object",
-    fileLabel: "others/result.json",
-    pathLabel: "prompt_evolution_report.stages[2].initial_messages[0]",
-    openingLines: ["{", '  "role": "user",', '  "content": "'],
-    closingLines: ['"', "}"],
-    entries: promptArtifactEntries([[1, 42]]),
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "final_model_request", chunkIndex: 0 });
   return slide;
 }
 
 function drawRequestPayloadDetail2(p, ctx) {
   const slide = p.slides.add();
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.blue2,
-    page: 11,
-    titleText: "REQUEST PAYLOAD (2 OF 2)",
-    subtitleText: "Verbatim metadata attached to the same packaged request",
-    pathLabel: "prompt_evolution_report.stages[2].{tool_choice, request_context, agent_hints}",
-    entries: jsonArtifactEntries({
-      tool_choice: "auto",
-      request_context: stripProvenance(stagePayload(2).request_context ?? {}),
-      agent_hints: stripProvenance(stagePayload(2).agent_hints ?? {}),
-    }, [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "final_model_request", chunkIndex: 1 });
   return slide;
 }
 
 function drawJsonRequestSystem(p, ctx) {
   const rows = csvRows();
-  return drawJsonTransition(p, ctx, rows[3], "JSON: Request To System Context", "Then, agent rules are layered into the request.", 12, DEEP_DIVES[2]);
+  return drawJsonTransition(p, ctx, rows[3], "JSON: Request To System Context", "Then, agent rules are layered into the request.", 13, DEEP_DIVES[2]);
 }
 
 function drawSystemContextDetail(p, ctx) {
   const slide = p.slides.add();
-  const stage = stripProvenance(stagePayload(3));
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.amber,
-    page: 13,
-    titleText: "SYSTEM CONTEXT",
-    subtitleText: "Exact persisted keys behind the agent-rules transition",
-    pathLabel: "prompt_evolution_report.stages[3].{system_prompt, added_keys, keys_before, keys_after, result_summary}",
-    entries: jsonArtifactEntries({
-      system_prompt: stage.system_prompt ?? "",
-      added_keys: stage.added_keys ?? "",
-      keys_before: stage.keys_before ?? "",
-      keys_after: stage.keys_after ?? "",
-      result_summary: stage.result_summary ?? "",
-    }, [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "system_context", chunkIndex: 0 });
   return slide;
 }
 
@@ -1605,328 +1749,84 @@ function drawJsonRuntimePreprocessing(p, ctx) {
   codePanel(slide, ctx, "After Tools Attached", prettyJson(left.json_keys_after), 64, 300, 548, 306, C.green, "light");
   codePanel(slide, ctx, "After Runtime Prepared - added fields called out above", prettyJson(right.json_keys_after), 668, 300, 548, 306, C.green, "light");
   support(slide, ctx, `${sizeChangeNote(right.size_change)} | ${right.outcome}`);
-  footer(slide, ctx, "PROMPT EVOLUTION", "light", 14);
+  footer(slide, ctx, "PROMPT EVOLUTION", "light", 15);
   return slide;
 }
 
 function drawToolRuntimeDetail(p, ctx) {
   const slide = p.slides.add();
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.green,
-    page: 15,
-    titleText: "TOOL RUNTIME CONTEXT (1 OF 2)",
-    subtitleText: "Verbatim stage object showing the request once tool and parser context are attached",
-    pathLabel: "prompt_evolution_report.stages[4]",
-    entries: jsonArtifactEntries(stripProvenance(stagePayload(4)), [[1, 21]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "tool_runtime_context", chunkIndex: 0 });
   return slide;
 }
 
 function drawRuntimeMetricsDetail(p, ctx) {
   const slide = p.slides.add();
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.green,
-    page: 16,
-    titleText: "TOOL RUNTIME CONTEXT (2 OF 2)",
-    subtitleText: "Verbatim continuation of the same stage object from slide 15",
-    pathLabel: "prompt_evolution_report.stages[4] (continued)",
-    entries: jsonArtifactEntries(stripProvenance(stagePayload(4)), [[22, 43]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "tool_runtime_context", chunkIndex: 1 });
   return slide;
 }
 
 function drawRuntimeMetricsDetail2(p, ctx) {
   const slide = p.slides.add();
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.green,
-    page: 17,
-    titleText: "RUNTIME PREPARATION",
-    subtitleText: "Exact measurement record for the same prepared request",
-    pathLabel: "measurements[0]",
-    entries: jsonArtifactEntries(stripProvenance(measurementPayload()), [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "tool_runtime_context", chunkIndex: 2 });
   return slide;
 }
 
 function drawJsonRuntimeBehavior(p, ctx) {
   const rows = csvRows();
-  return drawJsonTransition(p, ctx, rows[6], "JSON: Runtime To Behavior", "Finally, we observe what the model actually did.", 18, DEEP_DIVES[4]);
+  return drawJsonTransition(p, ctx, rows[6], "JSON: Runtime To Behavior", "Finally, we observe what the model actually did.", 19, DEEP_DIVES[4]);
 }
 
 function drawBehaviorDetail(p, ctx) {
   const slide = p.slides.add();
-  const stage = stripProvenance(stagePayload(6));
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.red,
-    page: 19,
-    titleText: "MODEL BEHAVIOR (1 OF 3)",
-    subtitleText: "Exact stage-analysis fields recorded for the observed outcome",
-    pathLabel: "prompt_evolution_report.stages[6].{stage, component, question_answered, changed_from, change_summary, delta_summary, result_summary, prompt_preview, prompt_chars, major_additions, added_elements, removed_elements, unchanged_core, key_facts}",
-    entries: jsonArtifactEntries({
-      stage: stage.stage,
-      component: stage.component,
-      question_answered: stage.question_answered,
-      changed_from: stage.changed_from,
-      change_summary: stage.change_summary,
-      delta_summary: stage.delta_summary,
-      result_summary: stage.result_summary,
-      prompt_preview: stage.prompt_preview,
-      prompt_chars: stage.prompt_chars,
-      major_additions: stage.major_additions,
-      added_elements: stage.added_elements,
-      removed_elements: stage.removed_elements,
-      unchanged_core: stage.unchanged_core,
-      key_facts: stage.key_facts,
-    }, [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "runtime_preprocessing", chunkIndex: 0 });
   return slide;
 }
 
 function drawBehaviorDetail2(p, ctx) {
   const slide = p.slides.add();
-  const stage = stripProvenance(stagePayload(6));
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.red,
-    page: 20,
-    titleText: "MODEL BEHAVIOR (2 OF 3)",
-    subtitleText: "Exact structure-evolution fields recorded for the observed outcome",
-    pathLabel: "prompt_evolution_report.stages[6].{structure_before, structure_after, keys_before, keys_after, json_keys_before, json_keys_after, added_keys, removed_keys, changed_keys, chars_before, chars_after, char_delta}",
-    entries: jsonArtifactEntries({
-      structure_before: stage.structure_before,
-      structure_after: stage.structure_after,
-      keys_before: stage.keys_before,
-      keys_after: stage.keys_after,
-      json_keys_before: stage.json_keys_before,
-      json_keys_after: stage.json_keys_after,
-      added_keys: stage.added_keys,
-      removed_keys: stage.removed_keys,
-      changed_keys: stage.changed_keys,
-      chars_before: stage.chars_before,
-      chars_after: stage.chars_after,
-      char_delta: stage.char_delta,
-    }, [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "runtime_preprocessing", chunkIndex: 1 });
   return slide;
 }
 
 function drawBehaviorDetail3(p, ctx) {
   const slide = p.slides.add();
-  const stage = stripProvenance(stagePayload(6));
-  drawJsonArtifactViewer(slide, ctx, {
-    accent: C.red,
-    page: 21,
-    titleText: "MODEL BEHAVIOR (3 OF 3)",
-    subtitleText: "Exact observed tool-use and response fields recorded for the outcome",
-    pathLabel: "prompt_evolution_report.stages[6].{observed_tool_call_names, observed_tool_result_names, observed_tool_call_count, finish_reason, response_text}",
-    entries: jsonArtifactEntries({
-      observed_tool_call_names: stage.observed_tool_call_names,
-      observed_tool_result_names: stage.observed_tool_result_names,
-      observed_tool_call_count: stage.observed_tool_call_count,
-      finish_reason: stage.finish_reason,
-      response_text: stage.response_text,
-    }, [[1, 999]]),
-    showLineNumbers: false,
-  });
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "runtime_preprocessing", chunkIndex: 2 });
   return slide;
 }
 
 function drawKeys(p, ctx) {
-  const rows = csvRows();
   const slide = p.slides.add();
-  bg(slide, ctx);
-  heading(slide, ctx, "Added Fields", "Each stage adds specific fields that explain the handoff.");
-  text(
-    slide,
-    ctx,
-    "The easiest way to read this slide: the left column names the step, the middle shows the new fields created at that step, and the right side shows whether the payload grew.",
-    64,
-    198,
-    930,
-    36,
-    { size: 16, color: C.slate },
-  );
-
-  const x = 64;
-  const y = 238;
-  const widths = [204, 520, 296, 132];
-  const rowH = 54;
-  const headers = ["Stage", "Fields added here", "Meaning of the change", "Size"];
-  let cx = x;
-  headers.forEach((h, i) => {
-    rect(slide, ctx, cx, y, widths[i], 34, "#E7E0D6");
-    text(slide, ctx, h, cx + 10, y + 8, widths[i] - 20, 16, { size: 11.6, color: C.ink, bold: true });
-    cx += widths[i];
-  });
-
-  rows.forEach((r, i) => {
-    const ry = y + 34 + i * rowH;
-    const fill = i % 2 ? "#F1EBE2" : "#FBF8F2";
-    const color = STAGE_COLORS[i];
-    rect(slide, ctx, x, ry, widths.reduce((a, b) => a + b, 0), rowH, fill);
-    rect(slide, ctx, x, ry, 8, rowH, color);
-    text(slide, ctx, stageLabel(r.stage), x + 18, ry + 7, widths[0] - 30, 17, { size: 12.4, color: C.ink, bold: true });
-    text(slide, ctx, componentLabel(r.owned_by), x + 18, ry + 29, widths[0] - 30, 12, { size: 9.8, color, bold: true });
-    drawChips(slide, ctx, listItems(r.added_keys), x + widths[0] + 12, ry + 10, widths[1] - 24, color, "light", 2);
-    text(
-      slide,
-      ctx,
-      shorten(r.changed_keys === "none" ? r.what_changed : r.changed_keys, 92),
-      x + widths[0] + widths[1] + 12,
-      ry + 10,
-      widths[2] - 24,
-      28,
-      { size: 10.3, color: C.slate },
-    );
-    text(
-      slide,
-      ctx,
-      formatSizeChange(r.size_change),
-      x + widths[0] + widths[1] + widths[2] + 10,
-      ry + 10,
-      widths[3] - 20,
-      16,
-      { size: 13.4, color: sizeChangeColor(r.size_change), bold: true, mono: true, align: "right" },
-    );
-    text(
-      slide,
-      ctx,
-      sizeChangeNote(r.size_change),
-      x + widths[0] + widths[1] + widths[2] + 10,
-      ry + 29,
-      widths[3] - 20,
-      12,
-      { size: 9, color: C.muted, align: "right" },
-    );
-    rule(slide, ctx, x, ry + rowH - 1, widths.reduce((a, b) => a + b, 0), C.line);
-  });
-
-  footer(slide, ctx, "PROMPT EVOLUTION", "light", 22);
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 0 });
   return slide;
 }
 
 function drawFacts(p, ctx) {
-  const rows = csvRows();
   const slide = p.slides.add();
-  bg(slide, ctx);
-  heading(slide, ctx, "Evidence Summary", "Each stage leaves a short proof trail executives can inspect.");
-
-  const promptRow = rows[1];
-  const runtimeRow = rows[5];
-  const behaviorRow = rows[6];
-  metric(slide, ctx, formatSizeChange(promptRow.size_change), PROMPT_BUILDER_LABEL, "largest growth: raw task becomes prompt", 64, 194, 344, C.blue);
-  metric(slide, ctx, formatSizeChange(runtimeRow.size_change), "Runtime Preparation", "same request, more runtime evidence", 468, 194, 344, C.green);
-  metric(slide, ctx, formatSizeChange(behaviorRow.size_change), "Behavior Record", "response and tool outcome are added", 872, 194, 344, C.red);
-
-  const x = 64;
-  const y = 326;
-  const widths = [184, 382, 426, 160];
-  const rowH = 43;
-  const headers = ["Stage", "Key facts", "Outcome", "Size signal"];
-  let cx = x;
-  headers.forEach((h, i) => {
-    rect(slide, ctx, cx, y, widths[i], 32, "#E7E0D6");
-    text(slide, ctx, h, cx + 10, y + 7, widths[i] - 20, 16, { size: 11.5, color: C.ink, bold: true });
-    cx += widths[i];
-  });
-
-  rows.forEach((r, i) => {
-    const ry = y + 32 + i * rowH;
-    const fill = i % 2 ? "#F1EBE2" : "#FBF8F2";
-    const color = STAGE_COLORS[i];
-    rect(slide, ctx, x, ry, widths.reduce((a, b) => a + b, 0), rowH, fill);
-    rect(slide, ctx, x, ry, 6, rowH, color);
-    text(slide, ctx, stageLabel(r.stage), x + 16, ry + 7, widths[0] - 28, 15, { size: 10.8, color: C.ink, bold: true });
-    text(slide, ctx, shorten(r.key_facts, 84), x + widths[0] + 10, ry + 7, widths[1] - 20, 20, { size: 9.8, color: C.slate });
-    text(slide, ctx, shorten(r.outcome, 92), x + widths[0] + widths[1] + 10, ry + 7, widths[2] - 20, 20, { size: 9.8, color: C.slate });
-    text(
-      slide,
-      ctx,
-      `${formatSizeChange(r.size_change)} | ${sizeChangeNote(r.size_change)}`,
-      x + widths[0] + widths[1] + widths[2] + 10,
-      ry + 8,
-      widths[3] - 20,
-      18,
-      { size: 9.5, color: sizeChangeColor(r.size_change), bold: true },
-    );
-    rule(slide, ctx, x, ry + rowH - 1, widths.reduce((a, b) => a + b, 0), C.line);
-  });
-
-  footer(slide, ctx, "PROMPT EVOLUTION", "light", 23);
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 1 });
   return slide;
 }
 
 function drawFinalSummary(p, ctx) {
   const slide = p.slides.add();
-  bg(slide, ctx);
-  heading(slide, ctx, "Final Summary", "We can now explain how one real engineering task becomes model behavior.");
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 2 });
+  return slide;
+}
 
-  text(
-    slide,
-    ctx,
-    "This experiment followed a NodeBB SWE-bench Pro task through the prompt pipeline: task intake, prompt construction, model request packaging, runtime preparation, and observed behavior.",
-    64,
-    190,
-    980,
-    42,
-    { size: 17.2, color: C.slate },
-  );
+function drawBehaviorDetail4(p, ctx) {
+  const slide = p.slides.add();
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 3 });
+  return slide;
+}
 
-  const cards = [
-    {
-      title: "What went in",
-      stat: "Real NodeBB task",
-      body: "A concrete email-validation bug with repo context, requirements, selected tests, and a target workspace.",
-      color: C.blue,
-    },
-    {
-      title: "What changed",
-      stat: "+5,576 chars",
-      body: "The largest transformation happened when raw task fields became one runnable agent prompt.",
-      color: C.violet,
-    },
-    {
-      title: "What ran",
-      stat: "Qwen 2.5 7B",
-      body: "The prompt was packaged and sent through the stack using Qwen/Qwen2.5-7B-Instruct.",
-      color: C.green,
-    },
-    {
-      title: "What came out",
-      stat: "Behavior trace",
-      body: "The final record shows tool calls, response status, and whether the workspace changed.",
-      color: C.red,
-    },
-  ];
+function drawBehaviorDetail5(p, ctx) {
+  const slide = p.slides.add();
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 4 });
+  return slide;
+}
 
-  cards.forEach((item, i) => {
-    const x = 64 + i * 292;
-    rect(slide, ctx, x, 272, 252, 188, C.white, { fill: item.color, width: 2, style: "solid" });
-    rect(slide, ctx, x, 272, 252, 8, item.color);
-    text(slide, ctx, item.title.toUpperCase(), x + 22, 304, 170, 12, { size: 9.8, color: C.muted, bold: true });
-    text(slide, ctx, item.stat, x + 22, 330, 200, 30, { size: item.stat.length > 12 ? 22 : 26, color: item.color, bold: true, title: true });
-    text(slide, ctx, item.body, x + 22, 382, 202, 58, { size: 12.6, color: C.slate });
-  });
-
-  rect(slide, ctx, 64, 508, 1152, 84, "#FBF8F2", { fill: C.amber, width: 1.8, style: "solid" });
-  rect(slide, ctx, 64, 508, 8, 84, C.amber);
-  text(slide, ctx, "Simple takeaway", 96, 530, 180, 16, { size: 12.2, color: C.amber, bold: true });
-  text(
-    slide,
-    ctx,
-    "The prompt pipeline is now explainable stage by stage: we can see the structure before and after each handoff, the fields each layer adds, and the evidence produced by the run.",
-    96,
-    548,
-    1020,
-    36,
-    { size: 16.8, color: C.ink, bold: true },
-  );
-
-  footer(slide, ctx, "PROMPT EVOLUTION", "light", 24);
+function drawBehaviorDetail6(p, ctx) {
+  const slide = p.slides.add();
+  drawStageFileArtifactViewer(slide, ctx, { stageKey: "model_behavior", chunkIndex: 5 });
   return slide;
 }
 
@@ -1978,6 +1878,7 @@ const slides = [
   drawTaskBrief,
   drawStructureOverview,
   drawJsonTaskPrompt,
+  drawTaskInputDetail,
   drawPromptFieldDetail1,
   drawPromptFieldDetail2,
   drawJsonPromptRequest,
@@ -1996,6 +1897,9 @@ const slides = [
   drawKeys,
   drawFacts,
   drawFinalSummary,
+  drawBehaviorDetail4,
+  drawBehaviorDetail5,
+  drawBehaviorDetail6,
 ];
 
 export async function renderSlide(presentation, ctx, number) {

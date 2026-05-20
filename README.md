@@ -1,3 +1,14 @@
+# slide creation prompt
+Give me a polished version of these slides attached:
+- Dont add/remove any data in any of the slides
+- Dont truncate or omit any information in any of the slides, every data (e.g., JSON key and value) MUST be displayed in the slides
+- I’m presenting to a technical audience 
+- JSON information should look nice and presentable
+- Use white background except when rendering JSON data
+- Give me page numbers for easier debugging
+
+First give me some recommendations on polishing the slides before I ask you to proceed 
+
 # kv_cache_offloading
 
 Reproducible AgentBench + Dynamo + SGLang harness for proving:
@@ -30,6 +41,44 @@ From a local checkout, upload with:
 
 ```bash
 ./aws/upload.sh
+```
+
+## Preflight Check
+
+Run this before building or starting Dynamo on a new machine, especially GH200.
+
+```bash
+cd ~/kv_cache_offloading
+
+echo "host arch: $(uname -m)"
+python3.11 --version
+docker version --format 'docker {{.Server.Version}}'
+df -h /
+docker system df
+
+test -n "${HF_TOKEN:-}" && echo "HF_TOKEN is set" || echo "HF_TOKEN is missing"
+
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
+
+ss -ltnp | grep ':8000' || true
+```
+
+If moving from `g5.xlarge` to GH200, do not reuse the G5-built Dynamo images
+unless the GH200 host is also `x86_64`. G5 builds are `linux/amd64`; many GH200
+hosts are `aarch64`/`arm64`, so rebuild Dynamo natively on the GH200.
+
+After building, verify image architecture:
+
+```bash
+docker image inspect local/dynamo-frontend:runtime-json-logs --format '{{.Architecture}}'
+docker image inspect local/dynamo-sglang:runtime-json-logs --format '{{.Architecture}}'
+```
+
+Expected values:
+
+```text
+x86_64 host -> amd64 images
+aarch64 host -> arm64 images
 ```
 
 ## Patch And Build Dynamo
