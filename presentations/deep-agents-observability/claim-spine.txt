@@ -1,0 +1,39 @@
+Thesis:
+We now have an end-to-end observability layer that explains how a SWE-bench task becomes a prompt, how that prompt becomes a runtime request, and how runtime behavior maps back to agent decisions.
+
+Audience:
+Executives and senior engineering managers evaluating whether the AgentBench + Deep Agents + Dynamo + SGLang stack is becoming controllable, diagnosable, and operationally credible.
+
+One-line arc:
+Move from opaque final outputs to accountable cross-layer traces, then use the latest run to separate instrumentation success from agent-effectiveness gaps.
+
+Slide list:
+01. Claim: We can now explain a full agent run across prompt, runtime, and behavior layers. Proof: cover metric rail and pipeline motif.
+02. Claim: The reporting layer turned a single run into an executive-readable operating trace. Proof: summary pillars.
+03. Claim: The old failure mode was ambiguity, not just low performance. Proof: before/after diagnostic model.
+04. Claim: The new reporting layer gives every major stage an owner, evidence record, and artifact trail. Proof: observability stack map.
+05. Claim: The run now has a clear route from dataset input to runtime evidence. Proof: end-to-end system flow.
+06. Claim: Four report families create the complete evidence pack. Proof: report portfolio.
+07. Claim: Prompt evolution is now visible as a seven-stage lineage. Proof: stage timeline.
+08. Claim: Ownership is no longer hidden inside one black-box run. Proof: ownership swimlane.
+09. Claim: The most important transformations are object-shape changes, not cosmetic text edits. Proof: before/after JSON shape board.
+10. Claim: Prompt construction created most of the textual growth, while runtime added measurement context. Proof: growth and tokenization chart.
+11. Claim: The runtime path was ready: parser observed, tools exposed, worker selected. Proof: readiness dashboard.
+12. Claim: Runtime alignment found consistency across five major decision points. Proof: alignment matrix.
+13. Claim: The latest run exposed the exact execution gap: the agent inspected files, then stopped without editing. Proof: case-study scorecard.
+14. Claim: This is the right kind of failure because it is explainable and assignable. Proof: instrumentation-vs-effectiveness split.
+15. Claim: Remaining risks are now specific enough to manage. Proof: risk register.
+16. Claim: The next phase should turn observability into control loops and dashboards. Proof: roadmap.
+17. Claim: The appendix preserves the raw evidence behind the executive story. Proof: appendix index.
+18. Claim: The artifact family is broad enough to support reproducible diagnosis. Proof: source inventory.
+19. Claim: The prompt evolution table shows exactly what changed at each stage. Proof: dense lineage table.
+20. Claim: The lifecycle trace records the chronology from setup through artifact generation. Proof: lifecycle event sample.
+21. Claim: Alignment rows connect agent-side decisions to runtime-side evidence. Proof: runtime alignment table.
+22. Claim: JSON before/after columns show the object-shape evolution. Proof: key-diff excerpts.
+23. Claim: The final response proves the model generated guidance rather than code changes. Proof: response excerpt and behavior flags.
+24. Claim: Shared definitions keep the executive narrative and technical appendix consistent. Proof: glossary and methodology.
+
+Omission notes:
+- The deck does not include full CSV screenshots in the main narrative.
+- The appendix includes representative dense tables rather than every raw field.
+- No invented success metric is used; the latest run is explicitly described as no workspace change.

@@ -1,0 +1,974 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/wxp8h1",
+    "id": "wxp8h1",
+    "slide": 2,
+    "layoutId": "0e457c94-dbc8-4b71-9b20-736032f987b0",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "5873eb36-151b-4109-9eca-1bf74784dea0",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display",
+      "Aptos Mono"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "0e457c94-dbc8-4b71-9b20-736032f987b0",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "5873eb36-151b-4109-9eca-1bf74784dea0",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "5873eb36-151b-4109-9eca-1bf74784dea0",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1cfa9w3",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#F7F4ED",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tsvu9kni",
+      "id": "2",
+      "bbox": [
+        64,
+        52,
+        8,
+        24
+      ],
+      "geometry": "rect",
+      "fillColor": "#6D28D9",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47y1kre1",
+      "id": "3",
+      "bbox": [
+        84,
+        52,
+        420,
+        24
+      ],
+      "geometry": "rect",
+      "text": "EXECUTIVE SUMMARY",
+      "textPreview": "EXECUTIVE SUMMARY",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "EXECUTIVE SUMMARY"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "EXECUTIVE SUMMARY",
+          "runs": [
+            {
+              "index": 1,
+              "text": "EXECUTIVE SUMMARY",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bat47y1k",
+      "id": "4",
+      "bbox": [
+        64,
+        86,
+        1010,
+        98
+      ],
+      "geometry": "rect",
+      "text": "The reporting layer turned one opaque agent run into a cross-system operating trace.",
+      "textPreview": "The reporting layer turned one opaque agent run into a cross-system operating trace.",
+      "resolvedFontSize": 34,
+      "resolvedTextStyle": {
+        "fontSize": 34,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The reporting layer turned one opaque agent run into a"
+          },
+          {
+            "index": 2,
+            "text": "cross-system operating trace."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The reporting layer turned one opaque agent run into a cross-system operating trace.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The reporting layer turned one opaque agent run into a cross-system operating trace.",
+              "fontSize": 34,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mp0bi9s3",
+      "id": "5",
+      "bbox": [
+        70,
+        214,
+        344,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#2563EB",
+      "lineWidth": 2
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tgfmlkjm",
+      "id": "6",
+      "bbox": [
+        70,
+        214,
+        8,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#2563EB",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4vmtwra5",
+      "id": "7",
+      "bbox": [
+        92,
+        232,
+        302,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Visibility",
+      "textPreview": "Visibility",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Visibility"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Visibility",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Visibility",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/b2hwfyxo",
+      "id": "8",
+      "bbox": [
+        92,
+        264,
+        302,
+        158
+      ],
+      "geometry": "rect",
+      "text": "We can now see the run move from raw task input to formatted prompt, request envelope, runtime preprocessing, worker execution, and final behavior.",
+      "textPreview": "We can now see the run move from raw task input to formatted prompt, request envelope, runtime preprocessing, worker execution, and final...",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "We can now see the run move from raw task"
+          },
+          {
+            "index": 2,
+            "text": "input to formatted prompt, request envelope,"
+          },
+          {
+            "index": 3,
+            "text": "runtime preprocessing, worker execution, and"
+          },
+          {
+            "index": 4,
+            "text": "final behavior."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "We can now see the run move from raw task input to formatted prompt, request envelope, runtime preprocessing, worker execution, and final behavior.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "We can now see the run move from raw task input to formatted prompt, request envelope, runtime preprocessing, worker execution, and final behavior.",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mhk3q5o7",
+      "id": "9",
+      "bbox": [
+        468,
+        214,
+        344,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#6D28D9",
+      "lineWidth": 2
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0z61032l",
+      "id": "10",
+      "bbox": [
+        468,
+        214,
+        8,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#6D28D9",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pkzupwb2",
+      "id": "11",
+      "bbox": [
+        490,
+        232,
+        302,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Control",
+      "textPreview": "Control",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Control"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Control",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Control",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/itgfmlkj",
+      "id": "12",
+      "bbox": [
+        490,
+        264,
+        302,
+        158
+      ],
+      "geometry": "rect",
+      "text": "Every stage carries an owner label and evidence trail, which makes failures assignable instead of mysterious.",
+      "textPreview": "Every stage carries an owner label and evidence trail, which makes failures assignable instead of mysterious.",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Every stage carries an owner label and evidence"
+          },
+          {
+            "index": 2,
+            "text": "trail, which makes failures assignable instead of"
+          },
+          {
+            "index": 3,
+            "text": "mysterious."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Every stage carries an owner label and evidence trail, which makes failures assignable instead of mysterious.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Every stage carries an owner label and evidence trail, which makes failures assignable instead of mysterious.",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7ed8bat4",
+      "id": "13",
+      "bbox": [
+        866,
+        214,
+        344,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#BE123C",
+      "lineWidth": 2
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0nuxc3yl",
+      "id": "14",
+      "bbox": [
+        866,
+        214,
+        8,
+        220
+      ],
+      "geometry": "rect",
+      "fillColor": "#BE123C",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p8nqxs72",
+      "id": "15",
+      "bbox": [
+        888,
+        232,
+        302,
+        26
+      ],
+      "geometry": "rect",
+      "text": "Latest finding",
+      "textPreview": "Latest finding",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Latest finding"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Latest finding",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Latest finding",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ih4byhgn",
+      "id": "16",
+      "bbox": [
+        888,
+        264,
+        302,
+        158
+      ],
+      "geometry": "rect",
+      "text": "Instrumentation worked: parser, tools, worker, and alignment evidence were captured. The agent still failed to edit the workspace.",
+      "textPreview": "Instrumentation worked: parser, tools, worker, and alignment evidence were captured. The agent still failed to edit the workspace.",
+      "resolvedFontSize": 14,
+      "resolvedTextStyle": {
+        "fontSize": 14,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Instrumentation worked: parser, tools, worker,"
+          },
+          {
+            "index": 2,
+            "text": "and alignment evidence were captured. The"
+          },
+          {
+            "index": 3,
+            "text": "agent still failed to edit the workspace."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Instrumentation worked: parser, tools, worker, and alignment evidence were captured. The agent still failed to edit the workspace.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Instrumentation worked: parser, tools, worker, and alignment evidence were captured. The agent still failed to edit the workspace.",
+              "fontSize": 14,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/72x4nap4",
+      "id": "17",
+      "bbox": [
+        70,
+        464,
+        1140,
+        104
+      ],
+      "geometry": "rect",
+      "fillColor": "#101820",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wjudg7ad",
+      "id": "18",
+      "bbox": [
+        94,
+        486,
+        260,
+        20
+      ],
+      "geometry": "rect",
+      "text": "Central message for executives",
+      "textPreview": "Central message for executives",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Central message for executives"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Central message for executives",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Central message for executives",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#A8B3C4",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p4r65wju",
+      "id": "19",
+      "bbox": [
+        94,
+        516,
+        900,
+        42
+      ],
+      "geometry": "rect",
+      "text": "The latest run did not solve the coding task; it proved we can diagnose where the failure happened.",
+      "textPreview": "The latest run did not solve the coding task; it proved we can diagnose where the failure happened.",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "fontSize": 22,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The latest run did not solve the coding task; it proved we can diagnose where the"
+          },
+          {
+            "index": 2,
+            "text": "failure happened."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The latest run did not solve the coding task; it proved we can diagnose where the failure happened.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The latest run did not solve the coding task; it proved we can diagnose where the failure happened.",
+              "fontSize": 22,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/9gr2p8nq",
+      "id": "20",
+      "bbox": [
+        64,
+        612,
+        980,
+        34
+      ],
+      "geometry": "rect",
+      "text": "This reframes the work from guesswork to operating visibility: prompt assembly, runtime behavior, and agent effectiveness can now be separated.",
+      "textPreview": "This reframes the work from guesswork to operating visibility: prompt assembly, runtime behavior, and agent effectiveness can now be sepa...",
+      "resolvedFontSize": 15,
+      "resolvedTextStyle": {
+        "fontSize": 15,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "This reframes the work from guesswork to operating visibility: prompt assembly, runtime behavior, and agent effectiveness can now be separated."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "This reframes the work from guesswork to operating visibility: prompt assembly, runtime behavior, and agent effectiveness can now be separated.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "This reframes the work from guesswork to operating visibility: prompt assembly, runtime behavior, and agent effectiveness can now be separated.",
+              "fontSize": 15,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gvy90je9",
+      "id": "21",
+      "bbox": [
+        64,
+        664,
+        1152,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7D1C8",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ra5gbq1o",
+      "id": "22",
+      "bbox": [
+        64,
+        680,
+        340,
+        18
+      ],
+      "geometry": "rect",
+      "text": "MAIN NARRATIVE",
+      "textPreview": "MAIN NARRATIVE",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "MAIN NARRATIVE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "MAIN NARRATIVE",
+          "runs": [
+            {
+              "index": 1,
+              "text": "MAIN NARRATIVE",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2p8nqxs7",
+      "id": "23",
+      "bbox": [
+        410,
+        680,
+        620,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+      "textPreview": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#667085"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/94fu18jq",
+      "id": "24",
+      "bbox": [
+        1164,
+        680,
+        52,
+        18
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#667085"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

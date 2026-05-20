@@ -1,0 +1,64 @@
+{
+  "summary": {
+    "gpu_candidates": [],
+    "cpu_candidates": [
+      "baseline_execution"
+    ],
+    "nvme_candidates": [],
+    "drop_candidates": [],
+    "_provenance": {
+      "gpu_candidates": {
+        "_container": "SPECULATIVE"
+      },
+      "cpu_candidates": {
+        "_container": "SPECULATIVE"
+      },
+      "nvme_candidates": {
+        "_container": "SPECULATIVE"
+      },
+      "drop_candidates": {
+        "_container": "SPECULATIVE"
+      }
+    }
+  },
+  "rows": [
+    {
+      "phase": "baseline_execution",
+      "step_index": null,
+      "prompt_tokens": 26575,
+      "pressure_risk": "very high",
+      "reuse_score": 0.9398,
+      "cache_value_score": 0.5331,
+      "recommended_tier": "cpu",
+      "movement_priority": "medium",
+      "reason": "worth keeping, but cheaper off-GPU residency is acceptable",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "prompt_tokens": "MEASURED",
+        "pressure_risk": "DERIVED",
+        "reuse_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "recommended_tier": "SPECULATIVE",
+        "movement_priority": "SPECULATIVE",
+        "reason": "SPECULATIVE"
+      }
+    }
+  ],
+  "_provenance": {
+    "summary": {
+      "_container": "SPECULATIVE"
+    },
+    "rows": {
+      "_container": "SPECULATIVE"
+    }
+  },
+  "_provenance_schema": {
+    "labels": [
+      "MEASURED",
+      "DERIVED",
+      "SPECULATIVE"
+    ],
+    "version": 1
+  }
+}

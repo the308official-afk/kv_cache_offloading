@@ -1,0 +1,38 @@
+Rendered QA scorecard
+
+Deck:
+/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/outputs/019e3ba8-46aa-7d12-a66e-809bc00208ca/presentations/deep-agents-observability/output/deep-agents-observability-executive-briefing.pptx
+
+Mode: create
+Primary profile: engineering-platform
+Secondary gate: appendix-heavy
+
+Rubric:
+- story: 5/5
+- specificity: 5/5
+- rhythm: 5/5
+- whitespace: 4/5
+- chart clarity: 4/5
+- typography: 4/5
+- restraint: 5/5
+- precision: 5/5
+- coherence: 5/5
+- reference delta: n/a
+
+Total: 42/45
+
+Profile gates:
+- Engineering-platform gate: pass. The deck uses workflow maps, prompt lineage, runtime alignment, and concrete metrics without vague platform slogans.
+- Appendix-heavy gate: pass. The appendix includes stable table grammar, source inventory, runtime rows, JSON shape excerpts, and definitions.
+
+Rendered validation:
+- Built 24-slide editable PPTX from artifact-tool slide modules.
+- Rendered 24 PNG previews and a contact sheet.
+- Ran layout quality check on 24 layout JSON files.
+- Final layout check: 0 errors, 70 warnings. Remaining warnings are tolerated tight-label/footer/table warnings after visual inspection.
+- Verified PPTX zip integrity with unzip -t: no compressed-data errors.
+
+Known limitations:
+- No corporate template or executive brand kit was supplied.
+- No speaker notes were authored in the PPTX.
+- Some appendix tables are dense by design, but readable in the rendered preview.

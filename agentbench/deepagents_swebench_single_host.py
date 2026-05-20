@@ -264,6 +264,28 @@ DERIVED_FIELDS = {
     "stage_description",
     "stage_component",
     "stage_category",
+    "hint_row_count",
+    "propagated_count",
+    "frontend_observed_count",
+    "worker_observed_count",
+    "behavior_supported_count",
+    "not_proven_count",
+    "metadata_matched_count",
+    "metadata_only_count",
+    "direct_sglang_hint_evidence",
+    "hint_probe_id",
+    "probe_status",
+    "probe_request_wrapper_observed",
+    "probe_frontend_observed",
+    "probe_worker_observed",
+    "frontend_agent_hints_sources",
+    "worker_agent_hints_sources",
+    "request_wrapper_observed",
+    "dynamo_frontend_observed",
+    "sglang_worker_observed",
+    "expected_runtime_effect",
+    "observed_runtime_effect",
+    "claim_level",
 }
 SPECULATIVE_FIELDS = {
     "recency_score",
@@ -283,6 +305,17 @@ SPECULATIVE_FIELDS = {
     "lowest_value_phase",
     "best_gpu_candidate_phase",
 }
+HINT_RUNTIME_EXPECTATIONS = {
+    "expected_output_tokens": "The runtime should use a generation budget consistent with this value.",
+    "reuse_likelihood": "Cache/routing behavior should show reuse when useful context is available.",
+    "priority": "A scheduler should be able to prefer this request when there is contention.",
+    "latency_sensitivity": "Routing or scheduling should prefer lower latency when there is a real choice.",
+    "agent_phase": "The phase label should match the request/run phase for traceability.",
+    "program_id": "The program label should be retained as observability metadata.",
+    "context_type": "The workload label should be retained as observability metadata.",
+    "hint_probe_id": "The probe marker should appear in every layer that receives the hint payload.",
+}
+HINT_METADATA_ONLY = {"agent_phase", "program_id", "context_type"}
 
 TASK_LIFECYCLE_STAGE_METADATA = {
     "run_initialized": {
@@ -489,6 +522,8 @@ def classify_provenance(artifact: str, path: tuple[str, ...], value) -> str:
     if artifact == "runtime_events":
         return "MEASURED"
     if artifact == "runtime_alignment_analysis":
+        return "DERIVED"
+    if artifact == "runtime_hint_alignment_analysis":
         return "DERIVED"
     if artifact == "stage_lifecycle_trace":
         return "MEASURED"
@@ -712,6 +747,112 @@ def _extract_execute_failure(messages: list[dict[str, Any]]) -> str | None:
         if text:
             return _prompt_preview(text, 220)
     return None
+
+
+def _runtime_json_records(log_file: str | None) -> list[dict[str, Any]]:
+    if not log_file:
+        return []
+    path = Path(log_file)
+    if not path.exists():
+        return []
+
+    records: list[dict[str, Any]] = []
+    marker = "[RUNTIME_JSON]"
+    for raw_line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = _strip_ansi(raw_line)
+        if marker not in line:
+            continue
+        payload = line.split(marker, 1)[1].strip()
+        json_start = payload.find("{")
+        if json_start == -1:
+            continue
+        try:
+            parsed = json.loads(payload[json_start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            records.append(parsed)
+    return records
+
+
+def _record_agent_hints(record: dict[str, Any]) -> dict[str, Any] | None:
+    agent_hints = record.get("agent_hints")
+    if isinstance(agent_hints, dict):
+        return agent_hints
+
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("agent_hints"), dict):
+        return nvext["agent_hints"]
+
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        nested_hints = runtime_observability.get("agent_hints")
+        if isinstance(nested_hints, dict):
+            return nested_hints
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("agent_hints"), dict):
+            return nested_nvext["agent_hints"]
+
+    return None
+
+
+def _runtime_hint_log_summary(log_file: str | None) -> dict[str, Any]:
+    records = _runtime_json_records(log_file)
+    observed_values: dict[str, list[Any]] = {}
+    agent_hints_sources: list[str] = []
+    agent_hints_null_count = 0
+    agent_hints_non_null_count = 0
+
+    for record in records:
+        if "agent_hints" in record and record.get("agent_hints") is None:
+            agent_hints_null_count += 1
+        source = record.get("agent_hints_source")
+        if isinstance(source, str) and source and source not in agent_hints_sources:
+            agent_hints_sources.append(source)
+        probe_id = record.get("hint_probe_id")
+        if probe_id:
+            values = observed_values.setdefault("hint_probe_id", [])
+            if not any(_hint_values_equal(probe_id, existing) for existing in values):
+                values.append(probe_id)
+        hints = _record_agent_hints(record)
+        if not hints:
+            continue
+        agent_hints_non_null_count += 1
+        for key, value in hints.items():
+            values = observed_values.setdefault(str(key), [])
+            if not any(_hint_values_equal(value, existing) for existing in values):
+                values.append(value)
+
+    return {
+        "runtime_json_event_count": len(records),
+        "agent_hints_null_count": agent_hints_null_count,
+        "agent_hints_non_null_count": agent_hints_non_null_count,
+        "agent_hints_sources": agent_hints_sources,
+        "observed_values": observed_values,
+    }
+
+
+def _hint_values_equal(left: Any, right: Any) -> bool:
+    if left == right:
+        return True
+    return str(left) == str(right)
+
+
+def _hint_observed(log_summary: dict[str, Any], hint_name: str, hint_value: Any) -> bool:
+    values = (log_summary.get("observed_values") or {}).get(hint_name) or []
+    return any(_hint_values_equal(hint_value, value) for value in values)
+
+
+def _hint_component_state(log_summary: dict[str, Any], hint_name: str, hint_value: Any) -> str:
+    if _hint_observed(log_summary, hint_name, hint_value):
+        return "observed"
+    if log_summary.get("agent_hints_non_null_count"):
+        return "not_observed"
+    if log_summary.get("agent_hints_null_count"):
+        return "logged_null"
+    if log_summary.get("runtime_json_event_count"):
+        return "runtime_json_without_hints"
+    return "not_logged"
 
 
 PROMPT_EVOLUTION_STAGE_COMPONENTS = {
@@ -1068,6 +1209,211 @@ def build_prompt_evolution_report(
             "tools_used": tools_used_text,
             "observed_tool_call_count": observed_tool_call_count,
         },
+    }
+
+
+def truncate_json_value_strings(value: Any, *, char_limit: int) -> Any:
+    if char_limit <= 0:
+        return value
+    if isinstance(value, str):
+        if len(value) <= char_limit:
+            return value
+        return value[: max(0, char_limit - 3)] + "..."
+    if isinstance(value, list):
+        return [truncate_json_value_strings(item, char_limit=char_limit) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): truncate_json_value_strings(item, char_limit=char_limit)
+            for key, item in value.items()
+        }
+    return value
+
+
+def prompt_evolution_value_stage_objects(
+    *,
+    task: dict,
+    workflow: dict,
+    frontend_url: str,
+    model: str,
+    app_variant: str,
+    runtime_log_artifacts: dict[str, Any],
+    workspace_metadata: dict[str, Any],
+    workspace_artifacts: dict[str, Any],
+) -> list[dict[str, Any]]:
+    baseline_result = workflow["result"]
+    response = baseline_result.get("response")
+    messages = _lineage_messages(response)
+    system_prompt = load_agent_instructions(app_variant)
+    tool_parser_usage = _extract_tool_parser_usage(
+        runtime_log_artifacts.get("frontend_log_file")
+        if isinstance(runtime_log_artifacts.get("frontend_log_file"), str)
+        else None
+    )
+    observed_tool_call_names = sorted(
+        {
+            name
+            for message in messages
+            for name in message.get("tool_call_names", [])
+            if isinstance(name, str) and name
+        }
+    )
+    observed_tool_result_names = sorted(
+        {
+            message.get("name")
+            for message in messages
+            if message.get("type") == "tool" and isinstance(message.get("name"), str)
+        }
+    )
+    observed_tool_call_count = sum(int(message.get("tool_call_count", 0)) for message in messages)
+    measurement = baseline_result.get("measurement", {})
+    request_context = measurement.get("request_context", {})
+    baseline_hints = baseline_result.get("baseline_hints", {})
+    prompt = workflow.get("prompt", "")
+    response_text = baseline_result.get("response_text", "")
+    expected_tools = [
+        "write_todos",
+        "ls",
+        "read_file",
+        "write_file",
+        "edit_file",
+        "glob",
+        "grep",
+        "execute",
+        "task",
+    ]
+
+    task_payload = {
+        "repo": task.get("repo"),
+        "base_commit": task.get("base_commit"),
+        "problem_statement": task.get("problem_statement"),
+        "requirements": task.get("requirements"),
+        "selected_test_files_to_run": task.get("selected_test_files_to_run"),
+        "workspace_path": workspace_metadata.get("workspace_path"),
+    }
+    formatted_prompt = {"prompt": prompt}
+    final_model_request = {
+        "model": model,
+        "frontend_url": frontend_url,
+        "messages": [{"role": "user", "content": prompt}],
+        "request_context": request_context,
+        "agent_hints": baseline_hints,
+        "tool_choice": "auto",
+    }
+    system_context = {
+        **final_model_request,
+        "system_prompt": system_prompt,
+    }
+    tool_runtime_context = {
+        **system_context,
+        "expected_builtin_tools": expected_tools,
+        "tool_parser_names_seen": tool_parser_usage["tool_parser_names_seen"],
+        "tool_parser_observed": tool_parser_usage["tool_parser_observed"],
+    }
+    runtime_preprocessing = {
+        **tool_runtime_context,
+        "prompt_tokens": measurement.get("prompt_tokens"),
+        "cached_prompt_tokens": measurement.get("cached_prompt_tokens"),
+        "cached_input_tokens": measurement.get("cached_input_tokens"),
+        "provider_response_id": measurement.get("provider_response_id"),
+    }
+    model_behavior = {
+        "messages": messages,
+        "observed_tool_call_names": observed_tool_call_names,
+        "observed_tool_result_names": observed_tool_result_names,
+        "observed_tool_call_count": observed_tool_call_count,
+        "finish_reason": measurement.get("finish_reason"),
+        "response_text": response_text,
+        "workspace_changed": bool(workspace_artifacts.get("patch_nonempty")),
+    }
+
+    return [
+        {"stage": "task_input", "before": None, "after": task_payload},
+        {"stage": "formatted_prompt", "before": task_payload, "after": formatted_prompt},
+        {"stage": "final_model_request", "before": formatted_prompt, "after": final_model_request},
+        {"stage": "system_context", "before": final_model_request, "after": system_context},
+        {"stage": "tool_runtime_context", "before": system_context, "after": tool_runtime_context},
+        {"stage": "runtime_preprocessing", "before": tool_runtime_context, "after": runtime_preprocessing},
+        {"stage": "model_behavior", "before": runtime_preprocessing, "after": model_behavior},
+    ]
+
+
+def write_prompt_evolution_stage_value_reports(
+    *,
+    run_dir: Path,
+    prompt_evolution_report: dict[str, Any],
+    task: dict,
+    workflow: dict,
+    frontend_url: str,
+    model: str,
+    app_variant: str,
+    runtime_log_artifacts: dict[str, Any],
+    workspace_metadata: dict[str, Any],
+    workspace_artifacts: dict[str, Any],
+    value_char_limit: int,
+) -> dict[str, Any]:
+    value_dir = run_dir / "prompt_evolution_values"
+    value_dir.mkdir(parents=True, exist_ok=True)
+    report_stages = {
+        str(stage.get("stage")): stage
+        for stage in prompt_evolution_report.get("stages", [])
+        if stage.get("stage")
+    }
+    value_stages = prompt_evolution_value_stage_objects(
+        task=task,
+        workflow=workflow,
+        frontend_url=frontend_url,
+        model=model,
+        app_variant=app_variant,
+        runtime_log_artifacts=runtime_log_artifacts,
+        workspace_metadata=workspace_metadata,
+        workspace_artifacts=workspace_artifacts,
+    )
+    stage_files: list[dict[str, Any]] = []
+    for index, value_stage in enumerate(value_stages, start=1):
+        stage_name = str(value_stage["stage"])
+        stage = report_stages.get(stage_name, {})
+        before = value_stage.get("before")
+        after = value_stage.get("after")
+        body = {
+            "stage": stage_name,
+            "diff_summary": {
+                "change_summary": stage.get("change_summary"),
+                "delta_summary": stage.get("delta_summary"),
+                "added_keys": stage.get("added_keys"),
+                "removed_keys": stage.get("removed_keys"),
+                "changed_keys": stage.get("changed_keys"),
+            },
+            "before": truncate_json_value_strings(before, char_limit=value_char_limit),
+            "after": truncate_json_value_strings(after, char_limit=value_char_limit),
+        }
+        filename = f"{index:02d}_{stage_name}.json"
+        path = value_dir / filename
+        path.write_text(json.dumps(body, indent=2, ensure_ascii=False, default=stringify_unknown), encoding="utf-8")
+        stage_files.append(
+            {
+                "stage": stage_name,
+                "filename": filename,
+                "path": str(path),
+            }
+        )
+
+    index_body = {
+        "run_id": run_dir.name,
+        "char_limit": value_char_limit,
+        "stages": [
+            {
+                "stage": stage_file["stage"],
+                "file": stage_file["filename"],
+            }
+            for stage_file in stage_files
+        ],
+    }
+    index_path = value_dir / "index.json"
+    index_path.write_text(json.dumps(index_body, indent=2, ensure_ascii=False), encoding="utf-8")
+    return {
+        "directory": str(value_dir),
+        "index_file": str(index_path),
+        "stage_files": stage_files,
     }
 
 
@@ -1698,6 +2044,34 @@ def collect_runtime_logs(run_dir: Path, *, since_iso: str) -> dict[str, object]:
         )
         results[metadata_key] = str(output_path)
         results[f"{container_name}_exit_code"] = completed.returncode
+
+    boundary_log = os.environ.get("AGENTBENCH_FRONTEND_BOUNDARY_LOG")
+    if boundary_log:
+        source_path = Path(boundary_log).expanduser()
+        copied_path = run_dir / "frontend_boundary_proxy.log"
+        if source_path.exists():
+            proxy_text = source_path.read_text(encoding="utf-8", errors="ignore")
+            copied_path.write_text(proxy_text, encoding="utf-8")
+            frontend_log_file = results.get("frontend_log_file")
+            if isinstance(frontend_log_file, str):
+                frontend_path = Path(frontend_log_file)
+                existing = (
+                    frontend_path.read_text(encoding="utf-8", errors="ignore")
+                    if frontend_path.exists()
+                    else ""
+                )
+                frontend_path.write_text(
+                    existing
+                    + ("\n" if existing and not existing.endswith("\n") else "")
+                    + "# frontend boundary proxy log\n"
+                    + proxy_text,
+                    encoding="utf-8",
+                )
+            results["frontend_boundary_log_file"] = str(copied_path)
+            results["frontend_boundary_log_found"] = True
+        else:
+            results["frontend_boundary_log_file"] = str(source_path)
+            results["frontend_boundary_log_found"] = False
     return results
 
 
@@ -2106,6 +2480,32 @@ def build_runtime_alignment_table(analysis: dict) -> list[dict]:
 
 
 def build_runtime_alignment_summary_table(analysis: dict) -> list[dict]:
+    return [dict(analysis.get("summary", {}))]
+
+
+def build_runtime_hint_alignment_table(analysis: dict) -> list[dict]:
+    return [
+        {
+            "phase": row.get("phase"),
+            "hint_name": row.get("hint_name"),
+            "hint_value_sent": row.get("hint_value_sent"),
+            "hint_source": row.get("hint_source"),
+            "request_wrapper_observed": row.get("request_wrapper_observed"),
+            "dynamo_frontend_observed": row.get("dynamo_frontend_observed"),
+            "dynamo_frontend_state": row.get("dynamo_frontend_state"),
+            "sglang_worker_observed": row.get("sglang_worker_observed"),
+            "sglang_worker_state": row.get("sglang_worker_state"),
+            "expected_runtime_effect": row.get("expected_runtime_effect"),
+            "observed_runtime_effect": row.get("observed_runtime_effect"),
+            "claim_level": row.get("claim_level"),
+            "status": row.get("status"),
+            "evidence": row.get("evidence"),
+        }
+        for row in analysis.get("rows", [])
+    ]
+
+
+def build_runtime_hint_alignment_summary_table(analysis: dict) -> list[dict]:
     return [dict(analysis.get("summary", {}))]
 
 
@@ -2890,6 +3290,268 @@ def build_runtime_alignment_analysis(
     }
 
 
+def _runtime_hint_effect(
+    hint_name: str,
+    hint_value: Any,
+    *,
+    event: dict[str, Any],
+    measurement: dict[str, Any],
+) -> tuple[str, str, str]:
+    cache = event.get("cache") or {}
+    latency = event.get("latency") or {}
+    scheduler = event.get("scheduler") or {}
+    phase = event.get("phase")
+
+    if hint_name == "hint_probe_id":
+        return (
+            "The probe marker was available for layer-by-layer propagation checks.",
+            "probe_marker",
+            f"hint_probe_id={hint_value}.",
+        )
+
+    if hint_name == "expected_output_tokens":
+        completion_tokens = measurement.get("completion_tokens") or measurement.get("output_tokens")
+        finish_reason = measurement.get("finish_reason")
+        if isinstance(hint_value, int) and completion_tokens == hint_value and finish_reason == "length":
+            return (
+                "Completion stopped at the hinted token budget.",
+                "behavior_supported",
+                (
+                    f"completion_tokens={completion_tokens}; finish_reason={finish_reason}. "
+                    "This supports a token-budget effect, but does not by itself prove the worker used nvext.agent_hints directly."
+                ),
+            )
+        if completion_tokens is not None:
+            return (
+                "Completion token count was recorded, but it did not prove the hint controlled generation.",
+                "not_proven",
+                f"completion_tokens={completion_tokens}; finish_reason={finish_reason or '-'}.",
+            )
+        return (
+            "No completion token evidence was available for this hint.",
+            "not_proven",
+            "completion_tokens=-; finish_reason=-.",
+        )
+
+    if hint_name == "reuse_likelihood":
+        cached_token_count = cache.get("cached_token_count")
+        recomputed_prefix_tokens = cache.get("recomputed_prefix_tokens")
+        if isinstance(cached_token_count, int) and cached_token_count > 0:
+            return (
+                "Cache reuse was observed for the request.",
+                "behavior_supported",
+                (
+                    f"cached_token_count={cached_token_count}; "
+                    f"recomputed_prefix_tokens={recomputed_prefix_tokens if recomputed_prefix_tokens is not None else '-'}. "
+                    "This is consistent with the reuse hint, but not causal proof by itself."
+                ),
+            )
+        return (
+            "No cache reuse evidence was observed for this request.",
+            "not_proven",
+            f"cached_token_count={cached_token_count if cached_token_count is not None else '-'}.",
+        )
+
+    if hint_name == "priority":
+        if scheduler:
+            return (
+                "The scheduler selected a worker, but no priority-specific decision was logged.",
+                "not_proven",
+                (
+                    f"worker_id={event.get('worker_id') or '-'}; "
+                    f"dp_rank={scheduler.get('dp_rank') if scheduler.get('dp_rank') is not None else '-'}; "
+                    f"logit={scheduler.get('logit') if scheduler.get('logit') is not None else '-'}. "
+                    "Priority needs queue/competition evidence to prove it was respected."
+                ),
+            )
+        return (
+            "No scheduler evidence was available to evaluate priority.",
+            "not_proven",
+            "scheduler=-.",
+        )
+
+    if hint_name == "latency_sensitivity":
+        ttft_ms = latency.get("ttft_ms")
+        end_to_end_ms = latency.get("end_to_end_ms")
+        if ttft_ms is not None or end_to_end_ms is not None:
+            return (
+                "Latency was measured, but no latency policy decision was logged.",
+                "not_proven",
+                (
+                    f"ttft_ms={ttft_ms if ttft_ms is not None else '-'}; "
+                    f"end_to_end_ms={end_to_end_ms if end_to_end_ms is not None else '-'}. "
+                    "Latency sensitivity needs routing or queue-policy evidence to prove it was respected."
+                ),
+            )
+        return (
+            "No latency evidence was available for this hint.",
+            "not_proven",
+            "ttft_ms=-; end_to_end_ms=-.",
+        )
+
+    if hint_name == "agent_phase":
+        if phase == hint_value:
+            return (
+                "The phase label matched the runtime event phase.",
+                "metadata_matched",
+                f"event_phase={phase}; hint_agent_phase={hint_value}.",
+            )
+        return (
+            "The phase label did not match the runtime event phase.",
+            "not_proven",
+            f"event_phase={phase or '-'}; hint_agent_phase={hint_value}.",
+        )
+
+    if hint_name in HINT_METADATA_ONLY:
+        return (
+            "This hint is treated as trace metadata, not a worker behavior instruction.",
+            "metadata_only",
+            "metadata-only hint; no runtime effect expected unless a component explicitly consumes it.",
+        )
+
+    return (
+        "No runtime-effect rule has been defined for this hint yet.",
+        "not_proven",
+        "effect_rule=-.",
+    )
+
+
+def build_runtime_hint_alignment_analysis(
+    runtime_events: list[dict],
+    baseline_result: dict,
+    runtime_log_artifacts: dict[str, Any],
+) -> dict:
+    frontend_log_summary = _runtime_hint_log_summary(
+        runtime_log_artifacts.get("frontend_log_file")
+        if isinstance(runtime_log_artifacts.get("frontend_log_file"), str)
+        else None
+    )
+    worker_log_summary = _runtime_hint_log_summary(
+        runtime_log_artifacts.get("worker_log_file")
+        if isinstance(runtime_log_artifacts.get("worker_log_file"), str)
+        else None
+    )
+    measurement = baseline_result.get("measurement", {})
+
+    rows: list[dict[str, Any]] = []
+    for event in runtime_events:
+        request_hints = event.get("request_hints")
+        if not isinstance(request_hints, dict) or not request_hints:
+            request_hints = baseline_result.get("baseline_hints")
+        if not isinstance(request_hints, dict) or not request_hints:
+            continue
+
+        for hint_name in sorted(key for key in request_hints if not str(key).startswith("_")):
+            hint_value = request_hints[hint_name]
+            request_wrapper_observed = (
+                isinstance(event.get("request_hints"), dict)
+                and hint_name in event.get("request_hints", {})
+            )
+            frontend_observed = _hint_observed(frontend_log_summary, hint_name, hint_value)
+            worker_observed = _hint_observed(worker_log_summary, hint_name, hint_value)
+            frontend_state = _hint_component_state(frontend_log_summary, hint_name, hint_value)
+            worker_state = _hint_component_state(worker_log_summary, hint_name, hint_value)
+            effect_text, effect_status, effect_evidence = _runtime_hint_effect(
+                hint_name,
+                hint_value,
+                event=event,
+                measurement=measurement,
+            )
+
+            if hint_name == "hint_probe_id" and request_wrapper_observed:
+                if worker_observed:
+                    claim_level = "probe_observed_by_worker"
+                    status = "observed_by_worker"
+                elif frontend_observed:
+                    claim_level = "probe_observed_by_frontend"
+                    status = "observed_by_frontend"
+                else:
+                    claim_level = "probe_present_request_only"
+                    status = "request_only"
+            elif effect_status in {"behavior_supported", "metadata_matched", "metadata_only"}:
+                if worker_observed:
+                    claim_level = f"observed_by_worker_plus_{effect_status}"
+                elif frontend_observed:
+                    claim_level = f"observed_by_frontend_plus_{effect_status}"
+                else:
+                    claim_level = effect_status
+                status = effect_status
+            elif worker_observed:
+                claim_level = "observed_by_worker"
+                status = "observed_by_worker"
+            elif frontend_observed:
+                claim_level = "observed_by_frontend"
+                status = "observed_by_frontend"
+            elif request_wrapper_observed:
+                claim_level = "propagated_to_request"
+                status = "not_proven"
+            else:
+                claim_level = effect_status
+                status = effect_status
+
+            rows.append(
+                {
+                    "phase": event.get("phase"),
+                    "hint_name": hint_name,
+                    "hint_value_sent": hint_value,
+                    "hint_source": "AgentBench Runner -> Deep Agents Request Wrapper",
+                    "request_wrapper_observed": request_wrapper_observed,
+                    "dynamo_frontend_observed": frontend_observed,
+                    "dynamo_frontend_state": frontend_state,
+                    "sglang_worker_observed": worker_observed,
+                    "sglang_worker_state": worker_state,
+                    "expected_runtime_effect": HINT_RUNTIME_EXPECTATIONS.get(
+                        hint_name,
+                        "No expected runtime effect has been defined for this hint.",
+                    ),
+                    "observed_runtime_effect": effect_text,
+                    "claim_level": claim_level,
+                    "status": status,
+                    "evidence": (
+                        f"request_wrapper_observed={request_wrapper_observed}; "
+                        f"dynamo_frontend_state={frontend_state}; "
+                        f"sglang_worker_state={worker_state}; {effect_evidence}"
+                    ),
+                }
+            )
+
+    probe_row = next((row for row in rows if row.get("hint_name") == "hint_probe_id"), None)
+    summary = {
+        "hint_row_count": len(rows),
+        "propagated_count": sum(1 for row in rows if row.get("request_wrapper_observed")),
+        "frontend_observed_count": sum(1 for row in rows if row.get("dynamo_frontend_observed")),
+        "worker_observed_count": sum(1 for row in rows if row.get("sglang_worker_observed")),
+        "behavior_supported_count": sum(
+            1 for row in rows if row.get("status") == "behavior_supported"
+        ),
+        "metadata_matched_count": sum(1 for row in rows if row.get("status") == "metadata_matched"),
+        "metadata_only_count": sum(1 for row in rows if row.get("status") == "metadata_only"),
+        "not_proven_count": sum(1 for row in rows if row.get("status") == "not_proven"),
+        "direct_sglang_hint_evidence": any(row.get("sglang_worker_observed") for row in rows),
+        "hint_probe_id": probe_row.get("hint_value_sent") if probe_row else None,
+        "probe_status": probe_row.get("status") if probe_row else "missing",
+        "probe_request_wrapper_observed": bool(probe_row and probe_row.get("request_wrapper_observed")),
+        "probe_frontend_observed": bool(probe_row and probe_row.get("dynamo_frontend_observed")),
+        "probe_worker_observed": bool(probe_row and probe_row.get("sglang_worker_observed")),
+        "frontend_runtime_json_event_count": frontend_log_summary.get("runtime_json_event_count"),
+        "frontend_agent_hints_non_null_count": frontend_log_summary.get("agent_hints_non_null_count"),
+        "frontend_agent_hints_sources": frontend_log_summary.get("agent_hints_sources"),
+        "worker_runtime_json_event_count": worker_log_summary.get("runtime_json_event_count"),
+        "worker_agent_hints_null_count": worker_log_summary.get("agent_hints_null_count"),
+        "worker_agent_hints_non_null_count": worker_log_summary.get("agent_hints_non_null_count"),
+        "worker_agent_hints_sources": worker_log_summary.get("agent_hints_sources"),
+    }
+    return {
+        "summary": summary,
+        "notes": [
+            "This report separates hint propagation from proof that the runtime respected a hint.",
+            "A hint can be behavior-supported even when direct SGLang worker hint evidence is missing, but that is not causal proof.",
+            "Hints such as agent_phase, program_id, and context_type are treated as trace metadata unless a runtime component explicitly consumes them.",
+        ],
+        "rows": rows,
+    }
+
+
 def render_runtime_alignment_markdown(analysis: dict) -> str:
     summary = analysis["summary"]
     rows = analysis["rows"]
@@ -2939,6 +3601,76 @@ def render_runtime_alignment_markdown(analysis: dict) -> str:
                 ttft=markdown_value(row.get("ttft_ms")),
                 decode=markdown_value(row.get("decode_ms")),
                 e2e=markdown_value(row.get("end_to_end_ms")),
+            )
+        )
+    return "\n".join(lines) + "\n"
+
+
+def render_runtime_hint_alignment_markdown(analysis: dict) -> str:
+    summary = analysis["summary"]
+    rows = analysis["rows"]
+    lines = [
+        "# Runtime Hint Alignment Analysis",
+        "",
+        "## Summary",
+        *markdown_field_table(
+            summary,
+            "runtime_hint_alignment_analysis",
+            [
+                ("hint_row_count", "Hint rows"),
+                ("propagated_count", "Hints present in request wrapper events"),
+                ("frontend_observed_count", "Hints directly observed in Dynamo frontend logs"),
+                ("worker_observed_count", "Hints directly observed in SGLang worker logs"),
+                ("behavior_supported_count", "Hints with behavior-supported evidence"),
+                ("metadata_matched_count", "Metadata hints that matched trace context"),
+                ("metadata_only_count", "Metadata-only hints"),
+                ("not_proven_count", "Hints not proven to affect runtime behavior"),
+                ("direct_sglang_hint_evidence", "Direct SGLang hint evidence"),
+                ("hint_probe_id", "Hint probe id"),
+                ("probe_status", "Probe status"),
+                ("probe_request_wrapper_observed", "Probe seen in request wrapper"),
+                ("probe_frontend_observed", "Probe seen in Dynamo frontend logs"),
+                ("probe_worker_observed", "Probe seen in SGLang worker logs"),
+                ("frontend_agent_hints_sources", "Dynamo frontend hint sources"),
+                ("worker_agent_hints_sources", "SGLang worker hint sources"),
+                ("worker_agent_hints_null_count", "Worker log events with null agent_hints"),
+                ("worker_agent_hints_non_null_count", "Worker log events with non-null agent_hints"),
+            ],
+            include_provenance=False,
+        ),
+        "",
+        "## Notes",
+        "- This report checks whether AgentBench hints were sent, observed by runtime logs, and supported by behavior evidence.",
+        "- Propagation is not the same as proof that SGLang used a hint.",
+        "- Worker-side proof requires SGLang logs to show non-null agent_hints or explicit runtime fields derived from the hints.",
+        "",
+        "## Probe Layer Check",
+        "",
+        "| Layer | Did the probe appear? |",
+        "| --- | --- |",
+        f"| AgentBench / Request Wrapper | {markdown_value(summary.get('probe_request_wrapper_observed'))} |",
+        f"| Dynamo Frontend Logs | {markdown_value(summary.get('probe_frontend_observed'))} |",
+        f"| SGLang Worker Logs | {markdown_value(summary.get('probe_worker_observed'))} |",
+        "",
+        "## Hint Table",
+        "",
+        "| Phase | Hint | Value sent | Request wrapper | Dynamo frontend | SGLang worker | Expected effect | Observed effect | Claim level | Status | Evidence |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {phase} | {hint} | {value} | {wrapper} | {frontend} | {worker} | {expected} | {observed} | {claim} | {status} | {evidence} |".format(
+                phase=markdown_value(row.get("phase")),
+                hint=markdown_value(row.get("hint_name")),
+                value=markdown_value(row.get("hint_value_sent")),
+                wrapper=markdown_value(row.get("request_wrapper_observed")),
+                frontend=markdown_value(row.get("dynamo_frontend_state")),
+                worker=markdown_value(row.get("sglang_worker_state")),
+                expected=markdown_value(row.get("expected_runtime_effect")),
+                observed=markdown_value(row.get("observed_runtime_effect")),
+                claim=markdown_value(row.get("claim_level")),
+                status=markdown_value(row.get("status")),
+                evidence=markdown_value(row.get("evidence")),
             )
         )
     return "\n".join(lines) + "\n"
@@ -3020,6 +3752,60 @@ def _prompt_preview(text: str | None, limit: int = 240) -> str:
     if len(normalized) <= limit:
         return normalized
     return normalized[: limit - 3] + "..."
+
+
+RUN_SLUG_STOPWORDS = {
+    "a",
+    "an",
+    "and",
+    "are",
+    "as",
+    "be",
+    "for",
+    "from",
+    "in",
+    "is",
+    "it",
+    "of",
+    "on",
+    "or",
+    "that",
+    "the",
+    "this",
+    "to",
+    "with",
+}
+
+
+def slugify_piece(value: Any, *, max_words: int | None = None, max_chars: int = 48) -> str:
+    words = [
+        word.lower()
+        for word in re.findall(r"[A-Za-z0-9]+", str(value or ""))
+        if word and word.lower() not in RUN_SLUG_STOPWORDS
+    ]
+    if max_words is not None:
+        words = words[:max_words]
+    slug = "-".join(words).strip("-")
+    if not slug:
+        return ""
+    return slug[:max_chars].strip("-")
+
+
+def result_directory_name(task: dict[str, Any], *, run_id: str, index: int) -> str:
+    repo_name = str(task.get("repo") or "task").split("/")[-1]
+    repo_slug = slugify_piece(repo_name, max_words=3, max_chars=28) or "task"
+    return f"agentbench-{repo_slug}_{run_id}"
+
+
+def unique_result_directory(base_name: str) -> Path:
+    candidate = RESULTS_DIR / base_name
+    if not candidate.exists():
+        return candidate
+    for suffix in range(2, 1000):
+        candidate = RESULTS_DIR / f"{base_name}_{suffix:02d}"
+        if not candidate.exists():
+            return candidate
+    raise SystemExit(f"Could not find an unused result directory name for: {base_name}")
 
 
 def prepare_workspace(
@@ -3190,6 +3976,15 @@ def main() -> None:
         default=4,
         help="Maximum number of explicit decomposition steps to dispatch.",
     )
+    parser.add_argument(
+        "--prompt-evolution-value-char-limit",
+        type=int,
+        default=1000,
+        help=(
+            "Character cap for string values inside per-stage prompt evolution before/after payloads. "
+            "Long string fields are truncated with '...'."
+        ),
+    )
     args = parser.parse_args()
 
     results_tz = ZoneInfo(args.results_timezone)
@@ -3210,9 +4005,10 @@ def main() -> None:
         index=args.index,
         instance_id=args.instance_id,
     )
-    safe_instance = str(task.get("instance_id", f"task_{args.index}")).replace("/", "__")
-    parent_run_id = f"{safe_instance}_{run_id}"
-    run_dir = RESULTS_DIR / parent_run_id
+    legacy_instance_slug = str(task.get("instance_id", f"task_{args.index}")).replace("/", "__")
+    parent_run_id_base = result_directory_name(task, run_id=run_id, index=args.index)
+    run_dir = unique_result_directory(parent_run_id_base)
+    parent_run_id = run_dir.name
     run_dir.mkdir(parents=True, exist_ok=True)
     others_dir = run_dir / "others"
     others_dir.mkdir(parents=True, exist_ok=True)
@@ -3342,6 +4138,8 @@ def main() -> None:
         )
 
     base_hints = json.loads(args.hint_json)
+    if "hint_probe_id" not in base_hints:
+        base_hints["hint_probe_id"] = f"{parent_run_id}::hint_probe"
     log_lifecycle_event(
         stage="workflow_invocation_started",
         payload={
@@ -3480,6 +4278,31 @@ def main() -> None:
         encoding="utf-8",
     )
     log_artifact_written_event(artifact_name="runtime_alignment_analysis_markdown", artifact_path=runtime_alignment_analysis_markdown_file)
+    runtime_hint_alignment_analysis = build_runtime_hint_alignment_analysis(
+        runtime_events,
+        workflow["result"],
+        runtime_log_artifacts,
+    )
+    runtime_hint_alignment_analysis_file = write_json_artifact(
+        run_dir,
+        "runtime_hint_alignment_analysis.json",
+        runtime_hint_alignment_analysis,
+        "runtime_hint_alignment_analysis",
+        annotate=False,
+    )
+    log_artifact_written_event(
+        artifact_name="runtime_hint_alignment_analysis",
+        artifact_path=runtime_hint_alignment_analysis_file,
+    )
+    runtime_hint_alignment_analysis_markdown_file = run_dir / "runtime_hint_alignment_analysis.md"
+    runtime_hint_alignment_analysis_markdown_file.write_text(
+        render_runtime_hint_alignment_markdown(runtime_hint_alignment_analysis),
+        encoding="utf-8",
+    )
+    log_artifact_written_event(
+        artifact_name="runtime_hint_alignment_analysis_markdown",
+        artifact_path=runtime_hint_alignment_analysis_markdown_file,
+    )
 
     result = workflow["result"]
     final_summary_file = run_dir / "final_summary.txt"
@@ -3531,6 +4354,28 @@ def main() -> None:
         artifact_name="prompt_evolution_report_table",
         artifact_path=prompt_evolution_report_table_file,
     )
+    prompt_evolution_value_reports = write_prompt_evolution_stage_value_reports(
+        run_dir=run_dir,
+        prompt_evolution_report=prompt_evolution_report,
+        task=task,
+        workflow=workflow,
+        frontend_url=args.frontend_url,
+        model=args.model,
+        app_variant=args.app_variant,
+        runtime_log_artifacts=runtime_log_artifacts,
+        workspace_metadata=workspace_metadata,
+        workspace_artifacts=workspace_artifacts,
+        value_char_limit=args.prompt_evolution_value_char_limit,
+    )
+    log_artifact_written_event(
+        artifact_name="prompt_evolution_values_index",
+        artifact_path=Path(prompt_evolution_value_reports["index_file"]),
+    )
+    for stage_file in prompt_evolution_value_reports["stage_files"]:
+        log_artifact_written_event(
+            artifact_name=f"prompt_evolution_values_{stage_file['stage']}",
+            artifact_path=Path(stage_file["path"]),
+        )
     run_summary_table = build_run_summary_table(
         parent_run_id=parent_run_id,
         task=task,
@@ -3598,6 +4443,24 @@ def main() -> None:
         build_runtime_alignment_summary_table(runtime_alignment_analysis),
     )
     log_artifact_written_event(artifact_name="runtime_alignment_summary_table", artifact_path=runtime_alignment_summary_table_file)
+    runtime_hint_alignment_table_file = write_csv_table(
+        run_dir,
+        "runtime_hint_alignment_table.csv",
+        build_runtime_hint_alignment_table(runtime_hint_alignment_analysis),
+    )
+    log_artifact_written_event(
+        artifact_name="runtime_hint_alignment_table",
+        artifact_path=runtime_hint_alignment_table_file,
+    )
+    runtime_hint_alignment_summary_table_file = write_csv_table(
+        others_dir,
+        "runtime_hint_alignment_summary_table.csv",
+        build_runtime_hint_alignment_summary_table(runtime_hint_alignment_analysis),
+    )
+    log_artifact_written_event(
+        artifact_name="runtime_hint_alignment_summary_table",
+        artifact_path=runtime_hint_alignment_summary_table_file,
+    )
     run_summary_table_file = write_csv_table(others_dir, "run_summary_table.csv", run_summary_table)
     log_artifact_written_event(artifact_name="run_summary_table", artifact_path=run_summary_table_file)
     raw_lifecycle_events = load_logged_events(lifecycle_log_path)
@@ -3646,6 +4509,8 @@ def main() -> None:
             "runtime_events": build_runtime_events_table(runtime_events),
             "runtime_alignment": build_runtime_alignment_table(runtime_alignment_analysis),
             "runtime_summary": build_runtime_alignment_summary_table(runtime_alignment_analysis),
+            "runtime_hint_alignment": build_runtime_hint_alignment_table(runtime_hint_alignment_analysis),
+            "runtime_hint_summary": build_runtime_hint_alignment_summary_table(runtime_hint_alignment_analysis),
             "stage_lifecycle": stage_lifecycle_table,
             "prompt_evolution_report": build_prompt_evolution_csv_rows(prompt_evolution_report),
             "run_summary": run_summary_table,
@@ -3655,6 +4520,7 @@ def main() -> None:
     payload = {
         "run_started_at": run_started_at.isoformat(),
         "parent_run_id": parent_run_id,
+        "legacy_instance_slug": legacy_instance_slug,
         "frontend_url": args.frontend_url,
         "model": args.model,
         "hint_json": workflow["resolved_hints"],
@@ -3669,6 +4535,10 @@ def main() -> None:
         "prompt_evolution_report_file": str(prompt_evolution_report_file),
         "prompt_evolution_report_markdown_file": str(prompt_evolution_report_markdown_file),
         "prompt_evolution_report_table_file": str(prompt_evolution_report_table_file),
+        "prompt_evolution_value_reports_dir": prompt_evolution_value_reports["directory"],
+        "prompt_evolution_value_reports_index_file": prompt_evolution_value_reports["index_file"],
+        "prompt_evolution_value_report_files": prompt_evolution_value_reports["stage_files"],
+        "prompt_evolution_value_char_limit": args.prompt_evolution_value_char_limit,
         "prompt_evolution_report": prompt_evolution_report,
         "prompt": prompt,
         "decomposition_plan": decomposition_plan,
@@ -3693,6 +4563,11 @@ def main() -> None:
         "runtime_alignment_table_file": str(runtime_alignment_table_file),
         "runtime_alignment_summary_table_file": str(runtime_alignment_summary_table_file),
         "runtime_alignment_analysis": runtime_alignment_analysis,
+        "runtime_hint_alignment_analysis_file": str(runtime_hint_alignment_analysis_file),
+        "runtime_hint_alignment_analysis_markdown_file": str(runtime_hint_alignment_analysis_markdown_file),
+        "runtime_hint_alignment_table_file": str(runtime_hint_alignment_table_file),
+        "runtime_hint_alignment_summary_table_file": str(runtime_hint_alignment_summary_table_file),
+        "runtime_hint_alignment_analysis": runtime_hint_alignment_analysis,
         "stage_lifecycle_trace_file": str(stage_lifecycle_trace_file),
         "stage_lifecycle_markdown_file": str(stage_lifecycle_markdown_file),
         "stage_lifecycle_table_file": str(stage_lifecycle_table_file),
@@ -3715,7 +4590,7 @@ def main() -> None:
     save_result(others_dir, annotate_with_provenance(payload, "result"))
     set_checkpoint_log_file(None)
 
-    print(f"AgentBench run complete: {safe_instance}")
+    print(f"AgentBench run complete: {parent_run_id}")
     print(f"Run directory: {run_dir}")
     print(f"Result file: {others_dir / 'result.json'}")
 

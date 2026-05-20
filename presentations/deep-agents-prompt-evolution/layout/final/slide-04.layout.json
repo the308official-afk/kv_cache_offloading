@@ -1,0 +1,2550 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/sszw9k",
+    "id": "sszw9k",
+    "slide": 4,
+    "layoutId": "e82a2d59-7bae-4a9f-831b-8f6eb103ec43",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display",
+      "Aptos Mono"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "e82a2d59-7bae-4a9f-831b-8f6eb103ec43",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lwval87e",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e9cvixcz",
+      "id": "2",
+      "bbox": [
+        64,
+        52,
+        8,
+        24
+      ],
+      "geometry": "rect",
+      "fillColor": "#6D28D9",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3q5o7qpg",
+      "id": "3",
+      "bbox": [
+        84,
+        52,
+        520,
+        24
+      ],
+      "geometry": "rect",
+      "text": "EXPERIMENT TASK",
+      "textPreview": "EXPERIMENT TASK",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "EXPERIMENT TASK"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "EXPERIMENT TASK",
+          "runs": [
+            {
+              "index": 1,
+              "text": "EXPERIMENT TASK",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3m94fu1",
+      "id": "4",
+      "bbox": [
+        64,
+        86,
+        1060,
+        104
+      ],
+      "geometry": "rect",
+      "text": "The task asked the agent to fix a real NodeBB email validation bug.",
+      "textPreview": "The task asked the agent to fix a real NodeBB email validation bug.",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "fontSize": 38,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The task asked the agent to fix a real NodeBB email"
+          },
+          {
+            "index": 2,
+            "text": "validation bug."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The task asked the agent to fix a real NodeBB email validation bug.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The task asked the agent to fix a real NodeBB email validation bug.",
+              "fontSize": 38,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/loj2t83i",
+      "id": "5",
+      "bbox": [
+        64,
+        202,
+        740,
+        34
+      ],
+      "geometry": "rect",
+      "text": "This is the concrete work item that entered the pipeline before it became a prompt, then a model request, then runtime behavior.",
+      "textPreview": "This is the concrete work item that entered the pipeline before it became a prompt, then a model request, then runtime behavior.",
+      "resolvedFontSize": 16.8,
+      "resolvedTextStyle": {
+        "fontSize": 16.8,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "This is the concrete work item that entered the pipeline before it became a prompt, then a model"
+          },
+          {
+            "index": 2,
+            "text": "request, then runtime behavior."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "This is the concrete work item that entered the pipeline before it became a prompt, then a model request, then runtime behavior.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "This is the concrete work item that entered the pipeline before it became a prompt, then a model request, then runtime behavior.",
+              "fontSize": 16.8,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex0nuxc3",
+      "id": "6",
+      "bbox": [
+        874,
+        186,
+        342,
+        50
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#1D4ED8",
+      "lineWidth": 1.8
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3itgfmlk",
+      "id": "7",
+      "bbox": [
+        874,
+        186,
+        8,
+        50
+      ],
+      "geometry": "rect",
+      "fillColor": "#1D4ED8",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/szqtcj6t",
+      "id": "8",
+      "bbox": [
+        898,
+        198,
+        132,
+        12
+      ],
+      "geometry": "rect",
+      "text": "LLM model used",
+      "textPreview": "LLM model used",
+      "resolvedFontSize": 10.31,
+      "resolvedTextStyle": {
+        "fontSize": 10.31,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "LLM model used"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "LLM model used",
+          "runs": [
+            {
+              "index": 1,
+              "text": "LLM model used",
+              "fontSize": 10.31,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lkjm1cfa",
+      "id": "9",
+      "bbox": [
+        898,
+        210,
+        286,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Qwen/Qwen2.5-7B-Instruct",
+      "textPreview": "Qwen/Qwen2.5-7B-Instruct",
+      "resolvedFontSize": 13.51,
+      "resolvedTextStyle": {
+        "fontSize": 13.51,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Qwen/Qwen2.5-7B-Instruct"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Qwen/Qwen2.5-7B-Instruct",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Qwen/Qwen2.5-7B-Instruct",
+              "fontSize": 13.51,
+              "typeface": "Aptos Mono",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hcrmhk3q",
+      "id": "10",
+      "bbox": [
+        64,
+        242,
+        438,
+        332
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#2563EB",
+      "lineWidth": 2
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/orytsvu9",
+      "id": "11",
+      "bbox": [
+        64,
+        242,
+        438,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#2563EB",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/z61032ls",
+      "id": "12",
+      "bbox": [
+        92,
+        274,
+        330,
+        24
+      ],
+      "geometry": "rect",
+      "text": "What entered the system",
+      "textPreview": "What entered the system",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "What entered the system"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "What entered the system",
+          "runs": [
+            {
+              "index": 1,
+              "text": "What entered the system",
+              "fontSize": 20,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/al87ed8b",
+      "id": "13",
+      "bbox": [
+        92,
+        318,
+        110,
+        13
+      ],
+      "geometry": "rect",
+      "text": "Repository",
+      "textPreview": "Repository",
+      "resolvedFontSize": 10.6,
+      "resolvedTextStyle": {
+        "fontSize": 10.6,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Repository"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Repository",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Repository",
+              "fontSize": 10.6,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/h0fepkzu",
+      "id": "14",
+      "bbox": [
+        210,
+        316,
+        250,
+        16
+      ],
+      "geometry": "rect",
+      "text": "NodeBB/NodeBB",
+      "textPreview": "NodeBB/NodeBB",
+      "resolvedFontSize": 13.6,
+      "resolvedTextStyle": {
+        "fontSize": 13.6,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "NodeBB/NodeBB"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "NodeBB/NodeBB",
+          "runs": [
+            {
+              "index": 1,
+              "text": "NodeBB/NodeBB",
+              "fontSize": 13.6,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/sfil0rqd",
+      "id": "15",
+      "bbox": [
+        92,
+        354,
+        110,
+        13
+      ],
+      "geometry": "rect",
+      "text": "Task title",
+      "textPreview": "Task title",
+      "resolvedFontSize": 10.6,
+      "resolvedTextStyle": {
+        "fontSize": 10.6,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Task title"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Task title",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Task title",
+              "fontSize": 10.6,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/zupwb2hw",
+      "id": "16",
+      "bbox": [
+        210,
+        350,
+        246,
+        48
+      ],
+      "geometry": "rect",
+      "text": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+      "textPreview": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+      "resolvedFontSize": 13,
+      "resolvedTextStyle": {
+        "fontSize": 13,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Email Validation Status Not Handled"
+          },
+          {
+            "index": 2,
+            "text": "Correctly in ACP and Confirmation"
+          },
+          {
+            "index": 3,
+            "text": "Logic"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+              "fontSize": 13,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a9w3m94f",
+      "id": "17",
+      "bbox": [
+        92,
+        416,
+        210,
+        13
+      ],
+      "geometry": "rect",
+      "text": "Problem in simple words",
+      "textPreview": "Problem in simple words",
+      "resolvedFontSize": 10.6,
+      "resolvedTextStyle": {
+        "fontSize": 10.6,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Problem in simple words"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Problem in simple words",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Problem in simple words",
+              "fontSize": 10.6,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwfyxobm",
+      "id": "18",
+      "bbox": [
+        92,
+        438,
+        360,
+        80
+      ],
+      "geometry": "rect",
+      "text": "In NodeBB's Admin Control Panel, email validation status could show incorrectly, and admin actions like validate or resend email could fail when confirmation keys expired or email data was missing.",
+      "textPreview": "In NodeBB's Admin Control Panel, email validation status could show incorrectly, and admin actions like validate or resend email could fa...",
+      "resolvedFontSize": 13.09,
+      "resolvedTextStyle": {
+        "fontSize": 13.09,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "In NodeBB's Admin Control Panel, email validation status"
+          },
+          {
+            "index": 2,
+            "text": "could show incorrectly, and admin actions like validate or"
+          },
+          {
+            "index": 3,
+            "text": "resend email could fail when confirmation keys expired or"
+          },
+          {
+            "index": 4,
+            "text": "email data was missing."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "In NodeBB's Admin Control Panel, email validation status could show incorrectly, and admin actions like validate or resend email could fail when confirmation keys expired or email data was missing.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "In NodeBB's Admin Control Panel, email validation status could show incorrectly, and admin actions like validate or resend email could fail when confirmation keys expired or email data was missing.",
+              "fontSize": 13.09,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/obm58z25",
+      "id": "19",
+      "bbox": [
+        92,
+        530,
+        110,
+        13
+      ],
+      "geometry": "rect",
+      "text": "Selected tests",
+      "textPreview": "Selected tests",
+      "resolvedFontSize": 10.6,
+      "resolvedTextStyle": {
+        "fontSize": 10.6,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Selected tests"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Selected tests",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Selected tests",
+              "fontSize": 10.6,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knih4byh",
+      "id": "20",
+      "bbox": [
+        210,
+        524,
+        250,
+        32
+      ],
+      "geometry": "rect",
+      "text": "test/database.js, test/database/keys.js, test/user/emails.js",
+      "textPreview": "test/database.js, test/database/keys.js, test/user/emails.js",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos Mono",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "test/database.js, test/database/keys.js,"
+          },
+          {
+            "index": 2,
+            "text": "test/user/emails.js"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "test/database.js, test/database/keys.js, test/user/emails.js",
+          "runs": [
+            {
+              "index": 1,
+              "text": "test/database.js, test/database/keys.js, test/user/emails.js",
+              "fontSize": 11,
+              "typeface": "Aptos Mono",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8bat47y",
+      "id": "21",
+      "bbox": [
+        538,
+        242,
+        300,
+        332
+      ],
+      "geometry": "rect",
+      "fillColor": "#FBF8F2",
+      "lineColor": "#D97706",
+      "lineWidth": 2
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2lszqtcj",
+      "id": "22",
+      "bbox": [
+        538,
+        242,
+        300,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6psfil0",
+      "id": "23",
+      "bbox": [
+        566,
+        274,
+        240,
+        24
+      ],
+      "geometry": "rect",
+      "text": "What was going wrong",
+      "textPreview": "What was going wrong",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "What was going wrong"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "What was going wrong",
+          "runs": [
+            {
+              "index": 1,
+              "text": "What was going wrong",
+              "fontSize": 20,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kf6dcbul",
+      "id": "24",
+      "bbox": [
+        566,
+        324,
+        26,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d0z61032",
+      "id": "25",
+      "bbox": [
+        566,
+        330,
+        26,
+        12
+      ],
+      "geometry": "rect",
+      "text": "1",
+      "textPreview": "1",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1",
+          "runs": [
+            {
+              "index": 1,
+              "text": "1",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29gr2p8n",
+      "id": "26",
+      "bbox": [
+        606,
+        324,
+        190,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Expired confirmation keys blocked validation.",
+      "textPreview": "Expired confirmation keys blocked validation.",
+      "resolvedFontSize": 12.4,
+      "resolvedTextStyle": {
+        "fontSize": 12.4,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Expired confirmation keys"
+          },
+          {
+            "index": 2,
+            "text": "blocked validation."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Expired confirmation keys blocked validation.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Expired confirmation keys blocked validation.",
+              "fontSize": 12.4,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vu9knih4",
+      "id": "27",
+      "bbox": [
+        566,
+        378,
+        26,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/k3q5o7qp",
+      "id": "28",
+      "bbox": [
+        566,
+        384,
+        26,
+        12
+      ],
+      "geometry": "rect",
+      "text": "2",
+      "textPreview": "2",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2",
+          "runs": [
+            {
+              "index": 1,
+              "text": "2",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/donyd0z6",
+      "id": "29",
+      "bbox": [
+        606,
+        378,
+        190,
+        36
+      ],
+      "geometry": "rect",
+      "text": "ACP status could be unclear or wrong.",
+      "textPreview": "ACP status could be unclear or wrong.",
+      "resolvedFontSize": 12.4,
+      "resolvedTextStyle": {
+        "fontSize": 12.4,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "ACP status could be unclear or"
+          },
+          {
+            "index": 2,
+            "text": "wrong."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "ACP status could be unclear or wrong.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "ACP status could be unclear or wrong.",
+              "fontSize": 12.4,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3itgfmlk",
+      "id": "30",
+      "bbox": [
+        566,
+        432,
+        26,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex0nuxc3",
+      "id": "31",
+      "bbox": [
+        566,
+        438,
+        26,
+        12
+      ],
+      "geometry": "rect",
+      "text": "3",
+      "textPreview": "3",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "3"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "3",
+          "runs": [
+            {
+              "index": 1,
+              "text": "3",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/loj2t83i",
+      "id": "32",
+      "bbox": [
+        606,
+        432,
+        190,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Validate and resend actions could fail.",
+      "textPreview": "Validate and resend actions could fail.",
+      "resolvedFontSize": 12.4,
+      "resolvedTextStyle": {
+        "fontSize": 12.4,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Validate and resend actions could"
+          },
+          {
+            "index": 2,
+            "text": "fail."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Validate and resend actions could fail.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Validate and resend actions could fail.",
+              "fontSize": 12.4,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3m94fu1",
+      "id": "33",
+      "bbox": [
+        566,
+        486,
+        26,
+        26
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3q5o7qpg",
+      "id": "34",
+      "bbox": [
+        566,
+        492,
+        26,
+        12
+      ],
+      "geometry": "rect",
+      "text": "4",
+      "textPreview": "4",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "4"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "4",
+          "runs": [
+            {
+              "index": 1,
+              "text": "4",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e9cvixcz",
+      "id": "35",
+      "bbox": [
+        606,
+        486,
+        190,
+        36
+      ],
+      "geometry": "rect",
+      "text": "Email lookup needed a safer fallback path.",
+      "textPreview": "Email lookup needed a safer fallback path.",
+      "resolvedFontSize": 12.4,
+      "resolvedTextStyle": {
+        "fontSize": 12.4,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Email lookup needed a safer"
+          },
+          {
+            "index": 2,
+            "text": "fallback path."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Email lookup needed a safer fallback path.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Email lookup needed a safer fallback path.",
+              "fontSize": 12.4,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lwval87e",
+      "id": "36",
+      "bbox": [
+        566,
+        528,
+        238,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Main areas: database adapters + user email logic",
+      "textPreview": "Main areas: database adapters + user email logic",
+      "resolvedFontSize": 10.8,
+      "resolvedTextStyle": {
+        "fontSize": 10.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Main areas: database adapters + user email"
+          },
+          {
+            "index": 2,
+            "text": "logic"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Main areas: database adapters + user email logic",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Main areas: database adapters + user email logic",
+              "fontSize": 10.8,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wb2hwfyx",
+      "id": "37",
+      "bbox": [
+        874,
+        242,
+        342,
+        332
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 2
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/32lszqtc",
+      "id": "38",
+      "bbox": [
+        874,
+        242,
+        342,
+        8
+      ],
+      "geometry": "rect",
+      "fillColor": "#0F9F6E",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ahoza1gv",
+      "id": "39",
+      "bbox": [
+        902,
+        274,
+        280,
+        48
+      ],
+      "geometry": "rect",
+      "text": "What the agent was asked to fix",
+      "textPreview": "What the agent was asked to fix",
+      "resolvedFontSize": 20,
+      "resolvedTextStyle": {
+        "fontSize": 20,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "What the agent was asked to"
+          },
+          {
+            "index": 2,
+            "text": "fix"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "What the agent was asked to fix",
+          "runs": [
+            {
+              "index": 1,
+              "text": "What the agent was asked to fix",
+              "fontSize": 20,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qd4vmtwr",
+      "id": "40",
+      "bbox": [
+        902,
+        330,
+        286,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#FBF8F2",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 1.1
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fyxobm58",
+      "id": "41",
+      "bbox": [
+        902,
+        330,
+        28,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#0F9F6E",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8jqh0fep",
+      "id": "42",
+      "bbox": [
+        902,
+        340,
+        28,
+        14
+      ],
+      "geometry": "rect",
+      "text": "1",
+      "textPreview": "1",
+      "resolvedFontSize": 9.6,
+      "resolvedTextStyle": {
+        "fontSize": 9.6,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "1"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "1",
+          "runs": [
+            {
+              "index": 1,
+              "text": "1",
+              "fontSize": 9.6,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/x4nap4r6",
+      "id": "43",
+      "bbox": [
+        944,
+        335,
+        220,
+        14
+      ],
+      "geometry": "rect",
+      "text": "Show correct status",
+      "textPreview": "Show correct status",
+      "resolvedFontSize": 11.8,
+      "resolvedTextStyle": {
+        "fontSize": 11.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Show correct status"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Show correct status",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Show correct status",
+              "fontSize": 11.8,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qpg3ex0n",
+      "id": "44",
+      "bbox": [
+        944,
+        351,
+        220,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Attach pending and expired flags to users.",
+      "textPreview": "Attach pending and expired flags to users.",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Attach pending and expired flags to users."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Attach pending and expired flags to users.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Attach pending and expired flags to users.",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 45,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fa9w3m94",
+      "id": "45",
+      "bbox": [
+        902,
+        376,
+        286,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#F1EBE2",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 1.1
+    },
+    {
+      "order": 46,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8v6psfil",
+      "id": "46",
+      "bbox": [
+        902,
+        376,
+        28,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#0F9F6E",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 47,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/xczed8v6",
+      "id": "47",
+      "bbox": [
+        902,
+        386,
+        28,
+        14
+      ],
+      "geometry": "rect",
+      "text": "2",
+      "textPreview": "2",
+      "resolvedFontSize": 9.6,
+      "resolvedTextStyle": {
+        "fontSize": 9.6,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "2"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "2",
+          "runs": [
+            {
+              "index": 1,
+              "text": "2",
+              "fontSize": 9.6,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 48,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/qtcj6tov",
+      "id": "48",
+      "bbox": [
+        944,
+        381,
+        220,
+        14
+      ],
+      "geometry": "rect",
+      "text": "Add batch lookup",
+      "textPreview": "Add batch lookup",
+      "resolvedFontSize": 11.8,
+      "resolvedTextStyle": {
+        "fontSize": 11.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Add batch lookup"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Add batch lookup",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Add batch lookup",
+              "fontSize": 11.8,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 49,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/je9cvixc",
+      "id": "49",
+      "bbox": [
+        944,
+        397,
+        220,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Add db.mget(keys) across database adapters.",
+      "textPreview": "Add db.mget(keys) across database adapters.",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Add db.mget(keys) across database adapters."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Add db.mget(keys) across database adapters.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Add db.mget(keys) across database adapters.",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 50,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5kb6xkf6",
+      "id": "50",
+      "bbox": [
+        902,
+        422,
+        286,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#FBF8F2",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 1.1
+    },
+    {
+      "order": 51,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/czed8v6p",
+      "id": "51",
+      "bbox": [
+        902,
+        422,
+        28,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#0F9F6E",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 52,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/neloj2t8",
+      "id": "52",
+      "bbox": [
+        902,
+        432,
+        28,
+        14
+      ],
+      "geometry": "rect",
+      "text": "3",
+      "textPreview": "3",
+      "resolvedFontSize": 9.6,
+      "resolvedTextStyle": {
+        "fontSize": 9.6,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "3"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "3",
+          "runs": [
+            {
+              "index": 1,
+              "text": "3",
+              "fontSize": 9.6,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 53,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ytsvu9kn",
+      "id": "53",
+      "bbox": [
+        944,
+        427,
+        220,
+        14
+      ],
+      "geometry": "rect",
+      "text": "Recover validation email",
+      "textPreview": "Recover validation email",
+      "resolvedFontSize": 11.8,
+      "resolvedTextStyle": {
+        "fontSize": 11.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Recover validation email"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Recover validation email",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Recover validation email",
+              "fontSize": 11.8,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 54,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sneloj2",
+      "id": "54",
+      "bbox": [
+        944,
+        443,
+        220,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Find email from profile or confirmation data.",
+      "textPreview": "Find email from profile or confirmation data.",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Find email from profile or confirmation data."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Find email from profile or confirmation data.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Find email from profile or confirmation data.",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 55,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cbulwval",
+      "id": "55",
+      "bbox": [
+        902,
+        468,
+        286,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#F1EBE2",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 1.1
+    },
+    {
+      "order": 56,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nqxs72x4",
+      "id": "56",
+      "bbox": [
+        902,
+        468,
+        28,
+        38
+      ],
+      "geometry": "rect",
+      "fillColor": "#0F9F6E",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 57,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u54zidon",
+      "id": "57",
+      "bbox": [
+        902,
+        478,
+        28,
+        14
+      ],
+      "geometry": "rect",
+      "text": "4",
+      "textPreview": "4",
+      "resolvedFontSize": 9.6,
+      "resolvedTextStyle": {
+        "fontSize": 9.6,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "4"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "4",
+          "runs": [
+            {
+              "index": 1,
+              "text": "4",
+              "fontSize": 9.6,
+              "typeface": "Aptos Mono",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 58,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5wjudg7a",
+      "id": "58",
+      "bbox": [
+        944,
+        473,
+        220,
+        14
+      ],
+      "geometry": "rect",
+      "text": "Use explicit expiry",
+      "textPreview": "Use explicit expiry",
+      "resolvedFontSize": 11.8,
+      "resolvedTextStyle": {
+        "fontSize": 11.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Use explicit expiry"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Use explicit expiry",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Use explicit expiry",
+              "fontSize": 11.8,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 59,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gbq1oryt",
+      "id": "59",
+      "bbox": [
+        944,
+        489,
+        220,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Use timestamp-based confirmation expiry.",
+      "textPreview": "Use timestamp-based confirmation expiry.",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Use timestamp-based confirmation expiry."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Use timestamp-based confirmation expiry.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Use timestamp-based confirmation expiry.",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 60,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cj6tovah",
+      "id": "60",
+      "bbox": [
+        902,
+        532,
+        286,
+        28
+      ],
+      "geometry": "rect",
+      "fillColor": "#F1EBE2",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 61,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/54zidony",
+      "id": "61",
+      "bbox": [
+        914,
+        536,
+        262,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Next: watch this task become a prompt, request, runtime record, and behavior trace.",
+      "textPreview": "Next: watch this task become a prompt, request, runtime record, and behavior trace.",
+      "resolvedFontSize": 10.2,
+      "resolvedTextStyle": {
+        "fontSize": 10.2,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Next: watch this task become a prompt, request,"
+          },
+          {
+            "index": 2,
+            "text": "runtime record, and behavior trace."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Next: watch this task become a prompt, request, runtime record, and behavior trace.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Next: watch this task become a prompt, request, runtime record, and behavior trace.",
+              "fontSize": 10.2,
+              "typeface": "Aptos",
+              "color": "#334155",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 62,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/udg7adsj",
+      "id": "62",
+      "bbox": [
+        64,
+        664,
+        1152,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7D1C8",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 63,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nyd0z610",
+      "id": "63",
+      "bbox": [
+        64,
+        680,
+        340,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PROMPT EVOLUTION",
+      "textPreview": "PROMPT EVOLUTION",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PROMPT EVOLUTION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PROMPT EVOLUTION",
+          "runs": [
+            {
+              "index": 1,
+              "text": "PROMPT EVOLUTION",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 64,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cvixczed",
+      "id": "64",
+      "bbox": [
+        1164,
+        680,
+        52,
+        18
+      ],
+      "geometry": "rect",
+      "text": "04",
+      "textPreview": "04",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos Mono",
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "04"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "04",
+          "runs": [
+            {
+              "index": 1,
+              "text": "04",
+              "fontSize": 11,
+              "typeface": "Aptos Mono",
+              "color": "#667085"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

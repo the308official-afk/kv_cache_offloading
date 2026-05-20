@@ -1,0 +1,783 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/62p404",
+    "id": "62p404",
+    "slide": 3,
+    "layoutId": "0e457c94-dbc8-4b71-9b20-736032f987b0",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "5873eb36-151b-4109-9eca-1bf74784dea0",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display",
+      "Aptos Mono"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "0e457c94-dbc8-4b71-9b20-736032f987b0",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "5873eb36-151b-4109-9eca-1bf74784dea0",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "5873eb36-151b-4109-9eca-1bf74784dea0",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ex0nuxc3",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#101820",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/loj2t83i",
+      "id": "2",
+      "bbox": [
+        64,
+        52,
+        8,
+        24
+      ],
+      "geometry": "rect",
+      "fillColor": "#2563EB",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3m94fu1",
+      "id": "3",
+      "bbox": [
+        84,
+        52,
+        420,
+        24
+      ],
+      "geometry": "rect",
+      "text": "WHY IT MATTERS",
+      "textPreview": "WHY IT MATTERS",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "WHY IT MATTERS"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "WHY IT MATTERS",
+          "runs": [
+            {
+              "index": 1,
+              "text": "WHY IT MATTERS",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#A8B3C4",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3q5o7qpg",
+      "id": "4",
+      "bbox": [
+        64,
+        86,
+        1010,
+        98
+      ],
+      "geometry": "rect",
+      "text": "The old failure mode was ambiguity, not just low performance.",
+      "textPreview": "The old failure mode was ambiguity, not just low performance.",
+      "resolvedFontSize": 40,
+      "resolvedTextStyle": {
+        "fontSize": 40,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The old failure mode was ambiguity, not just low"
+          },
+          {
+            "index": 2,
+            "text": "performance."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The old failure mode was ambiguity, not just low performance.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The old failure mode was ambiguity, not just low performance.",
+              "fontSize": 40,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/e9cvixcz",
+      "id": "5",
+      "bbox": [
+        80,
+        220,
+        500,
+        280
+      ],
+      "geometry": "rect",
+      "fillColor": "#172033",
+      "lineColor": "#445065",
+      "lineWidth": 1
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lwval87e",
+      "id": "6",
+      "bbox": [
+        700,
+        220,
+        500,
+        280
+      ],
+      "geometry": "rect",
+      "fillColor": "#172033",
+      "lineColor": "#0F9F6E",
+      "lineWidth": 1.5
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/wb2hwfyx",
+      "id": "7",
+      "bbox": [
+        110,
+        246,
+        220,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Before",
+      "textPreview": "Before",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "fontSize": 22,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Before"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Before",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Before",
+              "fontSize": 22,
+              "typeface": "Aptos Display",
+              "color": "#BE123C",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/32lszqtc",
+      "id": "8",
+      "bbox": [
+        110,
+        292,
+        340,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Final answer only",
+      "textPreview": "Final answer only",
+      "resolvedFontSize": 30,
+      "resolvedTextStyle": {
+        "fontSize": 30,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Final answer only"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Final answer only",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Final answer only",
+              "fontSize": 30,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ahoza1gv",
+      "id": "9",
+      "bbox": [
+        110,
+        352,
+        420,
+        94
+      ],
+      "geometry": "rect",
+      "text": "When a run failed, the team could not quickly tell whether the issue was prompt construction, Deep Agents behavior, Dynamo routing, SGLang execution, tool parsing, or the model itself.",
+      "textPreview": "When a run failed, the team could not quickly tell whether the issue was prompt construction, Deep Agents behavior, Dynamo routing, SGLan...",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "When a run failed, the team could not quickly tell"
+          },
+          {
+            "index": 2,
+            "text": "whether the issue was prompt construction, Deep"
+          },
+          {
+            "index": 3,
+            "text": "Agents behavior, Dynamo routing, SGLang execution,"
+          },
+          {
+            "index": 4,
+            "text": "tool parsing, or the model itself."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "When a run failed, the team could not quickly tell whether the issue was prompt construction, Deep Agents behavior, Dynamo routing, SGLang execution, tool parsing, or the model itself.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "When a run failed, the team could not quickly tell whether the issue was prompt construction, Deep Agents behavior, Dynamo routing, SGLang execution, tool parsing, or the model itself.",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#D8DEE9"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cj6tovah",
+      "id": "10",
+      "bbox": [
+        730,
+        246,
+        220,
+        28
+      ],
+      "geometry": "rect",
+      "text": "After",
+      "textPreview": "After",
+      "resolvedFontSize": 22,
+      "resolvedTextStyle": {
+        "fontSize": 22,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "After"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "After",
+          "runs": [
+            {
+              "index": 1,
+              "text": "After",
+              "fontSize": 22,
+              "typeface": "Aptos Display",
+              "color": "#0F9F6E",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/54zidony",
+      "id": "11",
+      "bbox": [
+        730,
+        292,
+        390,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Traceable evidence chain",
+      "textPreview": "Traceable evidence chain",
+      "resolvedFontSize": 30,
+      "resolvedTextStyle": {
+        "fontSize": 30,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Traceable evidence chain"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Traceable evidence chain",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Traceable evidence chain",
+              "fontSize": 30,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/udg7adsj",
+      "id": "12",
+      "bbox": [
+        730,
+        352,
+        420,
+        94
+      ],
+      "geometry": "rect",
+      "text": "The run now carries stage ownership, prompt structure, tool/runtime context, worker evidence, and final behavior into a coherent report family.",
+      "textPreview": "The run now carries stage ownership, prompt structure, tool/runtime context, worker evidence, and final behavior into a coherent report f...",
+      "resolvedFontSize": 17,
+      "resolvedTextStyle": {
+        "fontSize": 17,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 3,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The run now carries stage ownership, prompt"
+          },
+          {
+            "index": 2,
+            "text": "structure, tool/runtime context, worker evidence, and"
+          },
+          {
+            "index": 3,
+            "text": "final behavior into a coherent report family."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The run now carries stage ownership, prompt structure, tool/runtime context, worker evidence, and final behavior into a coherent report family.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "The run now carries stage ownership, prompt structure, tool/runtime context, worker evidence, and final behavior into a coherent report family.",
+              "fontSize": 17,
+              "typeface": "Aptos",
+              "color": "#D8DEE9"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nyd0z610",
+      "id": "13",
+      "bbox": [
+        126,
+        548,
+        1020,
+        34
+      ],
+      "geometry": "rect",
+      "text": "Manager impact: faster debugging, clearer ownership, and a more honest separation between platform readiness and agent success.",
+      "textPreview": "Manager impact: faster debugging, clearer ownership, and a more honest separation between platform readiness and agent success.",
+      "resolvedFontSize": 23,
+      "resolvedTextStyle": {
+        "fontSize": 23,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Manager impact: faster debugging, clearer ownership, and a more honest separation"
+          },
+          {
+            "index": 2,
+            "text": "between platform readiness and agent success."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Manager impact: faster debugging, clearer ownership, and a more honest separation between platform readiness and agent success.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Manager impact: faster debugging, clearer ownership, and a more honest separation between platform readiness and agent success.",
+              "fontSize": 23,
+              "typeface": "Aptos Display",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cvixczed",
+      "id": "14",
+      "bbox": [
+        64,
+        664,
+        1152,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#2B3545",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5gbq1ory",
+      "id": "15",
+      "bbox": [
+        64,
+        680,
+        340,
+        18
+      ],
+      "geometry": "rect",
+      "text": "MAIN NARRATIVE",
+      "textPreview": "MAIN NARRATIVE",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "MAIN NARRATIVE"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "MAIN NARRATIVE",
+          "runs": [
+            {
+              "index": 1,
+              "text": "MAIN NARRATIVE",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#A8B3C4",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/upwb2hwf",
+      "id": "16",
+      "bbox": [
+        410,
+        680,
+        620,
+        18
+      ],
+      "geometry": "rect",
+      "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+      "textPreview": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Source: prompt_evolution_report, stage_lifecycle_table, runtime_alignment_analysis, final_summary",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#A8B3C4"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nap4r65w",
+      "id": "17",
+      "bbox": [
+        1164,
+        680,
+        52,
+        18
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos Mono",
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 10,
+              "typeface": "Aptos Mono",
+              "color": "#A8B3C4"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

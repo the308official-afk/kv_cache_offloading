@@ -1,0 +1,252 @@
+Based on the code review, the following changes are needed to address the issue:
+
+1. **Implement `getConfirmObjs()` in `loadUserInfo()`**:
+   - Fetch confirmation codes using `db.mget(keys: string[]): Promise<string[]>`.
+   - Retrieve the corresponding `confirm:<code>` objects using `db.getObjects()`.
+
+2. **Implement `db.mget` in MongoDB, PostgreSQL, and Redis**:
+   - Ensure that `db.mget` returns `null` for non-existent keys.
+
+3. **Update `User.validateEmail` and `User.sendValidationEmail` handlers**:
+   - Ensure that the email validation and fallback logic is correctly implemented.
+
+4. **Update `User.email.getEmailForValidation` and `User.email.isValidationPending` methods**:
+   - Ensure that the fallback logic is correctly implemented.
+
+5. **Update `User.email.canSendValidation` method**:
+   - Ensure that the interval check is correctly implemented.
+
+Let's start by implementing the `getConfirmObjs()` helper in `loadUserInfo()` and the `db.mget` method in the database adapters.
+
+### Step 2: Implement `getConfirmObjs()` in `loadUserInfo()`
+
+I will modify the `loadUserInfo` function to include the `getConfirmObjs()` helper.
+
+```javascript
+// src/user/email.js
+const getConfirmObjs = async (uids) => {
+  const confirmKeys = uids.map(uid => `confirm:byUid:${uid}`);
+  const confirmCodes = await db.mget(confirmKeys);
+  const confirmObjs = await db.getObjects(confirmCodes);
+  return confirmCodes.map((code, index) => ({
+    code,
+    ...confirmObjs[index] || {}
+  }));
+};
+
+// Update the loadUserInfo function
+const loadUserInfo = async (callerUid, uids) => {
+  const users = await Promise.all(uids.map(uid => db.getObject(`user:${uid}`)));
+  const confirmObjs = await getConfirmObjs(uids);
+  users.forEach((user, index) => {
+    user.email = {
+      ...user.email,
+      pending: !!confirmObjs[index]?.email,
+      expired: !!(confirmObjs[index]?.email && !confirmObjs[index]?.expires || !confirmObjs[index]?.expires)
+    };
+  });
+  return users;
+};
+```
+
+### Step 3: Implement `db.mget` in MongoDB, PostgreSQL, and Redis
+
+I will implement the `db.mget` method in the MongoDB, PostgreSQL, and Redis database adapters.
+
+#### MongoDB
+```javascript
+// src/database/mongo/main.js
+module.exports = function (module) {
+  // ... existing code ...
+  module.mget = async function (keys) {
+    const result = await module.client.collection('objects').find({
+      _key: { $in: keys }
+    }, { _id: 0, _key: 1 }).toArray();
+    const map = {};
+    result.forEach((item) => {
+      map[item._key] = item.data;
+    });
+    return keys.map(key => map[key] || null);
+  };
+};
+```
+
+#### PostgreSQL
+```javascript
+// src/database/postgres/main.js
+module.exports = function (module) {
+  // ... existing code ...
+  module.mget = async function (keys) {
+    const query = `
+      SELECT _key, data
+      FROM legacy_object
+      WHERE _key = ANY($1::TEXT[])
+    `;
+    const result = await module.pool.query(query, [keys]);
+    const map = {};
+    result.rows.forEach(row => {
+      map[row._key] = row.data;
+    });
+    return keys.map(key => map[key] || null);
+  };
+};
+```
+
+#### Redis
+```javascript
+// src/database/redis/main.js
+module.exports = function (module) {
+  // ... existing code ...
+  module.mget = async function (keys) {
+    const results = await module.client.mget(keys);
+    return keys.map((key, index) => results[index] || null);
+  };
+};
+```
+
+### Step 4: Update `User.validateEmail` and `User.sendValidationEmail` handlers
+
+I will update the `User.validateEmail` and `User.sendValidationEmail` handlers to handle email validation and fallback logic.
+
+```javascript
+// src/user/email.js
+User.validateEmail = async function (uid) {
+  const email = await user.getUserField(uid, 'email');
+  if (email) {
+    await user.setUserField(uid, 'email:confirmed', 1);
+    return email;
+  }
+  const confirmObj = await db.getObject(`confirm:byUid:${uid}`);
+  if (confirmObj && confirmObj.email) {
+    await user.setUserField(uid, 'email', confirmObj.email);
+    await user.setUserField(uid, 'email:confirmed', 1);
+    return confirmObj.email;
+  }
+  return null;
+};
+
+User.sendValidationEmail = async function (uid, options) {
+  const email = await user.getUserField(uid, 'email');
+  if (!email) {
+    email = await user.email.getEmailForValidation(uid);
+  }
+  if (!email) {
+    throw new Error('Email not found');
+  }
+  // ... existing code ...
+};
+```
+
+### Step 5: Update `User.email.getEmailForValidation` and `User.email.isValidationPending` methods
+
+I will update the `getEmailForValidation` and `isValidationPending` methods to ensure the fallback logic is correctly implemented.
+
+```javascript
+// src/user/email.js
+User.email.getEmailForValidation = async function (uid) {
+  const email = await user.getUserField(uid, 'email');
+  if (email) {
+    return email;
+  }
+  const confirmObj = await db.getObject(`confirm:byUid:${uid}`);
+  if (confirmObj && confirmObj.email) {
+    return confirmObj.email;
+  }
+  return null;
+};
+
+User.email.isValidationPending = async function (uid, email) {
+  const confirmObj = await db.getObject(`confirm:byUid:${uid}`);
+  if (email) {
+    return !!confirmObj && email === confirmObj.email;
+  }
+  return !!confirmObj;
+};
+```
+
+### Step 6: Update `User.email.canSendValidation` method
+
+I will update the `canSendValidation` method to ensure the interval check is correctly implemented.
+
+```javascript
+// src/user/email.js
+User.email.canSendValidation = async function (uid, email) {
+  const pending = await User.email.isValidationPending(uid, email);
+  if (!pending) {
+    return true;
+  }
+
+  const ttl = await User.email.getValidationExpiry(uid);
+  const max = meta.config.emailConfirmExpiry * 60 * 60 * 1000;
+  const interval = meta.config.emailConfirmInterval * 60 * 1000;
+
+  return ttl + interval < max;
+};
+```
+
+### Step 7: Test the Changes
+
+I will now test the changes to ensure they resolve the issue.
+
+```javascript
+// test/user/emails.js
+const test = require('ava');
+const db = require('../src/database/mongo/main');
+const user = require('../src/user');
+const utils = require('../src/utils');
+
+test('validate email and fallback to confirmation', async t => {
+  const uid = await user.create({
+    username: utils.generateUUID().slice(0, 10),
+    password: utils.generateUUID(),
+  });
+
+  // Create a confirmation object
+  await db.set(`confirm:byUid:${uid}`, { email: 'test@example.org' });
+
+  const email = await user.email.getEmailForValidation(uid);
+  t.is(email, 'test@example.org');
+
+  const validatedEmail = await user.email.validateEmail(uid);
+  t.is(validatedEmail, 'test@example.org');
+});
+
+test('send validation email and fallback to confirmation', async t => {
+  const uid = await user.create({
+    username: utils.generateUUID().slice(0, 10),
+    password: utils.generateUUID(),
+  });
+
+  // Create a confirmation object
+  await db.set(`confirm:byUid:${uid}`, { email: 'test@example.org' });
+
+  const email = await user.email.getEmailForValidation(uid);
+  t.is(email, 'test@example.org');
+
+  const confirmCode = await user.email.sendValidationEmail(uid, { email });
+  t.truthy(confirmCode);
+
+  const validatedEmail = await user.email.validateEmail(uid);
+  t.is(validatedEmail, 'test@example.org');
+});
+```
+
+### Step 8: Commit and Push the Changes
+
+I will now commit and push the changes to the repository.
+
+```bash
+git add src/user/email.js src/database/mongo/main.js src/database/postgres/main.js src/database/redis/main.js test/user/emails.js
+git commit -m "Fix email validation and confirmation issues"
+git push
+```
+
+### Step 9: Verify the Fix
+
+I will now verify the fix by running the tests and ensuring the issue is resolved.
+
+```bash
+npm test
+```
+
+If the tests pass, the issue should be resolved. If there are any issues, I will iterate and make further changes as needed.

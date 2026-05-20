@@ -130,13 +130,14 @@ start_frontend() {
   docker run -d \
     --name "${FRONTEND_CONTAINER_NAME}" \
     --network host \
+    --entrypoint /bin/bash \
     -e ETCD_ENDPOINTS="${ETCD_ENDPOINTS}" \
     -e NATS_SERVER="${NATS_SERVER}" \
     -e DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-}" \
     -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}" \
     -e HF_TOKEN="${HF_TOKEN:-}" \
     "${FRONTEND_IMAGE}" \
-    bash -lc "python3 -m dynamo.frontend \
+    -lc "python3 -m dynamo.frontend \
       --http-port '${DYNAMO_FRONTEND_PORT}' \
       --router-mode '${DYNAMO_ROUTER_MODE}' \
       --kv-cache-block-size '${DYNAMO_KV_CACHE_BLOCK_SIZE}' \

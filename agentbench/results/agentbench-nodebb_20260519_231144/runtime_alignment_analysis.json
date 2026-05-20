@@ -1,0 +1,93 @@
+{
+  "summary": {
+    "decision_row_count": 5,
+    "observed_worker_count": 0,
+    "observed_workers": [],
+    "agreed_count": 2,
+    "partially_agreed_count": 0,
+    "diverged_count": 0,
+    "insufficient_evidence_count": 3,
+    "tool_parser_names_seen": [],
+    "observed_tool_call_names": [
+      "ls",
+      "read_file"
+    ]
+  },
+  "rows": [
+    {
+      "phase": "baseline_execution",
+      "decision_type": "request_dispatch",
+      "agent_component": "deepagents_app",
+      "runtime_component": "frontend_dynamo",
+      "agent_side_decision": "Sent one baseline model request for the task.",
+      "runtime_side_response": "Frontend observation for this request was not found.",
+      "evidence": "frontend_event_found=False; worker_observation_found=False; request_id=agentbench-nodebb_20260519_231144::baseline_execution; worker_id=-",
+      "alignment_judgment": "Agent request was recorded, but frontend routing evidence is missing.",
+      "agreement_status": "insufficient_evidence",
+      "worker_id": null,
+      "ttft_ms": null,
+      "decode_ms": null,
+      "end_to_end_ms": 109458.095
+    },
+    {
+      "phase": "baseline_execution",
+      "decision_type": "tool_availability",
+      "agent_component": "deepagents_app",
+      "runtime_component": "frontend_dynamo",
+      "agent_side_decision": "Expected a tool-capable execution path for coding work.",
+      "runtime_side_response": "No tool parser observation was found in frontend runtime logs.",
+      "evidence": "tool_parser_observed=False; parsers=-; tool_call_count=8",
+      "alignment_judgment": "Tool-capable execution was expected, but runtime parser evidence is missing.",
+      "agreement_status": "insufficient_evidence",
+      "worker_id": null,
+      "ttft_ms": null,
+      "decode_ms": null,
+      "end_to_end_ms": 109458.095
+    },
+    {
+      "phase": "baseline_execution",
+      "decision_type": "tool_use",
+      "agent_component": "deepagents_app",
+      "runtime_component": "frontend_dynamo",
+      "agent_side_decision": "Chose tool calls: ls, read_file.",
+      "runtime_side_response": "Runtime returned tool results for: ls, read_file.",
+      "evidence": "tool_call_count=8; tool_calls=ls, read_file; tool_results=ls, read_file",
+      "alignment_judgment": "Agent tool-use decisions aligned with runtime tool execution.",
+      "agreement_status": "agreed",
+      "worker_id": null,
+      "ttft_ms": null,
+      "decode_ms": null,
+      "end_to_end_ms": 109458.095
+    },
+    {
+      "phase": "baseline_execution",
+      "decision_type": "runtime_execution",
+      "agent_component": "deepagents_app",
+      "runtime_component": "sglang_worker",
+      "agent_side_decision": "Expected the request to execute on a routed worker.",
+      "runtime_side_response": "Worker activity was not observed.",
+      "evidence": "prefill_seen=False; decode_seen=False; cached_token_count=8576; recomputed_prefix_tokens=17999",
+      "alignment_judgment": "Runtime execution evidence is too weak to confirm worker-side execution details.",
+      "agreement_status": "insufficient_evidence",
+      "worker_id": null,
+      "ttft_ms": null,
+      "decode_ms": null,
+      "end_to_end_ms": 109458.095
+    },
+    {
+      "phase": "baseline_execution",
+      "decision_type": "stop_behavior",
+      "agent_component": "deepagents_app",
+      "runtime_component": "frontend_dynamo/sglang_worker",
+      "agent_side_decision": "Produced a final response and ended the run.",
+      "runtime_side_response": "Run ended with finish_reason=stop.",
+      "evidence": "finish_reason=stop; response_preview=Based on the code review, the following changes are needed to address the issue: 1. **Implement `getConfirmObjs()` in `loadUserInfo()`**:...",
+      "alignment_judgment": "Agent stopped in a way that is consistent with runtime/tool outcomes.",
+      "agreement_status": "agreed",
+      "worker_id": null,
+      "ttft_ms": null,
+      "decode_ms": null,
+      "end_to_end_ms": 109458.095
+    }
+  ]
+}

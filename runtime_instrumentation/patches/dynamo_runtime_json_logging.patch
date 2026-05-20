@@ -2,7 +2,7 @@ diff --git a/components/src/dynamo/common/runtime_logging.py b/components/src/dy
 new file mode 100644
 --- /dev/null
 +++ b/components/src/dynamo/common/runtime_logging.py
-@@ -0,0 +1,169 @@
+@@ -0,0 +1,196 @@
 +"""Helpers for opt-in structured runtime JSON logging."""
 +
 +from __future__ import annotations
@@ -79,25 +79,49 @@ new file mode 100644
 +    return None
 +
 +
-+def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
++def extract_agent_hints_with_source(
++    request: dict[str, Any],
++) -> tuple[dict[str, Any] | None, str]:
 +    nvext = request.get("nvext")
 +    if isinstance(nvext, dict):
 +        agent_hints = nvext.get("agent_hints")
 +        if isinstance(agent_hints, dict):
-+            return _sanitize(agent_hints)
++            return _sanitize(agent_hints), "nvext.agent_hints"
 +
 +    runtime_observability = extract_runtime_observability(request)
 +    agent_hints = runtime_observability.get("agent_hints")
 +    if isinstance(agent_hints, dict):
-+        return _sanitize(agent_hints)
++        return _sanitize(agent_hints), "runtime_observability.agent_hints"
 +
 +    nested_nvext = runtime_observability.get("nvext")
 +    if isinstance(nested_nvext, dict):
 +        agent_hints = nested_nvext.get("agent_hints")
 +        if isinstance(agent_hints, dict):
-+            return _sanitize(agent_hints)
++            return _sanitize(agent_hints), "runtime_observability.nvext.agent_hints"
 +
-+    return None
++    return None, "missing"
++
++
++def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
++    agent_hints, _source = extract_agent_hints_with_source(request)
++    return agent_hints
++
++
++def agent_hint_log_fields(request: dict[str, Any]) -> dict[str, Any]:
++    agent_hints, source = extract_agent_hints_with_source(request)
++    if not isinstance(agent_hints, dict):
++        return {
++            "agent_hints": None,
++            "agent_hints_source": source,
++            "agent_hints_keys": [],
++            "hint_probe_id": None,
++        }
++    return {
++        "agent_hints": agent_hints,
++        "agent_hints_source": source,
++        "agent_hints_keys": sorted(str(key) for key in agent_hints),
++        "hint_probe_id": agent_hints.get("hint_probe_id"),
++    }
 +
 +
 +def preferred_request_id(request: dict[str, Any], fallback: str | None = None) -> str | None:
@@ -136,9 +160,12 @@ new file mode 100644
 +    if request_context:
 +        runtime_observability["request_context"] = request_context
 +
-+    agent_hints = extract_agent_hints(request)
++    agent_hints, agent_hints_source = extract_agent_hints_with_source(request)
 +    if agent_hints:
 +        runtime_observability["agent_hints"] = agent_hints
++        runtime_observability["agent_hints_source"] = agent_hints_source
++        runtime_observability["agent_hints_keys"] = sorted(str(key) for key in agent_hints)
++        runtime_observability["hint_probe_id"] = agent_hints.get("hint_probe_id")
 +
 +    if request_context or agent_hints:
 +        runtime_observability["nvext"] = {}
@@ -180,9 +207,9 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
  from dynamo._core import Client
  from dynamo._internal import ModelDeploymentCard
 +from dynamo.common.runtime_logging import (
++    agent_hint_log_fields,
 +    build_runtime_observability_extra_args,
 +    emit_runtime_event,
-+    extract_agent_hints,
 +    extract_request_context,
 +    preferred_request_id,
 +)
@@ -245,7 +272,7 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
 +            kv_router=self.is_kv_router,
 +            prompt_tokens=len(tokens),
 +            request_context=extract_request_context(request),
-+            agent_hints=extract_agent_hints(request),
++            **agent_hint_log_fields(request),
 +        )
  
          post = SglangStreamingPostProcessor(
@@ -287,7 +314,7 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
 +            kv_router=self.is_kv_router,
 +            prompt_tokens=len(preproc_result.prompt_token_ids),
 +            request_context=extract_request_context(request),
-+            agent_hints=extract_agent_hints(request),
++            **agent_hint_log_fields(request),
 +        )
 +
          async for item in self._generate_and_stream(
@@ -335,7 +362,7 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
 +                kv_router=self.is_kv_router,
 +                prompt_tokens=len(tokens),
 +                request_context=extract_request_context(request),
-+                agent_hints=extract_agent_hints(request),
++                **agent_hint_log_fields(request),
 +            )
  
              # Accumulate tokens for batched detokenization when
@@ -356,7 +383,7 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
 +                            stop_reason=stop_reason,
 +                            usage=pending_usage,
 +                            request_context=extract_request_context(request),
-+                            agent_hints=extract_agent_hints(request),
++                            **agent_hint_log_fields(request),
 +                        )
 +                        completion_logged = True
 +
@@ -375,7 +402,7 @@ diff --git a/components/src/dynamo/frontend/sglang_processor.py b/components/src
 +                model=request["model"],
 +                error=str(e),
 +                request_context=extract_request_context(request),
-+                agent_hints=extract_agent_hints(request),
++                **agent_hint_log_fields(request),
 +            )
              logger.exception("Error generating response for request %s", request_id)
              raise Unknown(
@@ -403,15 +430,15 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py
  from dynamo.common.constants import DisaggregationMode
 -from dynamo.common.multimodal.image_loader import ImageLoader
 +from dynamo.common.runtime_logging import (
++    agent_hint_log_fields,
 +    emit_runtime_event,
-+    extract_agent_hints,
 +    extract_request_context,
 +    preferred_request_id,
 +)
  from dynamo.common.utils.engine_response import normalize_finish_reason
  from dynamo.common.utils.otel_tracing import build_trace_headers
  from dynamo.sglang._compat import filter_supported_async_generate_kwargs
-@@ -35,6 +39,23 @@
+@@ -35,6 +39,22 @@
      "DYN_SGL_ALLOW_TOP_LOGPROBS=1 to override at your own risk. "
      "Track the upstream fix at https://github.com/sgl-project/sglang/pull/24447."
  )
@@ -422,7 +449,6 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py
 +    runtime_context_id: str,
 +) -> Dict[str, Any]:
 +    request_context = extract_request_context(request)
-+    agent_hints = extract_agent_hints(request)
 +    external_request_id = preferred_request_id(
 +        request, fallback=runtime_context_id
 +    ) or runtime_context_id
@@ -430,7 +456,7 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py
 +        "external_request_id": external_request_id,
 +        "runtime_context_id": runtime_context_id,
 +        "request_context": request_context,
-+        "agent_hints": agent_hints,
++        **agent_hint_log_fields(request),
 +    }
  
  
@@ -649,15 +675,15 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.p
  
  from dynamo._core import Context
 +from dynamo.common.runtime_logging import (
++    agent_hint_log_fields,
 +    emit_runtime_event,
-+    extract_agent_hints,
 +    extract_request_context,
 +    preferred_request_id,
 +)
  from dynamo.common.utils.otel_tracing import build_trace_headers
  from dynamo.health_check import HEALTH_CHECK_KEY
  from dynamo.sglang.args import Config
-@@ -18,6 +24,23 @@
+@@ -18,6 +24,22 @@
  # This remains as a compatibility fallback for older callers that still encode
  # an unresolved data-parallel rank in-band instead of omitting the field.
  _DP_RANK_UNSET = 2**32 - 1
@@ -668,7 +694,6 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.p
 +    runtime_context_id: str,
 +) -> Dict[str, Any]:
 +    request_context = extract_request_context(request)
-+    agent_hints = extract_agent_hints(request)
 +    external_request_id = preferred_request_id(
 +        request, fallback=runtime_context_id
 +    ) or runtime_context_id
@@ -676,7 +701,7 @@ diff --git a/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.p
 +        "external_request_id": external_request_id,
 +        "runtime_context_id": runtime_context_id,
 +        "request_context": request_context,
-+        "agent_hints": agent_hints,
++        **agent_hint_log_fields(request),
 +    }
  
  

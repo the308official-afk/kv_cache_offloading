@@ -1,0 +1,55 @@
+{
+  "run": {
+    "id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260515_155633",
+    "shortId": "NodeBB-049989... / 2026-05-15 15:56:33",
+    "repo": "NodeBB/NodeBB",
+    "taskTitle": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "frontend": "http://127.0.0.1:8000/v1/chat/completions",
+    "worker": "7587894864635169841",
+    "parser": "hermes"
+  },
+  "metrics": {
+    "taskInputChars": 1330,
+    "formattedPromptChars": 6906,
+    "modelBehaviorChars": 8972,
+    "inputTokens": 12553,
+    "cachedInputTokens": 12544,
+    "outputTokens": 2048,
+    "cacheHitSharePct": 99.93,
+    "ttftMs": 141.928,
+    "decodeMs": 5334.126,
+    "endToEndMs": 81000.822,
+    "observedToolCalls": 2,
+    "workspaceChanged": false,
+    "alignmentRows": 5,
+    "alignmentAgreed": 5,
+    "alignmentDiverged": 0
+  },
+  "tools": {
+    "expected": ["write_todos", "ls", "read_file", "write_file", "edit_file", "glob", "grep", "execute", "task"],
+    "observed": ["ls", "read_file"]
+  },
+  "stages": [
+    ["task_input", "agentbench_runner", "Raw task payload", "repo, base_commit, problem_statement, requirements, selected tests, workspace path", "1,330 chars"],
+    ["formatted_prompt", "prompt_builder", "Single runnable prompt", "workspace instructions, interface notes, execution expectations, selected test block", "6,906 chars"],
+    ["final_model_request", "request_dispatch", "OpenAI-style request envelope", "messages, request_context, agent_hints, model, tool_choice", "6,906 chars"],
+    ["system_context", "deepagents_app", "System/app instruction layer", "system_prompt key added; measured as 0 chars in this run", "0 system chars"],
+    ["tool_runtime_context", "frontend_dynamo", "Tool-capable runtime view", "expected tools, parser, prompt tokens, cache context", "12,553 tokens"],
+    ["runtime_preprocessing", "frontend_dynamo", "Runtime-prepared request", "parser observed, cached input tokens", "12,544 cached"],
+    ["model_behavior", "deepagents_app", "Response and outcome state", "tool transcript, finish reason, workspace outcome", "no workspace change"]
+  ],
+  "alignmentRows": [
+    ["request_dispatch", "Frontend observed request and routed worker", "agreed", "TTFT 141.928 ms"],
+    ["tool_availability", "Runtime reported parser hermes", "agreed", "tool-capable path"],
+    ["tool_use", "Runtime returned ls and read_file results", "agreed", "2 calls"],
+    ["runtime_execution", "Worker prefill and decode observed", "agreed", "cached=8,448 / recomputed=4,105"],
+    ["stop_behavior", "Run ended with finish_reason=length", "agreed", "2,048 output tokens"]
+  ],
+  "sources": [
+    "prompt_evolution_report.md/json/csv",
+    "stage_lifecycle_table.csv",
+    "runtime_alignment_analysis.md/json",
+    "final_summary.txt"
+  ]
+}

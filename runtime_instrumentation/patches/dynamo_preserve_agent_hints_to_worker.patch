@@ -1,0 +1,169 @@
+--- a/lib/llm/src/protocols/openai/nvext.rs
++++ b/lib/llm/src/protocols/openai/nvext.rs
+@@ -384,6 +384,15 @@ pub struct NvExt {
+     #[builder(default, setter(strip_option))]
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub session_control: Option<SessionControl>,
++
++    /// Experiment/observability extension fields supplied under `nvext`.
++    ///
++    /// Keeping these fields lets the preprocessor forward local observability
++    /// metadata, such as AgentBench request context, without making it part of
++    /// Dynamo's stable public API.
++    #[builder(default)]
++    #[serde(flatten)]
++    pub extra: std::collections::HashMap<String, serde_json::Value>,
+ }
+ 
+ /// Hints from the agent/caller about request characteristics.
+@@ -403,6 +412,11 @@ pub struct AgentHints {
+     #[builder(default, setter(strip_option))]
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     pub osl: Option<u32>,
++
++    /// AgentBench-friendly alias for expected output length.
++    #[builder(default, setter(strip_option))]
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub expected_output_tokens: Option<u32>,
+ 
+     /// When true, after the assistant turn completes, the system will speculatively
+     /// prefill the predicted next-turn prefix (conversation history with thinking
+@@ -417,6 +431,14 @@ pub struct AgentHints {
+     #[serde(default, skip_serializing_if = "Option::is_none")]
+     #[schema(ignore)]
+     pub latency_sensitivity: Option<f64>,
++
++    /// Experiment/observability hint fields supplied by local harnesses.
++    ///
++    /// This preserves keys like `hint_probe_id`, `program_id`, `agent_phase`,
++    /// and `context_type` so they can be forwarded to runtime logs.
++    #[builder(default)]
++    #[serde(flatten)]
++    pub extra: std::collections::HashMap<String, serde_json::Value>,
+ }
+ 
+ fn default_session_timeout() -> u64 {
+--- a/lib/llm/src/preprocessor.rs
++++ b/lib/llm/src/preprocessor.rs
+@@ -62,7 +62,7 @@ use crate::protocols::{
+         },
+         completions::{NvCreateCompletionRequest, NvCreateCompletionResponse},
+         embeddings::{NvCreateEmbeddingRequest, NvCreateEmbeddingResponse},
+-        nvext::NvExtProvider,
++        nvext::{NvExt, NvExtProvider},
+     },
+ };
+ use crate::tokenizers::traits::Tokenizer;
+@@ -168,7 +169,69 @@ impl OpenAIPreprocessor {
+         let tokenizer = mdc.tokenizer()?;
+         match formatter {
+             PromptFormatter::OAI(formatter) => Self::new_with_parts(mdc, formatter, tokenizer),
++        }
++    }
++
++    fn runtime_observability_extra_args_from_nvext(nvext: &NvExt) -> Option<serde_json::Value> {
++        let mut runtime_observability = serde_json::Map::new();
++        let mut nested_nvext = serde_json::Map::new();
++
++        if let Some(agent_hints) = nvext.agent_hints.as_ref()
++            && let Ok(agent_hints_value) = serde_json::to_value(agent_hints)
++            && agent_hints_value
++                .as_object()
++                .is_some_and(|agent_hints| !agent_hints.is_empty())
++        {
++            let agent_hints_keys = agent_hints_value
++                .as_object()
++                .map(|agent_hints| {
++                    let mut keys = agent_hints.keys().cloned().collect::<Vec<_>>();
++                    keys.sort();
++                    keys
++                })
++                .unwrap_or_default();
++
++            if let Some(hint_probe_id) = agent_hints_value
++                .get("hint_probe_id")
++                .and_then(serde_json::Value::as_str)
++            {
++                runtime_observability.insert(
++                    "hint_probe_id".to_string(),
++                    serde_json::Value::String(hint_probe_id.to_string()),
++                );
++            }
++
++            runtime_observability.insert("agent_hints".to_string(), agent_hints_value.clone());
++            runtime_observability.insert(
++                "agent_hints_source".to_string(),
++                serde_json::Value::String("nvext.agent_hints".to_string()),
++            );
++            runtime_observability.insert(
++                "agent_hints_keys".to_string(),
++                serde_json::json!(agent_hints_keys),
++            );
++            nested_nvext.insert("agent_hints".to_string(), agent_hints_value);
++        }
++
++        if let Some(request_context) = nvext.extra.get("request_context") {
++            runtime_observability.insert("request_context".to_string(), request_context.clone());
++            nested_nvext.insert("request_context".to_string(), request_context.clone());
++        }
++
++        if runtime_observability.is_empty() {
++            return None;
++        }
++
++        if !nested_nvext.is_empty() {
++            runtime_observability.insert(
++                "nvext".to_string(),
++                serde_json::Value::Object(nested_nvext),
++            );
+         }
++
++        Some(serde_json::json!({
++            "runtime_observability": runtime_observability
++        }))
+     }
+ 
+     pub fn new_with_parts(
+@@ -338,6 +401,9 @@ impl OpenAIPreprocessor {
+         if let Some(nvext) = request.nvext() {
+             // Build routing hints from nvext fields
+             let hints = nvext.agent_hints.as_ref();
++            if let Some(extra_args) = Self::runtime_observability_extra_args_from_nvext(nvext) {
++                builder.extra_args(Some(extra_args));
++            }
+             builder.request_timestamp_ms(nvext.request_timestamp_ms);
+             builder.agent_context(nvext.agent_context.clone());
+             let routing = RoutingHints {
+@@ -346,7 +412,7 @@ impl OpenAIPreprocessor {
+                 decode_worker_id: nvext.decode_worker_id,
+                 dp_rank: nvext.dp_rank,
+                 prefill_dp_rank: nvext.prefill_dp_rank,
+-                expected_output_tokens: hints.and_then(|h| h.osl),
++                expected_output_tokens: hints.and_then(|h| h.osl.or(h.expected_output_tokens)),
+                 priority_jump: hints.and_then(|h| {
+                     h.priority
+                         .map(|priority| priority.max(0) as f64)
+@@ -434,7 +500,7 @@ impl OpenAIPreprocessor {
+         }
+     }
+ 
+-    pub async fn gather_multi_modal_data<R: OAIChatLikeRequest>(
++    pub async fn gather_multi_modal_data<R: OAIChatLikeRequest + NvExtProvider>(
+         &self,
+         request: &R,
+         builder: &mut PreprocessedRequestBuilder,
+@@ -513,9 +579,11 @@ impl OpenAIPreprocessor {
+             // workers (e.g., TRT-LLM needs messages and the template-rendered prompt with
+             // <image> placeholders for embedding-path / NIXL flows).
+             let messages_json = serde_json::to_value(request.messages())?;
+-            let mut extra_args = serde_json::json!({
+-                "messages": messages_json
+-            });
++            let mut extra_args = request
++                .nvext()
++                .and_then(Self::runtime_observability_extra_args_from_nvext)
++                .unwrap_or_else(|| serde_json::json!({}));
++            extra_args["messages"] = messages_json;
+ 
+             // Strip redundant inline data: URLs only when frontend decoding is active
+             // (media_loader decoded the images into RDMA descriptors). TRT-LLM and

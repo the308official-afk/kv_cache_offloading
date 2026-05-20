@@ -1,0 +1,2253 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/hvjf9v",
+    "id": "hvjf9v",
+    "slide": 9,
+    "layoutId": "e82a2d59-7bae-4a9f-831b-8f6eb103ec43",
+    "layoutName": "Title Slide",
+    "layoutType": "title",
+    "masterLayoutId": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+    "masterLayoutName": "Master",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1280,
+      "height": 720
+    }
+  },
+  "theme": {
+    "colorSchemeName": "ChatGPT",
+    "colors": {
+      "accent1": "#156082",
+      "accent2": "#E97132",
+      "accent3": "#196B24",
+      "accent4": "#0F9ED5",
+      "accent5": "#A02B93",
+      "accent6": "#4EA72E",
+      "bg1": "#FFFFFF",
+      "bg2": "#000000",
+      "tx1": "#1F1F1F",
+      "tx2": "#FFFFFF",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#0E2841",
+      "lt2": "#E8E8E8",
+      "hlink": "#467886",
+      "folHlink": "#96607D"
+    },
+    "typefaces": [
+      "Aptos",
+      "Aptos Display",
+      "Aptos Mono"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "e82a2d59-7bae-4a9f-831b-8f6eb103ec43",
+      "name": "Title Slide",
+      "type": "title",
+      "parentLayoutId": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "2452ebdf-6e02-40b5-ae2a-18f674e3679d",
+      "name": "Master",
+      "type": "master",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1orytsvu",
+      "id": "1",
+      "bbox": [
+        0,
+        0,
+        1280,
+        720
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u18jqh0f",
+      "id": "2",
+      "bbox": [
+        64,
+        52,
+        8,
+        24
+      ],
+      "geometry": "rect",
+      "fillColor": "#6D28D9",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jm1cfa9w",
+      "id": "3",
+      "bbox": [
+        84,
+        52,
+        520,
+        24
+      ],
+      "geometry": "rect",
+      "text": "STEP 3 OF 5 | REQUEST -> AGENT RULES | DEEP AGENTS LAYER",
+      "textPreview": "STEP 3 OF 5 | REQUEST -> AGENT RULES | DEEP AGENTS LAYER",
+      "resolvedFontSize": 12,
+      "resolvedTextStyle": {
+        "fontSize": 12,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "STEP 3 OF 5 | REQUEST -> AGENT RULES | DEEP AGENTS LAYER"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "STEP 3 OF 5 | REQUEST -> AGENT RULES | DEEP AGENTS LAYER",
+          "runs": [
+            {
+              "index": 1,
+              "text": "STEP 3 OF 5 | REQUEST -> AGENT RULES | DEEP AGENTS LAYER",
+              "fontSize": 12,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cfa9w3m9",
+      "id": "4",
+      "bbox": [
+        64,
+        86,
+        1060,
+        104
+      ],
+      "geometry": "rect",
+      "text": "Then, agent rules are layered into the request.",
+      "textPreview": "Then, agent rules are layered into the request.",
+      "resolvedFontSize": 38,
+      "resolvedTextStyle": {
+        "fontSize": 38,
+        "typeface": "Aptos Display",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Then, agent rules are layered into the request."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Then, agent rules are layered into the request.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Then, agent rules are layered into the request.",
+              "fontSize": 38,
+              "typeface": "Aptos Display",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/1032lszq",
+      "id": "5",
+      "bbox": [
+        804,
+        54,
+        78,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "#D8D0C7",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u9knih4b",
+      "id": "6",
+      "bbox": [
+        810,
+        60,
+        66,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Task",
+      "textPreview": "Task",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Task"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Task",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Task",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/judg7ads",
+      "id": "7",
+      "bbox": [
+        890,
+        54,
+        78,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "#D8D0C7",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cj6tovah",
+      "id": "8",
+      "bbox": [
+        896,
+        60,
+        66,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Prompt",
+      "textPreview": "Prompt",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Prompt"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Prompt",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Prompt",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/54zidony",
+      "id": "9",
+      "bbox": [
+        976,
+        54,
+        78,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "#1D4ED8",
+      "lineColor": "#1D4ED8",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t47y1kre",
+      "id": "10",
+      "bbox": [
+        982,
+        60,
+        66,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Request",
+      "textPreview": "Request",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Request"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Request",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Request",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#FFFFFF",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0je9cvix",
+      "id": "11",
+      "bbox": [
+        1062,
+        54,
+        78,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "#D8D0C7",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/byhgn29g",
+      "id": "12",
+      "bbox": [
+        1068,
+        60,
+        66,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Runtime",
+      "textPreview": "Runtime",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Runtime"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Runtime",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Runtime",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/idonyd0z",
+      "id": "13",
+      "bbox": [
+        1148,
+        54,
+        78,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "#D8D0C7",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tcj6tova",
+      "id": "14",
+      "bbox": [
+        1154,
+        60,
+        66,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Behavior",
+      "textPreview": "Behavior",
+      "resolvedFontSize": 9,
+      "resolvedTextStyle": {
+        "fontSize": 9,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "center"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Behavior"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Behavior",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Behavior",
+              "fontSize": 9,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/0rqd4vmt",
+      "id": "15",
+      "bbox": [
+        64,
+        196,
+        1152,
+        2
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/b6xkf6dc",
+      "id": "16",
+      "bbox": [
+        64,
+        258,
+        1152,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D8D0C7",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/il0rqd4v",
+      "id": "17",
+      "bbox": [
+        64,
+        196,
+        8,
+        62
+      ],
+      "geometry": "rect",
+      "fillColor": "#D97706",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tovahoza",
+      "id": "18",
+      "bbox": [
+        88,
+        207,
+        110,
+        12
+      ],
+      "geometry": "rect",
+      "text": "What changed",
+      "textPreview": "What changed",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "What changed"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "What changed",
+          "runs": [
+            {
+              "index": 1,
+              "text": "What changed",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/032lszqt",
+      "id": "19",
+      "bbox": [
+        88,
+        222,
+        270,
+        28
+      ],
+      "geometry": "rect",
+      "text": "Coding-agent behavior rules are layered around the request.",
+      "textPreview": "Coding-agent behavior rules are layered around the request.",
+      "resolvedFontSize": 11.6,
+      "resolvedTextStyle": {
+        "fontSize": 11.6,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Coding-agent behavior rules are layered around the"
+          },
+          {
+            "index": 2,
+            "text": "request."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Coding-agent behavior rules are layered around the request.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Coding-agent behavior rules are layered around the request.",
+              "fontSize": 11.6,
+              "typeface": "Aptos",
+              "color": "#101820"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/czed8v6p",
+      "id": "20",
+      "bbox": [
+        386,
+        207,
+        110,
+        12
+      ],
+      "geometry": "rect",
+      "text": "Why it matters",
+      "textPreview": "Why it matters",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Why it matters"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Why it matters",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Why it matters",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5kb6xkf6",
+      "id": "21",
+      "bbox": [
+        386,
+        222,
+        280,
+        28
+      ],
+      "geometry": "rect",
+      "text": "They tell the agent how to behave: inspect, use tools, and verify.",
+      "textPreview": "They tell the agent how to behave: inspect, use tools, and verify.",
+      "resolvedFontSize": 11.6,
+      "resolvedTextStyle": {
+        "fontSize": 11.6,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "They tell the agent how to behave: inspect, use tools,"
+          },
+          {
+            "index": 2,
+            "text": "and verify."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "They tell the agent how to behave: inspect, use tools, and verify.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "They tell the agent how to behave: inspect, use tools, and verify.",
+              "fontSize": 11.6,
+              "typeface": "Aptos",
+              "color": "#101820"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ytsvu9kn",
+      "id": "22",
+      "bbox": [
+        694,
+        207,
+        120,
+        12
+      ],
+      "geometry": "rect",
+      "text": "What to look at",
+      "textPreview": "What to look at",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "What to look at"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "What to look at",
+          "runs": [
+            {
+              "index": 1,
+              "text": "What to look at",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/neloj2t8",
+      "id": "23",
+      "bbox": [
+        694,
+        222,
+        326,
+        28
+      ],
+      "geometry": "rect",
+      "text": "New field: system_prompt.",
+      "textPreview": "New field: system_prompt.",
+      "resolvedFontSize": 11.6,
+      "resolvedTextStyle": {
+        "fontSize": 11.6,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "New field: system_prompt."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "New field: system_prompt.",
+          "runs": [
+            {
+              "index": 1,
+              "text": "New field: system_prompt.",
+              "fontSize": 11.6,
+              "typeface": "Aptos",
+              "color": "#101820"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cbulwval",
+      "id": "24",
+      "bbox": [
+        1050,
+        207,
+        90,
+        12
+      ],
+      "geometry": "rect",
+      "text": "Component",
+      "textPreview": "Component",
+      "resolvedFontSize": 9.8,
+      "resolvedTextStyle": {
+        "fontSize": 9.8,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Component"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Component",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Component",
+              "fontSize": 9.8,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5sneloj2",
+      "id": "25",
+      "bbox": [
+        1050,
+        222,
+        138,
+        16
+      ],
+      "geometry": "rect",
+      "text": "Deep Agents Layer",
+      "textPreview": "Deep Agents Layer",
+      "resolvedFontSize": 11.2,
+      "resolvedTextStyle": {
+        "fontSize": 11.2,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Deep Agents Layer"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Deep Agents Layer",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Deep Agents Layer",
+              "fontSize": 11.2,
+              "typeface": "Aptos",
+              "color": "#D97706",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/u54zidon",
+      "id": "26",
+      "bbox": [
+        64,
+        260,
+        260,
+        22
+      ],
+      "geometry": "rect",
+      "text": "Agent Rules Applied",
+      "textPreview": "Agent Rules Applied",
+      "resolvedFontSize": 18,
+      "resolvedTextStyle": {
+        "fontSize": 18,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Agent Rules Applied"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Agent Rules Applied",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Agent Rules Applied",
+              "fontSize": 18,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nqxs72x4",
+      "id": "27",
+      "bbox": [
+        342,
+        262,
+        132,
+        12
+      ],
+      "geometry": "rect",
+      "text": "Added in this step",
+      "textPreview": "Added in this step",
+      "resolvedFontSize": 10,
+      "resolvedTextStyle": {
+        "fontSize": 10,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Added in this step"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Added in this step",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Added in this step",
+              "fontSize": 10,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gbq1oryt",
+      "id": "28",
+      "bbox": [
+        476,
+        258,
+        108.4,
+        22
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#D97706",
+      "lineWidth": 1.2
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/5wjudg7a",
+      "id": "29",
+      "bbox": [
+        485,
+        263,
+        90.4,
+        11
+      ],
+      "geometry": "rect",
+      "text": "system_prompt",
+      "textPreview": "system_prompt",
+      "resolvedFontSize": 9.09,
+      "resolvedTextStyle": {
+        "fontSize": 9.09,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "system_prompt"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "system_prompt",
+          "runs": [
+            {
+              "index": 1,
+              "text": "system_prompt",
+              "fontSize": 9.09,
+              "typeface": "Aptos",
+              "color": "#334155",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/v6psfil0",
+      "id": "30",
+      "bbox": [
+        1014,
+        250,
+        202,
+        42
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#667085",
+      "lineWidth": 1.6
+    },
+    {
+      "order": 31,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2lszqtcj",
+      "id": "31",
+      "bbox": [
+        1026,
+        257,
+        178,
+        10
+      ],
+      "geometry": "rect",
+      "text": "Payload size change",
+      "textPreview": "Payload size change",
+      "resolvedFontSize": 9.2,
+      "resolvedTextStyle": {
+        "fontSize": 9.2,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Payload size change"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Payload size change",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Payload size change",
+              "fontSize": 9.2,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 32,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d8bat47y",
+      "id": "32",
+      "bbox": [
+        1026,
+        270,
+        178,
+        19
+      ],
+      "geometry": "rect",
+      "text": "0",
+      "textPreview": "0",
+      "resolvedFontSize": 16.51,
+      "resolvedTextStyle": {
+        "fontSize": 16.51,
+        "typeface": "Aptos Mono",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "0"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "0",
+          "runs": [
+            {
+              "index": 1,
+              "text": "0",
+              "fontSize": 16.51,
+              "typeface": "Aptos Mono",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 33,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/knih4byh",
+      "id": "33",
+      "bbox": [
+        64,
+        300,
+        548,
+        306
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#8D99A8",
+      "lineWidth": 2
+    },
+    {
+      "order": 34,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vu9knih4",
+      "id": "34",
+      "bbox": [
+        64,
+        300,
+        548,
+        42
+      ],
+      "geometry": "rect",
+      "fillColor": "#E9E1D6",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 35,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29gr2p8n",
+      "id": "35",
+      "bbox": [
+        82,
+        311,
+        512,
+        20
+      ],
+      "geometry": "rect",
+      "text": "Before",
+      "textPreview": "Before",
+      "resolvedFontSize": 13.2,
+      "resolvedTextStyle": {
+        "fontSize": 13.2,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Before"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Before",
+          "runs": [
+            {
+              "index": 1,
+              "text": "Before",
+              "fontSize": 13.2,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 36,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/d0z61032",
+      "id": "36",
+      "bbox": [
+        82,
+        358,
+        512,
+        236
+      ],
+      "geometry": "rect",
+      "text": "{\n  \"model\":\"...\",\n  \"messages\":[\n    {\n  \"role\":\"...\",\n  \"content\":\"...\"\n}\n  ],\n  \"request_context\":{\n  ...\n},\n  \"agent_hints\":{\n  ...\n},\n  \"tool_choice\":\"...\"\n}",
+      "textPreview": "{ |   \"model\":\"...\", |   \"messages\":[ |     { |   \"role\":\"...\", |   \"content\":\"...\" | } |   ], |   \"request_context\":{ |   ... | }, |   \"...",
+      "resolvedFontSize": 10.8,
+      "resolvedTextStyle": {
+        "fontSize": 10.8,
+        "typeface": "Aptos Mono",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 16,
+        "lines": [
+          {
+            "index": 1,
+            "text": "{"
+          },
+          {
+            "index": 2,
+            "text": "  \"model\":\"...\","
+          },
+          {
+            "index": 3,
+            "text": "  \"messages\":["
+          },
+          {
+            "index": 4,
+            "text": "    {"
+          },
+          {
+            "index": 5,
+            "text": "  \"role\":\"...\","
+          },
+          {
+            "index": 6,
+            "text": "  \"content\":\"...\""
+          },
+          {
+            "index": 7,
+            "text": "}"
+          },
+          {
+            "index": 8,
+            "text": "  ],"
+          },
+          {
+            "index": 9,
+            "text": "  \"request_context\":{"
+          },
+          {
+            "index": 10,
+            "text": "  ..."
+          },
+          {
+            "index": 11,
+            "text": "},"
+          },
+          {
+            "index": 12,
+            "text": "  \"agent_hints\":{"
+          },
+          {
+            "index": 13,
+            "text": "  ..."
+          },
+          {
+            "index": 14,
+            "text": "},"
+          },
+          {
+            "index": 15,
+            "text": "  \"tool_choice\":\"...\""
+          },
+          {
+            "index": 16,
+            "text": "}"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "  \"model\":\"...\",",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"model\":\"...\",",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "  \"messages\":[",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"messages\":[",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "text": "    {",
+          "runs": [
+            {
+              "index": 1,
+              "text": "    {",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "text": "  \"role\":\"...\",",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"role\":\"...\",",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "text": "  \"content\":\"...\"",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"content\":\"...\"",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "text": "}",
+          "runs": [
+            {
+              "index": 1,
+              "text": "}",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "text": "  ],",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ],",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "text": "  \"request_context\":{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"request_context\":{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "text": "  ...",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ...",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "text": "},",
+          "runs": [
+            {
+              "index": 1,
+              "text": "},",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "text": "  \"agent_hints\":{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"agent_hints\":{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "text": "  ...",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ...",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "text": "},",
+          "runs": [
+            {
+              "index": 1,
+              "text": "},",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "text": "  \"tool_choice\":\"...\"",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"tool_choice\":\"...\"",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "text": "}",
+          "runs": [
+            {
+              "index": 1,
+              "text": "}",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 37,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/kf6dcbul",
+      "id": "37",
+      "bbox": [
+        668,
+        300,
+        548,
+        306
+      ],
+      "geometry": "rect",
+      "fillColor": "#FFFFFF",
+      "lineColor": "#D97706",
+      "lineWidth": 2
+    },
+    {
+      "order": 38,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vixczed8",
+      "id": "38",
+      "bbox": [
+        668,
+        300,
+        548,
+        42
+      ],
+      "geometry": "rect",
+      "fillColor": "#E9E1D6",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 39,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2x4nap4r",
+      "id": "39",
+      "bbox": [
+        686,
+        311,
+        512,
+        20
+      ],
+      "geometry": "rect",
+      "text": "After - added fields are called out above",
+      "textPreview": "After - added fields are called out above",
+      "resolvedFontSize": 13.2,
+      "resolvedTextStyle": {
+        "fontSize": 13.2,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "After - added fields are called out above"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "After - added fields are called out above",
+          "runs": [
+            {
+              "index": 1,
+              "text": "After - added fields are called out above",
+              "fontSize": 13.2,
+              "typeface": "Aptos",
+              "color": "#101820",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 40,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/m1cfa9w3",
+      "id": "40",
+      "bbox": [
+        686,
+        358,
+        512,
+        236
+      ],
+      "geometry": "rect",
+      "text": "{\n  \"model\":\"...\",\n  \"system_prompt\":\"...\",\n  \"messages\":[\n    {\n  \"role\":\"...\",\n  \"content\":\"...\"\n}\n  ],\n  \"request_context\":{\n  ...\n},\n  \"agent_hints\":{\n  ...\n},\n  \"tool_choice\":\"...\"\n}",
+      "textPreview": "{ |   \"model\":\"...\", |   \"system_prompt\":\"...\", |   \"messages\":[ |     { |   \"role\":\"...\", |   \"content\":\"...\" | } |   ], |   \"request_co...",
+      "resolvedFontSize": 10.8,
+      "resolvedTextStyle": {
+        "fontSize": 10.8,
+        "typeface": "Aptos Mono",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 17,
+        "lines": [
+          {
+            "index": 1,
+            "text": "{"
+          },
+          {
+            "index": 2,
+            "text": "  \"model\":\"...\","
+          },
+          {
+            "index": 3,
+            "text": "  \"system_prompt\":\"...\","
+          },
+          {
+            "index": 4,
+            "text": "  \"messages\":["
+          },
+          {
+            "index": 5,
+            "text": "    {"
+          },
+          {
+            "index": 6,
+            "text": "  \"role\":\"...\","
+          },
+          {
+            "index": 7,
+            "text": "  \"content\":\"...\""
+          },
+          {
+            "index": 8,
+            "text": "}"
+          },
+          {
+            "index": 9,
+            "text": "  ],"
+          },
+          {
+            "index": 10,
+            "text": "  \"request_context\":{"
+          },
+          {
+            "index": 11,
+            "text": "  ..."
+          },
+          {
+            "index": 12,
+            "text": "},"
+          },
+          {
+            "index": 13,
+            "text": "  \"agent_hints\":{"
+          },
+          {
+            "index": 14,
+            "text": "  ..."
+          },
+          {
+            "index": 15,
+            "text": "},"
+          },
+          {
+            "index": 16,
+            "text": "  \"tool_choice\":\"...\""
+          },
+          {
+            "index": 17,
+            "text": "}"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 2,
+          "text": "  \"model\":\"...\",",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"model\":\"...\",",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 3,
+          "text": "  \"system_prompt\":\"...\",",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"system_prompt\":\"...\",",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 4,
+          "text": "  \"messages\":[",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"messages\":[",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 5,
+          "text": "    {",
+          "runs": [
+            {
+              "index": 1,
+              "text": "    {",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 6,
+          "text": "  \"role\":\"...\",",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"role\":\"...\",",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 7,
+          "text": "  \"content\":\"...\"",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"content\":\"...\"",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 8,
+          "text": "}",
+          "runs": [
+            {
+              "index": 1,
+              "text": "}",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 9,
+          "text": "  ],",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ],",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 10,
+          "text": "  \"request_context\":{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"request_context\":{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 11,
+          "text": "  ...",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ...",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 12,
+          "text": "},",
+          "runs": [
+            {
+              "index": 1,
+              "text": "},",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 13,
+          "text": "  \"agent_hints\":{",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"agent_hints\":{",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 14,
+          "text": "  ...",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  ...",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 15,
+          "text": "},",
+          "runs": [
+            {
+              "index": 1,
+              "text": "},",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 16,
+          "text": "  \"tool_choice\":\"...\"",
+          "runs": [
+            {
+              "index": 1,
+              "text": "  \"tool_choice\":\"...\"",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        },
+        {
+          "index": 17,
+          "text": "}",
+          "runs": [
+            {
+              "index": 1,
+              "text": "}",
+              "fontSize": 10.8,
+              "typeface": "Aptos Mono",
+              "color": "#172033"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 41,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/bm58z25k",
+      "id": "41",
+      "bbox": [
+        64,
+        610,
+        1040,
+        34
+      ],
+      "geometry": "rect",
+      "text": "No payload growth | system_prompt_chars=0 | runtime_source=python_environment",
+      "textPreview": "No payload growth | system_prompt_chars=0 | runtime_source=python_environment",
+      "resolvedFontSize": 15.51,
+      "resolvedTextStyle": {
+        "fontSize": 15.51,
+        "typeface": "Aptos",
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "No payload growth | system_prompt_chars=0 | runtime_source=python_environment"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "No payload growth | system_prompt_chars=0 | runtime_source=python_environment",
+          "runs": [
+            {
+              "index": 1,
+              "text": "No payload growth | system_prompt_chars=0 | runtime_source=python_environment",
+              "fontSize": 15.51,
+              "typeface": "Aptos",
+              "color": "#334155"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 42,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/47y1kre1",
+      "id": "42",
+      "bbox": [
+        64,
+        664,
+        1152,
+        1
+      ],
+      "geometry": "rect",
+      "fillColor": "#D7D1C8",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 43,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/tsvu9kni",
+      "id": "43",
+      "bbox": [
+        64,
+        680,
+        340,
+        18
+      ],
+      "geometry": "rect",
+      "text": "PROMPT EVOLUTION",
+      "textPreview": "PROMPT EVOLUTION",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos",
+        "bold": true,
+        "alignment": "left"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "PROMPT EVOLUTION"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "PROMPT EVOLUTION",
+          "runs": [
+            {
+              "index": 1,
+              "text": "PROMPT EVOLUTION",
+              "fontSize": 11,
+              "typeface": "Aptos",
+              "color": "#667085",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    },
+    {
+      "order": 44,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mp0bi9s3",
+      "id": "44",
+      "bbox": [
+        1164,
+        680,
+        52,
+        18
+      ],
+      "geometry": "rect",
+      "text": "09",
+      "textPreview": "09",
+      "resolvedFontSize": 11,
+      "resolvedTextStyle": {
+        "fontSize": 11,
+        "typeface": "Aptos Mono",
+        "alignment": "right"
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "09"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "09",
+          "runs": [
+            {
+              "index": 1,
+              "text": "09",
+              "fontSize": 11,
+              "typeface": "Aptos Mono",
+              "color": "#667085"
+            }
+          ]
+        }
+      ],
+      "fillColor": "rgba(0, 0, 0, 0)",
+      "lineColor": "rgba(0, 0, 0, 0)",
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}
