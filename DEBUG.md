@@ -92,6 +92,12 @@ docker ps -a --filter name=dynamo-etcd \
 docker logs --tail 200 dynamo-etcd
 ```
 
+Restart only etcd:
+
+```bash
+docker restart dynamo-etcd
+```
+
 Try a clean stack restart:
 
 ```bash
@@ -249,3 +255,14 @@ Verify:
 curl -fsS http://127.0.0.1:8000/v1/models
 ./run_dynamo_single_host.sh test
 ```
+
+=====
+docker run -d
+--name etcd
+--network host
+quay.io/coreos/etcd:v3.5.14
+etcd
+--listen-client-urls http://0.0.0.0:2379
+--advertise-client-urls http://127.0.0.1:2379 Then verify:
+
+curl -s http://127.0.0.1:2379/health
