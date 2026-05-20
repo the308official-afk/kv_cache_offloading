@@ -138,6 +138,39 @@ curl -fsS http://127.0.0.1:8000/v1/models
 
 If using a non-default frontend port, replace `8000` with that port.
 
+## First Simple Request
+
+Once etcd, nats, frontend, and worker are up, first confirm the model is
+registered:
+
+```bash
+curl -fsS http://127.0.0.1:8000/v1/models
+```
+
+Then send a tiny chat completion:
+
+```bash
+curl -sS http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "messages": [
+      {"role": "user", "content": "Reply with exactly: ok"}
+    ],
+    "max_tokens": 8
+  }'
+echo
+```
+
+Expected response: JSON with a `choices[0].message.content` value similar to
+`ok`.
+
+You can also use the built-in script test:
+
+```bash
+./run_dynamo_single_host.sh test
+```
+
 ## GPU Or Docker Problems
 
 Verify the host and Docker can see the GPU:
