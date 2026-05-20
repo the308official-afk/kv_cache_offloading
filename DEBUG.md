@@ -77,6 +77,50 @@ Then verify:
 curl -fsS http://127.0.0.1:8001/v1/models
 ```
 
+## etcd Is Not Running
+
+Dynamo uses etcd like a small registry. The worker registers itself there, and
+the frontend uses it to discover workers. If etcd is down, the frontend may not
+become healthy.
+
+Check etcd:
+
+```bash
+docker ps -a --filter name=dynamo-etcd \
+  --format 'table {{.Names}}\t{{.Status}}\t{{.Image}}\t{{.Command}}'
+
+docker logs --tail 200 dynamo-etcd
+```
+
+Try a clean stack restart:
+
+```bash
+./run_dynamo_single_host.sh stop
+./run_dynamo_single_host.sh start
+```
+
+If etcd still exits, clear its saved state and start fresh:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+rm -rf ~/kv_cache_offloading/dynamo_head_state/etcd-data
+
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+./run_dynamo_single_host.sh start
+```
+
+Also check whether etcd's port is already in use:
+
+```bash
+ss -ltnp | grep ':2379' || true
+```
+
+If something is listening on `2379`, stop that process/container before
+retrying.
+
 ## Worker Or Model Not Ready
 
 If the frontend becomes healthy but the model never appears in `/v1/models`,
