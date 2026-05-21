@@ -366,12 +366,12 @@ docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 If `nvidia-smi` works on the host but fails inside Docker, reinstall or
 reconfigure NVIDIA Container Toolkit.
 
-## Deep Agents Editable Install Missing
+## Deep Agents Local Install Missing
 
 If dependency installation fails with an error like:
 
 ```text
-... is not a valid editable requirement
+... is not a valid requirement
 ```
 
 then either `agentbench/upstream/deepagents` is missing, or the install command
@@ -384,7 +384,7 @@ agentbench/upstream/deepagents/libs/deepagents
 ```
 
 That nested `libs/deepagents` directory is the Python package. Do not install
-editable mode from `agentbench/upstream/deepagents` itself.
+from `agentbench/upstream/deepagents` itself.
 
 From the repo root, run:
 
@@ -405,7 +405,7 @@ Direct install equivalent:
 
 ```bash
 cd ~/kv_cache_offloading
-python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+python3.11 -m pip install ./agentbench/upstream/deepagents/libs/deepagents
 ```
 
 Quick verification:
@@ -466,7 +466,7 @@ Reinstall with the exact interpreter used to run AgentBench:
 
 ```bash
 python3.11 -m pip install --upgrade pip
-python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+python3.11 -m pip install ./agentbench/upstream/deepagents/libs/deepagents
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
@@ -490,7 +490,7 @@ python -m pip install -r agentbench/requirements.txt
 python agentbench/deepagents_swebench_single_host.py --help
 ```
 
-Temporary fallback if editable install is still not visible:
+Temporary fallback if local install is still not visible:
 
 ```bash
 cd ~/kv_cache_offloading

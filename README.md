@@ -40,7 +40,7 @@ Before installing project dependencies, make sure the machine has:
 - Docker GPU access via `docker run --rm --gpus all ... nvidia-smi`
 
 Clone or copy this repository onto the machine, then install AgentBench
-dependencies. Deep Agents is installed in editable mode from
+dependencies. Deep Agents is installed from the local checkout at
 `agentbench/upstream/deepagents/libs/deepagents`, so the checkout must exist
 before installing requirements.
 
@@ -62,7 +62,7 @@ export HF_TOKEN=your_token_here
 ```
 
 Run the install from the repo root, not from inside `agentbench/`, because the
-editable path is relative to `~/kv_cache_offloading`.
+local Deep Agents path is relative to `~/kv_cache_offloading`.
 
 The checkout existing is not enough. Deep Agents must also be installed into the
 same interpreter used to run AgentBench. Always use `python3.11 -m pip`, not
@@ -87,14 +87,13 @@ PY
 ```
 
 If the checkout exists but `python3.11 -m pip show deepagents` prints
-`WARNING: Package(s) not found: deepagents`, force reinstall the editable
-package:
+`WARNING: Package(s) not found: deepagents`, force reinstall the local package:
 
 ```bash
 cd ~/kv_cache_offloading
 
 python3.11 -m pip install --upgrade pip
-python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+python3.11 -m pip install ./agentbench/upstream/deepagents/libs/deepagents
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
