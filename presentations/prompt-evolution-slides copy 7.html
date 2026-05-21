@@ -126,26 +126,6 @@
             margin-left: 10px;
             flex-grow: 1;
         }
-        .terminal-block.clean-panel {
-            border-radius: 10px;
-            border-color: #223041;
-        }
-        .terminal-header.clean-panel-header {
-            justify-content: flex-start;
-            gap: 0;
-            padding: 12px 18px;
-            background: linear-gradient(180deg, #18212d 0%, #141b25 100%);
-        }
-        .terminal-header.clean-panel-header .dot {
-            display: none;
-        }
-        .terminal-header.clean-panel-header .terminal-title {
-            margin-left: 0;
-            color: #d7dee8;
-            font-size: 13px;
-            font-weight: 600;
-            letter-spacing: 0.02em;
-        }
         .json-body {
             color: #c9d1d9;
             font-family: 'JetBrains Mono', monospace;
@@ -196,136 +176,6 @@
         th { background-color: #f1f5f9; text-align: left; padding: 14px; font-weight: 700; border-bottom: 2px solid #cbd5e1; font-size: 16px; }
         td { padding: 14px; border-bottom: 1px solid #e2e8f0; font-size: 16px; vertical-align: top; }
         .badge { background-color: #e0f2fe; color: #0369a1; padding: 4px 8px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: bold; }
-        .structure-code {
-            background: #ffffff;
-            border: 1px solid #dbe4f0;
-            border-radius: 10px;
-            padding: 18px 20px;
-        }
-        .structure-code pre {
-            margin: 0;
-            color: #1e293b;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 15px;
-            line-height: 1.65;
-            white-space: pre-wrap;
-        }
-        .structure-added-box {
-            display: inline-block;
-            padding: 6px 10px;
-            border: 2px solid rgba(34, 197, 94, 0.95);
-            border-radius: 10px;
-            background: rgba(34, 197, 94, 0.08);
-            box-shadow: inset 0 0 0 1px rgba(187, 247, 208, 0.18);
-            color: #166534;
-            font-weight: 700;
-        }
-        .structure-code.tight pre {
-            font-size: 13px;
-            line-height: 1.5;
-        }
-        .structure-code.ultra-tight pre {
-            font-size: 12px;
-            line-height: 1.4;
-        }
-        .bridge-slide .tracker {
-            margin-bottom: 18px;
-            padding: 10px 18px;
-        }
-        .bridge-slide h2.title {
-            margin-bottom: 18px;
-        }
-        .bridge-slide .content {
-            justify-content: flex-start;
-        }
-        .bridge-slide .grid-2 {
-            gap: 24px;
-            align-items: stretch;
-            height: 100%;
-        }
-        .bridge-slide .panel {
-            padding: 14px 16px !important;
-            display: flex;
-            flex-direction: column;
-            min-height: 0;
-        }
-        .bridge-slide .badge {
-            margin-bottom: 8px !important;
-        }
-        .bridge-slide .structure-code {
-            flex: 1;
-            padding: 12px 14px;
-        }
-        .bridge-slide .structure-code.tight pre {
-            font-size: 12px;
-            line-height: 1.4;
-        }
-        .bridge-slide .structure-code.ultra-tight pre {
-            font-size: 11px;
-            line-height: 1.28;
-        }
-        .bridge-slide-dense {
-            padding: 42px 50px;
-        }
-        .bridge-slide-dense .slide-number {
-            top: 42px;
-            right: 50px;
-        }
-        .bridge-slide-dense .tracker {
-            margin-bottom: 12px;
-            padding: 8px 14px;
-        }
-        .bridge-slide-dense h2.title {
-            margin-bottom: 12px;
-            font-size: 29px;
-            padding-left: 14px;
-        }
-        .bridge-slide-dense .grid-2 {
-            gap: 18px;
-        }
-        .bridge-slide-dense .panel {
-            padding: 10px 12px !important;
-        }
-        .bridge-slide-dense .badge {
-            margin-bottom: 6px !important;
-            font-size: 11px;
-            padding: 3px 7px;
-        }
-        .bridge-slide-dense .structure-code {
-            padding: 10px 12px;
-        }
-        .bridge-slide-dense .structure-code.tight pre {
-            font-size: 11px;
-            line-height: 1.26;
-        }
-        .bridge-slide-dense .structure-code.ultra-tight pre {
-            font-size: 10px;
-            line-height: 1.18;
-        }
-        .state-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 8px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            background: #fff7ed;
-            border: 1px solid #fdba74;
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.45);
-        }
-        .state-chip-label {
-            color: #9a3412;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-        .state-chip-value {
-            color: #7c2d12;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-            font-weight: 700;
-        }
     </style>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
@@ -874,33 +724,12 @@
 <p class="tech-meta" style="color: #2563eb; font-weight: bold; margin-bottom: 15px; text-transform: uppercase; letter-spacing: 1.5px;">Pipeline Observability Trace</p>
 <h1>PROMPT EVOLUTION</h1>
 <p class="subtitle" style="max-width: 800px; margin-top: 10px;">Tracing One Software Engineering Task Through the Multi-Layer Agent Pipeline</p>
-<p style="margin-top: 22px; font-size: 18px; color: #475569; font-weight: 600;">Oluwole Jaiyeoba · Sergey Blagodurov</p>
 <div style="margin-top: 60px; border-top: 1px solid #e2e8f0; padding-top: 30px; width: 60%; display: flex; justify-content: space-around;">
 </div>
 </div>
 </div>
-<div class="slide" id="slide-1b">
-<div class="slide-number">Slide 2</div>
-<h2 class="title">Why This Research Matters</h2>
-<div class="content">
-<div style="display: flex; flex-direction: column; gap: 18px; width: 100%; max-width: 1020px; margin: 0 auto;">
-<div class="panel">
-<h3 style="margin-bottom: 10px;">Why should I care?</h3>
-<p>Modern coding agents are shaped by much more than the base model. Their performance depends on the workflow around the model: prompts, tools, runtime packaging, and execution handling.</p>
-</div>
-<div class="panel">
-<h3 style="margin-bottom: 10px;">What exactly are we studying?</h3>
-<p>We are tracing how one real software-engineering task changes as it moves through the full agent stack, from raw task input to final model behavior.</p>
-</div>
-<div class="panel">
-<h3 style="margin-bottom: 10px;">What do we get from it?</h3>
-<p>We get end-to-end visibility into where meaning, metadata, and runtime behavior are introduced. That makes the system easier to debug, explain, and optimize.</p>
-</div>
-</div>
-</div>
-</div>
 <div class="slide" id="slide-2">
-<div class="slide-number">Slide 3</div>
+<div class="slide-number">Slide 2</div>
 <h2 class="title">Introduction</h2>
 <div class="content">
 <p style="font-size: 22px; margin-bottom: 35px; color: #334155;">This setup traces how one task changes as it moves through the agent system.<br/>Think of it like tracking a package: we see what entered the system, how it was repackaged at each handoff, and what came out at the end.</p>
@@ -924,7 +753,7 @@
 </div>
 </div>
 <div class="slide-container" id="slide-3">
-<div class="slide-number">Slide 4</div>
+<div class="slide-number">Slide 3</div>
 <h2 class="title">System Architecture: Pillars &amp; Glue</h2>
 <div class="pillar-spine">
 <div class="pillar">
@@ -957,67 +786,56 @@
 <div class="glue-card">
 <h3>Prompt Builder</h3>
 <p class="glue-desc">
-                Turns the raw SWE-bench task into the actual model-facing prompt. It combines task metadata, repo/problem details, requirements, and selected test context into a clear instruction the coding agent can follow.
+                Turns the raw SWE-bench task into the actual model-facing prompt. It combines task metadata, repo/problem details, requirements, and selected test context, then packages that prompt into the request envelope with <i>request_context</i>, <i>agent_hints</i>, model name, and tool settings.
             </p>
 </div>
 </div>
 <div class="decoration"></div>
 </div>
 <div class="slide" id="slide-4" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 5</div>
+<div class="slide-number">Slide 4</div>
 <h2 class="title">FROM TASK TO ARTIFACT: ARCHITECTURAL FLOW</h2>
 <div class="content">
 <p style="margin-bottom: 30px; font-size: 1.05em; color: #475569;">
-            Each stage gives the request a new capability before it moves to the next layer.
+            Each component in our ecosystem is responsible for a specific state-transition of the coding task. 
         </p>
 <div class="grid-2">
 <div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<h3 style="margin-top: 0; color: #334155; margin-bottom: 15px;">Task To Agent Context</h3>
+<h3 style="margin-top: 0; color: #334155; margin-bottom: 15px;">Preparation Layers</h3>
 <div style="margin-bottom: 15px;">
 <div style="font-weight: 700; color: #1e293b;">1. Benchmark Loader</div>
-<div style="font-size: 14px; color: #64748b;">Loads the raw SWE-bench task and prepares the workspace.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">task-aware</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I know the repo, bug report, tests, and workspace path."</div>
+<div style="font-size: 14px; color: #64748b;">Loads raw task (repo, bug report, tests).</div>
+<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I have a bug report and a workspace path. I'll clone the repo and get the sandbox ready."</div>
 </div>
 <div style="margin-bottom: 15px;">
-<div style="font-weight: 700; color: #1e293b;">2. Prompt Builder (local helper script)</div>
-<div style="font-size: 14px; color: #64748b;">Turns benchmark data into the user-facing task prompt.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">instruction-aware</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "The raw task is now a clear instruction the coding agent can follow."</div>
+<div style="font-weight: 700; color: #1e293b;">2. Prompt Builder</div>
+<div style="font-size: 14px; color: #64748b;">Converts task data into structured instructions.</div>
+<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I'll turn these scattered notes into one 'System' message and one 'User' message the AI can actually follow."</div>
 </div>
 <div>
-<div style="font-weight: 700; color: #1e293b;">3. Deep Agents System Layer</div>
-<div style="font-size: 14px; color: #64748b;">Adds coding-agent behavior, rules, and system instructions.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">system-aware</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "The request now includes the agent’s operating manual: inspect before editing, verify before finishing."</div>
+<div style="font-weight: 700; color: #1e293b;">3. Request Wrapper</div>
+<div style="font-size: 14px; color: #64748b;">Packages model routing and metadata.</div>
+<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I'm adding the tool definitions and model name to the request so the AI knows what it's allowed to do."</div>
 </div>
 </div>
 <div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<h3 style="margin-top: 0; color: #334155; margin-bottom: 15px;">Packaging To Runtime</h3>
+<h3 style="margin-top: 0; color: #334155; margin-bottom: 15px;">Execution Layers</h3>
 <div style="margin-bottom: 15px;">
-<div style="font-weight: 700; color: #1e293b;">4. Deep Agents Tool Layer</div>
-<div style="font-size: 14px; color: #64748b;">Adds available tool definitions and tool-use policy.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">tool-aware</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "The model now knows it can use tools like <code>ls</code>, <code>read_file</code>, <code>edit_file</code>, and <code>execute</code>."</div>
-</div>
-<div style="margin-bottom: 15px;">
-<div style="font-weight: 700; color: #1e293b;">5. Request Wrapper (local helper script)</div>
-<div style="font-size: 14px; color: #64748b;">Builds the final OpenAI-style request envelope with model routing and metadata.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">dispatch-ready</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "The prompt, system instructions, tools, model name, request context, and agent hints are now packaged for Dynamo."</div>
+<div style="font-weight: 700; color: #1e293b;">4. Deep Agents Layer</div>
+<div style="font-size: 14px; color: #64748b;">Injects behavioral constraints.</div>
+<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I'm giving the model its 'Professional Coding Agent' manual—always inspect before editing, verify before finishing."</div>
 </div>
 <div>
-<div style="font-weight: 700; color: #1e293b;">6. Dynamo Runtime Layer</div>
-<div style="font-size: 14px; color: #64748b;">Preprocesses, routes, and coordinates the request with the worker.</div>
-<div class="state-chip"><span class="state-chip-label">Request state:</span><span class="state-chip-value">worker-aware / cache-aware</span></div>
-<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "The request is now attached to runtime execution, worker routing, and KV-cache observability."</div>
+<div style="font-weight: 700; color: #1e293b;">5. Dynamo Runtime Layer</div>
+<div style="font-size: 14px; color: #64748b;">Orchestrates tools, parser, and KV-cache.</div>
+<div style="font-size: 13px; font-style: italic; color: #6366f1; margin-top: 2px;">Ex: "I'm translating the request for the worker. Now the task is 'tool aware,' and the AI has access to `ls`, `read_file`, and `edit_file`."</div>
 </div>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-5">
-<div class="slide-number">Slide 6</div>
+<div class="slide-number">Slide 5</div>
 <h2 class="title">Benchmark Context</h2>
 <div class="content">
 <p style="font-size: 20px; color: #334155; margin-bottom: 30px; font-weight: 500;">
@@ -1050,7 +868,7 @@
 </div>
 </div>
 <div class="slide" id="slide-5b">
-<div class="slide-number">Slide 6b</div>
+<div class="slide-number">Slide 5b</div>
 <h2 class="title">Experiment Task: NodeBB Email Fix</h2>
 <div class="content">
 <p style="margin-bottom: 25px;">Fixing a real NodeBB email validation bug across database adapters and user logic.</p>
@@ -1087,7 +905,7 @@
 </div>
 </div>
 <div class="slide" id="slide-6">
-<div class="slide-number">Slide 7</div>
+<div class="slide-number">Slide 6</div>
 <h2 class="title">Structure Roadmap</h2>
 <div class="content">
 <p style="margin-bottom: 15px;">Historical layout tracing stage metrics, structural alterations, and byte delta adjustments across file outputs:</p>
@@ -1096,6 +914,7 @@
 <tr>
 <th>Index File</th>
 <th>Transformation Stage</th>
+<th>Layer Origin</th>
 <th>Payload Size Shift</th>
 </tr>
 </thead>
@@ -1103,31 +922,37 @@
 <tr>
 <td><span class="tech-meta">02_formatted_prompt.json</span></td>
 <td><span class="badge">formatted_prompt</span></td>
+<td>Prompt Builder Local Script</td>
 <td><strong style="color:#16a34a;">+5,576 characters</strong></td>
 </tr>
 <tr>
 <td><span class="tech-meta">03_final_model_request.json</span></td>
 <td><span class="badge">final_model_request</span></td>
+<td>Dynamo Framework Core</td>
 <td>No structural delta (0)</td>
 </tr>
 <tr>
 <td><span class="tech-meta">04_system_context.json</span></td>
 <td><span class="badge">system_context</span></td>
+<td>Deep Agents Core Logic</td>
 <td>No structural delta (0)</td>
 </tr>
 <tr>
 <td><span class="tech-meta">05_tool_runtime_context.json</span></td>
 <td><span class="badge">tool_runtime_context</span></td>
+<td>Dynamo Core Setup Layer</td>
 <td>No structural delta (0)</td>
 </tr>
 <tr>
 <td><span class="tech-meta">06_runtime_preprocessing.json</span></td>
 <td><span class="badge">runtime_preprocessing</span></td>
+<td>Dynamo Processing Wrapper</td>
 <td>No structural delta (0)</td>
 </tr>
 <tr>
 <td><span class="tech-meta">07_model_behavior.json</span></td>
 <td><span class="badge">model_behavior</span></td>
+<td>Deep Agents Execution Logger</td>
 <td><strong style="color:#16a34a;">+2,066 characters</strong></td>
 </tr>
 </tbody>
@@ -1135,7 +960,7 @@
 </div>
 </div>
 <div class="slide" id="slide-7">
-<div class="slide-number">Slide 8</div>
+<div class="slide-number">Slide 7</div>
 <div class="tracker">
 <div class="tracker-step active">1. Task → Prompt</div>
 <div class="tracker-step">2. Prompt → Request</div>
@@ -1145,61 +970,34 @@
 </div>
 <h2 class="title">Task to Prompt Transformation</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: Prompt Builder Integration</h3>
-<p style="margin-bottom: 15px;">The prompt builder combines raw task fields into one model-facing <code>prompt</code> string the coding agent can follow.</p>
+<p style="margin-bottom: 15px;">The local pipeline utility processes disparate relational properties, distilling separate tracking rows down into an actionable user directive payload.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #16a34a;">
 <p style="font-size: 15px;"><strong>Delta Properties Added:</strong> <span class="tech-meta">prompt</span></p>
 <p style="font-size: 15px;"><strong>Properties Removed:</strong> <span class="tech-meta">none</span></p>
 <p style="font-size: 15px;"><strong>Properties Mutated:</strong> <span class="tech-meta">problem_statement, requirements, selected_test_files_to_run</span> mapped into user query block.</p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: this is the largest semantic shift in the pipeline, because many benchmark fields collapse into one actionable prompt field.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide" id="slide-7b">
-<div class="slide-number">Slide 9</div>
-<div class="tracker">
-<div class="tracker-step active">1. Task → Prompt</div>
-<div class="tracker-step">2. Prompt → Request</div>
-<div class="tracker-step">3. Request → Rules</div>
-<div class="tracker-step">4. Tools → Runtime</div>
-<div class="tracker-step">5. Trace Analysis</div>
-</div>
-<h2 class="title">TASK TO PROMPT: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code">
-<pre>{
-  "repo",
-  "base_commit",
-  "problem_statement",
-  "requirements",
-  "selected_test_files_to_run",
-  "workspace_path"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code">
-<pre>{
-  <span class="structure-added-box">"prompt"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>Functional Shift Objectives</h3>
+<ul>
+<li>Consolidate environmental issues and repo constraints under a single object path.</li>
+<li>Format raw workspace configuration strings into explicit agent parameters.</li>
+<li>Inject operational sandbox constraints to force the generation of passing test suites before workflow sign-off.</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-8" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 10</div>
+<div class="slide-number">Slide 8</div>
 <h2 class="title">FORMATTED PROMPT JSON (1 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/02_formatted_prompt.json • Header Definition</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1223,11 +1021,12 @@
 </div>
 </div>
 <div class="slide" id="slide-9" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 11</div>
+<div class="slide-number">Slide 9</div>
 <h2 class="title">FORMATTED PROMPT JSON (2 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/02_formatted_prompt.json • Verbatim Content Payload (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1266,11 +1065,12 @@
 </div>
 </div>
 <div class="slide" id="slide-10" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 12</div>
+<div class="slide-number">Slide 10</div>
 <h2 class="title">FORMATTED PROMPT JSON (3 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/02_formatted_prompt.json • Verbatim Content Payload (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;">  <span class="j-k" style="color: #ff9e64;">"after"</span><span class="j-p">: {</span>
@@ -1302,7 +1102,7 @@
 </div>
 </div>
 <div class="slide" id="slide-11">
-<div class="slide-number">Slide 13</div>
+<div class="slide-number">Slide 11</div>
 <div class="tracker">
 <div class="tracker-step">1. Task → Prompt</div>
 <div class="tracker-step active">2. Prompt → Request</div>
@@ -1312,77 +1112,33 @@
 </div>
 <h2 class="title">Prompt to Model Request Envelope</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: Dynamo Request Assembly</h3>
-<p style="margin-bottom: 15px;">The wrapper takes the unified prompt and packages it into the final OpenAI-style request envelope without changing the prompt text itself.</p>
+<p style="margin-bottom: 15px;">Takes the unified raw prompt block and wraps it within standard chat structure messaging components without altering internal content characters.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #2563eb;">
 <p style="font-size: 15px;"><strong>Keys Generated:</strong> <span class="tech-meta">model, messages, request_context, agent_hints, tool_choice</span></p>
 <p style="font-size: 15px;"><strong>Structural Relocation:</strong> <span class="tech-meta">prompt → messages[0].content</span></p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: the same prompt is preserved, but the request gains the routing and metadata fields needed to send it through Dynamo.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide bridge-slide-dense" id="slide-11b">
-<div class="slide-number">Slide 14</div>
-<div class="tracker">
-<div class="tracker-step">1. Task → Prompt</div>
-<div class="tracker-step active">2. Prompt → Request</div>
-<div class="tracker-step">3. Request → Rules</div>
-<div class="tracker-step">4. Tools → Runtime</div>
-<div class="tracker-step">5. Trace Analysis</div>
-</div>
-<h2 class="title">PROMPT TO REQUEST: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code tight">
-<pre>{
-  "prompt"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code tight">
-<pre>{
-  <span class="structure-added-box">"model"</span>,
-  <span class="structure-added-box">"frontend_url"</span>,
-  <span class="structure-added-box">"messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ]</span>,
-  <span class="structure-added-box">"request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  }</span>,
-  <span class="structure-added-box">"agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  }</span>,
-  <span class="structure-added-box">"tool_choice"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>Context Integration Goals</h3>
+<ul>
+<li>Lock in the targeting model configurations (<span class="tech-meta">Qwen/Qwen2.5-7B-Instruct</span>).</li>
+<li>Affix parent trace orchestration IDs to group asynchronous baseline workers.</li>
+<li>Expose token budget sizing expectations (<span class="tech-meta">expected_output_tokens: 2048</span>) to manage multi-turn degradation properties.</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-12" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 15</div>
+<div class="slide-number">Slide 12</div>
 <h2 class="title">FINAL MODEL REQUEST JSON (1 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/03_final_model_request.json • Prompt Input + Diff Summary</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1402,11 +1158,12 @@
 </div>
 </div>
 <div class="slide" id="slide-13" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 16</div>
+<div class="slide-number">Slide 13</div>
 <h2 class="title">FINAL MODEL REQUEST JSON (2 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/03_final_model_request.json • Request Envelope Continuation (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1425,11 +1182,12 @@
 </div>
 </div>
 <div class="slide" id="slide-13b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 17</div>
+<div class="slide-number">Slide 14</div>
 <h2 class="title">FINAL MODEL REQUEST JSON (3 OF 3)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/03_final_model_request.json • Request Envelope Continuation (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1460,7 +1218,7 @@
 </div>
 </div>
 <div class="slide" id="slide-14">
-<div class="slide-number">Slide 18</div>
+<div class="slide-number">Slide 15</div>
 <div class="tracker">
 <div class="tracker-step">1. Task → Prompt</div>
 <div class="tracker-step">2. Prompt → Request</div>
@@ -1470,100 +1228,32 @@
 </div>
 <h2 class="title">Request to Agent Behavior Rules</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: System Prompt Interception</h3>
-<p style="margin-bottom: 15px;">The Deep Agents system layer adds the slot for agent-level operating rules and system instructions.</p>
+<p style="margin-bottom: 15px;">The Deep Agents operational frame explicitly layers core execution bounds around model entry arrays.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #eab308;">
 <p style="font-size: 15px;"><strong>Keys Generated:</strong> <span class="tech-meta">system_prompt</span></p>
 <p style="font-size: 15px;"><strong>Property Value Mapping:</strong> Injected as empty block element (<span class="tech-meta">""</span>) within this baseline evaluation run.</p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: the request gains a dedicated system-rules field, even though this particular run captured it as an empty string.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide" id="slide-14b">
-<div class="slide-number">Slide 19</div>
-<div class="tracker">
-<div class="tracker-step">1. Task → Prompt</div>
-<div class="tracker-step">2. Prompt → Request</div>
-<div class="tracker-step active">3. Request → Rules</div>
-<div class="tracker-step">4. Tools → Runtime</div>
-<div class="tracker-step">5. Trace Analysis</div>
-</div>
-<h2 class="title">REQUEST TO RULES: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  <span class="structure-added-box">"system_prompt"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>System Logic Objectives</h3>
+<ul>
+<li>Provide fixed system-level instructions regarding multi-turn toolkit rules.</li>
+<li>Standardize fallback logic paths for tracking failures without impacting specific payload data parameters.</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-15" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 20</div>
+<div class="slide-number">Slide 16</div>
 <h2 class="title">SYSTEM CONTEXT LAYER (1 OF 4)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/04_system_context.json • System Persona Envelope (1 of 4)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1579,11 +1269,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-15b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 21</div>
+<div class="slide-number">Slide 17</div>
 <h2 class="title">SYSTEM CONTEXT LAYER (2 OF 4)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/04_system_context.json • System Persona Envelope (2 of 4)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1602,11 +1293,12 @@
 </div>
 </div>
 <div class="slide" id="slide-16" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 22</div>
+<div class="slide-number">Slide 18</div>
 <h2 class="title">SYSTEM CONTEXT LAYER (3 OF 4)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/04_system_context.json • System Persona Envelope (3 of 4)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1636,11 +1328,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-16b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 23</div>
+<div class="slide-number">Slide 19</div>
 <h2 class="title">SYSTEM CONTEXT LAYER (4 OF 4)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/04_system_context.json • System Persona Envelope (4 of 4)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1680,7 +1373,7 @@
 </div>
 </div>
 <div class="slide" id="slide-17">
-<div class="slide-number">Slide 24</div>
+<div class="slide-number">Slide 20</div>
 <div class="tracker">
 <div class="tracker-step">1. Task → Prompt</div>
 <div class="tracker-step">2. Prompt → Request</div>
@@ -1690,103 +1383,31 @@
 </div>
 <h2 class="title">Tools to Runtime Context Prepared</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: Runtime Signature Appending</h3>
-<p style="margin-bottom: 15px;">The runtime layer appends the exact fields that make the request explicitly tool-capable and parser-aware.</p>
+<p style="margin-bottom: 15px;">Dynamo runtime layer appends precise local structural specifications immediately before executing the underlying worker inference calls.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #6366f1;">
 <p style="font-size: 15px;"><strong>Keys Appended:</strong> <span class="tech-meta">expected_builtin_tools, tool_parser_names_seen, tool_parser_observed</span></p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: this is the moment the request becomes visibly tool-aware in the runtime payload.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide bridge-slide-dense" id="slide-17b">
-<div class="slide-number">Slide 25</div>
-<div class="tracker">
-<div class="tracker-step">1. Task → Prompt</div>
-<div class="tracker-step">2. Prompt → Request</div>
-<div class="tracker-step">3. Request → Rules</div>
-<div class="tracker-step active">4. Tools → Runtime</div>
-<div class="tracker-step">5. Trace Analysis</div>
-</div>
-<h2 class="title">TOOLS TO RUNTIME: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  "system_prompt"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  "system_prompt",
-  <span class="structure-added-box">"expected_builtin_tools"</span>,
-  <span class="structure-added-box">"tool_parser_names_seen"</span>,
-  <span class="structure-added-box">"tool_parser_observed"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>Runtime Visibility Objectives</h3>
+<ul>
+<li>Expose explicit array elements representing authorized environment operations.</li>
+<li>Initialize runtime monitoring metrics to detect if structured output signatures are parsed successfully.</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-18" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 26</div>
+<div class="slide-number">Slide 21</div>
 <h2 class="title">TOOL RUNTIME CONTEXT LAYER (1 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/05_tool_runtime_context.json • Context Diff Overview</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1803,11 +1424,12 @@
 </div>
 </div>
 <div class="slide" id="slide-19" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 27</div>
+<div class="slide-number">Slide 22</div>
 <h2 class="title">TOOL RUNTIME CONTEXT LAYER (2 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/05_tool_runtime_context.json • State Before Execution (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1825,11 +1447,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-19b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 28</div>
+<div class="slide-number">Slide 23</div>
 <h2 class="title">TOOL RUNTIME CONTEXT LAYER (3 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/05_tool_runtime_context.json • State Before Execution (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1861,11 +1484,12 @@
 </div>
 </div>
 <div class="slide" id="slide-20" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 29</div>
+<div class="slide-number">Slide 24</div>
 <h2 class="title">TOOL RUNTIME CONTEXT LAYER (4 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/05_tool_runtime_context.json • Tool-Capable Attached Properties (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1883,11 +1507,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-20b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 30</div>
+<div class="slide-number">Slide 25</div>
 <h2 class="title">TOOL RUNTIME CONTEXT LAYER (5 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/05_tool_runtime_context.json • Tool-Capable Attached Properties (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -1932,7 +1557,7 @@
 </div>
 </div>
 <div class="slide" id="slide-18b">
-<div class="slide-number">Slide 31</div>
+<div class="slide-number">Slide 26</div>
 <div class="tracker">
 <div class="tracker-step">1. Task → Prompt</div>
 <div class="tracker-step">2. Prompt → Request</div>
@@ -1942,111 +1567,33 @@
 </div>
 <h2 class="title">Runtime Preprocessing Prepared</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: Inference Payload Finalization</h3>
-<p style="margin-bottom: 15px;">Right before generation, the runtime adds token-accounting and provider-trace fields to the request record.</p>
+<p style="margin-bottom: 15px;">Immediately before the worker executes the inference call, the Dynamo runtime calculates the exact tokenization of the combined prompt and establishes provider-side tracking IDs.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #6366f1;">
 <p style="font-size: 15px;"><strong>Metrics Captured:</strong> <span class="tech-meta">prompt_tokens, cached_prompt_tokens, cached_input_tokens</span></p>
 <p style="font-size: 15px;"><strong>Identifiers Generated:</strong> <span class="tech-meta">provider_response_id</span></p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: the request now carries the measurement fields that let us reason about cache reuse, prompt size, and provider-side execution.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide bridge-slide-dense" id="slide-18c">
-<div class="slide-number">Slide 32</div>
-<div class="tracker">
-<div class="tracker-step">1. Task → Prompt</div>
-<div class="tracker-step">2. Prompt → Request</div>
-<div class="tracker-step">3. Request → Rules</div>
-<div class="tracker-step active">4. Tools → Runtime</div>
-<div class="tracker-step">5. Trace Analysis</div>
-</div>
-<h2 class="title">RUNTIME PREPROCESSING: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  "system_prompt",
-  "expected_builtin_tools",
-  "tool_parser_names_seen",
-  "tool_parser_observed"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  "system_prompt",
-  "expected_builtin_tools",
-  "tool_parser_names_seen",
-  "tool_parser_observed",
-  <span class="structure-added-box">"prompt_tokens"</span>,
-  <span class="structure-added-box">"cached_prompt_tokens"</span>,
-  <span class="structure-added-box">"cached_input_tokens"</span>,
-  <span class="structure-added-box">"provider_response_id"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>Preprocessing Visibility Objectives</h3>
+<ul>
+<li><strong>Cache Verification:</strong> Explicitly log how many tokens were offloaded to the KV cache vs. computed fresh.</li>
+<li><strong>Cost/Sizing Audit:</strong> Establish the "Before" state of the token budget to measure model efficiency during the generation turn.</li>
+<li><strong>Provider Traceability:</strong> Affix the unique upstream completion ID to our local evidence record for one-to-one parity debugging.</li>
+</ul>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-21" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 33</div>
+<div class="slide-number">Slide 27</div>
 <h2 class="title">RUNTIME PREPROCESSING LAYER (1 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/06_runtime_preprocessing.json • Runtime Preprocessing Overview</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2063,11 +1610,12 @@
 </div>
 </div>
 <div class="slide" id="slide-22" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 34</div>
+<div class="slide-number">Slide 28</div>
 <h2 class="title">RUNTIME PREPROCESSING LAYER (2 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/06_runtime_preprocessing.json • State Before Execution (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2085,11 +1633,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-22b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 35</div>
+<div class="slide-number">Slide 29</div>
 <h2 class="title">RUNTIME PREPROCESSING LAYER (3 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/06_runtime_preprocessing.json • State Before Execution (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2134,11 +1683,12 @@
 </div>
 </div>
 <div class="slide" id="slide-23" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 36</div>
+<div class="slide-number">Slide 30</div>
 <h2 class="title">RUNTIME PREPROCESSING LAYER (4 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/06_runtime_preprocessing.json • Preprocessed Metrics &amp; Worker Signals (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2156,11 +1706,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-23b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 37</div>
+<div class="slide-number">Slide 31</div>
 <h2 class="title">RUNTIME PREPROCESSING LAYER (5 OF 5)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/06_runtime_preprocessing.json • Preprocessed Metrics &amp; Worker Signals (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2209,7 +1760,7 @@
 </div>
 </div>
 <div class="slide" id="slide-24">
-<div class="slide-number">Slide 38</div>
+<div class="slide-number">Slide 32</div>
 <div class="tracker">
 <div class="tracker-step">1. Task → Prompt</div>
 <div class="tracker-step">2. Prompt → Request</div>
@@ -2219,98 +1770,34 @@
 </div>
 <h2 class="title">Runtime Context to Observed Behavior</h2>
 <div class="content">
-<div class="panel" style="max-width: 1040px; margin: 0 auto;">
+<div class="grid-2">
+<div class="panel">
 <h3>Operation: Agent Execution Capture</h3>
-<p style="margin-bottom: 15px;">The execution layer converts the runtime-prepared request into observable behavior fields: what tools were used, how the run ended, and what the model ultimately said.</p>
+<p style="margin-bottom: 15px;">The Deep Agents execution layer captures the raw downstream response content. It parses and structure-logs the agent's specific tool invocations.</p>
 <div style="background-color: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid #3b82f6;">
 <p style="font-size: 15px;"><strong>Delta Properties Added:</strong> <span class="tech-meta">observed_tool_call_names, observed_tool_result_names, observed_tool_call_count, finish_reason, response_text</span></p>
 <p style="font-size: 15px;"><strong>Structural Relocation:</strong> Input envelope is dropped; target outputs map directly into tracing histories.</p>
 </div>
-<p style="margin-top: 18px; font-size: 16px; color: #334155; font-weight: 600;">Big idea: the request envelope gives way to execution evidence, so the report can show actual agent actions instead of planned capability.</p>
 </div>
-</div>
-</div>
-</div>
-<div class="slide bridge-slide" id="slide-24b">
-<div class="slide-number">Slide 39</div>
-<div class="tracker">
-<div class="tracker-step">1. Task → Prompt</div>
-<div class="tracker-step">2. Prompt → Request</div>
-<div class="tracker-step">3. Request → Rules</div>
-<div class="tracker-step">4. Tools → Runtime</div>
-<div class="tracker-step active">5. Trace Analysis</div>
-</div>
-<h2 class="title">RUNTIME TO BEHAVIOR: KEY STRUCTURE SHIFT</h2>
-<div class="content">
-<div class="grid-2">
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">BEFORE</span>
-<div class="structure-code ultra-tight">
-<pre>{
-  "model",
-  "frontend_url",
-  "messages": [
-    {
-      "role",
-      ...,
-      "content"
-    }
-  ],
-  "request_context": {
-    "request_id",
-    ...,
-    "step_title",
-    "app_variant"
-  },
-  "agent_hints": {
-    "priority",
-    "reuse_likelihood",
-    ...,
-    "expected_output_tokens",
-    "hint_probe_id"
-  },
-  "tool_choice",
-  "system_prompt",
-  "expected_builtin_tools",
-  "tool_parser_names_seen",
-  "tool_parser_observed",
-  "prompt_tokens",
-  "cached_prompt_tokens",
-  "cached_input_tokens",
-  "provider_response_id"
-}</pre>
-</div>
-</div>
-<div class="panel" style="background: #f8fafc; padding: 20px; border-radius: 8px;">
-<span class="badge" style="margin-bottom: 14px; display: inline-block;">AFTER</span>
-<div class="structure-code ultra-tight">
-<pre>{
-  "messages": [
-    {
-      <span class="structure-added-box">"index",
-      "type",
-      ...,
-      "tool_call_names"</span>
-    }
-  ],
-  <span class="structure-added-box">"observed_tool_call_names"</span>,
-  <span class="structure-added-box">"observed_tool_result_names"</span>,
-  <span class="structure-added-box">"observed_tool_call_count"</span>,
-  <span class="structure-added-box">"finish_reason"</span>,
-  <span class="structure-added-box">"response_text"</span>,
-  <span class="structure-added-box">"workspace_changed"</span>
-}</pre>
-</div>
+<div class="panel">
+<h3>Analysis Output Summary</h3>
+<table style="font-size: 14px; margin-top: 5px;">
+<tr><td><strong>Observed Invocations</strong></td><td><span class="tech-meta">ls, read_file</span></td></tr>
+<tr><td><strong>Total Call Count</strong></td><td><span class="tech-meta">8 discrete operations</span></td></tr>
+<tr><td><strong>Termination Signal</strong></td><td><span class="tech-meta">"stop"</span></td></tr>
+<tr><td><strong>Sandbox Modification State</strong></td><td><strong style="color:#ef4444;">workspace_changed: false</strong></td></tr>
+</table>
 </div>
 </div>
 </div>
 </div>
 <div class="slide" id="slide-25" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 40</div>
+<div class="slide-number">Slide 33</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (1 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • Evaluation Summary</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2326,11 +1813,12 @@
 </div>
 </div>
 <div class="slide" id="slide-26" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 41</div>
+<div class="slide-number">Slide 34</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (2 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • Message Sequence: User Input</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2357,11 +1845,12 @@
 </div>
 </div>
 <div class="slide" id="slide-27" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 42</div>
+<div class="slide-number">Slide 35</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (3 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • AI Action: Tool Orchestration (1 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2402,11 +1891,12 @@
 </div>
 </div>
 </div><div class="slide" id="slide-27b" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 43</div>
+<div class="slide-number">Slide 36</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (4 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • AI Action: Tool Orchestration (2 of 2)</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2454,11 +1944,12 @@
 </div>
 </div>
 <div class="slide" id="slide-28" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 44</div>
+<div class="slide-number">Slide 37</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (5 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • Execution Outcome</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>
@@ -2474,11 +1965,12 @@
 </div>
 </div>
 <div class="slide" id="slide-29" style="height: auto; min-height: 720px; padding-bottom: 60px;">
-<div class="slide-number">Slide 45</div>
+<div class="slide-number">Slide 38</div>
 <h2 class="title">MODEL BEHAVIOR LAYER (6 OF 6)</h2>
 <div class="content">
-<div class="terminal-block clean-panel" style="max-height: none; height: auto; overflow: visible;">
-<div class="terminal-header clean-panel-header">
+<div class="terminal-block" style="max-height: none; height: auto; overflow: visible;">
+<div class="terminal-header">
+<div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
 <div class="terminal-title">prompt_evolution_values/07_model_behavior.json • Diagnostic Conclusion</div>
 </div>
 <pre class="json-body" style="overflow: visible; white-space: pre-wrap; font-family: 'JetBrains Mono', monospace; margin: 0; padding: 20px;"><span class="j-p">{</span>

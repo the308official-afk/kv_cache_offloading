@@ -111,6 +111,36 @@ curl -fsS http://127.0.0.1:8000/v1/models
 This does not prove `agent_hints` reach worker logs. That proof requires the
 instrumented build below.
 
+If startup fails because etcd is not healthy, start a clean `dynamo-etcd`
+container manually:
+
+```bash
+docker rm -f dynamo-etcd etcd >/dev/null 2>&1 || true
+
+mkdir -p ~/kv_cache_offloading/dynamo_head_state/etcd-data
+
+docker run -d \
+  --name dynamo-etcd \
+  --network host \
+  -v ~/kv_cache_offloading/dynamo_head_state/etcd-data:/etcd-data \
+  quay.io/coreos/etcd:v3.5.14 \
+  /usr/local/bin/etcd \
+  --name dynamo-etcd \
+  --data-dir /etcd-data \
+  --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://127.0.0.1:2379
+
+curl -s http://127.0.0.1:2379/health
+```
+
+Expected:
+
+```json
+{"health":"true","reason":""}
+```
+
+Then rerun the smoke-test start command.
+
 ## Patch And Build Dynamo
 
 ```bash

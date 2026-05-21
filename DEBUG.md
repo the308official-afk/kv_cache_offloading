@@ -127,6 +127,41 @@ ss -ltnp | grep ':2379' || true
 If something is listening on `2379`, stop that process/container before
 retrying.
 
+Temporary manual etcd start, if you only need to bring the registry up for a
+single-host smoke test:
+
+```bash
+curl -s http://127.0.0.1:2379/health || true
+
+docker rm -f dynamo-etcd etcd >/dev/null 2>&1 || true
+
+mkdir -p ~/kv_cache_offloading/dynamo_head_state/etcd-data
+
+docker run -d \
+  --name dynamo-etcd \
+  --network host \
+  -v ~/kv_cache_offloading/dynamo_head_state/etcd-data:/etcd-data \
+  quay.io/coreos/etcd:v3.5.14 \
+  /usr/local/bin/etcd \
+  --name dynamo-etcd \
+  --data-dir /etcd-data \
+  --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://127.0.0.1:2379
+
+curl -s http://127.0.0.1:2379/health
+```
+
+Expected:
+
+```json
+{"health":"true","reason":""}
+```
+
+Prefer the container name `dynamo-etcd`. The repo scripts look for that name in
+`status`, `logs`, and `stop`. A manually started container named only `etcd` can
+work on port `2379`, but the scripts will not manage it cleanly and it can later
+cause port conflicts.
+
 ## Worker Or Model Not Ready
 
 If the frontend becomes healthy but the model never appears in `/v1/models`,
@@ -196,6 +231,57 @@ docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 
 If `nvidia-smi` works on the host but fails inside Docker, reinstall or
 reconfigure NVIDIA Container Toolkit.
+
+## Deep Agents Editable Install Missing
+
+If dependency installation fails with an error like:
+
+```text
+... is not a valid editable requirement
+```
+
+then either `agentbench/upstream/deepagents` is missing, or the install command
+was run from the wrong directory.
+
+The repo expects Deep Agents to exist here:
+
+```text
+agentbench/upstream/deepagents/libs/deepagents
+```
+
+That nested `libs/deepagents` directory is the Python package. Do not install
+editable mode from `agentbench/upstream/deepagents` itself.
+
+From the repo root, run:
+
+```bash
+cd ~/kv_cache_offloading
+
+mkdir -p agentbench/upstream
+
+if [ ! -f agentbench/upstream/deepagents/libs/deepagents/pyproject.toml ]; then
+  git clone https://github.com/langchain-ai/deepagents.git agentbench/upstream/deepagents
+  git -C agentbench/upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+fi
+
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+Direct install equivalent:
+
+```bash
+cd ~/kv_cache_offloading
+python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+```
+
+Quick verification:
+
+```bash
+python3.11 - <<'PY'
+import deepagents
+print(deepagents.__file__)
+PY
+```
 
 ## Disk Pressure
 
