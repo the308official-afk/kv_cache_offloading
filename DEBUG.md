@@ -220,6 +220,70 @@ export DYNAMO_FRONTEND_PORT=8001
 
 or replace the URLs with `http://127.0.0.1:8001/...`.
 
+## Model Context Length Exceeded
+
+If AgentBench fails with an error like:
+
+```text
+current token count exceeds the model maximum context length of 32768 tokens
+```
+
+the Dynamo/SGLang path is working, but the request plus agent/tool context is
+too large for the worker's configured context window.
+
+For a basic runtime smoke test, use the tiny direct request instead of
+AgentBench:
+
+```bash
+curl -sS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "messages": [
+      {"role": "user", "content": "Reply with exactly: ok"}
+    ],
+    "max_tokens": 8
+  }'
+echo
+```
+
+For AgentBench, restart the worker with a larger SGLang context length if the
+GPU has enough memory:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
+./run_dynamo_single_host.sh start
+```
+
+If you are using a non-default frontend port, include it in the restart and in
+the AgentBench URL:
+
+```bash
+export DYNAMO_FRONTEND_PORT=8001
+```
+
+Then rerun AgentBench with:
+
+```bash
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0
+```
+
+If the larger context causes GPU OOM, pick a smaller SWE-bench task index or use
+a larger-memory machine. Lowering `max_tokens` only helps when the prompt is
+near the limit; it does not help if the prompt/tool transcript alone already
+exceeds the context window.
+
 ## GPU Or Docker Problems
 
 Verify the host and Docker can see the GPU:

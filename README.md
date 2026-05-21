@@ -21,9 +21,13 @@ Success means an AgentBench SWE-bench result contains worker `[RUNTIME_JSON]`
 events with `agent_hints`, `hint_probe_id`, and `request_context` in
 `worker.decode.*`.
 
-## EC2 Setup
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 1. Machine Setup
 
 Use an Ampere-or-newer NVIDIA GPU instance with a 200-300 GB root disk.
+On GH200, skip the EC2-specific bootstrap if the machine is not Amazon Linux,
+but still complete Docker/GPU/Python setup and the verification below.
 
 ```bash
 sudo dnf install -y python3.11 python3.11-pip git
@@ -32,9 +36,6 @@ cd ~/kv_cache_offloading
 sudo ./aws/bootstrap_ec2_gpu.sh rootdisk
 newgrp docker
 ./aws/check_ec2_rootdisk_worker_ready.sh
-
-python3.11 -m pip install -r agentbench/requirements.txt
-export HF_TOKEN=your_token_here
 ```
 
 From a local checkout, upload with:
@@ -43,15 +44,9 @@ From a local checkout, upload with:
 ./aws/upload.sh
 ```
 
-## Deep Agents Dependency
-
-`agentbench/requirements.txt` installs Deep Agents in editable mode from:
-
-```text
-agentbench/upstream/deepagents/libs/deepagents
-```
-
-On a fresh machine, create that checkout before installing requirements:
+Then on the machine, install AgentBench dependencies. Deep Agents is installed
+in editable mode from `agentbench/upstream/deepagents/libs/deepagents`, so the
+checkout must exist before installing requirements.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -63,13 +58,87 @@ if [ ! -f agentbench/upstream/deepagents/libs/deepagents/pyproject.toml ]; then
   git -C agentbench/upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
 fi
 
+python3.11 -m pip install --upgrade pip
 python3.11 -m pip install -r agentbench/requirements.txt
+
+export HF_TOKEN=your_token_here
 ```
 
 Run the install from the repo root, not from inside `agentbench/`, because the
 editable path is relative to `~/kv_cache_offloading`.
 
-## Preflight Check
+The checkout existing is not enough. Deep Agents must also be installed into the
+same interpreter used to run AgentBench. Always use `python3.11 -m pip`, not
+plain `pip`.
+
+Verify the Python dependencies:
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 -m pip show deepagents
+
+python3.11 - <<'PY'
+import deepagents
+import datasets
+import pandas
+import langchain_openai
+
+print("AgentBench Python deps OK")
+print("deepagents:", deepagents.__file__)
+PY
+```
+
+If the checkout exists but `python3.11 -m pip show deepagents` prints
+`WARNING: Package(s) not found: deepagents`, force reinstall the editable
+package:
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 -m pip install --upgrade pip
+python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+---------------------------------------------------------------------------------------------------------------------------------------
+
+### 1.1 etcd Recovery
+
+Dynamo uses etcd as a local service registry. If startup fails with
+`Frontend did not become healthy` and etcd is not healthy, start a clean
+`dynamo-etcd` container manually:
+
+```bash
+docker rm -f dynamo-etcd etcd >/dev/null 2>&1 || true
+
+mkdir -p ~/kv_cache_offloading/dynamo_head_state/etcd-data
+
+docker run -d \
+  --name dynamo-etcd \
+  --network host \
+  -v ~/kv_cache_offloading/dynamo_head_state/etcd-data:/etcd-data \
+  quay.io/coreos/etcd:v3.5.14 \
+  /usr/local/bin/etcd \
+  --name dynamo-etcd \
+  --data-dir /etcd-data \
+  --listen-client-urls http://0.0.0.0:2379 \
+  --advertise-client-urls http://127.0.0.1:2379
+
+curl -s http://127.0.0.1:2379/health
+```
+
+Expected:
+
+```json
+{"health":"true","reason":""}
+```
+
+Then rerun the smoke-test start command.
+
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 2. Preflight Check
 
 Run this before building or starting Dynamo on a new machine, especially GH200.
 
@@ -107,7 +176,9 @@ x86_64 host -> amd64 images
 aarch64 host -> arm64 images
 ```
 
-## Smoke Test Without Rebuild
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 3. Smoke Test Without Rebuild
 
 Use the published Dynamo image first when you only want to prove Docker, GPU,
 model loading, and the basic OpenAI-compatible request path.
@@ -137,37 +208,12 @@ curl -fsS http://127.0.0.1:8000/v1/models
 This does not prove `agent_hints` reach worker logs. That proof requires the
 instrumented build below.
 
-If startup fails because etcd is not healthy, start a clean `dynamo-etcd`
-container manually:
+If startup fails because etcd is unhealthy, use the **etcd Recovery** step in
+Machine Setup, then rerun this smoke-test command.
 
-```bash
-docker rm -f dynamo-etcd etcd >/dev/null 2>&1 || true
+---------------------------------------------------------------------------------------------------------------------------------------
 
-mkdir -p ~/kv_cache_offloading/dynamo_head_state/etcd-data
-
-docker run -d \
-  --name dynamo-etcd \
-  --network host \
-  -v ~/kv_cache_offloading/dynamo_head_state/etcd-data:/etcd-data \
-  quay.io/coreos/etcd:v3.5.14 \
-  /usr/local/bin/etcd \
-  --name dynamo-etcd \
-  --data-dir /etcd-data \
-  --listen-client-urls http://0.0.0.0:2379 \
-  --advertise-client-urls http://127.0.0.1:2379
-
-curl -s http://127.0.0.1:2379/health
-```
-
-Expected:
-
-```json
-{"health":"true","reason":""}
-```
-
-Then rerun the smoke-test start command.
-
-## Patch And Build Dynamo
+## 4. Patch And Build Dynamo
 
 ```bash
 cd ~/kv_cache_offloading
@@ -189,7 +235,9 @@ local/dynamo-frontend:runtime-json-logs
 local/dynamo-sglang:runtime-json-logs
 ```
 
-## Start Runtime
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 5. Start Instrumented Runtime
 
 ```bash
 cd ~/kv_cache_offloading
@@ -221,7 +269,29 @@ docker logs -f --tail 200 dynamo-sglang-frontend
 curl -fsS http://127.0.0.1:8000/v1/models
 ```
 
-## Run AgentBench
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 6. Run AgentBench
+
+AgentBench requests can be much larger than the direct smoke test because they
+include SWE-bench task text, Deep Agents instructions, tools, and tool history.
+If you see `current token count exceeds the model maximum context length of
+32768 tokens`, restart the worker with a larger context window before rerunning:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
+./run_dynamo_single_host.sh start
+```
+
+If this causes GPU OOM, use a smaller SWE-bench task index or a larger-memory
+machine. Lowering output `max_tokens` only helps when the prompt is near the
+limit; it does not help if the prompt/tool transcript already exceeds the
+context window.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -236,7 +306,9 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --prompt-evolution-value-char-limit 1000
 ```
 
-## Verify
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 7. Verify Results
 
 ```bash
 LATEST_RESULT="$(ls -td agentbench/results/* | head -1)"
@@ -256,7 +328,9 @@ Success signal: `others/worker_runtime.log` contains
 `prompt_evolution_values/`. New result directories use simple readable names
 such as `agentbench-nodebb_20260519_140124`.
 
-## Key Files
+---------------------------------------------------------------------------------------------------------------------------------------
+
+## 8. Key Files
 
 - `runtime_instrumentation/prepare_instrumented_dynamo_source.sh`
 - `runtime_instrumentation/build_instrumented_dynamo_images.sh`
