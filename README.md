@@ -285,6 +285,45 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 ./run_dynamo_single_host.sh start
 ```
 
+If SGLang rejects that restart with:
+
+```text
+User-specified context_length (65536) is greater than the derived context_length (32768)
+```
+
+then the runtime is protecting you from an explicit longer-context override.
+For a basic smoke test, keep the default 32768 context and use a smaller task.
+For an intentional 65536-context AgentBench run, acknowledge the override with
+`SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1`:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
+./run_dynamo_single_host.sh start
+```
+
+Verify the override reached the worker container:
+
+```bash
+docker inspect dynamo-sglang-worker \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
+  grep SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
+```
+
+Expected:
+
+```text
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
+```
+
+For an instrumented run, include the same local image variables from
+**Start Instrumented Runtime** in that command.
+
 If this causes GPU OOM, use a smaller SWE-bench task index or a larger-memory
 machine. Lowering output `max_tokens` only helps when the prompt is near the
 limit; it does not help if the prompt/tool transcript already exceeds the

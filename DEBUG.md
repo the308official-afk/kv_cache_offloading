@@ -333,6 +333,23 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 ./run_dynamo_single_host.sh start
 ```
 
+Verify the override reached the worker container:
+
+```bash
+docker inspect dynamo-sglang-worker \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
+  grep SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
+```
+
+Expected:
+
+```text
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
+```
+
+If this line is missing, update `run_dynamo_single_host.sh` and
+`run_dynamo_worker.sh` so the variable is forwarded into Docker, then restart.
+
 If using instrumented local images, include `DYN_RUNTIME_JSON_LOGS=1`,
 `FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs`, and
 `WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs` in the restart command.
