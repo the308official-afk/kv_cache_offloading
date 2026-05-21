@@ -283,6 +283,77 @@ print(deepagents.__file__)
 PY
 ```
 
+## Deep Agents Installed But Import Fails
+
+If AgentBench fails with:
+
+```text
+ModuleNotFoundError: No module named 'deepagents'
+```
+
+first make sure you are using the same Python interpreter for install and run:
+
+```bash
+cd ~/kv_cache_offloading
+
+which python3.11
+python3.11 -m pip --version
+python3.11 -m pip show deepagents || true
+```
+
+Check that the local Deep Agents checkout exists:
+
+```bash
+test -f agentbench/upstream/deepagents/libs/deepagents/pyproject.toml && echo "Deep Agents checkout exists" || echo "Deep Agents checkout missing"
+```
+
+If the checkout is missing:
+
+```bash
+mkdir -p agentbench/upstream
+git clone https://github.com/langchain-ai/deepagents.git agentbench/upstream/deepagents
+git -C agentbench/upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+```
+
+Reinstall with the exact interpreter used to run AgentBench:
+
+```bash
+python3.11 -m pip install --upgrade pip
+python3.11 -m pip install -e ./agentbench/upstream/deepagents/libs/deepagents
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+Verify the import:
+
+```bash
+python3.11 - <<'PY'
+import sys
+import deepagents
+print(sys.executable)
+print(deepagents.__file__)
+PY
+```
+
+If you are using a virtual environment, activate it before both install and run,
+or call the venv Python directly:
+
+```bash
+source .venv/bin/activate
+python -m pip install -r agentbench/requirements.txt
+python agentbench/deepagents_swebench_single_host.py --help
+```
+
+Temporary fallback if editable install is still not visible:
+
+```bash
+cd ~/kv_cache_offloading
+export PYTHONPATH="$PWD/agentbench/upstream/deepagents/libs/deepagents:${PYTHONPATH:-}"
+python3.11 - <<'PY'
+import deepagents
+print(deepagents.__file__)
+PY
+```
+
 ## Disk Pressure
 
 Check disk usage:

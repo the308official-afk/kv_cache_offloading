@@ -43,6 +43,32 @@ From a local checkout, upload with:
 ./aws/upload.sh
 ```
 
+## Deep Agents Dependency
+
+`agentbench/requirements.txt` installs Deep Agents in editable mode from:
+
+```text
+agentbench/upstream/deepagents/libs/deepagents
+```
+
+On a fresh machine, create that checkout before installing requirements:
+
+```bash
+cd ~/kv_cache_offloading
+
+mkdir -p agentbench/upstream
+
+if [ ! -f agentbench/upstream/deepagents/libs/deepagents/pyproject.toml ]; then
+  git clone https://github.com/langchain-ai/deepagents.git agentbench/upstream/deepagents
+  git -C agentbench/upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+fi
+
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+Run the install from the repo root, not from inside `agentbench/`, because the
+editable path is relative to `~/kv_cache_offloading`.
+
 ## Preflight Check
 
 Run this before building or starting Dynamo on a new machine, especially GH200.
