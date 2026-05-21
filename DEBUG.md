@@ -231,6 +231,31 @@ current token count exceeds the model maximum context length of 32768 tokens
 the Dynamo/SGLang path is working, but the request plus agent/tool context is
 too large for the worker's configured context window.
 
+Ways to fix it without changing Dynamo/SGLang context length:
+
+```bash
+# Try a different, smaller SWE-bench task.
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model Qwen/Qwen2.5-7B-Instruct \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 1
+```
+
+Other non-restart options:
+
+- use a smaller task index or specific smaller `--instance-id`
+- use the direct smoke-test curl instead of AgentBench when you only need to
+  prove the runtime works
+- reduce prompt/tool-history size in AgentBench code if you need this exact
+  task to fit a 32k context window
+
+Lowering generation output tokens only helps when the request is barely over the
+limit. It will not fix a prompt/tool transcript that already exceeds 32k before
+generation.
+
 For a basic runtime smoke test, use the tiny direct request instead of
 AgentBench:
 
@@ -283,6 +308,34 @@ If the larger context causes GPU OOM, pick a smaller SWE-bench task index or use
 a larger-memory machine. Lowering `max_tokens` only helps when the prompt is
 near the limit; it does not help if the prompt/tool transcript alone already
 exceeds the context window.
+
+If SGLang rejects the larger context with:
+
+```text
+User-specified context_length (65536) is greater than the derived context_length (32768)
+```
+
+then the model/runtime derived a 32k safe limit. Preferred fixes:
+
+- keep the default 32k context and use a smaller AgentBench task
+- use a model/runtime configuration that naturally supports the needed context
+
+Override only if you accept the risk of incorrect outputs or CUDA errors:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
+DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
+./run_dynamo_single_host.sh start
+```
+
+If using instrumented local images, include `DYN_RUNTIME_JSON_LOGS=1`,
+`FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs`, and
+`WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs` in the restart command.
 
 ## GPU Or Docker Problems
 

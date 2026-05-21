@@ -25,28 +25,25 @@ events with `agent_hints`, `hint_probe_id`, and `request_context` in
 
 ## 1. Machine Setup
 
-Use an Ampere-or-newer NVIDIA GPU instance with a 200-300 GB root disk.
-On GH200, skip the EC2-specific bootstrap if the machine is not Amazon Linux,
-but still complete Docker/GPU/Python setup and the verification below.
+Use an Ampere-or-newer NVIDIA GPU machine with enough local disk for Docker
+images, model cache, and build artifacts. For a full instrumented Dynamo build,
+keep roughly 80-120 GB free; for a no-rebuild smoke test, keep roughly 30-50 GB
+free.
 
-```bash
-sudo dnf install -y python3.11 python3.11-pip git
+Before installing project dependencies, make sure the machine has:
 
-cd ~/kv_cache_offloading
-sudo ./aws/bootstrap_ec2_gpu.sh rootdisk
-newgrp docker
-./aws/check_ec2_rootdisk_worker_ready.sh
-```
+- Python 3.11 with `pip`
+- Git
+- Docker
+- NVIDIA driver
+- NVIDIA Container Toolkit
+- Docker GPU access via `docker run --rm --gpus all ... nvidia-smi`
 
-From a local checkout, upload with:
+Clone or copy this repository onto the machine, then install AgentBench
+dependencies. Deep Agents is installed in editable mode from
+`agentbench/upstream/deepagents/libs/deepagents`, so the checkout must exist
+before installing requirements.
 
-```bash
-./aws/upload.sh
-```
-
-Then on the machine, install AgentBench dependencies. Deep Agents is installed
-in editable mode from `agentbench/upstream/deepagents/libs/deepagents`, so the
-checkout must exist before installing requirements.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -158,9 +155,9 @@ docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
 ss -ltnp | grep ':8000' || true
 ```
 
-If moving from `g5.xlarge` to GH200, do not reuse the G5-built Dynamo images
-unless the GH200 host is also `x86_64`. G5 builds are `linux/amd64`; many GH200
-hosts are `aarch64`/`arm64`, so rebuild Dynamo natively on the GH200.
+Do not reuse Docker images between machines unless the CPU architecture matches.
+Many GH200 hosts are `aarch64`/`arm64`; x86 hosts build `linux/amd64` images.
+Rebuild Dynamo natively on the target machine when architectures differ.
 
 After building, verify image architecture:
 
