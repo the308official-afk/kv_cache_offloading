@@ -324,6 +324,10 @@ git clone https://github.com/langchain-ai/deepagents.git agentbench/upstream/dee
 git -C agentbench/upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
 ```
 
+If the checkout exists but `python3.11 -m pip show deepagents` says
+`WARNING: Package(s) not found: deepagents`, the source is present but not
+installed into the `python3.11` environment yet.
+
 Reinstall with the exact interpreter used to run AgentBench:
 
 ```bash
