@@ -291,6 +291,15 @@ If AgentBench fails with:
 ModuleNotFoundError: No module named 'deepagents'
 ```
 
+and this command prints `WARNING: Package(s) not found: deepagents`:
+
+```bash
+python3.11 -m pip show deepagents
+```
+
+then Deep Agents is not installed in the `python3.11` environment currently
+running AgentBench. Install it with `python3.11 -m pip`, not plain `pip`.
+
 first make sure you are using the same Python interpreter for install and run:
 
 ```bash
