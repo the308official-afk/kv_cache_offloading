@@ -461,6 +461,10 @@ MODEL='Qwen/Qwen2.5-7B-Instruct' \
 experiments/lpx_decode_split/profile_one_decode_case.sh
 ```
 
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
 --------------------------------------------------------------------------------
 
 ## 3. Optional Smoke Test Without Rebuild
