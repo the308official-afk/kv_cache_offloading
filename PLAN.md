@@ -866,3 +866,78 @@ Useful links:
 - [LongLLMLingua](https://huggingface.co/papers/2310.06839)
 - [Characterizing Prompt Compression Methods for Long Context Inference](https://huggingface.co/papers/2407.08892)
 - [CompLLM](https://huggingface.co/papers/2509.19228)
+
+## Active Experiment: LPX Decode Split
+
+The first concrete experiment for the NVIDIA/Groq LPX-style hardware question is:
+
+```text
+experiments/lpx_decode_split/run_decode_sweep.py
+```
+
+This experiment does not require Groq LPU hardware. It uses the current
+Dynamo/SGLang setup to generate trace evidence for a later "what if FFN moved
+to LPU?" model.
+
+Initial question:
+
+```text
+As agentic prompt/context length and output length change, does latency behave
+more like attention/KV pressure or more like per-token decode/FFN pressure?
+```
+
+The experiment varies:
+
+- prompt token target
+- requested output tokens
+- repeat count
+
+It records:
+
+- latency
+- prompt tokens
+- completion tokens
+- cached tokens when reported by the runtime
+- `nvext.agent_hints` probe ids for worker-log joins
+
+This is the first step toward a bolder hardware model:
+
+```text
+observed_decode_latency
+  = attention/KV component
+  + FFN/MoE component
+  + scheduling/runtime overhead
+```
+
+Once this sweep is stable, pair the same runs with `nsys`/`ncu` and classify
+kernels into:
+
+- attention / KV-cache movement
+- FFN / GEMM / activation
+- runtime overhead
+
+The first profiling wrapper is:
+
+```text
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+The first kernel classifier is:
+
+```text
+experiments/lpx_decode_split/analyze_nsys_sqlite.py
+```
+
+The first GPU+LPU what-if estimator is:
+
+```text
+experiments/lpx_decode_split/estimate_lpx_speedup.py
+```
+
+This makes the immediate research posture:
+
+```text
+Assume GPU+LPU split is compelling.
+Measure the attention/KV and FFN/MLP shares directly.
+Then estimate the payoff of moving FFN/MLP to LPU under transfer-cost assumptions.
+```

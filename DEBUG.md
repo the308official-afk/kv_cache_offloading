@@ -206,6 +206,594 @@ echo
 Expected response: JSON with a `choices[0].message.content` value similar to
 `ok`.
 
+For instrumented Dynamo, run a direct hint probe before full AgentBench:
+
+```bash
+PROBE_ID="manual-instrumented-dynamo-probe-$(date +%s)"
+
+curl -sS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"model\": \"Qwen/Qwen2.5-7B-Instruct\",
+    \"messages\": [
+      {\"role\": \"user\", \"content\": \"Reply with exactly: ok\"}
+    ],
+    \"max_tokens\": 8,
+    \"nvext\": {
+      \"agent_hints\": {
+        \"hint_probe_id\": \"${PROBE_ID}\",
+        \"program_id\": \"manual_probe\",
+        \"agent_phase\": \"hint_path_test\",
+        \"expected_output_tokens\": 8
+      },
+      \"request_context\": {
+        \"probe\": \"manual_instrumented_dynamo\"
+      }
+    }
+  }"
+
+echo
+echo "PROBE_ID=${PROBE_ID}"
+```
+
+Then confirm the same probe id reached the worker:
+
+```bash
+docker logs dynamo-sglang-worker 2>&1 | \
+  grep -E "${PROBE_ID}|agent_hints|hint_probe_id|worker.decode" | \
+  tail -50
+```
+
+Success means a worker `[RUNTIME_JSON]` event contains the same `hint_probe_id`
+and `agent_hints`.
+
+To profile the Dynamo/SGLang decode path directly for the GPU/LPU split study,
+run one controlled synthetic case. This does not run Deep Agents or AgentBench:
+
+```bash
+cd ~/kv_cache_offloading
+
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+Check:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+LATEST_RESULT_ROOT="$(ls -td experiments/lpx_decode_split/results/* | head -1)"
+
+echo "$LATEST_PROFILE"
+echo "$LATEST_RESULT_ROOT"
+
+find "$LATEST_RESULT_ROOT" -name measurements.csv -o -name summary.md
+find "$LATEST_PROFILE" -maxdepth 3 -type f | sort
+
+ls experiments/lpx_decode_split/profiles/*/kernel_analysis/summary.md
+ls experiments/lpx_decode_split/profiles/*/kernel_analysis/lpx_what_if/summary.md
+```
+
+Worker logs like `Registered endpoint 'dynamo.backend.generate'` and
+`Model registration succeeded` mean the profiled worker reached the stage that
+previously failed. Keep waiting for the script to print `Running decode-sweep...`
+and then the final profile/result directories.
+
+If the script appears stuck after:
+
+```text
+Model registration succeeded; processing queued requests
+```
+
+and no `measurements.csv` or profile files appear yet, the wrapper is probably
+waiting on the tiny generation-readiness request. Use the latest
+`profile_one_decode_case.sh`; readiness requests are time-bounded and write:
+
+```text
+experiments/lpx_decode_split/profiles/<run>/generation-readiness-last-response.txt
+```
+
+For faster diagnosis, rerun with shorter readiness timeouts:
+
+```bash
+PROFILE_READY_RETRIES=6 \
+PROFILE_READY_DELAY_SECS=3 \
+PROFILE_READY_REQUEST_TIMEOUT_SECS=10 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If startup stops earlier with:
+
+```text
+Timed out waiting for model registration in the frontend.
+```
+
+and the worker log still shows model download or `Load weight begin`, the worker
+is not dead; the wrapper gave up too early and cleaned up the container. Rerun
+with a longer model-registration wait:
+
+```bash
+MODEL_READY_RETRIES=600 \
+MODEL_READY_DELAY_SECS=2 \
+WORKER_PROFILE_TRACE='cuda,nvtx,cublas' \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_READY_RETRIES=6 \
+PROFILE_READY_DELAY_SECS=3 \
+PROFILE_READY_REQUEST_TIMEOUT_SECS=10 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If the worker log warns about unauthenticated Hugging Face requests, set
+`HF_TOKEN` before starting the stack to reduce model download throttling:
+
+```bash
+export HF_TOKEN='<your-hugging-face-token>'
+```
+
+`docker logs -f dynamo-sglang-worker` will fail after this timeout because the
+wrapper cleans up the stack on failure. Inspect the saved logs instead:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+tail -300 "$LATEST_PROFILE/dynamo-sglang-worker.log"
+cat "$LATEST_PROFILE/docker-worker-state.txt"
+```
+
+In another shell, you can test the same tiny readiness request manually:
+
+```bash
+curl -fsS --connect-timeout 3 --max-time 10 \
+  http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "Qwen/Qwen2.5-7B-Instruct",
+    "messages": [
+      {"role": "user", "content": "Reply with exactly: ok"}
+    ],
+    "max_tokens": 4,
+    "temperature": 0
+  }'
+echo
+```
+
+If `kernel_analysis/summary.md` is missing but an `.nsys-rep` file exists,
+export SQLite manually with `nsys export --force-overwrite true --type sqlite`, then run
+`experiments/lpx_decode_split/analyze_nsys_sqlite.py`.
+
+If the profile wrapper returns:
+
+```text
+HTTP 500: {"message":"Failed to generate completions: Connection refused (os error 111)"}
+```
+
+the frontend registered the model before the profiled worker was ready for real
+generation traffic. Use the latest `profile_one_decode_case.sh`; it waits for a
+tiny generation request before sending the measured request and saves:
+
+```text
+experiments/lpx_decode_split/profiles/<run>/dynamo-frontend.log
+experiments/lpx_decode_split/profiles/<run>/dynamo-sglang-worker.log
+```
+
+If it still fails, inspect:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+cat "$LATEST_PROFILE/dynamo-frontend.log" | tail -200
+cat "$LATEST_PROFILE/dynamo-sglang-worker.log" | tail -300
+```
+
+To separate "Nsight broke worker startup" from "the request shape is broken,"
+run the same wrapper with profiling disabled:
+
+```bash
+PROFILE_MODE=off \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If `PROFILE_MODE=off` works but the default `PROFILE_MODE=nsys` fails, the
+worker image/runtime likely cannot serve correctly under `nsys profile`. In that
+case, first collect decode-sweep measurements without Nsight, then use a lower
+overhead profiler configuration or profile a smaller request.
+
+If the frontend log shows a worker selected, then:
+
+```text
+Failed to generate completions: Connection refused (os error 111)
+Removing worker ...
+chat endpoints disabled
+```
+
+the worker registered and then died or became unreachable under profiling. Retry
+with a lower-overhead Nsight configuration:
+
+```bash
+WORKER_PROFILE_TRACE='cuda,nvtx,cublas' \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_READY_RETRIES=6 \
+PROFILE_READY_DELAY_SECS=3 \
+PROFILE_READY_REQUEST_TIMEOUT_SECS=10 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If that still fails, confirm the synthetic decode request works without Nsight:
+
+```bash
+PROFILE_MODE=off \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If `PROFILE_MODE=off` works, try a smaller profiled request:
+
+```bash
+WORKER_PROFILE_TRACE='cuda,nvtx,cublas' \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROMPT_TOKEN_TARGET=1024 \
+MAX_TOKENS=32 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+The latest wrapper also saves these files for this failure mode:
+
+```text
+experiments/lpx_decode_split/profiles/<run>/docker-worker-state.txt
+experiments/lpx_decode_split/profiles/<run>/docker-worker-inspect.json
+experiments/lpx_decode_split/profiles/<run>/dynamo-sglang-worker.full.log
+```
+
+If the run succeeds but Nsight prints:
+
+```text
+Unable to retrieve the importer version: skipping importation of the QDSTRM file.
+Generated:
+  /profiles/<run>.qdstrm
+```
+
+then the measured request succeeded and Nsight captured a raw `.qdstrm` stream,
+but the container could not convert it to `.nsys-rep`. NVIDIA's Nsight Systems
+docs describe `.qdstrm` as an intermediate CLI output that must be imported into
+`.nsys-rep`; the CLI and QdstrmImporter versions need to match.
+
+If you see this message while following `docker logs -f dynamo-sglang-worker`,
+remember that it is the in-container importer failing. The outer
+`profile_one_decode_case.sh` wrapper may still import the `.qdstrm` after the
+worker stops, as long as host `QdstrmImporter` is on `PATH` in the same shell
+that launched the profile script. Wait for the profile script itself to return,
+then inspect the profile directory.
+
+If only `.qdstrm` exists after the wrapper returns, manually re-add host Nsight
+tools to `PATH` and import the latest capture:
+
+```bash
+cd ~/tools/nsight-systems-install
+
+NSYS_BIN="$(find "$PWD/extracted" -type f -name nsys | head -1)"
+QDISTRM_BIN="$(find "$PWD/extracted" -type f -name QdstrmImporter | head -1)"
+export PATH="$(dirname "$NSYS_BIN"):$(dirname "$QDISTRM_BIN"):${PATH}"
+
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+rm -f "$LATEST_PROFILE/${BASENAME}.nsys-rep" "$LATEST_PROFILE/${BASENAME}.sqlite"
+
+QdstrmImporter \
+  -i "$LATEST_PROFILE/${BASENAME}.qdstrm" \
+  -o "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+```
+
+If that import fails with:
+
+```text
+Qdstrm file does not have valid time conversion factors.
+```
+
+the raw stream is not recoverable. Regenerate the profile while forcing the
+worker container to use the same host `nsys` package as host `QdstrmImporter`:
+
+```bash
+cd ~/tools/nsight-systems-install
+
+NSYS_BIN="$(find "$PWD/extracted" -type f -name nsys | head -1)"
+QDISTRM_BIN="$(find "$PWD/extracted" -type f -name QdstrmImporter | head -1)"
+export PATH="$(dirname "$NSYS_BIN"):$(dirname "$QDISTRM_BIN"):${PATH}"
+
+cd ~/kv_cache_offloading
+
+NSYS_COMMAND_PATH="$(readlink -f "$(command -v nsys)")"
+NSYS_COMMAND_DIR="$(dirname "${NSYS_COMMAND_PATH}")"
+if [[ "$(basename "${NSYS_COMMAND_DIR}")" = target-linux-* ]]; then
+  WORKER_PROFILE_NSYS_DIR="$(dirname "${NSYS_COMMAND_DIR}")"
+else
+  WORKER_PROFILE_NSYS_DIR="${NSYS_COMMAND_DIR}"
+fi
+
+WORKER_PROFILE_NSYS_DIR="${WORKER_PROFILE_NSYS_DIR}" \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+The patched wrapper auto-detects host `nsys` when it is on `PATH`, mounts that
+directory into the worker container, and runs `/opt/host-nsys-target/nsys` so the
+generated `.qdstrm` and host `QdstrmImporter` come from the same Nsight Systems
+package.
+
+Check the latest outputs:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+LATEST_RESULT_ROOT="$(ls -td experiments/lpx_decode_split/results/* | head -1)"
+
+find "$LATEST_RESULT_ROOT" -name measurements.csv -o -name summary.md
+find "$LATEST_PROFILE" -maxdepth 1 -type f | sort
+```
+
+After worker logs show:
+
+```text
+Generated:
+  /profiles/<run>.nsys-rep
+```
+
+wait for `profile_one_decode_case.sh` itself to return, then inspect the latest
+analysis:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+LATEST_RESULT_ROOT="$(ls -td experiments/lpx_decode_split/results/* | head -1)"
+
+find "$LATEST_RESULT_ROOT" -name measurements.csv -o -name summary.md
+find "$LATEST_PROFILE" -maxdepth 3 -type f | sort
+
+cat "$LATEST_RESULT_ROOT"/*/summary.md
+cat "$LATEST_PROFILE/kernel_analysis/summary.md"
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+If `kernel_analysis/summary.md` exists but
+`kernel_analysis/lpx_what_if/summary.md` is missing, run only the estimator:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --completion-tokens 256 \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
+
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+The wrapper now runs this automatically after successful kernel classification.
+
+If you have `QdstrmImporter` available on a machine with the matching Nsight
+Systems install, import the stream and continue analysis:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+QdstrmImporter \
+  -i "$LATEST_PROFILE/${BASENAME}.qdstrm" \
+  -o "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+
+nsys export --force-overwrite true --type sqlite \
+  --output "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
+```
+
+If `kernel_analysis/summary.md` says:
+
+```text
+Kernel table: `ENUM_CUDA_KERNEL_LAUNCH_TYPE`
+Kernel rows: 0
+```
+
+the profile capture probably succeeded, but the local analyzer is stale and
+picked a lookup table instead of a real CUDA kernel event table. Update the repo
+to the latest `analyze_nsys_sqlite.py`, then rerun analysis on the existing
+SQLite export:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+rm -rf "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
+
+cat "$LATEST_PROFILE/kernel_analysis/summary.md"
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+Expected: `Kernel table` should be a real event table such as
+`CUPTI_ACTIVITY_KIND_KERNEL` or `CUDA_GRAPH_EVENTS`, not an `ENUM_*` table, and
+`Kernel rows` should be greater than zero. `CUDA_GRAPH_EVENTS` is valid for
+runs where SGLang serves through CUDA graph replay. If the analyzer still cannot
+find a usable table, it prints a diagnostic list of CUDA/kernel-like tables;
+paste that output back into the debug session.
+
+If the diagnostic shows `CUDA_GRAPH_EVENTS` with timed rows but no classic
+`CUPTI_ACTIVITY_KIND_KERNEL` table, update to the analyzer that accepts
+`CUDA_GRAPH_EVENTS` and rerun the same commands above. If the resulting top
+kernel names are too generic to separate attention from FFN/MLP, collect another
+profile with CUDA graph node tracing enabled. NVIDIA Nsight Systems documents
+`--cuda-graph-trace=graph` as graph-level tracing where node activities are not
+collected; `--cuda-graph-trace=node` collects node activities with higher
+overhead:
+
+```bash
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If that still reports only `Graph Creation` / `GraphExec Creation` with zero
+duration, collect a slower profile with CUDA graphs disabled so Nsight records
+individual kernel launches:
+
+```bash
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --disable-cuda-graph' \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+This run is usually slower, but it can expose clearer per-kernel names for the
+attention-vs-FFN classification.
+
+If `QdstrmImporter` is installed but not on `PATH`, locate it first:
+
+```bash
+find /opt /usr/local /usr -name QdstrmImporter 2>/dev/null | head
+```
+
+If that prints nothing, this machine does not have the importer installed. Do not
+run `/path/to/QdstrmImporter` literally; that is only a placeholder. Either
+install a matching Nsight Systems host package on this machine, or move the
+`.qdstrm` file to a machine that already has Nsight Systems installed.
+
+For new machines, verify Nsight Systems host tools during setup:
+
+```bash
+command -v nsys || echo "nsys is missing"
+find /opt /usr/local /usr -name QdstrmImporter 2>/dev/null | head
+```
+
+Smoke tests and AgentBench correctness runs do not require these tools. Decode
+kernel profiling analysis does require them, because `.qdstrm` must be imported
+to `.nsys-rep` and then exported to SQLite before
+`analyze_nsys_sqlite.py` can classify kernels.
+
+Install them with NVIDIA's full Nsight Systems `.run` package:
+
+```bash
+cd ~
+mkdir -p tools/nsight-systems-install
+cd tools/nsight-systems-install
+
+NSYS_VERSION="2026.3.1.157-3804839"
+
+case "$(uname -m)" in
+  x86_64)
+    NSYS_RUN="NsightSystems-linux-public-${NSYS_VERSION}.run"
+    ;;
+  aarch64|arm64)
+    NSYS_RUN="NsightSystems-linux-sbsa-public-${NSYS_VERSION}.run"
+    ;;
+  *)
+    echo "Unsupported architecture for this command: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+wget -O "${NSYS_RUN}" \
+  "https://developer.download.nvidia.com/devtools/nsight-systems/${NSYS_RUN}"
+
+chmod +x "${NSYS_RUN}"
+
+rm -rf extracted
+mkdir -p extracted
+./"${NSYS_RUN}" --target "$PWD/extracted" --noexec
+
+NSYS_BIN="$(find ~/tools/nsight-systems-install/extracted -type f -name nsys | head -1)"
+QDISTRM_BIN="$(find ~/tools/nsight-systems-install/extracted -type f -name QdstrmImporter | head -1)"
+
+test -n "${NSYS_BIN}" || { echo "ERROR: nsys not found; inspect installer output"; exit 1; }
+test -n "${QDISTRM_BIN}" || { echo "ERROR: QdstrmImporter not found; install full Nsight Systems, not CLI-only"; exit 1; }
+
+NSYS_BIN_DIR="$(dirname "${NSYS_BIN}")"
+QDISTRM_BIN_DIR="$(dirname "${QDISTRM_BIN}")"
+
+export PATH="${NSYS_BIN_DIR}:${QDISTRM_BIN_DIR}:${PATH}"
+
+command -v nsys
+command -v QdstrmImporter
+nsys --version
+```
+
+If the commands are still missing, inspect the download and installer output:
+
+```bash
+cd ~/tools/nsight-systems-install
+ls -lh
+file "${NSYS_RUN}"
+./"${NSYS_RUN}" --help | head -80
+find "$PWD/extracted" -maxdepth 5 -type f | sort | head -100
+```
+
+When you do have the real path, call it by absolute path:
+
+```bash
+/path/to/QdstrmImporter \
+  -i "$LATEST_PROFILE/${BASENAME}.qdstrm" \
+  -o "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+```
+
+If you only have the Nsight Systems GUI on another machine, copy the `.qdstrm`
+there and import it with a matching or newer Nsight Systems install, then copy
+the resulting `.nsys-rep` or exported `.sqlite` back into the same profile
+directory.
+
+If the measured request succeeds but no `.nsys-rep` file is produced, make sure
+you have the latest wrapper. It now stops `dynamo-sglang-worker` gracefully before
+normal stack cleanup so `nsys` can flush the report. You can increase the wait:
+
+```bash
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
 You can also use the built-in script test:
 
 ```bash

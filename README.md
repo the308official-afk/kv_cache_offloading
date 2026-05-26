@@ -1,51 +1,135 @@
-# slide creation prompt
-Give me a polished version of these slides attached:
-- Dont add/remove any data in any of the slides
-- Dont truncate or omit any information in any of the slides, every data (e.g., JSON key and value) MUST be displayed in the slides
-- I’m presenting to a technical audience 
-- JSON information should look nice and presentable
-- Use white background except when rendering JSON data
-- Give me page numbers for easier debugging
-
-First give me some recommendations on polishing the slides before I ask you to proceed 
-
 # kv_cache_offloading
 
-Reproducible AgentBench + Dynamo + SGLang harness for proving:
+Reproducible AgentBench + Dynamo + SGLang harness for two research workflows:
 
 ```text
-AgentBench -> Dynamo native frontend/preprocessor -> SGLang worker
+1. LPX decode profiling:
+   Dynamo native frontend -> SGLang worker under Nsight Systems
+
+2. AgentBench runtime-hint tracing:
+   AgentBench -> Dynamo frontend/preprocessor -> SGLang worker
 ```
 
-Success means an AgentBench SWE-bench result contains worker `[RUNTIME_JSON]`
-events with `agent_hints`, `hint_probe_id`, and `request_context` in
-`worker.decode.*`.
+The most important current result is the LPX decode split experiment. A
+successful run produces:
 
----------------------------------------------------------------------------------------------------------------------------------------
+```text
+experiments/lpx_decode_split/profiles/<run>/kernel_analysis/summary.md
+experiments/lpx_decode_split/profiles/<run>/kernel_analysis/lpx_what_if/summary.md
+```
 
-## 1. Machine Setup
+Reference success signal from the first complete run:
 
-Use an Ampere-or-newer NVIDIA GPU machine with enough local disk for Docker
-images, model cache, and build artifacts. For a full instrumented Dynamo build,
-keep roughly 80-120 GB free; for a no-rebuild smoke test, keep roughly 30-50 GB
-free.
+```text
+Kernel table: CUPTI_ACTIVITY_KIND_KERNEL
+Kernel rows: 29809
+Total kernel duration ms: 9884.823
 
-Before installing project dependencies, make sure the machine has:
+FFN/MLP:      8794.067 ms  88.965%
+Attention/KV:  766.629 ms   7.756%
+Other:         324.127 ms   3.279%
+```
 
+Exact numbers will vary by GPU, driver, image build, and model cache state, but
+the report should have nonzero kernel time, bucketed `ffn_mlp`, `attention_kv`,
+and `other` rows, plus a generated LPX what-if speedup table.
+
+--------------------------------------------------------------------------------
+
+## 1. Golden Path: Reproduce LPX Decode Profiling
+
+Use this section on a new machine when the goal is to reproduce the final
+successful GPU/LPU split experiment.
+
+### 1.1 Machine Requirements
+
+Use an NVIDIA GPU machine with:
+
+- Ampere-or-newer GPU
+- NVIDIA driver
+- Docker
+- NVIDIA Container Toolkit
 - Python 3.11 with `pip`
 - Git
-- Docker
-- NVIDIA driver
-- NVIDIA Container Toolkit
-- Docker GPU access via `docker run --rm --gpus all ... nvidia-smi`
+- 80-120 GB free disk for model cache, Docker images, and build artifacts
+- Nsight Systems host tools: `nsys` and `QdstrmImporter`
+- Hugging Face token recommended for reliable model downloads
 
-Clone or copy this repository onto the machine, then install AgentBench
-dependencies. Deep Agents is installed from the local checkout at
-`agentbench/upstream/deepagents/libs/deepagents`, so the checkout must exist
-before installing requirements.
-
+Verify Docker GPU access:
 
 ```bash
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
+```
+
+Do not reuse Docker images between machines unless CPU architecture matches.
+Many GH200 hosts are `aarch64`/`arm64`; x86 hosts build `linux/amd64` images.
+Rebuild Dynamo natively on the target machine when architectures differ.
+
+--------------------------------------------------------------------------------
+
+### 1.2 Install Nsight Systems Host Tools
+
+Nsight is required for kernel classification. Smoke tests and AgentBench
+correctness runs do not require it, but LPX profiling does.
+
+Install NVIDIA's full Linux `.run` package. Use `linux-public` on `x86_64` and
+`linux-sbsa-public` on `aarch64`/Arm server systems:
+
+```bash
+cd ~
+mkdir -p tools/nsight-systems-install
+cd tools/nsight-systems-install
+
+NSYS_VERSION="2026.3.1.157-3804839"
+
+case "$(uname -m)" in
+  x86_64)
+    NSYS_RUN="NsightSystems-linux-public-${NSYS_VERSION}.run"
+    ;;
+  aarch64|arm64)
+    NSYS_RUN="NsightSystems-linux-sbsa-public-${NSYS_VERSION}.run"
+    ;;
+  *)
+    echo "Unsupported architecture for this command: $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+
+wget -O "${NSYS_RUN}" \
+  "https://developer.download.nvidia.com/devtools/nsight-systems/${NSYS_RUN}"
+
+chmod +x "${NSYS_RUN}"
+
+rm -rf extracted
+mkdir -p extracted
+./"${NSYS_RUN}" --target "$PWD/extracted" --noexec
+
+NSYS_BIN="$(find "$PWD/extracted" -type f -name nsys | head -1)"
+QDISTRM_BIN="$(find "$PWD/extracted" -type f -name QdstrmImporter | head -1)"
+
+test -n "${NSYS_BIN}" || { echo "ERROR: nsys not found"; exit 1; }
+test -n "${QDISTRM_BIN}" || { echo "ERROR: QdstrmImporter not found"; exit 1; }
+
+export PATH="$(dirname "${NSYS_BIN}"):$(dirname "${QDISTRM_BIN}"):${PATH}"
+
+command -v nsys
+command -v QdstrmImporter
+nsys --version
+```
+
+To make this persistent, append the final `export PATH=...` line to `~/.bashrc`
+after confirming both commands resolve.
+
+If `QdstrmImporter` is missing, you probably installed a CLI-only package. Use
+the full Nsight Systems installer instead.
+
+--------------------------------------------------------------------------------
+
+### 1.3 Clone And Install Python Dependencies
+
+```bash
+cd ~
+git clone <your-repo-url> kv_cache_offloading
 cd ~/kv_cache_offloading
 
 mkdir -p agentbench/upstream
@@ -61,14 +145,8 @@ python3.11 -m pip install -r agentbench/requirements.txt
 export HF_TOKEN=your_token_here
 ```
 
-Run the install from the repo root, not from inside `agentbench/`, because the
-local Deep Agents path is relative to `~/kv_cache_offloading`.
-
-The checkout existing is not enough. Deep Agents must also be installed into the
-same interpreter used to run AgentBench. Always use `python3.11 -m pip`, not
-plain `pip`.
-
-Verify the Python dependencies:
+Run installs from the repo root. Deep Agents must be installed into the same
+interpreter used later:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -81,29 +159,173 @@ import datasets
 import pandas
 import langchain_openai
 
-print("AgentBench Python deps OK")
+print("Python deps OK")
 print("deepagents:", deepagents.__file__)
 PY
 ```
 
-If the checkout exists but `python3.11 -m pip show deepagents` prints
-`WARNING: Package(s) not found: deepagents`, force reinstall the local package:
+If the checkout exists but `python3.11 -m pip show deepagents` says the package
+is missing, force reinstall:
 
 ```bash
 cd ~/kv_cache_offloading
 
-python3.11 -m pip install --upgrade pip
 python3.11 -m pip install ./agentbench/upstream/deepagents/libs/deepagents
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
----------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-### 1.1 etcd Recovery
+### 1.4 Preflight Check
+
+Run this before building or profiling:
+
+```bash
+cd ~/kv_cache_offloading
+
+echo "host arch: $(uname -m)"
+python3.11 --version
+docker version --format 'docker {{.Server.Version}}'
+df -h /
+docker system df
+
+test -n "${HF_TOKEN:-}" && echo "HF_TOKEN is set" || echo "HF_TOKEN is missing"
+
+docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
+
+command -v nsys || echo "nsys is missing"
+command -v QdstrmImporter || echo "QdstrmImporter is missing"
+
+ss -ltnp | grep ':8000' || true
+```
+
+--------------------------------------------------------------------------------
+
+### 1.5 Build Instrumented Dynamo Images
+
+The LPX profile wrapper expects local instrumented images by default.
+
+```bash
+cd ~/kv_cache_offloading
+chmod +x run_dynamo_head.sh run_dynamo_single_host.sh run_dynamo_worker.sh
+
+rm -rf runtime_upstream/dynamo
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+Built images:
+
+```text
+local/dynamo-frontend:runtime-json-logs
+local/dynamo-sglang:runtime-json-logs
+```
+
+Verify image architecture:
+
+```bash
+docker image inspect local/dynamo-frontend:runtime-json-logs --format '{{.Architecture}}'
+docker image inspect local/dynamo-sglang:runtime-json-logs --format '{{.Architecture}}'
+```
+
+Expected:
+
+```text
+x86_64 host -> amd64 images
+aarch64 host -> arm64 images
+```
+
+--------------------------------------------------------------------------------
+
+### 1.6 Run The Successful LPX Profile Case
+
+This command starts Dynamo/SGLang, runs the SGLang worker under Nsight Systems,
+sends one synthetic decode request, stops the worker gracefully so Nsight flushes
+the report, exports SQLite, classifies kernels, and writes the LPX what-if table.
+
+```bash
+cd ~/kv_cache_offloading
+
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+The `--cuda-graph-trace=node` flag is important. Without it, Nsight may only
+show `Graph Creation` / `GraphExec Creation` rows and report zero useful kernel
+duration.
+
+--------------------------------------------------------------------------------
+
+### 1.7 Verify LPX Outputs
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+LATEST_RESULT_ROOT="$(ls -td experiments/lpx_decode_split/results/* | head -1)"
+
+echo "$LATEST_PROFILE"
+echo "$LATEST_RESULT_ROOT"
+
+find "$LATEST_RESULT_ROOT" -name measurements.csv -o -name summary.md
+find "$LATEST_PROFILE" -maxdepth 3 -type f | sort
+
+cat "$LATEST_RESULT_ROOT"/*/summary.md
+cat "$LATEST_PROFILE/kernel_analysis/summary.md"
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+Required files:
+
+```text
+<profile>/<run>.nsys-rep
+<profile>/<run>.sqlite
+<profile>/kernel_analysis/kernel_classification.json
+<profile>/kernel_analysis/summary.md
+<profile>/kernel_analysis/lpx_what_if/summary.md
+<result>/measurements.csv
+<result>/summary.md
+```
+
+Good success signals:
+
+```text
+Kernel table: CUPTI_ACTIVITY_KIND_KERNEL
+Kernel rows: greater than 0
+Total kernel duration ms: greater than 0
+Bucket Summary includes ffn_mlp, attention_kv, and other
+LPX What-If Speedup table is present
+```
+
+Reference first complete result:
+
+```text
+FFN/MLP:      8794.067 ms  88.965%
+Attention/KV:  766.629 ms   7.756%
+Other:         324.127 ms   3.279%
+
+2x FFN speedup -> about 1.80x projected kernel speedup
+4x FFN speedup -> about 3.01x projected kernel speedup
+8x FFN speedup -> about 4.51x projected kernel speedup
+```
+
+--------------------------------------------------------------------------------
+
+## 2. Golden Path Failure Recovery
+
+Use this section only when the LPX profile path above does not produce the
+expected files.
+
+### 2.1 etcd Is Unhealthy
 
 Dynamo uses etcd as a local service registry. If startup fails with
-`Frontend did not become healthy` and etcd is not healthy, start a clean
-`dynamo-etcd` container manually:
+`Frontend did not become healthy`, start a clean `dynamo-etcd` container:
 
 ```bash
 docker rm -f dynamo-etcd etcd >/dev/null 2>&1 || true
@@ -130,54 +352,121 @@ Expected:
 {"health":"true","reason":""}
 ```
 
-Then rerun the smoke-test start command.
+Then rerun the LPX profile command.
 
----------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-## 2. Preflight Check
+### 2.2 `.nsys-rep` Exists But `lpx_what_if` Is Missing
 
-Run this before building or starting Dynamo on a new machine, especially GH200.
+Run only the estimator:
 
 ```bash
 cd ~/kv_cache_offloading
 
-echo "host arch: $(uname -m)"
-python3.11 --version
-docker version --format 'docker {{.Server.Version}}'
-df -h /
-docker system df
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
 
-test -n "${HF_TOKEN:-}" && echo "HF_TOKEN is set" || echo "HF_TOKEN is missing"
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --completion-tokens 256 \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
 
-docker run --rm --gpus all nvidia/cuda:12.2.0-base-ubuntu22.04 nvidia-smi
-
-ss -ltnp | grep ':8000' || true
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
 ```
 
-Do not reuse Docker images between machines unless the CPU architecture matches.
-Many GH200 hosts are `aarch64`/`arm64`; x86 hosts build `linux/amd64` images.
-Rebuild Dynamo natively on the target machine when architectures differ.
+--------------------------------------------------------------------------------
 
-After building, verify image architecture:
+### 2.3 `.nsys-rep` Exists But SQLite Or Kernel Analysis Is Missing
 
 ```bash
-docker image inspect local/dynamo-frontend:runtime-json-logs --format '{{.Architecture}}'
-docker image inspect local/dynamo-sglang:runtime-json-logs --format '{{.Architecture}}'
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+nsys export --force-overwrite true --type sqlite \
+  --output "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --completion-tokens 256 \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
 ```
 
-Expected values:
+--------------------------------------------------------------------------------
+
+### 2.4 Only `.qdstrm` Exists
+
+Use matching host `QdstrmImporter`:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+QdstrmImporter \
+  -i "$LATEST_PROFILE/${BASENAME}.qdstrm" \
+  -o "$LATEST_PROFILE/${BASENAME}.nsys-rep"
+```
+
+Then run the SQLite and analysis commands from **2.3**.
+
+If import fails with:
 
 ```text
-x86_64 host -> amd64 images
-aarch64 host -> arm64 images
+Qdstrm file does not have valid time conversion factors.
 ```
 
----------------------------------------------------------------------------------------------------------------------------------------
+regenerate the profile after ensuring the same Nsight package is available on
+`PATH`. The profile wrapper auto-detects host `nsys`, mounts it into the worker,
+and avoids the mismatched-importer failure.
 
-## 3. Smoke Test Without Rebuild
+--------------------------------------------------------------------------------
 
-Use the published Dynamo image first when you only want to prove Docker, GPU,
-model loading, and the basic OpenAI-compatible request path.
+### 2.5 Kernel Summary Shows Only Graph Creation Rows
+
+If `kernel_analysis/summary.md` shows only:
+
+```text
+Graph Creation
+GraphExec Creation
+Total kernel duration ms: 0.0
+```
+
+rerun with CUDA graph node tracing:
+
+```bash
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+If that still fails, collect a slower profile with SGLang CUDA graphs disabled:
+
+```bash
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --disable-cuda-graph' \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+PROMPT_TOKEN_TARGET=8192 \
+MAX_TOKENS=256 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+experiments/lpx_decode_split/profile_one_decode_case.sh
+```
+
+--------------------------------------------------------------------------------
+
+## 3. Optional Smoke Test Without Rebuild
+
+Use this only to prove Docker, GPU, model loading, and the basic OpenAI-compatible
+request path. This does not prove runtime JSON hints or LPX profiling.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -201,43 +490,15 @@ curl -fsS http://127.0.0.1:8000/v1/models
 ./run_dynamo_single_host.sh test
 ```
 
-This does not prove `agent_hints` reach worker logs. That proof requires the
-instrumented build below.
+--------------------------------------------------------------------------------
 
-If startup fails because etcd is unhealthy, use the **etcd Recovery** step in
-Machine Setup, then rerun this smoke-test command.
+## 4. Optional Direct Hint Probe
 
----------------------------------------------------------------------------------------------------------------------------------------
-
-## 4. Patch And Build Dynamo
+Use this after building instrumented images when you want to prove `agent_hints`
+reach the worker without running AgentBench.
 
 ```bash
 cd ~/kv_cache_offloading
-rm -rf runtime_upstream/dynamo
-./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
-
-LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
-./runtime_instrumentation/build_instrumented_dynamo_images.sh
-```
-
-The prep script applies runtime JSON logging, preserves `nvext.agent_hints` and
-`nvext.request_context`, adds worker hint proof fields, and repairs known
-upstream drift (`overlap_score_credit`, stale `choice.stop_reason`).
-
-Built images:
-
-```text
-local/dynamo-frontend:runtime-json-logs
-local/dynamo-sglang:runtime-json-logs
-```
-
----------------------------------------------------------------------------------------------------------------------------------------
-
-## 5. Start Instrumented Runtime
-
-```bash
-cd ~/kv_cache_offloading
-chmod +x run_dynamo_head.sh run_dynamo_single_host.sh run_dynamo_worker.sh
 
 ./run_dynamo_single_host.sh stop
 
@@ -250,83 +511,78 @@ WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 ./run_dynamo_single_host.sh start
 ```
 
-Check model registration:
+Then send a direct hint probe:
 
 ```bash
-./run_dynamo_single_host.sh status
-curl -fsS http://127.0.0.1:8000/v1/models
+PROBE_ID="manual-instrumented-dynamo-probe-$(date +%s)"
+
+curl -sS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"model\": \"Qwen/Qwen2.5-7B-Instruct\",
+    \"messages\": [
+      {\"role\": \"user\", \"content\": \"Reply with exactly: ok\"}
+    ],
+    \"max_tokens\": 8,
+    \"nvext\": {
+      \"agent_hints\": {
+        \"hint_probe_id\": \"${PROBE_ID}\",
+        \"program_id\": \"manual_probe\",
+        \"agent_phase\": \"hint_path_test\",
+        \"expected_output_tokens\": 8
+      },
+      \"request_context\": {
+        \"probe\": \"manual_instrumented_dynamo\"
+      }
+    }
+  }"
+
+echo
+echo "PROBE_ID=${PROBE_ID}"
 ```
 
-If the model is not listed yet:
+Check worker logs:
 
 ```bash
-docker logs -f dynamo-sglang-worker
-docker logs -f --tail 200 dynamo-sglang-frontend
-curl -fsS http://127.0.0.1:8000/v1/models
+docker logs dynamo-sglang-worker 2>&1 | \
+  grep -E "${PROBE_ID}|agent_hints|hint_probe_id|worker.decode" | \
+  tail -50
 ```
 
----------------------------------------------------------------------------------------------------------------------------------------
+Success signal: a worker `[RUNTIME_JSON]` event contains the same
+`hint_probe_id` and `agent_hints`.
 
-## 6. Run AgentBench
+--------------------------------------------------------------------------------
 
-AgentBench requests can be much larger than the direct smoke test because they
-include SWE-bench task text, Deep Agents instructions, tools, and tool history.
-If you see `current token count exceeds the model maximum context length of
-32768 tokens`, restart the worker with a larger context window before rerunning:
+## 5. Optional AgentBench Run
 
-```bash
-./run_dynamo_single_host.sh stop
+AgentBench requests are larger than the LPX synthetic decode request because
+they include SWE-bench task text, Deep Agents instructions, tools, and tool
+history.
 
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
-DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
-./run_dynamo_single_host.sh start
-```
-
-If SGLang rejects that restart with:
+If you see:
 
 ```text
-User-specified context_length (65536) is greater than the derived context_length (32768)
+current token count exceeds the model maximum context length of 32768 tokens
 ```
 
-then the runtime is protecting you from an explicit longer-context override.
-For a basic smoke test, keep the default 32768 context and use a smaller task.
-For an intentional 65536-context AgentBench run, acknowledge the override with
-`SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1`:
+restart the worker with a larger context window:
 
 ```bash
 ./run_dynamo_single_host.sh stop
 
 SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH='Qwen/Qwen2.5-7B-Instruct' \
 DYNAMO_SERVED_MODEL_NAME='Qwen/Qwen2.5-7B-Instruct' \
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
 ./run_dynamo_single_host.sh start
 ```
 
-Verify the override reached the worker container:
-
-```bash
-docker inspect dynamo-sglang-worker \
-  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
-  grep SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
-```
-
-Expected:
-
-```text
-SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
-```
-
-For an instrumented run, include the same local image variables from
-**Start Instrumented Runtime** in that command.
-
-If this causes GPU OOM, use a smaller SWE-bench task index or a larger-memory
-machine. Lowering output `max_tokens` only helps when the prompt is near the
-limit; it does not help if the prompt/tool transcript already exceeds the
-context window.
+Run one AgentBench task:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -341,9 +597,7 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --prompt-evolution-value-char-limit 1000
 ```
 
----------------------------------------------------------------------------------------------------------------------------------------
-
-## 7. Verify Results
+Verify AgentBench runtime-hint results:
 
 ```bash
 LATEST_RESULT="$(ls -td agentbench/results/* | head -1)"
@@ -359,14 +613,16 @@ ls "$LATEST_RESULT/prompt_evolution_values"
 Success signal: `others/worker_runtime.log` contains
 `worker.decode.request_received`, `worker.decode.request_attached`, or
 `worker.decode.request_completed` events with AgentBench `agent_hints`, including
-`hint_probe_id: "...::hint_probe"`. Per-stage value snapshots are written under
-`prompt_evolution_values/`. New result directories use simple readable names
-such as `agentbench-nodebb_20260519_140124`.
+`hint_probe_id: "...::hint_probe"`.
 
----------------------------------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-## 8. Key Files
+## 6. Key Files
 
+- `experiments/lpx_decode_split/profile_one_decode_case.sh`
+- `experiments/lpx_decode_split/run_decode_sweep.py`
+- `experiments/lpx_decode_split/analyze_nsys_sqlite.py`
+- `experiments/lpx_decode_split/estimate_lpx_speedup.py`
 - `runtime_instrumentation/prepare_instrumented_dynamo_source.sh`
 - `runtime_instrumentation/build_instrumented_dynamo_images.sh`
 - `runtime_instrumentation/patches/dynamo_preserve_agent_hints_to_worker.patch`
@@ -379,3 +635,4 @@ such as `agentbench-nodebb_20260519_140124`.
 - `run_dynamo_worker.sh`
 - `agentbench/deepagents_swebench_single_host.py`
 - `agentbench/deepagents_app/src/agent.py`
+- `DEBUG.md`

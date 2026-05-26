@@ -22,6 +22,12 @@ WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:---enable-cache-report --enable-priority-
 WORKER_DEV_MODE="${WORKER_DEV_MODE:-0}"
 WORKER_DEV_SOURCE_ROOT="${WORKER_DEV_SOURCE_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/components/src/dynamo}"
 WORKER_DEV_BINDINGS_ROOT="${WORKER_DEV_BINDINGS_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/lib/bindings/python/src/dynamo}"
+WORKER_PROFILE_MODE="${WORKER_PROFILE_MODE:-}"
+WORKER_PROFILE_DIR="${WORKER_PROFILE_DIR:-${SCRIPT_DIR}/experiments/lpx_decode_split/profiles}"
+WORKER_PROFILE_BASENAME="${WORKER_PROFILE_BASENAME:-dynamo-sglang-worker-$(date +%Y%m%d_%H%M%S)}"
+WORKER_PROFILE_TRACE="${WORKER_PROFILE_TRACE:-cuda,nvtx,cublas}"
+WORKER_PROFILE_EXTRA_ARGS="${WORKER_PROFILE_EXTRA_ARGS:---sample=none --cuda-event-trace=false}"
+WORKER_PROFILE_NSYS_DIR="${WORKER_PROFILE_NSYS_DIR:-}"
 
 usage() {
   cat <<EOF
@@ -59,6 +65,12 @@ Environment overrides:
   WORKER_DEV_MODE       Default: ${WORKER_DEV_MODE}
   WORKER_DEV_SOURCE_ROOT Default: ${WORKER_DEV_SOURCE_ROOT}
   WORKER_DEV_BINDINGS_ROOT Default: ${WORKER_DEV_BINDINGS_ROOT}
+  WORKER_PROFILE_MODE   Default: ${WORKER_PROFILE_MODE:-<unset>} (set to nsys)
+  WORKER_PROFILE_DIR    Default: ${WORKER_PROFILE_DIR}
+  WORKER_PROFILE_BASENAME Default: ${WORKER_PROFILE_BASENAME}
+  WORKER_PROFILE_TRACE  Default: ${WORKER_PROFILE_TRACE}
+  WORKER_PROFILE_EXTRA_ARGS Default: ${WORKER_PROFILE_EXTRA_ARGS}
+  WORKER_PROFILE_NSYS_DIR Default: ${WORKER_PROFILE_NSYS_DIR:-<unset>} (host dir containing nsys)
 EOF
 }
 
@@ -98,6 +110,9 @@ EOF
 ensure_dirs() {
   sudo mkdir -p "${DYNAMO_CACHE_DIR}"
   sudo chmod 777 "${DYNAMO_CACHE_DIR}"
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
+    mkdir -p "${WORKER_PROFILE_DIR}"
+  fi
 }
 
 initialize_endpoints() {
@@ -190,14 +205,38 @@ start_worker() {
     worker_pythonpath_prefix="/workspace/components/src:/workspace/lib/bindings/python/src:"
   fi
 
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
+    docker_args+=(
+      -v "${WORKER_PROFILE_DIR}:/profiles"
+    )
+    if [[ -n "${WORKER_PROFILE_NSYS_DIR}" ]]; then
+      if [[ ! -x "${WORKER_PROFILE_NSYS_DIR}/nsys" && ! -x "${WORKER_PROFILE_NSYS_DIR}/target-linux-x64/nsys" ]]; then
+        echo "WORKER_PROFILE_NSYS_DIR must contain nsys or target-linux-x64/nsys: ${WORKER_PROFILE_NSYS_DIR}" >&2
+        exit 1
+      fi
+      docker_args+=(
+        -v "${WORKER_PROFILE_NSYS_DIR}:/opt/host-nsys-package:ro"
+      )
+    fi
+  fi
+
   if container_exists; then
     docker rm -f "${WORKER_CONTAINER_NAME}" >/dev/null 2>&1 || true
+  fi
+
+  local worker_launcher="exec"
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
+    if [[ -n "${WORKER_PROFILE_NSYS_DIR}" ]]; then
+      worker_launcher="mkdir -p /tmp/host-nsys && if [ -x /opt/host-nsys-package/nsys ]; then ln -sf /opt/host-nsys-package/nsys /tmp/host-nsys/nsys; elif [ -x /opt/host-nsys-package/target-linux-x64/nsys ]; then ln -sf /opt/host-nsys-package/target-linux-x64/nsys /tmp/host-nsys/nsys; else echo 'ERROR: mounted host nsys is not executable.' >&2; exit 127; fi; /tmp/host-nsys/nsys --version; exec /tmp/host-nsys/nsys profile --force-overwrite=true --trace='${WORKER_PROFILE_TRACE}' --output='/profiles/${WORKER_PROFILE_BASENAME}' ${WORKER_PROFILE_EXTRA_ARGS}"
+    else
+      worker_launcher="command -v nsys >/dev/null || { echo 'ERROR: nsys is not available in the worker image.' >&2; exit 127; }; nsys --version; exec nsys profile --force-overwrite=true --trace='${WORKER_PROFILE_TRACE}' --output='/profiles/${WORKER_PROFILE_BASENAME}' ${WORKER_PROFILE_EXTRA_ARGS}"
+    fi
   fi
 
   docker run \
     "${docker_args[@]}" \
     "${WORKER_IMAGE}" \
-    bash -lc "export PYTHONPATH='${worker_pythonpath_prefix}'\"\${PYTHONPATH:-}\"; python3 -m dynamo.sglang \
+    bash -lc "export PYTHONPATH='${worker_pythonpath_prefix}'\"\${PYTHONPATH:-}\"; ${worker_launcher} python3 -m dynamo.sglang \
       --model-path '${DYNAMO_MODEL_PATH}' \
       --served-model-name '${DYNAMO_SERVED_MODEL_NAME}' \
       --discovery-backend '${DYNAMO_DISCOVERY_BACKEND}' \
@@ -221,6 +260,8 @@ Model:     ${DYNAMO_MODEL_PATH}
 etcd:      ${ETCD_ENDPOINTS}
 page size: ${DYNAMO_PAGE_SIZE}
 dev mode:  ${WORKER_DEV_MODE}
+profile:   ${WORKER_PROFILE_MODE:-off}
+nsys dir:  ${WORKER_PROFILE_NSYS_DIR:-image default}
 
 Next steps:
   $0 status
