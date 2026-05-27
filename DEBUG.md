@@ -38,6 +38,22 @@ patch_generation
 review
 ```
 
+Optional HBM pass after a successful worker profile:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/deepagents_swebench_profile/profiles/* | head -1)"
+
+HBM_TOP_KERNELS_PER_GROUP=1 \
+HBM_INFERENCE_PHASES=decode \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+
+cat "$LATEST_PROFILE/kernel_analysis/hbm/hbm_summary.md"
+column -s, -t "$LATEST_PROFILE/kernel_analysis/hbm/hbm_phase_bucket_summary.csv" | less -S
+```
+
+If the worker image does not have `ncu`, set `WORKER_PROFILE_NCU_DIR` to a host
+Nsight Compute install directory before running the HBM script.
+
 If `agent_phase_inference_bucket_summary.csv` is missing, rerun the analyzer
 with the worker log:
 

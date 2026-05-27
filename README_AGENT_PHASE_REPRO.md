@@ -262,7 +262,73 @@ signal is:
 - `agent_phase_inference_bucket_summary.csv` has rows for prefill/decode and
   FFN/attention buckets
 
-## 6. Useful Debug Checks
+## 6. Optional HBM Bytes Per Phase/Bucket
+
+After a successful Nsight Systems run, run a targeted Nsight Compute pass over
+the top kernels. This reruns the same AgentBench command from the profile
+directory and estimates HBM traffic by joining Nsight Compute per-launch memory
+bytes with the Nsight Systems phase/bucket kernel counts.
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/deepagents_swebench_profile/profiles/* | head -1)"
+
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+```
+
+Key output:
+
+```bash
+cat "$LATEST_PROFILE/kernel_analysis/hbm/hbm_summary.md"
+column -s, -t "$LATEST_PROFILE/kernel_analysis/hbm/hbm_phase_bucket_summary.csv" | less -S
+```
+
+Useful knobs:
+
+```bash
+# Smaller/faster first pass.
+HBM_TOP_KERNELS_PER_GROUP=1 \
+HBM_INFERENCE_PHASES=decode \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+
+# Include prefill and decode for FFN and attention buckets.
+HBM_TOP_KERNELS_PER_GROUP=2 \
+HBM_INFERENCE_PHASES=decode,prefill \
+HBM_BUCKETS=ffn_mlp,attention_kv \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+```
+
+The HBM script skips the extra readiness generation request by default so the
+Nsight Compute averages are less polluted by a tiny warmup prompt. To force the
+readiness request back on:
+
+```bash
+HBM_SKIP_GENERATION_READY=0 \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+```
+
+If `ncu` is not inside the worker image, point the wrapper at a host Nsight
+Compute install:
+
+```bash
+WORKER_PROFILE_NCU_DIR=/opt/nvidia/nsight-compute/2026.3.0 \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+```
+
+If your Nsight Compute version uses different metric names, override them:
+
+```bash
+WORKER_PROFILE_NCU_METRICS='dram__bytes_read.sum,dram__bytes_write.sum' \
+experiments/deepagents_swebench_profile/profile_hbm_top_kernels.sh "$LATEST_PROFILE"
+```
+
+Interpretation note: this is a selected-kernel estimate. It is strongest for
+the dominant kernels in each phase/bucket, and the report includes
+`matched_duration_pct` so you can see how much selected kernel time the HBM
+estimate covers.
+
+## 7. Useful Debug Checks
 
 If phase rows are missing, inspect worker hints:
 

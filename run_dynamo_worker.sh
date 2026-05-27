@@ -28,6 +28,10 @@ WORKER_PROFILE_BASENAME="${WORKER_PROFILE_BASENAME:-dynamo-sglang-worker-$(date 
 WORKER_PROFILE_TRACE="${WORKER_PROFILE_TRACE:-cuda,nvtx,cublas}"
 WORKER_PROFILE_EXTRA_ARGS="${WORKER_PROFILE_EXTRA_ARGS:---sample=none --cuda-event-trace=false}"
 WORKER_PROFILE_NSYS_DIR="${WORKER_PROFILE_NSYS_DIR:-}"
+WORKER_PROFILE_NCU_DIR="${WORKER_PROFILE_NCU_DIR:-}"
+WORKER_PROFILE_NCU_METRICS="${WORKER_PROFILE_NCU_METRICS:-dram__bytes_read.sum,dram__bytes_write.sum}"
+WORKER_PROFILE_NCU_KERNEL_NAME="${WORKER_PROFILE_NCU_KERNEL_NAME:-}"
+WORKER_PROFILE_NCU_EXTRA_ARGS="${WORKER_PROFILE_NCU_EXTRA_ARGS:---target-processes all --replay-mode kernel --kernel-name-base demangled}"
 
 usage() {
   cat <<EOF
@@ -65,12 +69,16 @@ Environment overrides:
   WORKER_DEV_MODE       Default: ${WORKER_DEV_MODE}
   WORKER_DEV_SOURCE_ROOT Default: ${WORKER_DEV_SOURCE_ROOT}
   WORKER_DEV_BINDINGS_ROOT Default: ${WORKER_DEV_BINDINGS_ROOT}
-  WORKER_PROFILE_MODE   Default: ${WORKER_PROFILE_MODE:-<unset>} (set to nsys)
+  WORKER_PROFILE_MODE   Default: ${WORKER_PROFILE_MODE:-<unset>} (set to nsys or ncu)
   WORKER_PROFILE_DIR    Default: ${WORKER_PROFILE_DIR}
   WORKER_PROFILE_BASENAME Default: ${WORKER_PROFILE_BASENAME}
   WORKER_PROFILE_TRACE  Default: ${WORKER_PROFILE_TRACE}
   WORKER_PROFILE_EXTRA_ARGS Default: ${WORKER_PROFILE_EXTRA_ARGS}
   WORKER_PROFILE_NSYS_DIR Default: ${WORKER_PROFILE_NSYS_DIR:-<unset>} (host dir containing nsys)
+  WORKER_PROFILE_NCU_DIR Default: ${WORKER_PROFILE_NCU_DIR:-<unset>} (host dir containing ncu)
+  WORKER_PROFILE_NCU_METRICS Default: ${WORKER_PROFILE_NCU_METRICS}
+  WORKER_PROFILE_NCU_KERNEL_NAME Default: ${WORKER_PROFILE_NCU_KERNEL_NAME:-<unset>}
+  WORKER_PROFILE_NCU_EXTRA_ARGS Default: ${WORKER_PROFILE_NCU_EXTRA_ARGS}
 EOF
 }
 
@@ -110,7 +118,7 @@ EOF
 ensure_dirs() {
   sudo mkdir -p "${DYNAMO_CACHE_DIR}"
   sudo chmod 777 "${DYNAMO_CACHE_DIR}"
-  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
     mkdir -p "${WORKER_PROFILE_DIR}"
   fi
 }
@@ -205,10 +213,13 @@ start_worker() {
     worker_pythonpath_prefix="/workspace/components/src:/workspace/lib/bindings/python/src:"
   fi
 
-  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
     docker_args+=(
       -v "${WORKER_PROFILE_DIR}:/profiles"
     )
+  fi
+
+  if [[ "${WORKER_PROFILE_MODE}" = "nsys" ]]; then
     if [[ -n "${WORKER_PROFILE_NSYS_DIR}" ]]; then
       if [[ ! -x "${WORKER_PROFILE_NSYS_DIR}/nsys" && ! -x "${WORKER_PROFILE_NSYS_DIR}/target-linux-x64/nsys" ]]; then
         echo "WORKER_PROFILE_NSYS_DIR must contain nsys or target-linux-x64/nsys: ${WORKER_PROFILE_NSYS_DIR}" >&2
@@ -216,6 +227,18 @@ start_worker() {
       fi
       docker_args+=(
         -v "${WORKER_PROFILE_NSYS_DIR}:/opt/host-nsys-package:ro"
+      )
+    fi
+  fi
+
+  if [[ "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
+    if [[ -n "${WORKER_PROFILE_NCU_DIR}" ]]; then
+      if [[ ! -x "${WORKER_PROFILE_NCU_DIR}/ncu" && ! -x "${WORKER_PROFILE_NCU_DIR}/target/linux-desktop-glibc_2_11_3-x64/ncu" && ! -x "${WORKER_PROFILE_NCU_DIR}/target-linux-x64/ncu" ]]; then
+        echo "WORKER_PROFILE_NCU_DIR must contain ncu or a target/.../ncu binary: ${WORKER_PROFILE_NCU_DIR}" >&2
+        exit 1
+      fi
+      docker_args+=(
+        -v "${WORKER_PROFILE_NCU_DIR}:/opt/host-ncu-package:ro"
       )
     fi
   fi
@@ -230,6 +253,17 @@ start_worker() {
       worker_launcher="mkdir -p /tmp/host-nsys && if [ -x /opt/host-nsys-package/nsys ]; then ln -sf /opt/host-nsys-package/nsys /tmp/host-nsys/nsys; elif [ -x /opt/host-nsys-package/target-linux-x64/nsys ]; then ln -sf /opt/host-nsys-package/target-linux-x64/nsys /tmp/host-nsys/nsys; else echo 'ERROR: mounted host nsys is not executable.' >&2; exit 127; fi; /tmp/host-nsys/nsys --version; exec /tmp/host-nsys/nsys profile --force-overwrite=true --trace='${WORKER_PROFILE_TRACE}' --output='/profiles/${WORKER_PROFILE_BASENAME}' ${WORKER_PROFILE_EXTRA_ARGS}"
     else
       worker_launcher="command -v nsys >/dev/null || { echo 'ERROR: nsys is not available in the worker image.' >&2; exit 127; }; nsys --version; exec nsys profile --force-overwrite=true --trace='${WORKER_PROFILE_TRACE}' --output='/profiles/${WORKER_PROFILE_BASENAME}' ${WORKER_PROFILE_EXTRA_ARGS}"
+    fi
+  fi
+  if [[ "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
+    local ncu_kernel_arg=""
+    if [[ -n "${WORKER_PROFILE_NCU_KERNEL_NAME}" ]]; then
+      ncu_kernel_arg="--kernel-name '${WORKER_PROFILE_NCU_KERNEL_NAME}'"
+    fi
+    if [[ -n "${WORKER_PROFILE_NCU_DIR}" ]]; then
+      worker_launcher="mkdir -p /tmp/host-ncu && if [ -x /opt/host-ncu-package/ncu ]; then ln -sf /opt/host-ncu-package/ncu /tmp/host-ncu/ncu; elif [ -x /opt/host-ncu-package/target/linux-desktop-glibc_2_11_3-x64/ncu ]; then ln -sf /opt/host-ncu-package/target/linux-desktop-glibc_2_11_3-x64/ncu /tmp/host-ncu/ncu; elif [ -x /opt/host-ncu-package/target-linux-x64/ncu ]; then ln -sf /opt/host-ncu-package/target-linux-x64/ncu /tmp/host-ncu/ncu; else echo 'ERROR: mounted host ncu is not executable.' >&2; exit 127; fi; /tmp/host-ncu/ncu --version; exec /tmp/host-ncu/ncu --force-overwrite --export='/profiles/${WORKER_PROFILE_BASENAME}' --metrics '${WORKER_PROFILE_NCU_METRICS}' ${ncu_kernel_arg} ${WORKER_PROFILE_NCU_EXTRA_ARGS}"
+    else
+      worker_launcher="command -v ncu >/dev/null || { echo 'ERROR: ncu is not available in the worker image. Set WORKER_PROFILE_NCU_DIR to a host Nsight Compute directory.' >&2; exit 127; }; ncu --version; exec ncu --force-overwrite --export='/profiles/${WORKER_PROFILE_BASENAME}' --metrics '${WORKER_PROFILE_NCU_METRICS}' ${ncu_kernel_arg} ${WORKER_PROFILE_NCU_EXTRA_ARGS}"
     fi
   fi
 
@@ -262,6 +296,7 @@ page size: ${DYNAMO_PAGE_SIZE}
 dev mode:  ${WORKER_DEV_MODE}
 profile:   ${WORKER_PROFILE_MODE:-off}
 nsys dir:  ${WORKER_PROFILE_NSYS_DIR:-image default}
+ncu dir:   ${WORKER_PROFILE_NCU_DIR:-image default}
 
 Next steps:
   $0 status
