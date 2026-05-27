@@ -54,7 +54,7 @@ SWE-bench Pro -> AgentBench runner -> prompt builder -> Deep Agents
 
 ### Out Of The Box
 
-These pieces are upstream/off-the-shelf:
+The following components are upstream/off-the-shelf:
 
 - **SWE-bench Pro dataset**: loaded from Hugging Face with `datasets`.
 - **Deep Agents framework**: cloned from upstream and installed from
@@ -68,7 +68,7 @@ These pieces are upstream/off-the-shelf:
 
 ### Custom In This Repo
 
-These pieces are custom implementation:
+The following components are project-specific implementation:
 
 - **AgentBench runner**:
   `agentbench/deepagents_swebench_single_host.py`.
@@ -92,13 +92,51 @@ These pieces are custom implementation:
   result directories, measurements, prompt-evolution reports, runtime alignment
   summaries, and helper diagnostics are custom.
 
-### Short Version
+### Summary
 
 The model-serving stack is mostly upstream Dynamo + SGLang. The agent framework
 is upstream Deep Agents. The dataset is upstream SWE-bench Pro. The custom part
 is the glue: loading one task, building the prompt, adapting Deep Agents to the
 local Dynamo endpoint, launching the local runtime, and saving the benchmark
 artifacts.
+
+### How Much Of `agentbench/` Is Custom?
+
+In practical terms, almost everything outside `agentbench/upstream/deepagents/`
+is custom project code or generated output.
+
+Approximate current tree shape:
+
+```text
+agentbench/ total files:              5919
+agentbench/upstream/deepagents files:  852   upstream Deep Agents checkout
+agentbench/results files:             5029   generated run outputs
+remaining non-upstream/non-results:     38   mostly custom project files
+remaining excluding slides too:          31   core-ish custom files
+```
+
+Interpretation:
+
+- `agentbench/upstream/deepagents/` is the cloned upstream Deep Agents repo.
+- `agentbench/results/` is generated experiment output, not source logic.
+- The core `agentbench/` pipeline is custom.
+
+Core custom pieces include:
+
+- `agentbench/deepagents_swebench_single_host.py`
+- `agentbench/deepagents_app/`
+- `agentbench/deepagents_app/src/prompts.py`
+- `agentbench/deepagents_app/src/agent.py`
+- `agentbench/log_utils.py`
+- `agentbench/constants.py`
+- `agentbench/run_*.sh`
+- `agentbench/diagnose_*.py`
+- `agentbench/sample_task*.json`
+
+The core `agentbench/` pipeline is custom. It uses upstream SWE-bench Pro,
+upstream Deep Agents, Dynamo, SGLang, and LangChain/OpenAI client APIs, but the
+benchmark harness, prompt construction, runtime wiring, artifact capture, and
+analysis/reporting are project-specific.
 
 --------------------------------------------------------------------------------
 
