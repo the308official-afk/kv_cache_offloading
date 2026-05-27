@@ -1,5 +1,75 @@
 # Debug Guide
 
+## Phased SWE-bench Worker Profile
+
+Use this path when the goal is realistic DeepAgents/SWE-bench traffic while
+profiling only the SGLang worker with Nsight:
+
+```bash
+cd ~/kv_cache_offloading
+
+AGENTBENCH_WORKFLOW_MODE=phased \
+WORKER_PROFILE_EXTRA_ARGS='--sample=none --cuda-event-trace=false --cuda-graph-trace=node' \
+PROFILE_STOP_TIMEOUT_SECS=240 \
+MODEL='Qwen/Qwen2.5-7B-Instruct' \
+TASK_INDEX=0 \
+experiments/deepagents_swebench_profile/profile_one_case.sh
+```
+
+Verify the latest run:
+
+```bash
+LATEST_PROFILE="$(ls -td experiments/deepagents_swebench_profile/profiles/* | head -1)"
+AGENTBENCH_RESULT_DIR="$(cat "$LATEST_PROFILE/agentbench-result-dir.txt")"
+
+python3.11 experiments/deepagents_swebench_profile/verify_profile_run.py \
+  --profile-dir "$LATEST_PROFILE" \
+  --agentbench-result-dir "$AGENTBENCH_RESULT_DIR" \
+  --show-timing-table \
+  --inference-phase decode
+```
+
+Expected phase hints:
+
+```text
+planning
+execution
+patch_generation
+review
+```
+
+If `agent_phase_inference_bucket_summary.csv` is missing, rerun the analyzer
+with the worker log:
+
+```bash
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+```
+
+If phases are still missing, inspect whether hints reached the worker:
+
+```bash
+grep -n 'agent_phase' "$LATEST_PROFILE/dynamo-sglang-worker.full.log" | head -40
+grep -n 'hint_probe_id' "$LATEST_PROFILE/dynamo-sglang-worker.full.log" | head -40
+```
+
+If every kernel is `unassigned`, the analyzer did not receive usable worker
+runtime JSON or phase timestamp mapping failed. Keep `DYN_RUNTIME_JSON_LOGS=1`,
+run with `AGENTBENCH_WORKFLOW_MODE=phased`, and pass
+`--worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log"` to
+`analyze_nsys_sqlite.py`.
+
+If `.nsys-rep` is missing and only `.qdstrm` exists, the worker stopped before
+Nsight finished exporting. Re-run with:
+
+```bash
+PROFILE_STOP_TIMEOUT_SECS=240
+```
+
 ## Frontend Did Not Become Healthy
 
 If startup fails with:
@@ -506,8 +576,22 @@ If that import fails with:
 Qdstrm file does not have valid time conversion factors.
 ```
 
-the raw stream is not recoverable. Regenerate the profile while forcing the
-worker container to use the same host `nsys` package as host `QdstrmImporter`:
+the raw stream is not recoverable. Do not keep trying to import that file. Use
+the newest profile that already has `.nsys-rep`, or regenerate the profile while
+forcing the worker container to use the same host `nsys` package as host
+`QdstrmImporter`.
+
+Find the newest completed profile:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(find experiments/lpx_decode_split/profiles -name '*.nsys-rep' -exec dirname {} \; | sort -r | head -1)"
+echo "$LATEST_PROFILE"
+```
+
+If this prints nothing, rerun the profile command from the README golden path.
+To regenerate:
 
 ```bash
 cd ~/tools/nsight-systems-install
@@ -573,6 +657,84 @@ cat "$LATEST_PROFILE/kernel_analysis/summary.md"
 cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
 ```
 
+The kernel summary should now include:
+
+```text
+Phase assignment: epoch_wall
+```
+
+or:
+
+```text
+Phase assignment: relative_tail_heuristic
+```
+
+and sections named `Phase Summary`, `Phase x Bucket Summary`, and
+`Top Phase Kernels`. The wrapper passes
+`dynamo-sglang-worker.full.log` into `analyze_nsys_sqlite.py` so the analyzer can
+use the measured request's `worker.decode.request_received`,
+`worker.decode.request_attached`, and `worker.decode.request_completed` events
+to split kernels into `prefill` and `decode`.
+
+The corresponding CSV files are:
+
+```text
+kernel_analysis/phase_summary.csv
+kernel_analysis/phase_bucket_summary.csv
+kernel_analysis/top_phase_kernels.csv
+```
+
+If `kernel_analysis/summary.md` says:
+
+```text
+Phase assignment: `none`
+```
+
+but the worker log contains the measured decode-sweep request, the profile is
+still usable. This means phase metadata was not attached during analysis, often
+because the local analyzer is stale or could not parse the exact Docker log
+format. First confirm the measured request events are in the full worker log:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+
+grep -n 'decode-sweep_.*ctx.*out' "$LATEST_PROFILE/dynamo-sglang-worker.full.log" | tail -20
+```
+
+You should see `worker.decode.request_received`,
+`worker.decode.request_attached`, and `worker.decode.request_completed` for the
+same `external_request_id`. Then update to the latest
+`analyze_nsys_sqlite.py` and rerun analysis on the existing profile; you do not
+need to rerun Nsight:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+rm -rf "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --completion-tokens 256 \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
+
+cat "$LATEST_PROFILE/kernel_analysis/summary.md"
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+Expected: phase assignment should change to `epoch_wall` or
+`relative_tail_heuristic`, and `Phase Summary` should show separate `prefill`
+and `decode` rows.
+
 If `kernel_analysis/summary.md` exists but
 `kernel_analysis/lpx_what_if/summary.md` is missing, run only the estimator:
 
@@ -591,12 +753,41 @@ cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
 
 The wrapper now runs this automatically after successful kernel classification.
 
+If your SSH session closes and you see local paths such as:
+
+```text
+/Users/<name>/...
+```
+
+you are back on your local laptop, not the GPU machine. Do not run profile
+recovery commands there unless you have copied the profile directory locally and
+installed Nsight locally. Reconnect to the GPU machine first, then use
+`~/kv_cache_offloading`:
+
+```bash
+ssh <your-gpu-machine>
+cd ~/kv_cache_offloading
+```
+
+Also, `find -printf` is GNU/Linux-specific and fails on macOS. Use this portable
+form when looking for the newest completed profile:
+
+```bash
+LATEST_PROFILE="$(find experiments/lpx_decode_split/profiles -name '*.nsys-rep' -exec dirname {} \; | sort -r | head -1)"
+echo "$LATEST_PROFILE"
+```
+
 If you have `QdstrmImporter` available on a machine with the matching Nsight
 Systems install, import the stream and continue analysis:
 
 ```bash
 LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
 BASENAME="$(basename "$LATEST_PROFILE")"
+
+test -f "$LATEST_PROFILE/${BASENAME}.qdstrm" || {
+  echo "ERROR: missing $LATEST_PROFILE/${BASENAME}.qdstrm"
+  exit 1
+}
 
 QdstrmImporter \
   -i "$LATEST_PROFILE/${BASENAME}.qdstrm" \
@@ -608,6 +799,7 @@ nsys export --force-overwrite true --type sqlite \
 
 python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
   --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
   --out-dir "$LATEST_PROFILE/kernel_analysis"
 
 python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
@@ -637,6 +829,7 @@ rm -rf "$LATEST_PROFILE/kernel_analysis"
 
 python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
   --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
   --out-dir "$LATEST_PROFILE/kernel_analysis"
 
 python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \

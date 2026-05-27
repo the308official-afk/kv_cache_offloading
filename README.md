@@ -6,8 +6,8 @@ Reproducible AgentBench + Dynamo + SGLang harness for two research workflows:
 1. LPX decode profiling:
    Dynamo native frontend -> SGLang worker under Nsight Systems
 
-2. AgentBench runtime-hint tracing:
-   AgentBench -> Dynamo frontend/preprocessor -> SGLang worker
+2. AgentBench runtime-hint tracing and phased SWE-bench profiling:
+   AgentBench/DeepAgents -> Dynamo frontend/preprocessor -> SGLang worker
 ```
 
 The most important current result is the LPX decode split experiment. A
@@ -17,6 +17,13 @@ successful run produces:
 experiments/lpx_decode_split/profiles/<run>/kernel_analysis/summary.md
 experiments/lpx_decode_split/profiles/<run>/kernel_analysis/lpx_what_if/summary.md
 ```
+
+For the self-contained reproduction playbook, use
+[`README_LPX_REPRO.md`](README_LPX_REPRO.md).
+
+For the full phased SWE-bench workload, where only the SGLang worker is profiled
+and the report is split by `planning`, `execution`, `patch_generation`, and
+`review`, use [`README_AGENT_PHASE_REPRO.md`](README_AGENT_PHASE_REPRO.md).
 
 Reference success signal from the first complete run:
 
@@ -129,7 +136,7 @@ the full Nsight Systems installer instead.
 
 ```bash
 cd ~
-git clone <your-repo-url> kv_cache_offloading
+git clone https://github.com/the308official-afk/kv_cache_offloading.git kv_cache_offloading
 cd ~/kv_cache_offloading
 
 mkdir -p agentbench/upstream
@@ -288,6 +295,9 @@ Required files:
 <profile>/<run>.sqlite
 <profile>/kernel_analysis/kernel_classification.json
 <profile>/kernel_analysis/summary.md
+<profile>/kernel_analysis/phase_summary.csv
+<profile>/kernel_analysis/phase_bucket_summary.csv
+<profile>/kernel_analysis/top_phase_kernels.csv
 <profile>/kernel_analysis/lpx_what_if/summary.md
 <result>/measurements.csv
 <result>/summary.md
@@ -300,8 +310,16 @@ Kernel table: CUPTI_ACTIVITY_KIND_KERNEL
 Kernel rows: greater than 0
 Total kernel duration ms: greater than 0
 Bucket Summary includes ffn_mlp, attention_kv, and other
+Phase x Bucket Summary includes prefill and decode rows
 LPX What-If Speedup table is present
 ```
+
+The phase split is assigned from `worker.decode` runtime log timestamps. When
+Nsight and log timestamps share an epoch clock, the analyzer reports
+`Phase assignment: epoch_wall`. Otherwise it reports
+`Phase assignment: relative_tail_heuristic`, which is valid for this wrapper
+because the measured request runs at the end and the worker is stopped
+immediately after the request.
 
 Reference first complete result:
 
@@ -383,12 +401,19 @@ cd ~/kv_cache_offloading
 LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
 BASENAME="$(basename "$LATEST_PROFILE")"
 
+test -f "$LATEST_PROFILE/${BASENAME}.nsys-rep" || {
+  echo "ERROR: missing $LATEST_PROFILE/${BASENAME}.nsys-rep"
+  echo "If only .qdstrm exists, use section 2.5 first."
+  exit 1
+}
+
 nsys export --force-overwrite true --type sqlite \
   --output "$LATEST_PROFILE/${BASENAME}.sqlite" \
   "$LATEST_PROFILE/${BASENAME}.nsys-rep"
 
 python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
   --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
   --out-dir "$LATEST_PROFILE/kernel_analysis"
 
 python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
@@ -399,7 +424,54 @@ python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
 
 --------------------------------------------------------------------------------
 
-### 2.4 Only `.qdstrm` Exists
+### 2.4 Kernel Analysis Exists But Phase Assignment Is `none`
+
+If `kernel_analysis/summary.md` reports `Phase assignment: none`, first confirm
+that the measured decode-sweep request events are present:
+
+```bash
+cd ~/kv_cache_offloading
+
+LATEST_PROFILE="$(ls -td experiments/lpx_decode_split/profiles/* | head -1)"
+BASENAME="$(basename "$LATEST_PROFILE")"
+
+grep -n 'decode-sweep_.*ctx.*out' "$LATEST_PROFILE/dynamo-sglang-worker.full.log" | tail -20
+```
+
+Expected log events for the same request:
+
+```text
+worker.decode.request_received
+worker.decode.request_attached
+worker.decode.request_completed
+```
+
+Then rerun only the analysis step. You do not need to rerun Nsight:
+
+```bash
+rm -rf "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
+  --sqlite "$LATEST_PROFILE/${BASENAME}.sqlite" \
+  --worker-log "$LATEST_PROFILE/dynamo-sglang-worker.full.log" \
+  --out-dir "$LATEST_PROFILE/kernel_analysis"
+
+python3.11 experiments/lpx_decode_split/estimate_lpx_speedup.py \
+  --classification-json "$LATEST_PROFILE/kernel_analysis/kernel_classification.json" \
+  --completion-tokens 256 \
+  --out-dir "$LATEST_PROFILE/kernel_analysis/lpx_what_if"
+
+cat "$LATEST_PROFILE/kernel_analysis/summary.md"
+cat "$LATEST_PROFILE/kernel_analysis/lpx_what_if/summary.md"
+```
+
+Expected: `Phase assignment` should be `epoch_wall` or
+`relative_tail_heuristic`, and the phase tables should include `prefill` and
+`decode`.
+
+--------------------------------------------------------------------------------
+
+### 2.5 Only `.qdstrm` Exists
 
 Use matching host `QdstrmImporter`:
 
@@ -422,13 +494,21 @@ If import fails with:
 Qdstrm file does not have valid time conversion factors.
 ```
 
-regenerate the profile after ensuring the same Nsight package is available on
-`PATH`. The profile wrapper auto-detects host `nsys`, mounts it into the worker,
-and avoids the mismatched-importer failure.
+that raw stream is not recoverable. Use the newest profile that already contains
+`.nsys-rep`, or regenerate the profile after ensuring the same Nsight package is
+available on `PATH`. The profile wrapper auto-detects host `nsys`, mounts it
+into the worker, and avoids the mismatched-importer failure.
+
+Find the newest completed profile:
+
+```bash
+LATEST_PROFILE="$(find experiments/lpx_decode_split/profiles -name '*.nsys-rep' -exec dirname {} \; | sort -r | head -1)"
+echo "$LATEST_PROFILE"
+```
 
 --------------------------------------------------------------------------------
 
-### 2.5 Kernel Summary Shows Only Graph Creation Rows
+### 2.6 Kernel Summary Shows Only Graph Creation Rows
 
 If `kernel_analysis/summary.md` shows only:
 

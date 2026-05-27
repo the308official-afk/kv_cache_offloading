@@ -6,25 +6,33 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
 MODEL="${MODEL:-Qwen/Qwen2.5-7B-Instruct}"
-PROMPT_TOKEN_TARGET="${PROMPT_TOKEN_TARGET:-8192}"
-MAX_TOKENS="${MAX_TOKENS:-256}"
+DATASET="${DATASET:-ScaleAI/SWE-bench_Pro}"
+SPLIT="${SPLIT:-test}"
+TASK_INDEX="${TASK_INDEX:-0}"
+INSTANCE_ID="${INSTANCE_ID:-}"
+APP_VARIANT="${APP_VARIANT:-local}"
+AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
+PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 DYNAMO_FRONTEND_PORT="${DYNAMO_FRONTEND_PORT:-8000}"
 FRONTEND_URL="${FRONTEND_URL:-http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/chat/completions}"
 RUN_STAMP="$(date +%Y%m%d_%H%M%S)"
-RUN_NAME="${RUN_NAME:-profile-decode_${RUN_STAMP}_ctx${PROMPT_TOKEN_TARGET}_out${MAX_TOKENS}}"
+TASK_LABEL="${INSTANCE_ID:-idx${TASK_INDEX}}"
+TASK_LABEL="$(printf "%s" "${TASK_LABEL}" | tr '/: ' '___')"
+RUN_NAME="${RUN_NAME:-profile-swebench_${RUN_STAMP}_${TASK_LABEL}}"
 PROFILE_DIR="${PROFILE_DIR:-${SCRIPT_DIR}/profiles/${RUN_NAME}}"
-RESULTS_ROOT="${RESULTS_ROOT:-${SCRIPT_DIR}/results/${RUN_NAME}}"
 NSYS_BASENAME="${NSYS_BASENAME:-${RUN_NAME}}"
 PROFILE_MODE="${PROFILE_MODE:-nsys}"
 PROFILE_READY_RETRIES="${PROFILE_READY_RETRIES:-30}"
 PROFILE_READY_DELAY_SECS="${PROFILE_READY_DELAY_SECS:-5}"
 PROFILE_READY_REQUEST_TIMEOUT_SECS="${PROFILE_READY_REQUEST_TIMEOUT_SECS:-20}"
-PROFILE_STOP_TIMEOUT_SECS="${PROFILE_STOP_TIMEOUT_SECS:-120}"
+PROFILE_STOP_TIMEOUT_SECS="${PROFILE_STOP_TIMEOUT_SECS:-240}"
 MODEL_READY_RETRIES="${MODEL_READY_RETRIES:-600}"
 MODEL_READY_DELAY_SECS="${MODEL_READY_DELAY_SECS:-2}"
 WORKER_PROFILE_TRACE="${WORKER_PROFILE_TRACE:-cuda,nvtx,cublas}"
 WORKER_PROFILE_EXTRA_ARGS="${WORKER_PROFILE_EXTRA_ARGS:---sample=none --cuda-event-trace=false --cuda-graph-trace=node}"
 WORKER_PROFILE_NSYS_DIR="${WORKER_PROFILE_NSYS_DIR:-}"
+CONTEXT_LENGTH="${CONTEXT_LENGTH:-65536}"
+WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length ${CONTEXT_LENGTH}}"
 
 if [[ "${PROFILE_MODE}" = "nsys" && -z "${WORKER_PROFILE_NSYS_DIR}" ]] && command -v nsys >/dev/null 2>&1; then
   NSYS_COMMAND_PATH="$(readlink -f "$(command -v nsys)")"
@@ -36,15 +44,14 @@ if [[ "${PROFILE_MODE}" = "nsys" && -z "${WORKER_PROFILE_NSYS_DIR}" ]] && comman
   fi
 fi
 
-mkdir -p "${PROFILE_DIR}" "${RESULTS_ROOT}"
-
+mkdir -p "${PROFILE_DIR}"
 cd "${REPO_ROOT}"
 
-cleanup() {
-  local status=$?
-  if [[ ${status} -ne 0 ]]; then
-    capture_stack_logs
-    stop_profiled_stack >/dev/null 2>&1 || true
+require_command() {
+  local command_name="$1"
+  if ! command -v "${command_name}" >/dev/null 2>&1; then
+    echo "ERROR: required command not found: ${command_name}" >&2
+    exit 1
   fi
 }
 
@@ -68,10 +75,16 @@ print_stack_log_tails() {
 }
 
 stop_profiled_stack() {
-  # Give nsys a chance to flush the .nsys-rep before the normal cleanup path
-  # removes containers. docker rm -f can kill the profiler too abruptly.
   docker stop -t "${PROFILE_STOP_TIMEOUT_SECS}" dynamo-sglang-worker >/dev/null 2>&1 || true
   ./run_dynamo_single_host.sh stop
+}
+
+cleanup() {
+  local status=$?
+  if [[ ${status} -ne 0 ]]; then
+    capture_stack_logs
+    stop_profiled_stack >/dev/null 2>&1 || true
+  fi
 }
 
 wait_for_generation_ready() {
@@ -101,13 +114,51 @@ wait_for_generation_ready() {
 
   echo "ERROR: profiled worker did not become generation-ready." >&2
   capture_stack_logs
-  echo "Saved logs:" >&2
-  echo "  ${PROFILE_DIR}/dynamo-frontend.log" >&2
-  echo "  ${PROFILE_DIR}/dynamo-sglang-worker.log" >&2
-  echo "  ${PROFILE_DIR}/generation-readiness-last-response.txt" >&2
   print_stack_log_tails
   return 1
 }
+
+run_agentbench_case() {
+  local -a cmd
+  cmd=(
+    python3.11 agentbench/deepagents_swebench_single_host.py
+    --app-variant "${APP_VARIANT}"
+    --frontend-url "${FRONTEND_URL}"
+    --model "${MODEL}"
+    --dataset "${DATASET}"
+    --split "${SPLIT}"
+    --prompt-evolution-value-char-limit "${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}"
+  )
+
+  if [[ -n "${INSTANCE_ID}" ]]; then
+    cmd+=(--instance-id "${INSTANCE_ID}")
+  else
+    cmd+=(--index "${TASK_INDEX}")
+  fi
+  if [[ -n "${CSV_PATH:-}" ]]; then
+    cmd+=(--csv-path "${CSV_PATH}")
+  fi
+  if [[ -n "${JSON_PATH:-}" ]]; then
+    cmd+=(--json-path "${JSON_PATH}")
+  fi
+  if [[ -n "${REPO_PATH:-}" ]]; then
+    cmd+=(--repo-path "${REPO_PATH}")
+  fi
+  if [[ -n "${REPO_URL:-}" ]]; then
+    cmd+=(--repo-url "${REPO_URL}")
+  fi
+  if [[ "${NO_AUTO_REPO_CHECKOUT:-0}" = "1" ]]; then
+    cmd+=(--no-auto-repo-checkout)
+  fi
+
+  printf "%q " "${cmd[@]}" > "${PROFILE_DIR}/agentbench-command.txt"
+  printf "\n" >> "${PROFILE_DIR}/agentbench-command.txt"
+  AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE}" "${cmd[@]}" 2>&1 | tee "${PROFILE_DIR}/agentbench-run.log"
+}
+
+require_command docker
+require_command curl
+require_command python3.11
 
 trap cleanup EXIT
 
@@ -123,6 +174,8 @@ MODEL_READY_RETRIES="${MODEL_READY_RETRIES}" \
 MODEL_READY_DELAY_SECS="${MODEL_READY_DELAY_SECS}" \
 DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-1}" \
 DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-hermes}" \
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN="${SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN:-1}" \
+WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS}" \
 DYNAMO_MODEL_PATH="${MODEL}" \
 DYNAMO_SERVED_MODEL_NAME="${MODEL}" \
 DYNAMO_FRONTEND_PORT="${DYNAMO_FRONTEND_PORT}" \
@@ -131,18 +184,14 @@ WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}" \
 ./run_dynamo_single_host.sh start
 
 wait_for_generation_ready
+run_agentbench_case
 
-python3.11 "${SCRIPT_DIR}/run_decode_sweep.py" \
-  --frontend-url "${FRONTEND_URL}" \
-  --model "${MODEL}" \
-  --prompt-token-targets "${PROMPT_TOKEN_TARGET}" \
-  --max-tokens-list "${MAX_TOKENS}" \
-  --repeats 1 \
-  --results-root "${RESULTS_ROOT}" \
-  --fail-on-error
+AGENTBENCH_RESULT_DIR="$(ls -td agentbench/results/* 2>/dev/null | head -1 || true)"
+if [[ -n "${AGENTBENCH_RESULT_DIR}" ]]; then
+  printf "%s\n" "${AGENTBENCH_RESULT_DIR}" > "${PROFILE_DIR}/agentbench-result-dir.txt"
+fi
 
 capture_stack_logs
-
 stop_profiled_stack
 trap - EXIT
 
@@ -152,12 +201,11 @@ SQLITE_PATH="${PROFILE_DIR}/${NSYS_BASENAME}.sqlite"
 
 echo
 echo "Profile directory: ${PROFILE_DIR}"
-echo "Measurement directory: ${RESULTS_ROOT}"
+echo "AgentBench result directory: ${AGENTBENCH_RESULT_DIR:-<not found>}"
 
 if [[ "${PROFILE_MODE}" != "nsys" ]]; then
   echo
   echo "PROFILE_MODE=${PROFILE_MODE}; skipping Nsight report export and kernel classification."
-  echo "Measurement directory: ${RESULTS_ROOT}"
   exit 0
 fi
 
@@ -181,16 +229,16 @@ if command -v nsys >/dev/null 2>&1 && [[ -f "${REPORT_PATH}" ]]; then
 fi
 
 if [[ -f "${SQLITE_PATH}" ]]; then
-  python3.11 "${SCRIPT_DIR}/analyze_nsys_sqlite.py" \
+  python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
     --sqlite "${SQLITE_PATH}" \
     --worker-log "${PROFILE_DIR}/dynamo-sglang-worker.full.log" \
     --out-dir "${PROFILE_DIR}/kernel_analysis"
-  if [[ -f "${PROFILE_DIR}/kernel_analysis/kernel_classification.json" ]]; then
-    python3.11 "${SCRIPT_DIR}/estimate_lpx_speedup.py" \
-      --classification-json "${PROFILE_DIR}/kernel_analysis/kernel_classification.json" \
-      --completion-tokens "${MAX_TOKENS}" \
-      --out-dir "${PROFILE_DIR}/kernel_analysis/lpx_what_if"
+
+  verify_cmd=(python3.11 "${SCRIPT_DIR}/verify_profile_run.py" --profile-dir "${PROFILE_DIR}")
+  if [[ -n "${AGENTBENCH_RESULT_DIR}" ]]; then
+    verify_cmd+=(--agentbench-result-dir "${AGENTBENCH_RESULT_DIR}")
   fi
+  "${verify_cmd[@]}"
 else
   cat <<EOF
 SQLite export not found yet.
@@ -199,23 +247,17 @@ Export manually on a machine with Nsight Systems CLI:
 
   nsys export --force-overwrite true --type sqlite --output "${SQLITE_PATH}" "${REPORT_PATH}"
 
-If only the raw .qdstrm exists, first import it with the matching Nsight Systems
-QdstrmImporter version:
-
-  QdstrmImporter -i "${QDSTRM_PATH}" -o "${REPORT_PATH}"
-
 Then classify kernels:
 
-  python3.11 "${SCRIPT_DIR}/analyze_nsys_sqlite.py" \\
+  python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \\
     --sqlite "${SQLITE_PATH}" \\
     --worker-log "${PROFILE_DIR}/dynamo-sglang-worker.full.log" \\
     --out-dir "${PROFILE_DIR}/kernel_analysis"
 
-Then run the LPX what-if estimate:
+Then verify phase coverage:
 
-  python3.11 "${SCRIPT_DIR}/estimate_lpx_speedup.py" \\
-    --classification-json "${PROFILE_DIR}/kernel_analysis/kernel_classification.json" \\
-    --completion-tokens "${MAX_TOKENS}" \\
-    --out-dir "${PROFILE_DIR}/kernel_analysis/lpx_what_if"
+  python3.11 "${SCRIPT_DIR}/verify_profile_run.py" \\
+    --profile-dir "${PROFILE_DIR}" \\
+    ${AGENTBENCH_RESULT_DIR:+--agentbench-result-dir "${AGENTBENCH_RESULT_DIR}"}
 EOF
 fi

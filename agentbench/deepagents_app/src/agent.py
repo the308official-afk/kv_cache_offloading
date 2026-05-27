@@ -300,6 +300,10 @@ def ensure_hint_probe_id(hints: dict[str, Any], *, parent_run_id: str | None) ->
     return resolved
 
 
+def build_phase_probe_id(*, parent_run_id: str | None, phase: str, sequence_index: int) -> str:
+    return f"{parent_run_id or 'run'}::{phase}::{sequence_index}"
+
+
 # Builds the ChatOpenAI client that sends requests to the local Dynamo frontend.
 def build_dynamo_chat_model(
     *,
@@ -552,7 +556,198 @@ def execute_baseline_agent(
     }
 
 
-# Main entry point for one task: build the prompt, run the baseline agent, and package artifacts.
+def build_phase_prompt(
+    *,
+    phase: str,
+    task_prompt: str,
+    planning_text: str = "",
+    execution_text: str = "",
+    patch_text: str = "",
+) -> str:
+    if phase == "planning":
+        return (
+            "Phase: planning\n\n"
+            "Read the SWE-bench task and produce a concise implementation plan. "
+            "Do not edit files in this phase. Identify likely files, risks, and the "
+            "smallest next coding steps.\n\n"
+            f"{task_prompt}"
+        )
+    if phase == "execution":
+        return (
+            "Phase: execution\n\n"
+            "Use the plan to implement the SWE-bench fix in the workspace. "
+            "Make focused code changes only. Run lightweight checks if practical.\n\n"
+            "Planning output:\n"
+            f"{planning_text or '(no planning output captured)'}\n\n"
+            f"{task_prompt}"
+        )
+    if phase == "patch_generation":
+        return (
+            "Phase: patch_generation\n\n"
+            "Inspect the current workspace changes and consolidate the final patch. "
+            "Do not start a broad refactor. If no edits are needed, summarize why. "
+            "Return the changed files, intended behavior, and any checks run.\n\n"
+            "Planning output:\n"
+            f"{planning_text or '(no planning output captured)'}\n\n"
+            "Execution output:\n"
+            f"{execution_text or '(no execution output captured)'}"
+        )
+    if phase == "review":
+        return (
+            "Phase: review\n\n"
+            "Review the current patch for bugs, missing tests, and behavioral risk. "
+            "Keep the review concise and actionable. Do not undo unrelated changes.\n\n"
+            "Planning output:\n"
+            f"{planning_text or '(no planning output captured)'}\n\n"
+            "Execution output:\n"
+            f"{execution_text or '(no execution output captured)'}\n\n"
+            "Patch-generation output:\n"
+            f"{patch_text or '(no patch-generation output captured)'}"
+        )
+    raise ValueError(f"Unsupported phase: {phase}")
+
+
+def execute_phase_agent(
+    *,
+    phase: str,
+    sequence_index: int,
+    frontend_url: str,
+    model: str,
+    base_hints: dict[str, Any],
+    prompt: str,
+    workspace_dir: Path | None,
+    app_variant: str = "local",
+    task_index: int | None = None,
+    task_source: str | None = None,
+    task_metadata: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
+    step_title: str | None = None,
+    expected_output_tokens: int = 1024,
+) -> dict:
+    phase_hints = build_phase_hints(base_hints, phase=phase)
+    phase_hints["hint_probe_id"] = build_phase_probe_id(
+        parent_run_id=parent_run_id,
+        phase=phase,
+        sequence_index=sequence_index,
+    )
+    phase_hints["expected_output_tokens"] = expected_output_tokens
+    phase_hints["phase_sequence_index"] = sequence_index
+    request_context = build_request_context(
+        parent_run_id=parent_run_id,
+        task_instance_id=(task_metadata or {}).get("instance_id"),
+        phase=phase,
+        app_variant=app_variant,
+        step_index=sequence_index,
+        step_title=step_title or phase.replace("_", " ").title(),
+    )
+    log_lifecycle_event(
+        stage=f"{phase}_request_prepared",
+        payload={
+            "event_kind": "request_context",
+            "phase": phase,
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": phase_hints,
+            "request_context": request_context,
+            "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
+        },
+    )
+    agent = build_coding_agent(
+        frontend_url=frontend_url,
+        model=model,
+        workspace_dir=workspace_dir,
+        base_hints=phase_hints,
+        phase=phase,
+        app_variant=app_variant,
+        request_context=request_context,
+        prompt_stage=f"{phase}_agent_system_prompt_loaded",
+    )
+    log_outbound_harness_request(
+        check_point=f"2. Deep Agents {phase} request leaving harness",
+        task_index=task_index,
+        payload={
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "phase": phase,
+            "prompt_preview": _prompt_preview(prompt),
+            "prompt": prompt,
+            "hints": phase_hints,
+            "request_context": request_context,
+            "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+        },
+    )
+    log_lifecycle_event(
+        stage=f"{phase}_request_dispatched",
+        payload={
+            "event_kind": "request_dispatch",
+            "phase": phase,
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": phase_hints,
+            "request_context": request_context,
+            **build_prompt_snapshot(prompt),
+        },
+    )
+    original_cwd = Path.cwd()
+    try:
+        if workspace_dir is not None:
+            os.chdir(workspace_dir)
+        started_at_perf = time.perf_counter()
+        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+        finished_at_perf = time.perf_counter()
+    finally:
+        os.chdir(original_cwd)
+    measurement = build_measurement_record(
+        phase=phase,
+        model=model,
+        frontend_url=frontend_url,
+        prompt=prompt,
+        hints=phase_hints,
+        response=response,
+        started_at_perf=started_at_perf,
+        finished_at_perf=finished_at_perf,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
+        request_context=request_context,
+        step_index=sequence_index,
+        step_title=step_title,
+        app_variant=app_variant,
+    )
+    log_lifecycle_event(
+        stage=f"{phase}_response_received",
+        payload={
+            "event_kind": "response",
+            "phase": phase,
+            "request_context": request_context,
+            "measurement": measurement,
+            **build_response_snapshot(response),
+        },
+    )
+    return {
+        "phase": phase,
+        "sequence_index": sequence_index,
+        "hints": phase_hints,
+        "request_context": request_context,
+        "prompt": prompt,
+        "response": response,
+        "response_text": response_text(response),
+        "measurement": measurement,
+    }
+
+
+def combine_phase_response_text(phase_results: list[dict[str, Any]]) -> str:
+    parts = ["# Phased SWE-bench Agent Run", ""]
+    for phase_result in phase_results:
+        phase = str(phase_result.get("phase") or "unknown")
+        text = str(phase_result.get("response_text") or "").strip()
+        parts.extend([f"## {phase}", "", text or "(no response text)", ""])
+    return "\n".join(parts).strip() + "\n"
+
+
+# Main entry point for one task: build the prompt, run phased agent calls, and package artifacts.
 def run_task_workflow(
     *,
     frontend_url: str,
@@ -566,10 +761,10 @@ def run_task_workflow(
     task_source: str | None = None,
     parent_run_id: str | None = None,
 ) -> dict:
-    """Run the active baseline Deep Agents workflow for one task."""
+    """Run the active phased Deep Agents workflow for one task."""
     # Debugging note: this is the app-layer orchestration entry point.
     # The wrapper calls this once per run, and this function owns:
-    # prompt building, baseline agent execution, and returned artifacts.
+    # prompt building, phase-tagged Deep Agents requests, and returned artifacts.
 
     prompt = format_swebench_task_prompt(task)
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
@@ -615,27 +810,194 @@ def run_task_workflow(
             "step_limit": step_limit,
         },
     )
-    result = execute_baseline_agent(
-        frontend_url=frontend_url,
-        model=model,
-        base_hints=resolved_hints,
-        task_prompt=prompt,
-        workspace_dir=workspace_dir,
-        app_variant=app_variant,
-        task_index=task_index,
-        task_source=task_source,
-        task_metadata=task_metadata,
-        parent_run_id=parent_run_id,
+    if os.environ.get("AGENTBENCH_WORKFLOW_MODE", "phased").lower() in {"baseline", "single"}:
+        result = execute_baseline_agent(
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            task_prompt=prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+        )
+        measurements = [result["measurement"]]
+        decomposition_plan = {
+            "steps": [],
+            "planning_hints": None,
+            "planning_prompt": None,
+            "planning_response_text": None,
+            "measurement": None,
+        }
+        step_results: list[dict] = []
+        phase_results = [result]
+    else:
+        phase_results: list[dict[str, Any]] = []
+        planning_prompt = build_phase_prompt(phase="planning", task_prompt=prompt)
+        planning_result = execute_phase_agent(
+            phase="planning",
+            sequence_index=0,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            prompt=planning_prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title="Plan SWE-bench fix",
+            expected_output_tokens=768,
+        )
+        phase_results.append(planning_result)
+
+        execution_prompt = build_phase_prompt(
+            phase="execution",
+            task_prompt=prompt,
+            planning_text=planning_result["response_text"],
+        )
+        execution_result = execute_phase_agent(
+            phase="execution",
+            sequence_index=0,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            prompt=execution_prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title="Implement SWE-bench fix",
+            expected_output_tokens=2048,
+        )
+        phase_results.append(execution_result)
+
+        patch_prompt = build_phase_prompt(
+            phase="patch_generation",
+            task_prompt=prompt,
+            planning_text=planning_result["response_text"],
+            execution_text=execution_result["response_text"],
+        )
+        patch_result = execute_phase_agent(
+            phase="patch_generation",
+            sequence_index=0,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            prompt=patch_prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title="Consolidate patch",
+            expected_output_tokens=1024,
+        )
+        phase_results.append(patch_result)
+
+        review_prompt = build_phase_prompt(
+            phase="review",
+            task_prompt=prompt,
+            planning_text=planning_result["response_text"],
+            execution_text=execution_result["response_text"],
+            patch_text=patch_result["response_text"],
+        )
+        review_result = execute_phase_agent(
+            phase="review",
+            sequence_index=0,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            prompt=review_prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title="Review patch",
+            expected_output_tokens=1024,
+        )
+        phase_results.append(review_result)
+
+        measurements = [phase_result["measurement"] for phase_result in phase_results]
+        decomposition_plan = {
+            "steps": [
+                {
+                    "phase": "planning",
+                    "title": "Plan SWE-bench fix",
+                    "hint_probe_id": planning_result["hints"].get("hint_probe_id"),
+                },
+                {
+                    "phase": "execution",
+                    "title": "Implement SWE-bench fix",
+                    "hint_probe_id": execution_result["hints"].get("hint_probe_id"),
+                },
+                {
+                    "phase": "patch_generation",
+                    "title": "Consolidate patch",
+                    "hint_probe_id": patch_result["hints"].get("hint_probe_id"),
+                },
+                {
+                    "phase": "review",
+                    "title": "Review patch",
+                    "hint_probe_id": review_result["hints"].get("hint_probe_id"),
+                },
+            ],
+            "planning_hints": planning_result["hints"],
+            "planning_prompt": planning_result["prompt"],
+            "planning_response_text": planning_result["response_text"],
+            "measurement": planning_result["measurement"],
+        }
+        step_results = [
+            {
+                "phase": phase_result["phase"],
+                "sequence_index": phase_result["sequence_index"],
+                "request_context": phase_result["request_context"],
+                "hints": phase_result["hints"],
+                "response_text": phase_result["response_text"],
+                "measurement": phase_result["measurement"],
+            }
+            for phase_result in phase_results
+        ]
+        primary_result = execution_result
+        result = {
+            **primary_result,
+            "baseline_hints": primary_result["hints"],
+            "baseline_prompt": primary_result["prompt"],
+            "response_text": combine_phase_response_text(phase_results),
+            "phase_results": [
+                {
+                    "phase": phase_result["phase"],
+                    "sequence_index": phase_result["sequence_index"],
+                    "request_context": phase_result["request_context"],
+                    "hints": phase_result["hints"],
+                    "prompt": phase_result["prompt"],
+                    "response_text": phase_result["response_text"],
+                    "measurement": phase_result["measurement"],
+                }
+                for phase_result in phase_results
+            ],
+        }
+    phase_names = [str(phase_result.get("phase") or "") for phase_result in phase_results]
+    log_lifecycle_event(
+        stage="phased_requests_completed",
+        payload={
+            "event_kind": "workflow",
+            "task_source": task_source,
+            "task_metadata": task_metadata,
+            "parent_run_id": parent_run_id,
+            "phases": phase_names,
+            "phase_count": len(phase_names),
+            "measurement_count": len(measurements),
+        },
     )
-    measurements = [result["measurement"]]
-    decomposition_plan = {
-        "steps": [],
-        "planning_hints": None,
-        "planning_prompt": None,
-        "planning_response_text": None,
-        "measurement": None,
-    }
-    step_results: list[dict] = []
     log_lifecycle_event(
         stage="task_workflow_completed",
         payload={
@@ -643,9 +1005,9 @@ def run_task_workflow(
             "task_source": task_source,
             "task_metadata": task_metadata,
             "parent_run_id": parent_run_id,
-            "step_count": 0,
+            "step_count": len(step_results),
             "measurement_count": len(measurements),
-            "plan_steps": [],
+            "plan_steps": decomposition_plan.get("steps", []),
             "final_response_preview": _prompt_preview(result["response_text"]),
         },
     )
@@ -656,6 +1018,7 @@ def run_task_workflow(
         "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
+        "phase_results": phase_results,
         "result": result,
         "measurements": measurements,
     }

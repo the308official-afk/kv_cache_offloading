@@ -91,6 +91,8 @@ The wrapper:
 5. exports SQLite when `nsys` is available on the host
 6. classifies kernel time with `analyze_nsys_sqlite.py`
 7. writes the LPX what-if estimate under `kernel_analysis/lpx_what_if/`
+8. splits classified kernels into approximate `prefill` and `decode` phases
+   using worker `worker.decode.*` runtime log events
 
 The default profile uses:
 
@@ -121,6 +123,7 @@ Then classify:
 ```bash
 python3.11 experiments/lpx_decode_split/analyze_nsys_sqlite.py \
   --sqlite experiments/lpx_decode_split/profiles/<run>/<run>.sqlite \
+  --worker-log experiments/lpx_decode_split/profiles/<run>/dynamo-sglang-worker.full.log \
   --out-dir experiments/lpx_decode_split/profiles/<run>/kernel_analysis
 ```
 
@@ -137,6 +140,16 @@ observed decode kernel time
   = attention/KV time
   + FFN/MLP time
   + other runtime time
+```
+
+The same summary also includes `Phase Summary`, `Phase x Bucket Summary`, and
+`Top Phase Kernels` when `dynamo-sglang-worker.full.log` is available. CSV
+versions are written to:
+
+```text
+kernel_analysis/phase_summary.csv
+kernel_analysis/phase_bucket_summary.csv
+kernel_analysis/top_phase_kernels.csv
 ```
 
 ## LPX What-If Estimate
