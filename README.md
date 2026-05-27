@@ -43,6 +43,65 @@ and `other` rows, plus a generated LPX what-if speedup table.
 
 --------------------------------------------------------------------------------
 
+## 0. Core Pipeline: Upstream vs Custom
+
+This section describes the basic non-instrumentation pipeline:
+
+```text
+SWE-bench Pro -> AgentBench runner -> prompt builder -> Deep Agents
+-> Dynamo frontend -> SGLang worker
+```
+
+### Out Of The Box
+
+These pieces are upstream/off-the-shelf:
+
+- **SWE-bench Pro dataset**: loaded from Hugging Face with `datasets`.
+- **Deep Agents framework**: cloned from upstream and installed from
+  `agentbench/upstream/deepagents/libs/deepagents`.
+- **Deep Agents deploy-coding-agent example content**: reused when running with
+  `--app-variant upstream_deploy_coding_agent`.
+- **Dynamo frontend/runtime**: OpenAI-compatible frontend and request routing.
+- **SGLang worker**: model serving backend that runs the model.
+- **LangChain/OpenAI client surface**: `ChatOpenAI` is used as the client
+  interface to the local Dynamo `/v1` endpoint.
+
+### Custom In This Repo
+
+These pieces are custom implementation:
+
+- **AgentBench runner**:
+  `agentbench/deepagents_swebench_single_host.py`.
+  This is not an external AgentBench package. It is the local harness that loads
+  one SWE-bench task, prepares the workspace, starts one run, calls the Deep
+  Agents app, and writes result artifacts.
+- **Prompt builder**:
+  `agentbench/deepagents_app/src/prompts.py`.
+  This turns raw SWE-bench task fields into the model-facing coding task prompt.
+- **Deep Agents adapter app**:
+  `agentbench/deepagents_app/src/agent.py`.
+  This wires upstream Deep Agents to the local Dynamo frontend, selects the
+  instruction surface, builds the filesystem/shell backend, and attaches
+  request metadata.
+- **Dynamo/SGLang launch glue**:
+  `run_dynamo_single_host.sh`, `run_dynamo_head.sh`, and
+  `run_dynamo_worker.sh`.
+  These start etcd, NATS, the Dynamo frontend, and the SGLang worker in the
+  shape needed by this project.
+- **Run artifacts and reports**:
+  result directories, measurements, prompt-evolution reports, runtime alignment
+  summaries, and helper diagnostics are custom.
+
+### Short Version
+
+The model-serving stack is mostly upstream Dynamo + SGLang. The agent framework
+is upstream Deep Agents. The dataset is upstream SWE-bench Pro. The custom part
+is the glue: loading one task, building the prompt, adapting Deep Agents to the
+local Dynamo endpoint, launching the local runtime, and saving the benchmark
+artifacts.
+
+--------------------------------------------------------------------------------
+
 ## 1. Golden Path: Reproduce LPX Decode Profiling
 
 Use this section on a new machine when the goal is to reproduce the final
