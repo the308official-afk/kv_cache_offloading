@@ -1,0 +1,160 @@
+{
+  "formula_notes": {
+    "description": "Higher scores mean the cached context is more worth keeping in fast memory.",
+    "weights": {
+      "reuse_score": 0.28,
+      "priority_score": 0.18,
+      "recency_score": 0.12,
+      "future_turn_score": 0.18,
+      "latency_value_score": 0.18,
+      "size_penalty_score": -0.12,
+      "_provenance": {
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED"
+      }
+    },
+    "_provenance": {
+      "description": "SPECULATIVE",
+      "weights": {
+        "_container": "SPECULATIVE"
+      }
+    }
+  },
+  "summary": {
+    "highest_value_phase": "execution",
+    "lowest_value_phase": "review",
+    "keep_candidates": [],
+    "evict_first_candidates": [],
+    "_provenance": {
+      "highest_value_phase": "SPECULATIVE",
+      "lowest_value_phase": "SPECULATIVE",
+      "keep_candidates": {
+        "_container": "SPECULATIVE"
+      },
+      "evict_first_candidates": {
+        "_container": "SPECULATIVE"
+      }
+    }
+  },
+  "rows": [
+    {
+      "phase": "execution",
+      "step_index": 0,
+      "reuse_score": 0.8477,
+      "priority_score": 0.5,
+      "recency_score": 0.4,
+      "future_turn_score": 0.4,
+      "latency_value_score": 1.0,
+      "size_penalty_score": 1.0,
+      "cache_value_score": 0.5074,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "planning",
+      "step_index": 0,
+      "reuse_score": 0.8886,
+      "priority_score": 0.5,
+      "recency_score": 0.35,
+      "future_turn_score": 0.45,
+      "latency_value_score": 0.682,
+      "size_penalty_score": 0.8304,
+      "cache_value_score": 0.4849,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "patch_generation",
+      "step_index": 0,
+      "reuse_score": 0.9321,
+      "priority_score": 0.5,
+      "recency_score": 0.4,
+      "future_turn_score": 0.4,
+      "latency_value_score": 0.4284,
+      "size_penalty_score": 0.7849,
+      "cache_value_score": 0.4539,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    },
+    {
+      "phase": "review",
+      "step_index": 0,
+      "reuse_score": 0.8073,
+      "priority_score": 0.5,
+      "recency_score": 0.4,
+      "future_turn_score": 0.4,
+      "latency_value_score": 0.2518,
+      "size_penalty_score": 0.865,
+      "cache_value_score": 0.3776,
+      "keep_recommendation": "spill-or-recompute",
+      "_provenance": {
+        "phase": "MEASURED",
+        "step_index": "MEASURED",
+        "reuse_score": "DERIVED",
+        "priority_score": "DERIVED",
+        "recency_score": "SPECULATIVE",
+        "future_turn_score": "SPECULATIVE",
+        "latency_value_score": "DERIVED",
+        "size_penalty_score": "DERIVED",
+        "cache_value_score": "SPECULATIVE",
+        "keep_recommendation": "SPECULATIVE"
+      }
+    }
+  ],
+  "_provenance": {
+    "formula_notes": {
+      "_container": "SPECULATIVE"
+    },
+    "summary": {
+      "_container": "SPECULATIVE"
+    },
+    "rows": {
+      "_container": "SPECULATIVE"
+    }
+  },
+  "_provenance_schema": {
+    "labels": [
+      "MEASURED",
+      "DERIVED",
+      "SPECULATIVE"
+    ],
+    "version": 1
+  }
+}

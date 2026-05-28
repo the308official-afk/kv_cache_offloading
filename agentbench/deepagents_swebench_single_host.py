@@ -570,6 +570,18 @@ def annotate_with_provenance(data, artifact: str, path: tuple[str, ...] = (), in
     return data
 
 
+def strip_provenance(data):
+    if isinstance(data, dict):
+        return {
+            key: strip_provenance(value)
+            for key, value in data.items()
+            if key not in {"_provenance", "_provenance_schema"}
+        }
+    if isinstance(data, list):
+        return [strip_provenance(item) for item in data]
+    return data
+
+
 def write_json_artifact(run_dir: Path, filename: str, payload, artifact: str, *, annotate: bool = True) -> Path:
     output_path = run_dir / filename
     body = annotate_with_provenance(payload, artifact) if annotate else payload
@@ -3887,7 +3899,12 @@ def prepare_workspace(
     return workspace_dir, metadata
 
 
-def collect_workspace_artifacts(run_dir: Path, workspace_dir: Path | None) -> dict:
+def collect_workspace_artifacts(
+    report_dir: Path,
+    workspace_dir: Path | None,
+    *,
+    auxiliary_dir: Path | None = None,
+) -> dict:
     # [CHECK_POINT 6] Git patch and workspace artifacts are captured here.
     # Debugging note: this is where repo-aware runs become benchmark artifacts:
     # patch file, git status, git diff stat, and workspace metadata.
@@ -3909,10 +3926,14 @@ def collect_workspace_artifacts(run_dir: Path, workspace_dir: Path | None) -> di
     diff_stat = run_command(["git", "diff", "--stat"], cwd=workspace_dir, check=False)
     head = run_command(["git", "rev-parse", "HEAD"], cwd=workspace_dir, check=False)
 
-    patch_path = run_dir / "workspace.patch"
+    artifact_dir = auxiliary_dir or report_dir
+    patch_path = report_dir / "workspace.patch"
     patch_path.write_text(diff.stdout, encoding="utf-8")
-    (run_dir / "git_status.txt").write_text(status.stdout, encoding="utf-8")
-    (run_dir / "git_diff_stat.txt").write_text(diff_stat.stdout, encoding="utf-8")
+    legacy_patch_path = artifact_dir / "workspace.patch"
+    if legacy_patch_path != patch_path and legacy_patch_path.exists():
+        legacy_patch_path.unlink()
+    (artifact_dir / "git_status.txt").write_text(status.stdout, encoding="utf-8")
+    (artifact_dir / "git_diff_stat.txt").write_text(diff_stat.stdout, encoding="utf-8")
 
     artifacts.update(
         {
@@ -4181,7 +4202,14 @@ def main() -> None:
     log_artifact_written_event(artifact_name="plan", artifact_path=plan_file, related_phase="planning")
 
     step_results = workflow["step_results"]
-    step_results_file = write_json_artifact(others_dir, "step_results.json", step_results, "step_results")
+    step_results_report = strip_provenance(step_results)
+    step_results_file = write_json_artifact(
+        run_dir,
+        "step_results.json",
+        step_results_report,
+        "step_results",
+        annotate=False,
+    )
     log_artifact_written_event(artifact_name="step_results", artifact_path=step_results_file)
     measurements = workflow["measurements"]
     measurements_file = write_json_artifact(others_dir, "measurements.json", measurements, "measurements")
@@ -4309,7 +4337,7 @@ def main() -> None:
     final_summary_file.write_text(result["response_text"], encoding="utf-8")
     log_artifact_written_event(artifact_name="final_summary", artifact_path=final_summary_file, related_phase="synthesis")
 
-    workspace_artifacts = collect_workspace_artifacts(others_dir, workspace_dir)
+    workspace_artifacts = collect_workspace_artifacts(run_dir, workspace_dir, auxiliary_dir=others_dir)
     log_lifecycle_event(
         stage="workspace_artifacts_collected",
         payload={

@@ -303,6 +303,40 @@ command -v QdstrmImporter || echo "QdstrmImporter is missing"
 ss -ltnp | grep ':8000' || true
 ```
 
+If Docker fails while pulling or unpacking an image with:
+
+```text
+failed to register layer: mkdir ... no space left on device
+```
+
+free Docker space before retrying:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_single_host.sh stop || true
+
+df -h /
+docker system df
+
+docker container prune -f
+docker image prune -f
+docker builder prune -f
+```
+
+If the machine still does not have enough free space and no important local
+Docker images/build cache need to be preserved, use the stronger cleanup:
+
+```bash
+docker system prune -af
+docker builder prune -af
+
+df -h /
+docker system df
+```
+
+Keep at least 30-50 GB free for smoke or prompt-evolution runs, and 80-120 GB
+free for instrumented Dynamo rebuilds.
+
 --------------------------------------------------------------------------------
 
 ### 1.5 Build Instrumented Dynamo Images

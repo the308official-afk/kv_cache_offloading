@@ -1,5 +1,12 @@
 # Debug Guide
 
+## AgentBench Environment Setup Runbook
+
+Use [README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md) as the
+compact setup checklist for new machines. It collects the Node, NodeBB, Redis,
+`config.json`, missing-module, and `workspace.patch` checks that are repeated in
+the debugging sections below.
+
 ## Phased SWE-bench Worker Profile
 
 Use this path when the goal is realistic DeepAgents/SWE-bench traffic while
@@ -1310,6 +1317,61 @@ docker system df
 For a smoke test, keep at least 30-50 GB free. For a Dynamo rebuild, keep at
 least 80-120 GB free.
 
+If Docker fails while downloading or unpacking an image with an error like:
+
+```text
+failed to register layer: mkdir ... no space left on device
+```
+
+the root filesystem or Docker data root is full. First stop the local runtime:
+
+```bash
+cd ~/kv_cache_offloading
+./run_dynamo_single_host.sh stop || true
+```
+
+Then check where the space is going:
+
+```bash
+df -h /
+docker system df
+sudo du -xh /var/lib/docker 2>/dev/null | sort -h | tail -30
+du -xh ~/.cache/huggingface 2>/dev/null | sort -h | tail -30
+du -xh ~/kv_cache_offloading 2>/dev/null | sort -h | tail -30
+```
+
+Safe Docker cleanup for retrying an image pull:
+
+```bash
+docker container prune -f
+docker image prune -f
+docker builder prune -f
+```
+
+If Docker still reports many reclaimable GB and no important local images need
+to be preserved, do the stronger cleanup:
+
+```bash
+docker system prune -af
+docker builder prune -af
+```
+
+If Hugging Face/model cache is the largest consumer, remove only models you can
+redownload:
+
+```bash
+du -sh ~/.cache/huggingface 2>/dev/null || true
+rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-7B-Instruct
+rm -rf ~/.cache/huggingface/hub/models--Qwen--Qwen2.5-Coder-7B-Instruct
+```
+
+Recheck free space before retrying:
+
+```bash
+df -h /
+docker system df
+```
+
 ## Image Architecture
 
 On GH200, verify host architecture:
@@ -1378,3 +1440,556 @@ Then verify:
 
 curl -s http://127.0.0.1:2379/health
 # Expected: {"health":"true","reason":""}
+
+## Agent Did Not Edit The Workspace
+
+Use this when a run completes but `workspace.patch`, `git_status.txt`, and
+`git_diff_stat.txt` are empty. That means the serving stack worked, but the
+agent did not actually fix the SWE-bench task.
+
+First compare a single continuous agent run against the phased run. The single
+run is the best sanity check because Deep Agents keeps one tool loop instead of
+splitting planning, execution, patch generation, and review into separate model
+calls.
+
+Choose the model with `MODEL_KIND`:
+
+```bash
+cd ~/kv_cache_offloading
+
+MODEL_KIND="${MODEL_KIND:-coder}"  # coder or instruct
+case "$MODEL_KIND" in
+  coder)
+    MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+    ;;
+  instruct)
+    MODEL_NAME='Qwen/Qwen2.5-7B-Instruct'
+    ;;
+  *)
+    echo "MODEL_KIND must be coder or instruct" >&2
+    exit 1
+    ;;
+esac
+
+echo "Using model: $MODEL_NAME"
+```
+
+Restart Dynamo/SGLang with the selected model:
+
+```bash
+./run_dynamo_single_host.sh stop
+
+SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
+./run_dynamo_single_host.sh start
+```
+
+Verify model registration:
+
+```bash
+curl -fsS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/models
+```
+
+Run the continuous baseline agent:
+
+```bash
+AGENTBENCH_WORKFLOW_MODE=baseline \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --prompt-evolution-value-char-limit 1000
+```
+
+Check whether the task was actually attempted:
+
+```bash
+LATEST_RESULT="$(ls -td agentbench/results/* | head -1)"
+
+echo "$LATEST_RESULT"
+cat "$LATEST_RESULT/others/git_status.txt"
+cat "$LATEST_RESULT/others/git_diff_stat.txt"
+wc -c "$LATEST_RESULT/workspace.patch"
+grep -R "workspace_changed\\|tool_call\\|finish_reason\\|output_tokens" -n \
+  "$LATEST_RESULT/prompt_evolution_values" "$LATEST_RESULT/others/step_results.json" | head -80
+```
+
+Expected for a useful run:
+
+```text
+workspace.patch size > 0
+git_status.txt or git_diff_stat.txt is non-empty
+model output includes edit/write/execute tool activity, not only ls/read_file
+```
+
+If the baseline edits files but the phased run does not, the problem is likely
+the phased orchestration: the planning response may be empty or malformed, and
+that bad planning text gets fed into later phases. If both baseline and phased
+runs fail to edit files, inspect model/tool compatibility and try the other
+model with `MODEL_KIND=instruct` or `MODEL_KIND=coder`.
+
+## workspace.patch Still Appears Under others/
+
+New runs should write the patch here:
+
+```text
+agentbench/results/<run_id>/workspace.patch
+```
+
+If a machine still writes this instead:
+
+```text
+agentbench/results/<run_id>/others/workspace.patch
+```
+
+then it is probably running an older copy of
+`agentbench/deepagents_swebench_single_host.py`, or the run was created before
+the report-layout update.
+
+Check the script:
+
+```bash
+grep -n "collect_workspace_artifacts(run_dir, workspace_dir, auxiliary_dir=others_dir)" \
+  agentbench/deepagents_swebench_single_host.py
+
+grep -n "patch_path = report_dir / \"workspace.patch\"" \
+  agentbench/deepagents_swebench_single_host.py
+```
+
+Both commands should print a matching line. If either command prints nothing,
+upload or pull the latest repo files before rerunning AgentBench.
+
+For an already-created result, move the patch manually:
+
+```bash
+LATEST_RESULT="$(ls -td agentbench/results/* | head -1)"
+
+if [ -f "$LATEST_RESULT/others/workspace.patch" ] && [ ! -f "$LATEST_RESULT/workspace.patch" ]; then
+  mv "$LATEST_RESULT/others/workspace.patch" "$LATEST_RESULT/workspace.patch"
+fi
+
+find "$LATEST_RESULT" -maxdepth 2 -name workspace.patch -print -exec wc -c {} \;
+```
+
+## Agent Tool Shell Cannot Find node
+
+Use this when the AgentBench transcript shows tool results like:
+
+```text
+/bin/sh: line 1: node: command not found
+```
+
+This usually means Node.js is installed through `nvm`, but the Python process
+that launched Deep Agents did not inherit the `nvm` Node binary path. Installing
+or updating `nvm` during the agent run is not enough because the agent tool
+commands run in non-interactive shells.
+
+Before launching AgentBench, prepare Node.js in the same shell:
+
+```bash
+cd ~/kv_cache_offloading
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm install 22
+nvm use 22
+
+export PATH="$(dirname "$(command -v node)"):$PATH"
+
+node -v
+npm -v
+```
+
+Both `node -v` and `npm -v` must succeed before starting the benchmark. Then run
+AgentBench from that same shell so `LocalShellBackend(inherit_env=True)` passes
+the Node path into tool commands:
+
+```bash
+AGENTBENCH_WORKFLOW_MODE=baseline \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --prompt-evolution-value-char-limit 1000
+```
+
+After the run:
+
+```bash
+LATEST_RESULT="$(ls -td agentbench/results/* | head -1)"
+grep -R "node: command not found" -n "$LATEST_RESULT" || true
+wc -c "$LATEST_RESULT/workspace.patch"
+```
+
+## Node Project Dependencies Missing
+
+Use this when the AgentBench transcript shows tool results like:
+
+```text
+Error: Cannot find module 'nconf'
+Error: Cannot find module 'async'
+Error: Cannot find module 'winston'
+Error: Cannot find module 'semver'
+Error: Cannot find module 'ioredis'
+Error: Cannot find module 'lru-cache'
+Error: Cannot find module 'chalk'
+Error: Cannot find module 'request'
+Error: Cannot find module 'request-promise-native'
+Error: Cannot find module 'xregexp'
+Error: Cannot find module 'mkdirp'
+Error: Cannot find module 'mime'
+Error: Cannot find module 'graceful-fs'
+Error: Cannot find module 'validator'
+Error: Cannot find module 'cron'
+Error: Cannot find module 'benchpressjs'
+Error: Cannot find module 'nodemailer'
+Error: Cannot find module 'html-to-text'
+Error: ENOENT: no such file or directory, scandir '.../node_modules/timeago/locales'
+```
+
+This means Node.js itself is available, but the checked-out task workspace has
+not installed its full npm dependency set. If `npm install` says only a small
+number of packages were installed, the shell may be in production mode or npm
+may be omitting dev or optional dependencies. For NodeBB tasks, install all
+dependencies in the benchmark workspace before rerunning AgentBench:
+
+```bash
+cd ~/kv_cache_offloading
+
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+nvm use 22
+export PATH="$(dirname "$(command -v node)"):$PATH"
+
+cd agentbench/repos/NodeBB__NodeBB
+
+unset NODE_ENV
+npm install --include=dev --include=optional
+
+node -e "require('nconf'); require('async'); require('winston'); require('semver'); require('ioredis'); require('lru-cache'); require('chalk'); require('request'); require('request-promise-native'); require('xregexp'); require('mkdirp'); require('mime'); require('graceful-fs'); require('validator'); require('cron'); require('benchpressjs'); require('nodemailer'); require('html-to-text'); console.log('node deps ok')"
+```
+
+Before using compatibility installs, inspect whether this checkout has the real
+NodeBB dependency manifest. For this benchmark checkout, the real manifest may
+live at `install/package.json` rather than root `package.json`:
+
+```bash
+git remote -v || true
+git rev-parse HEAD || true
+git ls-tree -r HEAD --name-only | grep -E '(^|/)package(-lock)?\.json$' || true
+
+node - <<'NODE'
+const fs = require('fs');
+for (const file of ['package.json', 'install/package.json']) {
+  if (!fs.existsSync(file)) continue;
+  const p = JSON.parse(fs.readFileSync(file, 'utf8'));
+  console.log(file, {
+    name: p.name,
+    version: p.version,
+    dependencies: Object.keys(p.dependencies || {}).length,
+    devDependencies: Object.keys(p.devDependencies || {}).length,
+    optionalDependencies: Object.keys(p.optionalDependencies || {}).length,
+  });
+}
+NODE
+```
+
+If root `package.json` has only a few dependencies but `install/package.json`
+has the real NodeBB manifest, install the exact dependency versions from
+`install/package.json` plus the root dependency ranges into the root workspace.
+The root ranges are included last because NodeBB's dependency checker reads
+root `package.json`:
+
+```bash
+NODEBB_INSTALL_DEPS="$(
+node <<'NODE'
+const fs = require('fs');
+const install = JSON.parse(fs.readFileSync('install/package.json', 'utf8'));
+const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+const deps = {
+  ...(install.dependencies || {}),
+  ...(install.devDependencies || {}),
+  ...(root.dependencies || {}),
+  ...(root.devDependencies || {}),
+};
+console.log(Object.entries(deps).map(([name, version]) => `${name}@${version}`).join(' '));
+NODE
+)"
+
+npm install --no-save $NODEBB_INSTALL_DEPS
+
+node -e "console.log(require('chalk').yellow('chalk ok'))"
+node -e "new (require('@isaacs/ttlcache'))({ ttl: 1000 }); console.log('ttlcache ok')"
+node -e "if (typeof require('connect-redis').default !== 'function') throw new Error('connect-redis mismatch'); console.log('connect-redis ok')"
+npm ls nconf winston
+test -d node_modules/timeago/locales && echo "timeago locales ok"
+test -f node_modules/nodebb-theme-persona/theme.json && echo "persona theme ok"
+```
+
+If Mocha fails with:
+
+```text
+Error: dependencies-out-of-date
+```
+
+rerun this exact-manifest install block. That error usually means the root
+`package.json` dependency ranges, commonly `nconf` or `winston`, were not
+installed after the `install/package.json` versions.
+
+Build the NodeBB templates before running the email tests:
+
+```bash
+./nodebb build tpl --series
+test -f build/public/templates/emails/verify-email.js && echo "email template ok"
+```
+
+If Mocha fails with:
+
+```text
+Failed to lookup view "emails/verify-email"
+```
+
+rerun this template build. The dependency install prepares packages, but it does
+not create `build/public/templates`.
+
+For this preflight, webpack errors about missing `build/public/src/client.js` or
+`build/public/src/admin/admin.js` during `./nodebb build tpl --series` are not
+blocking as long as `email template ok` prints. The selected tests only need the
+compiled templates.
+
+Use the compatibility bundle below only if `install/package.json` is absent or
+the exact-manifest install fails.
+
+If the full install fails on optional/native packages, retry with:
+
+```bash
+npm install --include=dev --omit=optional
+```
+
+If the install still reports only a tiny dependency set, this benchmark
+materialization has a sparse `package.json`. Inspect what this checkout actually
+declares:
+
+```bash
+node -e "const p=require('./package.json'); console.log({name:p.name, deps:Object.keys(p.dependencies||{}).length, devDeps:Object.keys(p.devDependencies||{}).length}); console.log('has semver:', !!(p.dependencies||{}).semver || !!(p.devDependencies||{}).semver)"
+npm ls semver ioredis lru-cache chalk request request-promise-native xregexp mkdirp mime graceful-fs validator cron benchpressjs nodemailer html-to-text || true
+```
+
+There is not a reliable single public package that safely provides all top-level
+modules for this sparse checkout. Instead, generate one install list from the
+checkout's own `require(...)` calls and install that list in one pass:
+
+```bash
+NODEBB_COMPAT_DEPS="$(
+node <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const Module = require('module');
+
+const builtins = new Set(Module.builtinModules.map((name) => name.replace(/^node:/, '')));
+const roots = ['src', 'test'].filter((root) => fs.existsSync(root));
+const deps = new Set();
+const knownRuntimeDeps = [
+  'xregexp',
+  'timeago@1.6.7',
+  'nodebb-theme-persona',
+  'nodebb-plugin-dbsearch',
+  'nodebb-widget-essentials',
+  'nodebb-plugin-composer-default',
+];
+const pinnedPackages = new Map([
+  ['chalk', 'chalk@4.1.2'],
+  ['@isaacs/ttlcache', '@isaacs/ttlcache@1.4.1'],
+  ['connect-redis', 'connect-redis@7.1.1'],
+]);
+const validPackage = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/i;
+
+function walk(filePath) {
+  const stat = fs.statSync(filePath);
+  if (stat.isDirectory()) {
+    for (const entry of fs.readdirSync(filePath)) {
+      if (entry === 'node_modules' || entry === '.git') continue;
+      walk(path.join(filePath, entry));
+    }
+    return;
+  }
+  if (!filePath.endsWith('.js')) return;
+  const text = fs.readFileSync(filePath, 'utf8');
+  const pattern = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let match;
+  while ((match = pattern.exec(text))) {
+    const spec = match[1];
+    if (spec.startsWith('.') || spec.startsWith('/') || builtins.has(spec)) continue;
+    const pkg = spec.startsWith('@')
+      ? spec.split('/').slice(0, 2).join('/')
+      : spec.split('/')[0];
+    if (!validPackage.test(pkg)) continue;
+    if (pkg.includes('*') || pkg.includes('$') || pkg.includes('{') || pkg.includes('}')) continue;
+    if (!builtins.has(pkg)) deps.add(pinnedPackages.get(pkg) || pkg);
+  }
+}
+
+for (const root of roots) walk(root);
+for (const dep of knownRuntimeDeps) deps.add(dep);
+console.log([...deps].sort().join(' '));
+NODE
+)"
+
+echo "$NODEBB_COMPAT_DEPS"
+npm install --no-save $NODEBB_COMPAT_DEPS
+```
+
+Run that as one block. Do not install `timeago@1.6.7` separately afterward:
+another `npm install --no-save ...` can prune the previously installed
+compatibility packages.
+
+If the tests fail with:
+
+```text
+TypeError: TTLCache is not a constructor
+```
+
+rerun the generated compatibility install above. It pins
+`@isaacs/ttlcache@1.4.1` because this older NodeBB checkout expects
+`require('@isaacs/ttlcache')` to return the constructor directly.
+
+If the tests fail with:
+
+```text
+TypeError: sessionStore is not a constructor
+```
+
+rerun the generated compatibility install above. It pins `connect-redis@7.1.1`
+because this older NodeBB checkout expects `require('connect-redis').default`
+to be the session-store constructor.
+
+If the tests fail with:
+
+```text
+TypeError: chalk.yellow is not a function
+```
+
+rerun the generated compatibility install above. It pins `chalk@4.1.2` because
+this older NodeBB checkout expects the CommonJS v4 API with helpers like
+`chalk.yellow(...)`.
+
+If the tests fail with:
+
+```text
+ENOENT ... node_modules/nodebb-theme-persona/theme.json
+```
+
+rerun the generated compatibility install above. The default NodeBB theme and
+plugins are loaded from config names, so they are manually added to
+`knownRuntimeDeps` because the `require(...)` scanner cannot discover them.
+
+If a package is still missing after that, add it as an environment dependency
+without saving it into the repo:
+
+```bash
+npm install --no-save semver ioredis lru-cache chalk@4.1.2 request request-promise-native xregexp mkdirp mime graceful-fs validator cron benchpressjs nodemailer html-to-text timeago@1.6.7 @isaacs/ttlcache@1.4.1 connect-redis@7.1.1 nodebb-theme-persona nodebb-plugin-dbsearch nodebb-widget-essentials nodebb-plugin-composer-default
+node -e "require('semver'); require('ioredis'); require('lru-cache'); require('chalk'); require('request'); require('request-promise-native'); require('xregexp'); require('mkdirp'); require('mime'); require('graceful-fs'); require('validator'); require('cron'); require('benchpressjs'); require('nodemailer'); require('html-to-text'); new (require('@isaacs/ttlcache'))({ ttl: 1000 }); if (typeof require('connect-redis').default !== 'function') throw new Error('connect-redis default export mismatch'); console.log('redis deps ok')"
+test -d node_modules/timeago/locales && echo "timeago locales ok"
+test -f node_modules/nodebb-theme-persona/theme.json && echo "persona theme ok"
+```
+
+Install temporary `--no-save` dependencies together. Because they are not
+recorded in `package.json`, running a later `npm install --no-save <other-package>`
+can prune a previously installed temporary package.
+
+If `npm install` reports an engine/version mismatch, inspect the repo's Node
+version requirements and switch Node versions before installing:
+
+```bash
+cat package.json | grep -A5 '"engines"' || true
+cat .nvmrc 2>/dev/null || true
+```
+
+Then rerun AgentBench from the same shell. A useful rerun should no longer show
+`Cannot find module`, and `workspace.patch` should become non-empty if the agent
+actually edits files.
+
+## NodeBB config.json Missing
+
+Use this when the AgentBench transcript shows tool results like:
+
+```text
+Error: ENOENT: no such file or directory, open '.../NodeBB__NodeBB/config.json'
+```
+
+This means npm dependencies are installed, but the NodeBB test harness cannot
+boot because the checkout is missing its local `config.json`. Redis is used here
+only as the simple local test database for NodeBB. Create a minimal test config
+and start Redis before rerunning AgentBench:
+
+```bash
+cd ~/kv_cache_offloading/agentbench/repos/NodeBB__NodeBB
+
+docker rm -f nodebb-test-redis >/dev/null 2>&1 || true
+docker run -d \
+  --name nodebb-test-redis \
+  --network host \
+  redis:7-alpine
+
+cat > config.json <<'JSON'
+{
+  "url": "http://127.0.0.1:4567",
+  "secret": "agentbench-test-secret",
+  "database": "redis",
+  "redis": {
+    "host": "127.0.0.1",
+    "port": "6379",
+    "password": "",
+    "database": "0"
+  },
+  "test_database": {
+    "host": "127.0.0.1",
+    "port": "6379",
+    "password": "",
+    "database": "1"
+  }
+}
+JSON
+```
+
+Preflight the selected tests directly:
+
+```bash
+test -f config.json && echo "config.json exists"
+node -e "require('nconf'); require('async'); require('winston'); console.log('node deps ok')"
+./nodebb build tpl --series
+test -f build/public/templates/emails/verify-email.js && echo "email template ok"
+npx mocha --timeout 30000 test/database.js test/database/keys.js test/user/emails.js
+```
+
+Expected success signal:
+
+```text
+298 passing
+```
+
+If this reaches real assertion failures instead of `ENOENT` or
+`MODULE_NOT_FOUND`, rerun AgentBench from the repo root:
+
+```bash
+cd ~/kv_cache_offloading
+
+AGENTBENCH_WORKFLOW_MODE=baseline \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --prompt-evolution-value-char-limit 1000
+```

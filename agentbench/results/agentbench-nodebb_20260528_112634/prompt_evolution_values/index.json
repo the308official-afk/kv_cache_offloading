@@ -1,0 +1,34 @@
+{
+  "run_id": "agentbench-nodebb_20260528_112634",
+  "char_limit": 1000,
+  "stages": [
+    {
+      "stage": "task_input",
+      "file": "01_task_input.json"
+    },
+    {
+      "stage": "formatted_prompt",
+      "file": "02_formatted_prompt.json"
+    },
+    {
+      "stage": "final_model_request",
+      "file": "03_final_model_request.json"
+    },
+    {
+      "stage": "system_context",
+      "file": "04_system_context.json"
+    },
+    {
+      "stage": "tool_runtime_context",
+      "file": "05_tool_runtime_context.json"
+    },
+    {
+      "stage": "runtime_preprocessing",
+      "file": "06_runtime_preprocessing.json"
+    },
+    {
+      "stage": "model_behavior",
+      "file": "07_model_behavior.json"
+    }
+  ]
+}

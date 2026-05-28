@@ -1,0 +1,2 @@
+phase,phase_provenance,step_index,step_index_provenance,latency_ms,latency_ms_provenance,input_tokens,input_tokens_provenance,output_tokens,output_tokens_provenance,cached_input_tokens,cached_input_tokens_provenance,finish_reason,finish_reason_provenance,prefill_decode_profile,prefill_decode_profile_provenance,reuse_signal,reuse_signal_provenance,pressure_risk,pressure_risk_provenance
+baseline_execution,MEASURED,,MEASURED,92855.569,MEASURED,19123,MEASURED,562,MEASURED,17728,MEASURED,stop,MEASURED,prefill-heavy,DERIVED,yes (17728 cached tokens),DERIVED,very high,DERIVED

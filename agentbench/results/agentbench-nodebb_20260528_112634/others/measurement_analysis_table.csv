@@ -1,0 +1,5 @@
+phase,phase_provenance,step_index,step_index_provenance,latency_ms,latency_ms_provenance,input_tokens,input_tokens_provenance,output_tokens,output_tokens_provenance,cached_input_tokens,cached_input_tokens_provenance,finish_reason,finish_reason_provenance,prefill_decode_profile,prefill_decode_profile_provenance,reuse_signal,reuse_signal_provenance,pressure_risk,pressure_risk_provenance
+planning,MEASURED,0,MEASURED,9339.763,MEASURED,9374,MEASURED,8,MEASURED,8448,MEASURED,stop,MEASURED,prefill-heavy,DERIVED,yes (8448 cached tokens),DERIVED,high,DERIVED
+execution,MEASURED,0,MEASURED,15261.351,MEASURED,12172,MEASURED,83,MEASURED,10880,MEASURED,stop,MEASURED,prefill-heavy,DERIVED,yes (10880 cached tokens),DERIVED,very high,DERIVED
+patch_generation,MEASURED,0,MEASURED,1599.114,MEASURED,7191,MEASURED,8,MEASURED,7104,MEASURED,stop,MEASURED,prefill-heavy,DERIVED,yes (7104 cached tokens),DERIVED,high,DERIVED
+review,MEASURED,0,MEASURED,3837.058,MEASURED,7305,MEASURED,6,MEASURED,7232,MEASURED,stop,MEASURED,prefill-heavy,DERIVED,yes (7232 cached tokens),DERIVED,high,DERIVED

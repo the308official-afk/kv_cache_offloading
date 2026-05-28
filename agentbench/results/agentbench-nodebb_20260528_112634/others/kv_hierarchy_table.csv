@@ -1,0 +1,5 @@
+phase,phase_provenance,step_index,step_index_provenance,prompt_tokens,prompt_tokens_provenance,pressure_risk,pressure_risk_provenance,reuse_score,reuse_score_provenance,cache_value_score,cache_value_score_provenance,recommended_tier,recommended_tier_provenance,movement_priority,movement_priority_provenance,reason,reason_provenance
+planning,MEASURED,0,MEASURED,9374,MEASURED,high,DERIVED,0.9005,DERIVED,0.4829,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
+execution,MEASURED,0,MEASURED,12172,MEASURED,very high,DERIVED,0.8975,DERIVED,0.5213,SPECULATIVE,cpu,SPECULATIVE,medium,SPECULATIVE,"worth keeping, but cheaper off-GPU residency is acceptable",SPECULATIVE
+patch_generation,MEASURED,0,MEASURED,7191,MEASURED,high,DERIVED,0.9352,DERIVED,0.4198,SPECULATIVE,nvme,SPECULATIVE,medium,SPECULATIVE,lower-value context; preserve only in colder storage if needed,SPECULATIVE
+review,MEASURED,0,MEASURED,7305,MEASURED,high,DERIVED,0.936,DERIVED,0.4453,SPECULATIVE,nvme,SPECULATIVE,medium,SPECULATIVE,lower-value context; preserve only in colder storage if needed,SPECULATIVE
