@@ -1,4 +1,4 @@
-./agentbench/upstream/deepagents/libs/deepagents
+./upstream/deepagents/libs/deepagents
 langchain-openai
 langchain-core
 datasets

@@ -3,6 +3,14 @@
 from __future__ import annotations
 
 import json
+import os
+from pathlib import Path
+
+APP_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_TASK_OVERRIDES_FILE = APP_ROOT / "prompts" / "task_overrides.txt"
+PROMPT_OVERRIDES_ENV = "AGENTBENCH_PROMPT_OVERRIDES"
+PROMPT_OVERRIDES_FILE_ENV = "AGENTBENCH_PROMPT_OVERRIDES_FILE"
+PROMPT_OVERRIDES_DISABLED_VALUES = {"0", "false", "no", "off", "none", "disabled"}
 
 SYSTEM_PROMPT = (
     "You are a careful software engineering agent. "
@@ -45,6 +53,70 @@ def _normalize_text(value: object, *, fallback: str) -> str:
     text = str(decoded).strip()
     return text or fallback
 
+
+def _normalize_list(value: object) -> list[str]:
+    decoded = _decode_task_field(value)
+    if isinstance(decoded, list):
+        return [str(item).strip() for item in decoded if str(item).strip()]
+    if isinstance(decoded, str):
+        return [line.strip() for line in decoded.splitlines() if line.strip()]
+    if decoded:
+        return [str(decoded).strip()]
+    return []
+
+
+def build_validation_command(task: dict) -> str:
+    """Build an explicit validation command for known selected-test shapes."""
+
+    selected_tests = _normalize_list(task.get("selected_test_files_to_run", ""))
+    if selected_tests and all(test.endswith(".js") for test in selected_tests):
+        return "npx mocha --timeout 30000 " + " ".join(selected_tests)
+    return ""
+
+
+class _PromptOverrideValues(dict):
+    def __missing__(self, key: str) -> str:
+        return ""
+
+
+def prompt_overrides_enabled() -> bool:
+    value = os.environ.get(PROMPT_OVERRIDES_ENV, "1").strip().lower()
+    return value not in PROMPT_OVERRIDES_DISABLED_VALUES
+
+
+def prompt_overrides_path() -> Path:
+    configured_path = os.environ.get(PROMPT_OVERRIDES_FILE_ENV, "").strip()
+    if configured_path:
+        return Path(configured_path).expanduser()
+    return DEFAULT_TASK_OVERRIDES_FILE
+
+
+def load_prompt_overrides_template() -> str:
+    if not prompt_overrides_enabled():
+        return ""
+    path = prompt_overrides_path()
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
+
+
+def render_task_prompt_overrides(task: dict) -> str:
+    template = load_prompt_overrides_template()
+    if not template:
+        return ""
+    values = _PromptOverrideValues(
+        validation_command=build_validation_command(task) or "Not provided.",
+        selected_tests=_normalize_text(
+            task.get("selected_test_files_to_run", ""),
+            fallback="Not provided.",
+        ),
+        repo=str(task.get("repo", "unknown_repo")),
+        instance_id=str(task.get("instance_id", "unknown_instance")),
+        workspace_path=str(task.get("workspace_path", "")).strip(),
+    )
+    return template.format_map(values).strip()
+
+
 def format_swebench_task_prompt(task: dict) -> str:
     """Build the main SWE-bench-style task prompt for the Deep Agents app."""
 
@@ -66,6 +138,8 @@ def format_swebench_task_prompt(task: dict) -> str:
         task.get("selected_test_files_to_run", ""),
         fallback="Not provided.",
     )
+    prompt_overrides = render_task_prompt_overrides(task)
+    prompt_overrides_section = f"\n{prompt_overrides}\n" if prompt_overrides else ""
 
     workspace_path = str(task.get("workspace_path", "")).strip()
     workspace_notes = (
@@ -93,6 +167,7 @@ Interface / environment notes:
 
 Selected tests to run:
 {selected_tests}
+{prompt_overrides_section}
 
 Workspace:
 {workspace_notes}

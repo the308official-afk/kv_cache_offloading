@@ -13,7 +13,7 @@ from pptx.util import Inches, Pt
 
 
 ROOT = Path(__file__).resolve().parents[2]
-RUN_DIR = ROOT / "agentbench/results/sample__stronger_behavior__001_20260506_155649"
+RUN_DIR = ROOT / "experiments/raw/agentbench/results/sample__stronger_behavior__001_20260506_155649"
 OUT = ROOT / "agentbench/slides/AgentBench_Experiment1_Upstream_Deploy_Coding_Agent_Run.pptx"
 
 
@@ -543,7 +543,7 @@ add_bullets(
     slide,
     [
         "10. Saved artifacts hook",
-        "This is where the run outputs are written into your agentbench/results/... format.",
+        "This is where the run outputs are written into your experiments/raw/agentbench/results/... format.",
         "agentbench/deepagents_swebench_single_host.py: save_result(...)",
         "writes plan.json",
         "writes step_results.json",
@@ -907,7 +907,7 @@ add_bullets(
     [
         "10. Saved artifacts",
         "After the final response comes back, the wrapper saves everything under:",
-        "agentbench/results/<run>/",
+        "experiments/raw/agentbench/results/<run>/",
         "Typical files:",
         "result.json",
         "plan.json",

@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/runtime_upstream/dynamo}"
+SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
 
 echo "Preparing instrumented Dynamo source at: ${SOURCE_DIR}"
 

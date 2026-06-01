@@ -1,8 +1,8 @@
 # AgentBench
 
-The AgentBench runbook has moved to the repo root:
+The AgentBench runbook has moved to the repo README directory:
 
-- [../README.md](../README.md)
+- [../README/README.md](../README/README.md)
 
-That root README is now the canonical replication guide for the full
+That README is now the canonical replication guide for the full
 AgentBench + instrumented Dynamo + SGLang hint-propagation experiment.

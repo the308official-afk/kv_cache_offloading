@@ -10,7 +10,7 @@ Primary upstream references:
 
 Cloned upstream source in this workspace:
 
-- [agentbench/upstream/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents)
+- [upstream/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents)
 - [agentbench/UPSTREAM_DEEPAGENTS_ADOPTION_MAP.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/UPSTREAM_DEEPAGENTS_ADOPTION_MAP.md)
 
 ## Purpose
@@ -81,7 +81,7 @@ The runner now imports the app-layer code from:
 
 The app now prepends the cloned upstream package path at runtime:
 
-- [agentbench/upstream/deepagents/libs/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/libs/deepagents)
+- [upstream/deepagents/libs/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/libs/deepagents)
 
 So calls to `deepagents` now prefer the downloaded GitHub source over a separately installed package copy when that cloned path exists.
 

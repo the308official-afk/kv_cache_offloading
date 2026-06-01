@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIR = Path(os.environ.get("SOURCE_DIR", ROOT / "runtime_upstream" / "dynamo"))
+SOURCE_DIR = Path(os.environ.get("SOURCE_DIR", ROOT / "upstream" / "dynamo"))
 OLD = "overlap_score_credit"
 NEW = "overlap_score_weight"
 

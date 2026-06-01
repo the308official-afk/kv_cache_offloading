@@ -2,6 +2,9 @@
 
 This directory turns the Dynamo/SGLang runtime instrumentation into a repeatable workflow instead of a one-off local clone.
 
+For SGLang host/device KV movement logging, see
+[sglang_transfer_logging/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/README.md).
+
 ## What this instruments
 
 The tracked patch in [patches/dynamo_runtime_json_logging.patch](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/patches/dynamo_runtime_json_logging.patch) adds opt-in structured JSON log events to upstream Dynamo runtime source.
@@ -77,7 +80,7 @@ cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
 
 This clones upstream into:
 
-- `/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo`
+- `/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo`
 
 The fetch script uses `GIT_LFS_SKIP_SMUDGE=1` so the source clone stays usable even if large LFS assets are not needed for instrumentation work.
 
@@ -192,8 +195,8 @@ Example:
 ```bash
 cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
 WORKER_DEV_MODE=1 \
-WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/components/src/dynamo \
-WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/lib/bindings/python/src/dynamo \
+WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo \
+WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/bindings/python/src/dynamo \
 DYN_RUNTIME_JSON_LOGS=1 \
 ./run_dynamo_worker.sh start
 ```
@@ -203,8 +206,8 @@ Single-host example:
 ```bash
 cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
 WORKER_DEV_MODE=1 \
-WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/components/src/dynamo \
-WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_upstream/dynamo/lib/bindings/python/src/dynamo \
+WORKER_DEV_SOURCE_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo \
+WORKER_DEV_BINDINGS_ROOT=/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/bindings/python/src/dynamo \
 DYN_RUNTIME_JSON_LOGS=1 \
 ./run_dynamo_single_host.sh start
 ```
@@ -353,19 +356,19 @@ Fix:
 
 ```bash
 cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
-rm -rf runtime_upstream/dynamo
+rm -rf upstream/dynamo
 
 ./runtime_instrumentation/fetch_dynamo_source.sh
 ./runtime_instrumentation/apply_runtime_json_logging_patch.sh
 ```
 
-### `runtime_upstream/dynamo` exists but is not a valid git clone
+### `upstream/dynamo` exists but is not a valid git clone
 
-If the scripts complain that `runtime_upstream/dynamo` exists but is not a git repo or is incomplete, remove it and rerun:
+If the scripts complain that `upstream/dynamo` exists but is not a git repo or is incomplete, remove it and rerun:
 
 ```bash
 cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
-rm -rf runtime_upstream/dynamo
+rm -rf upstream/dynamo
 ./runtime_instrumentation/fetch_dynamo_source.sh
 ```
 

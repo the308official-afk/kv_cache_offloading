@@ -4,16 +4,16 @@ This file maps the active local `agentbench` app to the cloned upstream Deep Age
 
 Local upstream clone:
 
-- [agentbench/upstream/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents)
+- [upstream/deepagents](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents)
 
 ## Primary Upstream Bases
 
 ### 1. Main workflow base
 
-- [examples/deploy-coding-agent/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/README.md)
-- [examples/deploy-coding-agent/AGENTS.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/AGENTS.md)
-- [examples/deploy-coding-agent/deepagents.toml](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/deepagents.toml)
-- [examples/deploy-coding-agent/mcp.json](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/mcp.json)
+- [examples/deploy-coding-agent/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/README.md)
+- [examples/deploy-coding-agent/AGENTS.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/AGENTS.md)
+- [examples/deploy-coding-agent/deepagents.toml](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/deepagents.toml)
+- [examples/deploy-coding-agent/mcp.json](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/mcp.json)
 
 Why:
 
@@ -22,7 +22,7 @@ Why:
 
 ### 2. Main source-level customization reference
 
-- [examples/nvidia_deep_agent/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/nvidia_deep_agent/README.md)
+- [examples/nvidia_deep_agent/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/nvidia_deep_agent/README.md)
 
 Why:
 
@@ -31,8 +31,8 @@ Why:
 
 ### 3. Future eval / optimization reference
 
-- [examples/better-harness/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/better-harness/README.md)
-- [examples/better-harness/better_harness_plugin.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/better-harness/better_harness_plugin.py)
+- [examples/better-harness/README.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/better-harness/README.md)
+- [examples/better-harness/better_harness_plugin.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/better-harness/better_harness_plugin.py)
 
 Why:
 
@@ -48,7 +48,7 @@ Local:
 
 Upstream target:
 
-- [examples/deploy-coding-agent/AGENTS.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/AGENTS.md)
+- [examples/deploy-coding-agent/AGENTS.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/AGENTS.md)
 
 ### App config
 
@@ -59,8 +59,8 @@ Local:
 
 Upstream target:
 
-- [examples/deploy-coding-agent/deepagents.toml](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/deepagents.toml)
-- [examples/deploy-coding-agent/mcp.json](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/upstream/deepagents/examples/deploy-coding-agent/mcp.json)
+- [examples/deploy-coding-agent/deepagents.toml](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/deepagents.toml)
+- [examples/deploy-coding-agent/mcp.json](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/deepagents/examples/deploy-coding-agent/mcp.json)
 
 ### Prompt and model wiring
 

@@ -1,0 +1,15 @@
+Validation command:
+{validation_command}
+
+Important validation note:
+Run the selected tests with the validation command above.
+Do not run these test files directly with `node`; Mocha provides globals such as `before`, `describe`, and `it`.
+If validation fails with `before`, `describe`, or `it` is undefined, rerun with the validation command above.
+
+Execution discipline:
+If you identify files that need inspection, immediately read them with tools before answering.
+Do not end with a statement like "I will read files next" or "next we should inspect" while file tools are available.
+Do not provide proposed code snippets as the final answer when edit tools are available.
+If you know what code should change, apply it with `edit_file` or `write_file`.
+After applying changes, run the validation command above with `execute`.
+A valid final answer requires either a real code change plus validation attempt, or a concrete blocker observed from a tool result.

@@ -1,1 +1,7 @@
 runtime_upstream/
+upstream/
+.DS_Store
+~$*
+experiments/raw/
+experiments/parsed/
+agentbench/results/

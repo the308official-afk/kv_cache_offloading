@@ -20,10 +20,19 @@ ETCD_ENDPOINTS="${ETCD_ENDPOINTS:-}"
 NATS_SERVER="${NATS_SERVER:-}"
 WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru}"
 WORKER_DEV_MODE="${WORKER_DEV_MODE:-0}"
-WORKER_DEV_SOURCE_ROOT="${WORKER_DEV_SOURCE_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/components/src/dynamo}"
-WORKER_DEV_BINDINGS_ROOT="${WORKER_DEV_BINDINGS_ROOT:-${SCRIPT_DIR}/runtime_upstream/dynamo/lib/bindings/python/src/dynamo}"
+WORKER_DEV_SOURCE_ROOT="${WORKER_DEV_SOURCE_ROOT:-${SCRIPT_DIR}/upstream/dynamo/components/src/dynamo}"
+WORKER_DEV_BINDINGS_ROOT="${WORKER_DEV_BINDINGS_ROOT:-${SCRIPT_DIR}/upstream/dynamo/lib/bindings/python/src/dynamo}"
+WORKER_SGLANG_DEV_MODE="${WORKER_SGLANG_DEV_MODE:-0}"
+WORKER_SGLANG_SOURCE_ROOT="${WORKER_SGLANG_SOURCE_ROOT:-${SCRIPT_DIR}/upstream/sglang/python/sglang}"
+SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-}"
+SGLANG_TRANSFER_LOG_DIR="${SGLANG_TRANSFER_LOG_DIR:-${SCRIPT_DIR}/experiments/raw/sglang_transfer_logs}"
+SGLANG_TRANSFER_LOG_BASENAME="${SGLANG_TRANSFER_LOG_BASENAME:-sglang_transfer_events_$(date +%Y%m%d_%H%M%S)_$$}"
+SGLANG_TRANSFER_LOG_PATH="${SGLANG_TRANSFER_LOG_PATH:-/transfer-logs/${SGLANG_TRANSFER_LOG_BASENAME}.jsonl}"
+SGLANG_TRANSFER_LOG_FULL_TOKENS="${SGLANG_TRANSFER_LOG_FULL_TOKENS:-}"
+SGLANG_TRANSFER_LOG_TOKEN_PREVIEW="${SGLANG_TRANSFER_LOG_TOKEN_PREVIEW:-32}"
+SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS="${SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS:-16}"
 WORKER_PROFILE_MODE="${WORKER_PROFILE_MODE:-}"
-WORKER_PROFILE_DIR="${WORKER_PROFILE_DIR:-${SCRIPT_DIR}/experiments/lpx_decode_split/profiles}"
+WORKER_PROFILE_DIR="${WORKER_PROFILE_DIR:-${SCRIPT_DIR}/experiments/raw/lpx_decode_split/profiles}"
 WORKER_PROFILE_BASENAME="${WORKER_PROFILE_BASENAME:-dynamo-sglang-worker-$(date +%Y%m%d_%H%M%S)}"
 WORKER_PROFILE_TRACE="${WORKER_PROFILE_TRACE:-cuda,nvtx,cublas}"
 WORKER_PROFILE_EXTRA_ARGS="${WORKER_PROFILE_EXTRA_ARGS:---sample=none --cuda-event-trace=false}"
@@ -69,6 +78,12 @@ Environment overrides:
   WORKER_DEV_MODE       Default: ${WORKER_DEV_MODE}
   WORKER_DEV_SOURCE_ROOT Default: ${WORKER_DEV_SOURCE_ROOT}
   WORKER_DEV_BINDINGS_ROOT Default: ${WORKER_DEV_BINDINGS_ROOT}
+  WORKER_SGLANG_DEV_MODE Default: ${WORKER_SGLANG_DEV_MODE}
+  WORKER_SGLANG_SOURCE_ROOT Default: ${WORKER_SGLANG_SOURCE_ROOT}
+  SGLANG_TRANSFER_LOG   Default: ${SGLANG_TRANSFER_LOG:-<unset>} (set to 1 to enable patched transfer logs)
+  SGLANG_TRANSFER_LOG_DIR Default: ${SGLANG_TRANSFER_LOG_DIR}
+  SGLANG_TRANSFER_LOG_BASENAME Default: ${SGLANG_TRANSFER_LOG_BASENAME}
+  SGLANG_TRANSFER_LOG_PATH Default: ${SGLANG_TRANSFER_LOG_PATH}
   WORKER_PROFILE_MODE   Default: ${WORKER_PROFILE_MODE:-<unset>} (set to nsys or ncu)
   WORKER_PROFILE_DIR    Default: ${WORKER_PROFILE_DIR}
   WORKER_PROFILE_BASENAME Default: ${WORKER_PROFILE_BASENAME}
@@ -121,6 +136,18 @@ ensure_dirs() {
   if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
     mkdir -p "${WORKER_PROFILE_DIR}"
   fi
+  if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
+    mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
+    if [[ "${SGLANG_TRANSFER_LOG_PATH}" == /transfer-logs/* ]]; then
+      local transfer_log_name
+      transfer_log_name="$(basename "${SGLANG_TRANSFER_LOG_PATH}")"
+      ln -sfn "${transfer_log_name}" "${SGLANG_TRANSFER_LOG_DIR}/latest_sglang_transfer_events.jsonl"
+      echo "SGLang transfer log: ${SGLANG_TRANSFER_LOG_DIR}/${transfer_log_name}"
+      echo "SGLang transfer latest: ${SGLANG_TRANSFER_LOG_DIR}/latest_sglang_transfer_events.jsonl"
+    else
+      echo "SGLang transfer log path is outside /transfer-logs: ${SGLANG_TRANSFER_LOG_PATH}"
+    fi
+  fi
 }
 
 initialize_endpoints() {
@@ -171,6 +198,19 @@ EOF
   fi
 }
 
+validate_worker_sglang_source() {
+  if [[ ! -f "${WORKER_SGLANG_SOURCE_ROOT}/__init__.py" ]]; then
+    cat >&2 <<EOF
+WORKER_SGLANG_DEV_MODE is enabled, but WORKER_SGLANG_SOURCE_ROOT does not look like a Python sglang package:
+  ${WORKER_SGLANG_SOURCE_ROOT}
+
+Expected to find:
+  ${WORKER_SGLANG_SOURCE_ROOT}/__init__.py
+EOF
+    exit 1
+  fi
+}
+
 container_exists() {
   docker ps -a --format '{{.Names}}' | grep -Fxq "${WORKER_CONTAINER_NAME}"
 }
@@ -197,6 +237,11 @@ start_worker() {
     -e DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-}"
     -e DYN_RUNTIME_JSON_LOGS="${DYN_RUNTIME_JSON_LOGS:-}"
     -e SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN="${SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN:-}"
+    -e SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-}"
+    -e SGLANG_TRANSFER_LOG_PATH="${SGLANG_TRANSFER_LOG_PATH:-}"
+    -e SGLANG_TRANSFER_LOG_FULL_TOKENS="${SGLANG_TRANSFER_LOG_FULL_TOKENS:-}"
+    -e SGLANG_TRANSFER_LOG_TOKEN_PREVIEW="${SGLANG_TRANSFER_LOG_TOKEN_PREVIEW:-}"
+    -e SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS="${SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS:-}"
     -e HF_TOKEN="${HF_TOKEN:-}"
   )
 
@@ -211,6 +256,26 @@ start_worker() {
       -v "${WORKER_DEV_BINDINGS_ROOT}/runtime:/workspace/lib/bindings/python/src/dynamo/runtime:ro"
     )
     worker_pythonpath_prefix="/workspace/components/src:/workspace/lib/bindings/python/src:"
+  fi
+
+  if [[ "${WORKER_SGLANG_DEV_MODE}" = "1" ]]; then
+    validate_worker_sglang_source
+    docker_args+=(
+      -v "${WORKER_SGLANG_SOURCE_ROOT}:/workspace/sglang_transfer_overlay/sglang:ro"
+    )
+    worker_pythonpath_prefix="/workspace/sglang_transfer_overlay:${worker_pythonpath_prefix}"
+  fi
+
+  if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
+    docker_args+=(
+      -v "${SGLANG_TRANSFER_LOG_DIR}:/transfer-logs"
+    )
+  fi
+
+  if [[ -n "${worker_pythonpath_prefix}" ]]; then
+    docker_args+=(
+      -e PYTHONPATH="${worker_pythonpath_prefix}"
+    )
   fi
 
   if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
@@ -270,7 +335,7 @@ start_worker() {
   docker run \
     "${docker_args[@]}" \
     "${WORKER_IMAGE}" \
-    bash -lc "export PYTHONPATH='${worker_pythonpath_prefix}'\"\${PYTHONPATH:-}\"; ${worker_launcher} python3 -m dynamo.sglang \
+    bash -lc "${worker_launcher} python3 -m dynamo.sglang \
       --model-path '${DYNAMO_MODEL_PATH}' \
       --served-model-name '${DYNAMO_SERVED_MODEL_NAME}' \
       --discovery-backend '${DYNAMO_DISCOVERY_BACKEND}' \
@@ -294,6 +359,8 @@ Model:     ${DYNAMO_MODEL_PATH}
 etcd:      ${ETCD_ENDPOINTS}
 page size: ${DYNAMO_PAGE_SIZE}
 dev mode:  ${WORKER_DEV_MODE}
+sglang dev: ${WORKER_SGLANG_DEV_MODE}
+transfer log: ${SGLANG_TRANSFER_LOG:-off}
 profile:   ${WORKER_PROFILE_MODE:-off}
 nsys dir:  ${WORKER_PROFILE_NSYS_DIR:-image default}
 ncu dir:   ${WORKER_PROFILE_NCU_DIR:-image default}

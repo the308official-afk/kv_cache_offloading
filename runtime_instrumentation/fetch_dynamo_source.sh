@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/runtime_upstream/dynamo}"
+SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
 SOURCE_REPO="${SOURCE_REPO:-https://github.com/ai-dynamo/dynamo.git}"
 
 mkdir -p "$(dirname "${SOURCE_DIR}")"

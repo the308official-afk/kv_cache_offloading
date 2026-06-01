@@ -14,7 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE_DIR = Path(os.environ.get("SOURCE_DIR", ROOT / "runtime_upstream" / "dynamo"))
+SOURCE_DIR = Path(os.environ.get("SOURCE_DIR", ROOT / "upstream" / "dynamo"))
 TARGET = SOURCE_DIR / "lib/llm/src/preprocessor.rs"
 STALE_LINE = "                            choice.stop_reason = None;\n"
 

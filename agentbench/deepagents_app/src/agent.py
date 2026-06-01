@@ -32,6 +32,7 @@ from .prompts import (
     DYNAMO_HINT_NOTES,
     PLANNING_NOTES,
     SYSTEM_PROMPT,
+    build_validation_command,
     format_swebench_task_prompt,
 )
 
@@ -568,15 +569,25 @@ def build_phase_prompt(
         return (
             "Phase: planning\n\n"
             "Read the SWE-bench task and produce a concise implementation plan. "
-            "Do not edit files in this phase. Identify likely files, risks, and the "
-            "smallest next coding steps.\n\n"
+            "Do not edit files in this phase. Do not end by telling a later phase to "
+            "read a file next; instead identify the concrete files, functions, and code "
+            "changes that execution should make. If the task prompt already names target "
+            "files, treat those as enough to plan from. Return a short numbered edit plan, "
+            "including the validation command to run after edits. Do not output empty JSON "
+            "or markdown code fences.\n\n"
             f"{task_prompt}"
         )
     if phase == "execution":
         return (
             "Phase: execution\n\n"
             "Use the plan to implement the SWE-bench fix in the workspace. "
-            "Make focused code changes only. Run lightweight checks if practical.\n\n"
+            "Make focused code changes only. If the planning output only proposes more "
+            "inspection, continue with the task prompt and inspect the necessary files "
+            "yourself. Do not return a prose plan or empty JSON fence. Use read_file when "
+            "you need context, then use edit_file or write_file to apply the fix. After "
+            "editing, run the validation command from the task prompt with execute. A final "
+            "answer is valid only after an edit plus validation attempt, or after a concrete "
+            "blocker from a tool result.\n\n"
             "Planning output:\n"
             f"{planning_text or '(no planning output captured)'}\n\n"
             f"{task_prompt}"
@@ -585,8 +596,10 @@ def build_phase_prompt(
         return (
             "Phase: patch_generation\n\n"
             "Inspect the current workspace changes and consolidate the final patch. "
-            "Do not start a broad refactor. If no edits are needed, summarize why. "
-            "Return the changed files, intended behavior, and any checks run.\n\n"
+            "Do not start a broad refactor. Do not output an empty JSON fence. Use execute "
+            "to inspect git status and git diff. If no edits exist, say explicitly that "
+            "the workspace has no patch. If edits exist, return the changed files, intended "
+            "behavior, and any checks run.\n\n"
             "Planning output:\n"
             f"{planning_text or '(no planning output captured)'}\n\n"
             "Execution output:\n"
@@ -596,7 +609,9 @@ def build_phase_prompt(
         return (
             "Phase: review\n\n"
             "Review the current patch for bugs, missing tests, and behavioral risk. "
-            "Keep the review concise and actionable. Do not undo unrelated changes.\n\n"
+            "Keep the review concise and actionable. Do not undo unrelated changes. Do not "
+            "output an empty JSON fence. Use execute to inspect git diff before reviewing; "
+            "if there is no patch, say no patch was produced and name that as the blocker.\n\n"
             "Planning output:\n"
             f"{planning_text or '(no planning output captured)'}\n\n"
             "Execution output:\n"
@@ -766,6 +781,7 @@ def run_task_workflow(
     # The wrapper calls this once per run, and this function owns:
     # prompt building, phase-tagged Deep Agents requests, and returned artifacts.
 
+    validation_command = build_validation_command(task)
     prompt = format_swebench_task_prompt(task)
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
@@ -1013,6 +1029,7 @@ def run_task_workflow(
     )
     return {
         "prompt": prompt,
+        "validation_command": validation_command,
         "resolved_hints": resolved_hints,
         "app_variant": app_variant,
         "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,

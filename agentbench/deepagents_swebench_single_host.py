@@ -64,7 +64,10 @@ except ImportError as exc:  # pragma: no cover
     ) from exc
 
 
-RESULTS_DIR = REPO_ROOT / "agentbench" / "results"
+DEFAULT_RESULTS_DIR = REPO_ROOT / "experiments" / "raw" / "agentbench" / "results"
+RESULTS_DIR = Path(os.environ.get("AGENTBENCH_RESULTS_DIR", str(DEFAULT_RESULTS_DIR))).expanduser()
+if not RESULTS_DIR.is_absolute():
+    RESULTS_DIR = REPO_ROOT / RESULTS_DIR
 REPOS_DIR = REPO_ROOT / "agentbench" / "repos"
 DEFAULT_RESULTS_TIMEZONE = "America/Chicago"
 DEFAULT_HINTS = {
@@ -917,6 +920,7 @@ def build_prompt_evolution_report(
     request_context = measurement.get("request_context", {})
     baseline_hints = baseline_result.get("baseline_hints", {})
     prompt = workflow.get("prompt", "")
+    validation_command = str(workflow.get("validation_command") or task.get("validation_command") or "")
 
     requirements_text = str(task.get("requirements") or "")
     selected_tests = task.get("selected_test_files_to_run")
@@ -956,25 +960,27 @@ def build_prompt_evolution_report(
                 "delta_summary": "Established the starting task description from dataset fields before any prompt assembly.",
                 "result_summary": (
                     f"repo={task.get('repo')} | base_commit={task.get('base_commit')} | "
-                    f"tests={selected_tests_text or '-'} | workspace={workspace_metadata.get('workspace_path') or '-'}"
+                    f"tests={selected_tests_text or '-'} | validation={validation_command or '-'} | "
+                    f"workspace={workspace_metadata.get('workspace_path') or '-'}"
                 ),
                 "prompt_preview": _prompt_preview(problem_statement_text),
                 "prompt_chars": task_input_chars,
-                "major_additions": "Task metadata, problem statement, requirements, selected tests, workspace path.",
-                "added_elements": "repo metadata, problem statement, requirements, selected tests, workspace path",
+                "major_additions": "Task metadata, problem statement, requirements, selected tests, validation command, workspace path.",
+                "added_elements": "repo metadata, problem statement, requirements, selected tests, validation command, workspace path",
                 "removed_elements": "none",
                 "unchanged_core": "raw bug description and acceptance criteria are the source of truth",
                 "key_facts": (
                     f"repo={task.get('repo')} | base_commit={task.get('base_commit')} | "
-                    f"tests={selected_tests_text or '-'} | workspace={workspace_metadata.get('workspace_path') or '-'}"
+                    f"tests={selected_tests_text or '-'} | validation={validation_command or '-'} | "
+                    f"workspace={workspace_metadata.get('workspace_path') or '-'}"
                 ),
                 "structure_before": "none",
-                "structure_after": "task payload with repo, base_commit, problem_statement, requirements, selected tests, workspace path",
+                "structure_after": "task payload with repo, base_commit, problem_statement, requirements, selected tests, validation command, workspace path",
                 "keys_before": "none",
-                "keys_after": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
+                "keys_after": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, validation_command, workspace_path",
                 "json_keys_before": "none",
-                "json_keys_after": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"workspace_path":"..."}',
-                "added_keys": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
+                "json_keys_after": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"validation_command":"...","workspace_path":"..."}',
+                "added_keys": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, validation_command, workspace_path",
                 "removed_keys": "none",
                 "changed_keys": "none",
                 "chars_before": 0,
@@ -987,32 +993,39 @@ def build_prompt_evolution_report(
                 "question_answered": "what exact prompt did we build?",
                 "changed_from": "task_input",
                 "change_summary": (
-                    "Merged the task fields into one action-oriented user prompt and added workspace instructions plus execution expectations."
+                    "Merged the task fields into one action-oriented user prompt and added the exact validation command, workspace instructions, and execution expectations."
                 ),
-                "delta_summary": "Turned scattered task fields into one runnable user prompt with explicit instructions to inspect, edit, validate, and report real changes.",
-                "result_summary": f"user_prompt_lines={len(prompt.splitlines())} | user_prompt_chars={len(prompt)}",
+                "delta_summary": "Turned scattered task fields into one runnable user prompt with explicit instructions to inspect, edit, validate with the proper test runner, and report real changes.",
+                "result_summary": (
+                    f"user_prompt_lines={len(prompt.splitlines())} | user_prompt_chars={len(prompt)} | "
+                    f"validation={validation_command or '-'}"
+                ),
                 "prompt_preview": _prompt_preview(prompt),
                 "prompt_chars": formatted_prompt_chars,
                 "major_additions": (
-                    "Combined repo metadata, bug description, requirements, interface notes, selected tests, workspace instructions, and expectations."
+                    "Combined repo metadata, bug description, requirements, interface notes, selected tests, validation command, workspace instructions, and expectations."
                 ),
-                "added_elements": "workspace instructions, interface notes, execution expectations, selected test block",
+                "added_elements": "workspace instructions, interface notes, execution expectations, selected test block, validation command",
                 "removed_elements": "none",
                 "unchanged_core": "problem statement and requirements remained intact inside the merged prompt",
-                "key_facts": f"prompt_lines={len(prompt.splitlines())} | prompt_chars={formatted_prompt_chars}",
+                "key_facts": (
+                    f"prompt_lines={len(prompt.splitlines())} | prompt_chars={formatted_prompt_chars} | "
+                    f"validation={validation_command or '-'}"
+                ),
                 "structure_before": "task payload fields spread across dataset columns",
                 "structure_after": "single formatted prompt string",
-                "keys_before": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, workspace_path",
-                "keys_after": "prompt",
-                "json_keys_before": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"workspace_path":"..."}',
-                "json_keys_after": '{"prompt":"..."}',
-                "added_keys": "prompt",
+                "keys_before": "repo, base_commit, problem_statement, requirements, selected_test_files_to_run, validation_command, workspace_path",
+                "keys_after": "prompt, validation_command",
+                "json_keys_before": '{"repo":"...","base_commit":"...","problem_statement":"...","requirements":"...","selected_test_files_to_run":["..."],"validation_command":"...","workspace_path":"..."}',
+                "json_keys_after": '{"prompt":"...","validation_command":"..."}',
+                "added_keys": "prompt, validation_command",
                 "removed_keys": "none",
                 "changed_keys": "problem_statement, requirements, selected tests -> prompt text",
                 "chars_before": task_input_chars,
                 "chars_after": formatted_prompt_chars,
                 "char_delta": formatted_prompt_chars - task_input_chars,
                 "full_text": prompt,
+                "validation_command": validation_command,
             },
             {
                 "stage": "final_model_request",
@@ -1209,6 +1222,7 @@ def build_prompt_evolution_report(
             "system_prompt_chars": len(system_prompt),
             "requirements_preview": _prompt_preview(requirements_text),
             "selected_tests": selected_tests_text,
+            "validation_command": validation_command,
             "provider_response_id": measurement.get("provider_response_id"),
             "latency_ms": measurement.get("latency_ms"),
             "input_tokens": measurement.get("input_tokens"),
@@ -1281,6 +1295,7 @@ def prompt_evolution_value_stage_objects(
     request_context = measurement.get("request_context", {})
     baseline_hints = baseline_result.get("baseline_hints", {})
     prompt = workflow.get("prompt", "")
+    validation_command = str(workflow.get("validation_command") or task.get("validation_command") or "")
     response_text = baseline_result.get("response_text", "")
     expected_tools = [
         "write_todos",
@@ -1300,9 +1315,10 @@ def prompt_evolution_value_stage_objects(
         "problem_statement": task.get("problem_statement"),
         "requirements": task.get("requirements"),
         "selected_test_files_to_run": task.get("selected_test_files_to_run"),
+        "validation_command": validation_command,
         "workspace_path": workspace_metadata.get("workspace_path"),
     }
-    formatted_prompt = {"prompt": prompt}
+    formatted_prompt = {"prompt": prompt, "validation_command": validation_command}
     final_model_request = {
         "model": model,
         "frontend_url": frontend_url,

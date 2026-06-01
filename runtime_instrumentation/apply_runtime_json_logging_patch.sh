@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/runtime_upstream/dynamo}"
+SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
 PATCH_FILE="${PATCH_FILE:-${SCRIPT_DIR}/patches/dynamo_runtime_json_logging.patch}"
 
 if [[ ! -d "${SOURCE_DIR}/.git" ]]; then

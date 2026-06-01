@@ -1,2 +1,0 @@
-decision_row_count,observed_worker_count,observed_workers,agreed_count,partially_agreed_count,diverged_count,insufficient_evidence_count,tool_parser_names_seen,observed_tool_call_names
-5,1,['7587895149794289712'],5,0,0,0,['hermes'],"['edit_file', 'execute', 'ls', 'read_file']"
