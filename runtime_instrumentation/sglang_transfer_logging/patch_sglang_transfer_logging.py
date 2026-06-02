@@ -477,7 +477,31 @@ def _looks_like_token_name(name: str) -> bool:
 
 @contextlib.contextmanager
 def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
-    context = _semantic_token_summary(function, locals_dict)
+    context = _merge_transfer_context_pair(
+        current_transfer_context(),
+        _semantic_token_summary(function, locals_dict),
+    )
+    token = _SEMANTIC_CONTEXT.set(context)
+    try:
+        yield
+    finally:
+        _SEMANTIC_CONTEXT.reset(token)
+
+
+@contextlib.contextmanager
+def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
+    context = current_transfer_context() or {}
+    request_metadata = _request_metadata_summary(locals_dict)
+    self_obj = locals_dict.get("self")
+    if self_obj is not None:
+        _merge_request_metadata(
+            request_metadata,
+            _request_metadata_candidates_from_value("self", self_obj),
+            "self",
+        )
+    if request_metadata:
+        request_metadata["request_context_function"] = function
+    context = _merge_transfer_context_pair(context, request_metadata)
     token = _SEMANTIC_CONTEXT.set(context)
     try:
         yield
@@ -490,6 +514,20 @@ def current_transfer_context() -> dict[str, Any] | None:
     if isinstance(context, dict):
         return copy.deepcopy(context)
     return None
+
+
+def _merge_transfer_context_pair(
+    base: dict[str, Any] | None,
+    overlay: dict[str, Any] | None,
+) -> dict[str, Any]:
+    merged = copy.deepcopy(base) if isinstance(base, dict) else {}
+    if not isinstance(overlay, dict):
+        return merged
+    for key, value in overlay.items():
+        if value in (None, "", [], {}):
+            continue
+        merged[key] = copy.deepcopy(value)
+    return merged
 
 
 def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, Any] | None:
@@ -773,12 +811,14 @@ def log_transfer_event(
 
     local_summary = _local_token_summary(locals_dict)
     semantic_context = _SEMANTIC_CONTEXT.get()
+    has_semantic_context = isinstance(semantic_context, dict)
+    if has_semantic_context:
+        payload.update(semantic_context)
     has_semantic_tokens = bool(
-        semantic_context and int(semantic_context.get("semantic_token_count") or 0) > 0
+        has_semantic_context and int(semantic_context.get("semantic_token_count") or 0) > 0
     )
     has_local_tokens = bool(local_summary["local_token_preview_count"])
     if has_semantic_tokens:
-        payload.update(semantic_context)
         payload["token_ids_preview"] = semantic_context.get("semantic_token_ids_preview", [])
         payload["token_preview_count"] = semantic_context.get("semantic_token_preview_count", 0)
         payload["token_preview_source"] = "semantic_context"
@@ -788,8 +828,6 @@ def log_transfer_event(
         payload["token_preview_source"] = "local_heuristic"
         payload.update(local_summary)
     elif _verbose():
-        if semantic_context:
-            payload.update(semantic_context)
         payload.update(local_summary)
         payload["token_ids_preview"] = []
         payload["token_preview_count"] = 0
@@ -855,6 +893,29 @@ def find_optional_first(sglang_root: Path, filename: str) -> Path | None:
     return matches[0]
 
 
+def find_optional_preferred(
+    sglang_root: Path,
+    filename: str,
+    preferred_subpath: str,
+) -> Path | None:
+    matches = sorted(sglang_root.rglob(filename))
+    if not matches:
+        return None
+
+    preferred = [
+        match for match in matches
+        if match.as_posix().endswith(preferred_subpath)
+    ]
+    if preferred:
+        return preferred[0]
+
+    if len(matches) > 1:
+        print(f"Found multiple {filename} files; using first:")
+        for match in matches:
+            print(f"  {match}")
+    return matches[0]
+
+
 def insert_after_future(text: str, imports: list[str], marker: str) -> str:
     if marker in text:
         return text
@@ -899,6 +960,16 @@ def insert_cache_controller_imports(text: str) -> str:
             ")\n",
         ],
         "from sglang.srt.mem_cache.transfer_logging import (",
+    )
+
+
+def insert_request_context_imports(text: str) -> str:
+    return insert_after_future(
+        text,
+        [
+            "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context\n",
+        ],
+        "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context",
     )
 
 
@@ -1035,6 +1106,66 @@ def wrap_context_function(text: str, function_name: str) -> tuple[str, int]:
     return "".join(lines), changed
 
 
+def wrap_request_context_function(text: str, function_name: str) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    bounds = find_all_function_bounds(lines, function_name)
+    changed = 0
+    for start, signature_end, end in reversed(bounds):
+        body_text = "".join(lines[signature_end + 1 : end])
+        if "_sgl_transfer_request_context" in body_text:
+            continue
+        def_indent = len(lines[start]) - len(lines[start].lstrip(" "))
+        body_indent = " " * (def_indent + 4)
+        original_body = lines[signature_end + 1 : end]
+        wrapped_body = [
+            f"{body_indent}with _sgl_transfer_request_context(function=\"{function_name}\", locals_dict=locals()):\n",
+        ]
+        for line in original_body:
+            if line.strip():
+                wrapped_body.append("    " + line)
+            else:
+                wrapped_body.append(line)
+        lines[signature_end + 1 : end] = wrapped_body
+        changed += 1
+    return "".join(lines), changed
+
+
+def wrap_call_with_request_context(
+    text: str,
+    call_marker: str,
+    function_label: str,
+) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    changed = 0
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if call_marker not in line:
+            index += 1
+            continue
+        if index > 0 and "_sgl_transfer_request_context" in lines[index - 1]:
+            index += 1
+            continue
+
+        indent_len = len(line) - len(line.lstrip(" "))
+        indent = " " * indent_len
+        call_end = index
+        paren_balance = line.count("(") - line.count(")")
+        while call_end + 1 < len(lines) and paren_balance > 0:
+            call_end += 1
+            paren_balance += lines[call_end].count("(") - lines[call_end].count(")")
+
+        block = lines[index : call_end + 1]
+        wrapped = [
+            f"{indent}with _sgl_transfer_request_context(function=\"{function_label}\", locals_dict=locals()):\n",
+        ]
+        wrapped.extend("    " + item if item.strip() else item for item in block)
+        lines[index : call_end + 1] = wrapped
+        changed += 1
+        index += len(wrapped)
+    return "".join(lines), changed
+
+
 def add_cache_operation_context_capture(text: str) -> tuple[str, bool]:
     if "self.sglang_transfer_context = _sgl_current_transfer_context()" in text:
         return text, False
@@ -1157,6 +1288,57 @@ def patch_cache_controller(path: Path) -> list[str]:
     return patched
 
 
+def patch_radix_cache(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    text = insert_request_context_imports(text)
+    patched: list[str] = []
+
+    for function_name in ("cache_finished_req", "cache_unfinished_req"):
+        text, changed = wrap_request_context_function(text, function_name)
+        if changed:
+            patched.append(f"{function_name} request context ({changed} occurrence{'s' if changed != 1 else ''})")
+
+    if patched:
+        path.write_text(text, encoding="utf-8")
+    return patched
+
+
+def patch_schedule_batch(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    text = insert_request_context_imports(text)
+    patched: list[str] = []
+
+    text, changed = wrap_call_with_request_context(
+        text,
+        "tree_cache.match_prefix(",
+        "Req.init_next_round_input.match_prefix",
+    )
+    if changed:
+        patched.append(f"Req.init_next_round_input match_prefix context ({changed} call{'s' if changed != 1 else ''})")
+
+    if patched:
+        path.write_text(text, encoding="utf-8")
+    return patched
+
+
+def patch_schedule_policy(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    text = insert_request_context_imports(text)
+    patched: list[str] = []
+
+    text, changed = wrap_call_with_request_context(
+        text,
+        "self.tree_cache.init_load_back(",
+        "SchedulePolicy.add_one_req.init_load_back",
+    )
+    if changed:
+        patched.append(f"SchedulePolicy init_load_back context ({changed} call{'s' if changed != 1 else ''})")
+
+    if patched:
+        path.write_text(text, encoding="utf-8")
+    return patched
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -1170,13 +1352,31 @@ def main() -> int:
     sglang_root = args.sglang_root.resolve()
     memory_pool_host = find_first(sglang_root, "memory_pool_host.py")
     hiradix_cache = find_optional_first(sglang_root, "hiradix_cache.py")
-    cache_controller = find_optional_first(sglang_root, "cache_controller.py")
+    cache_controller = find_optional_preferred(
+        sglang_root,
+        "cache_controller.py",
+        "srt/managers/cache_controller.py",
+    )
+    radix_cache = find_optional_first(sglang_root, "radix_cache.py")
+    schedule_batch = find_optional_preferred(
+        sglang_root,
+        "schedule_batch.py",
+        "srt/managers/schedule_batch.py",
+    )
+    schedule_policy = find_optional_preferred(
+        sglang_root,
+        "schedule_policy.py",
+        "srt/managers/schedule_policy.py",
+    )
 
     helper_path = memory_pool_host.with_name("transfer_logging.py")
     helper_path.write_text(HELPER_SOURCE + "\n", encoding="utf-8")
     memory_patched = patch_memory_pool_host(memory_pool_host)
     hiradix_patched = patch_hiradix_cache(hiradix_cache) if hiradix_cache else []
     cache_controller_patched = patch_cache_controller(cache_controller) if cache_controller else []
+    radix_cache_patched = patch_radix_cache(radix_cache) if radix_cache else []
+    schedule_batch_patched = patch_schedule_batch(schedule_batch) if schedule_batch else []
+    schedule_policy_patched = patch_schedule_policy(schedule_policy) if schedule_policy else []
 
     print(f"memory_pool_host: {memory_pool_host}")
     print(f"transfer_logging: {helper_path}")
@@ -1208,6 +1408,39 @@ def main() -> int:
             print("no cache-controller propagation patched; it may already be instrumented or unsupported")
     else:
         print("cache_controller: not found; async transfer context propagation was not patched")
+
+    if radix_cache:
+        print(f"radix_cache: {radix_cache}")
+        if radix_cache_patched:
+            print("patched request context around cache insertion:")
+            for item in radix_cache_patched:
+                print(f"  - {item}")
+        else:
+            print("no radix-cache request context patched; it may already be instrumented or unsupported")
+    else:
+        print("radix_cache: not found; cache insertion request context was not patched")
+
+    if schedule_batch:
+        print(f"schedule_batch: {schedule_batch}")
+        if schedule_batch_patched:
+            print("patched request context around prefix matching:")
+            for item in schedule_batch_patched:
+                print(f"  - {item}")
+        else:
+            print("no schedule-batch request context patched; it may already be instrumented or unsupported")
+    else:
+        print("schedule_batch: not found; prefix-match request context was not patched")
+
+    if schedule_policy:
+        print(f"schedule_policy: {schedule_policy}")
+        if schedule_policy_patched:
+            print("patched request context around host load-back:")
+            for item in schedule_policy_patched:
+                print(f"  - {item}")
+        else:
+            print("no schedule-policy request context patched; it may already be instrumented or unsupported")
+    else:
+        print("schedule_policy: not found; load-back request context was not patched")
 
     return 0
 

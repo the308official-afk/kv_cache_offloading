@@ -7,6 +7,7 @@ phase logic out of the repo-local runner and into a source-level Deep Agents app
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -20,9 +21,40 @@ APP_ROOT = THIS_FILE.parents[1]
 AGENTBENCH_ROOT = APP_ROOT.parents[1]
 UPSTREAM_ROOT = AGENTBENCH_ROOT / "upstream" / "deepagents"
 CLONED_DEEPAGENTS_LIB_ROOT = UPSTREAM_ROOT / "libs" / "deepagents"
-if CLONED_DEEPAGENTS_LIB_ROOT.exists() and str(CLONED_DEEPAGENTS_LIB_ROOT) not in sys.path:
-    # Debugging note: this is the "use the downloaded GitHub repo first" hook.
-    sys.path.insert(0, str(CLONED_DEEPAGENTS_LIB_ROOT))
+
+
+def _select_deepagents_runtime_source() -> str:
+    """Select which DeepAgents library implementation this run imports."""
+    requested = os.environ.get("AGENTBENCH_DEEPAGENTS_SOURCE", "python_environment")
+    source = requested.strip().lower().replace("-", "_")
+    cloned_root = str(CLONED_DEEPAGENTS_LIB_ROOT)
+
+    if source in {"python", "python_environment", "installed"}:
+        sys.path[:] = [entry for entry in sys.path if entry != cloned_root]
+        return "python_environment"
+
+    if source in {"upstream", "cloned", "repo"}:
+        if not CLONED_DEEPAGENTS_LIB_ROOT.exists():
+            raise SystemExit(
+                "AGENTBENCH_DEEPAGENTS_SOURCE=upstream was requested, but "
+                f"{CLONED_DEEPAGENTS_LIB_ROOT} does not exist."
+            )
+        if cloned_root not in sys.path:
+            sys.path.insert(0, cloned_root)
+        return cloned_root
+
+    if source == "auto":
+        if CLONED_DEEPAGENTS_LIB_ROOT.exists() and cloned_root not in sys.path:
+            sys.path.insert(0, cloned_root)
+        return cloned_root if CLONED_DEEPAGENTS_LIB_ROOT.exists() else "python_environment"
+
+    raise SystemExit(
+        "Unsupported AGENTBENCH_DEEPAGENTS_SOURCE value "
+        f"{requested!r}. Use python_environment, upstream, or auto."
+    )
+
+
+DEEPAGENTS_RUNTIME_SOURCE = _select_deepagents_runtime_source()
 
 from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend, StateBackend
@@ -50,11 +82,57 @@ DEFAULT_DYNAMO_HINTS: dict[str, Any] = {
     "expected_output_tokens": 512,
 }
 
-DEEPAGENTS_RUNTIME_SOURCE = (
-    str(CLONED_DEEPAGENTS_LIB_ROOT)
-    if CLONED_DEEPAGENTS_LIB_ROOT.exists()
-    else "python_environment"
-)
+
+def env_flag(name: str, *, default: bool = False) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def env_int(name: str, *, default: int) -> int:
+    value = os.environ.get(name)
+    if value is None or not value.strip():
+        return default
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise SystemExit(f"{name} must be an integer, got {value!r}") from exc
+
+
+def limit_text(text: str, limit: int = 3000) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def load_task_overrides() -> dict[str, str | None]:
+    configured_path = os.environ.get("AGENTBENCH_TASK_OVERRIDES_FILE")
+    if not configured_path:
+        return {"path": None, "text": ""}
+
+    path = Path(configured_path).expanduser()
+    if not path.is_absolute():
+        path = AGENTBENCH_ROOT / path
+    if not path.exists():
+        raise SystemExit(f"AGENTBENCH_TASK_OVERRIDES_FILE does not exist: {path}")
+
+    text = path.read_text(encoding="utf-8").strip()
+    return {"path": str(path), "text": text}
+
+
+def apply_task_overrides(prompt: str, task_overrides: dict[str, str | None]) -> str:
+    text = str(task_overrides.get("text") or "").strip()
+    if not text:
+        return prompt
+    path = task_overrides.get("path") or "unknown"
+    return (
+        f"{prompt.rstrip()}\n\n"
+        "External task override instructions:\n"
+        f"Source: {path}\n\n"
+        f"{text}\n"
+    )
+
 
 # Builds the per-request tracking payload that we send through logs and Dynamo hints.
 def build_request_context(
@@ -103,6 +181,520 @@ def _extract_last_ai_message(response: Any) -> Any:
             if message_type == "ai":
                 return message
     return response
+
+
+def _response_messages(response: Any) -> list[Any]:
+    messages = None
+    if isinstance(response, Mapping):
+        messages = response.get("messages")
+    elif hasattr(response, "get"):
+        try:
+            messages = response.get("messages")
+        except Exception:  # noqa: BLE001
+            messages = None
+    if messages is None:
+        messages = getattr(response, "messages", None)
+    return messages if isinstance(messages, list) else []
+
+
+def _tool_call_name(tool_call: Any) -> str | None:
+    if isinstance(tool_call, Mapping):
+        name = tool_call.get("name")
+        if name:
+            return str(name)
+        function = tool_call.get("function")
+        if isinstance(function, Mapping) and function.get("name"):
+            return str(function["name"])
+    name = getattr(tool_call, "name", None)
+    return str(name) if name else None
+
+
+def _message_tool_call_names(message: Any) -> list[str]:
+    tool_calls = None
+    if isinstance(message, Mapping):
+        tool_calls = message.get("tool_calls")
+    if tool_calls is None:
+        tool_calls = getattr(message, "tool_calls", None)
+    if not isinstance(tool_calls, list):
+        return []
+    return [name for item in tool_calls if (name := _tool_call_name(item))]
+
+
+def summarize_tool_progress(response: Any) -> dict[str, Any]:
+    names: list[str] = []
+    for message in _response_messages(response):
+        names.extend(_message_tool_call_names(message))
+
+    write_or_edit_tools = {"edit_file", "write_file"}
+    unique_names = sorted(set(names))
+    has_write_or_edit = any(name in write_or_edit_tools for name in names)
+    has_execute = any(name == "execute" for name in names)
+    return {
+        "tool_call_count": len(names),
+        "tool_call_names": names,
+        "unique_tool_call_names": unique_names,
+        "has_read_file": any(name == "read_file" for name in names),
+        "has_write_or_edit": has_write_or_edit,
+        "has_execute": has_execute,
+        "has_edit_plus_validation": has_write_or_edit and has_execute,
+    }
+
+
+def execution_retry_reason(tool_progress: dict[str, Any]) -> str | None:
+    if not env_flag("AGENTBENCH_EXECUTION_GUARD", default=True):
+        return None
+
+    tool_call_count = int(tool_progress.get("tool_call_count") or 0)
+    unique_names = set(tool_progress.get("unique_tool_call_names") or [])
+    if tool_call_count == 0:
+        return "no_tool_calls"
+    if unique_names <= {"read_file"}:
+        return "read_only_tool_calls"
+    if not tool_progress.get("has_write_or_edit"):
+        return "no_edit_or_write_tool_call"
+    if not tool_progress.get("has_execute"):
+        return "no_validation_execute_tool_call"
+    return None
+
+
+def execution_loop_enabled() -> bool:
+    return env_flag("AGENTBENCH_EXECUTION_LOOP", default=False)
+
+
+def execution_loop_max_steps() -> int:
+    return env_int("AGENTBENCH_EXECUTION_LOOP_MAX_STEPS", default=6)
+
+
+def execution_loop_require_test() -> bool:
+    return env_flag("AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST", default=True)
+
+
+def _message_type(message: Any) -> str | None:
+    if isinstance(message, Mapping):
+        value = message.get("type")
+        if value:
+            return str(value)
+    value = getattr(message, "type", None)
+    return str(value) if value else None
+
+
+def _message_text(message: Any) -> str:
+    if isinstance(message, Mapping):
+        if message.get("text") is not None:
+            return response_text(message.get("text"))
+        content = message.get("content")
+    else:
+        text = getattr(message, "text", None)
+        if text is not None:
+            return response_text(text)
+        content = getattr(message, "content", None)
+    return response_text(content if content is not None else message)
+
+
+def _tool_call_id(tool_call: Any) -> str | None:
+    if isinstance(tool_call, Mapping):
+        value = tool_call.get("id")
+    else:
+        value = getattr(tool_call, "id", None)
+    return str(value) if value else None
+
+
+def tool_result_texts_by_name(response: Any) -> dict[str, list[str]]:
+    call_id_to_name: dict[str, str] = {}
+    results: dict[str, list[str]] = {}
+
+    for message in _response_messages(response):
+        tool_calls = None
+        if isinstance(message, Mapping):
+            tool_calls = message.get("tool_calls")
+        if tool_calls is None:
+            tool_calls = getattr(message, "tool_calls", None)
+        if isinstance(tool_calls, list):
+            for tool_call in tool_calls:
+                call_id = _tool_call_id(tool_call)
+                name = _tool_call_name(tool_call)
+                if call_id and name:
+                    call_id_to_name[call_id] = name
+
+        if _message_type(message) != "tool":
+            continue
+        if isinstance(message, Mapping):
+            tool_call_id = message.get("tool_call_id")
+            name = message.get("name")
+        else:
+            tool_call_id = getattr(message, "tool_call_id", None)
+            name = getattr(message, "name", None)
+        tool_name = str(name or call_id_to_name.get(str(tool_call_id)) or "unknown")
+        results.setdefault(tool_name, []).append(_message_text(message))
+
+    return results
+
+
+def execute_output_failed(response: Any) -> bool:
+    execute_outputs = "\n".join(tool_result_texts_by_name(response).get("execute", []))
+    lowered = execute_outputs.lower()
+    failure_markers = (
+        "[stderr]",
+        "exception during run",
+        "traceback",
+        "error:",
+        "failed",
+        "failing",
+        "cannot find module",
+        "command not found",
+        "no such file or directory",
+        "exit code",
+    )
+    return any(marker in lowered for marker in failure_markers)
+
+
+def git_workspace_snapshot(workspace_dir: Path | None) -> dict[str, Any]:
+    if workspace_dir is None or not (workspace_dir / ".git").exists():
+        return {
+            "workspace_present": workspace_dir is not None,
+            "git_repo": False,
+            "workspace_changed": False,
+            "patch_nonempty": False,
+            "git_status": "",
+            "git_diff_stat": "",
+            "git_untracked_files": "",
+        }
+
+    def run_git(command: list[str]) -> subprocess.CompletedProcess:
+        return subprocess.run(  # noqa: S603
+            command,
+            cwd=workspace_dir,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    status = run_git(["git", "status", "--short"])
+    diff_stat = run_git(["git", "diff", "--stat"])
+    untracked = run_git(["git", "ls-files", "--others", "--exclude-standard"])
+    return {
+        "workspace_present": True,
+        "git_repo": True,
+        "workspace_changed": bool(status.stdout.strip()),
+        "patch_nonempty": bool(diff_stat.stdout.strip() or untracked.stdout.strip()),
+        "git_status": status.stdout,
+        "git_diff_stat": diff_stat.stdout,
+        "git_untracked_files": untracked.stdout,
+    }
+
+
+def describe_execution_attempts(execution_results: list[dict[str, Any]]) -> str:
+    parts: list[str] = []
+    for index, result in enumerate(execution_results):
+        tool_progress = result.get("tool_progress") or {}
+        tool_names = tool_progress.get("tool_call_names") or []
+        tool_text = ", ".join(str(name) for name in tool_names) or "none"
+        response = limit_text(str(result.get("response_text") or "").strip(), 1800)
+        parts.append(
+            f"Attempt {index} tool calls: {tool_text}\n"
+            f"Attempt {index} response:\n{response or '(empty response)'}"
+        )
+    return "\n\n".join(parts)
+
+
+def build_execution_retry_prompt(
+    *,
+    task_prompt: str,
+    planning_text: str,
+    execution_results: list[dict[str, Any]],
+    retry_reason: str,
+) -> str:
+    return (
+        "Phase: execution_retry\n\n"
+        f"The previous execution attempt stalled with guard reason: {retry_reason}.\n\n"
+        "Continue the same SWE-bench task. Do not write another plan, todo list, "
+        "markdown code fence, or next-steps section. Use real tool calls. If the "
+        "previous reads gave enough context, call edit_file or write_file now. If one "
+        "specific file is still missing, read that file and then edit/write. After "
+        "editing, call execute with the validation command from the task prompt. "
+        "A valid response for this retry must include edit_file or write_file and "
+        "execute, unless a tool result shows a concrete blocker.\n\n"
+        "Previous execution attempts:\n"
+        f"{describe_execution_attempts(execution_results)}\n\n"
+        "Planning output:\n"
+        f"{planning_text or '(no planning output captured)'}\n\n"
+        f"{task_prompt}"
+    )
+
+
+def combine_execution_attempt_text(execution_results: list[dict[str, Any]]) -> str:
+    if len(execution_results) == 1:
+        return str(execution_results[0].get("response_text") or "")
+    parts: list[str] = []
+    for index, result in enumerate(execution_results):
+        tool_progress = result.get("tool_progress") or {}
+        reason = result.get("execution_guard", {}).get("retry_reason")
+        tool_names = ", ".join(str(name) for name in tool_progress.get("tool_call_names") or []) or "none"
+        parts.append(
+            f"### Execution attempt {index}\n\n"
+            f"Tool calls: {tool_names}\n"
+            f"Guard retry reason: {reason or 'none'}\n\n"
+            f"{str(result.get('response_text') or '').strip() or '(empty response)'}"
+        )
+    return "\n\n".join(parts)
+
+
+def describe_loop_steps(execution_results: list[dict[str, Any]], limit: int = 2200) -> str:
+    parts: list[str] = []
+    for index, result in enumerate(execution_results):
+        tool_progress = result.get("tool_progress") or {}
+        loop_state = result.get("execution_loop") or {}
+        workspace = loop_state.get("workspace") or {}
+        tool_names = ", ".join(str(name) for name in tool_progress.get("tool_call_names") or []) or "none"
+        parts.append(
+            f"Step {index} ({loop_state.get('step_type', 'unknown')})\n"
+            f"Tools: {tool_names}\n"
+            f"Workspace changed: {workspace.get('workspace_changed')}\n"
+            f"Patch exists: {workspace.get('patch_nonempty')}\n"
+            f"Execute failed: {loop_state.get('execute_failed')}\n"
+            f"Response:\n{limit_text(str(result.get('response_text') or '').strip(), 900) or '(empty response)'}"
+        )
+    return limit_text("\n\n".join(parts), limit)
+
+
+def next_execution_loop_step(
+    *,
+    execution_results: list[dict[str, Any]],
+    require_test: bool,
+) -> tuple[str | None, str]:
+    if not execution_results:
+        return "inspect", "start_with_inspection"
+
+    last_result = execution_results[-1]
+    last_loop = last_result.get("execution_loop") or {}
+    last_workspace = last_loop.get("workspace") or {}
+    last_progress = last_result.get("tool_progress") or {}
+    any_workspace_changed = any(
+        ((result.get("execution_loop") or {}).get("workspace") or {}).get("workspace_changed")
+        for result in execution_results
+    )
+    any_patch_nonempty = any(
+        ((result.get("execution_loop") or {}).get("workspace") or {}).get("patch_nonempty")
+        for result in execution_results
+    )
+    any_execute = any((result.get("tool_progress") or {}).get("has_execute") for result in execution_results)
+    any_edit = any((result.get("tool_progress") or {}).get("has_write_or_edit") for result in execution_results)
+    last_has_execute = bool(last_progress.get("has_execute"))
+    last_execute_failed = last_has_execute and bool(last_loop.get("execute_failed"))
+    last_execute_succeeded = last_has_execute and not last_execute_failed
+
+    if require_test and any_patch_nonempty and last_execute_succeeded:
+        return None, "patch_and_validation_attempted"
+    if not require_test and any_patch_nonempty:
+        return None, "patch_produced"
+    if require_test and any_patch_nonempty and last_execute_failed:
+        return "fix", "validation_failed"
+    if not any_workspace_changed and not any_edit:
+        unique_names = set(last_progress.get("unique_tool_call_names") or [])
+        if unique_names <= {"read_file", "grep", "glob", "ls"}:
+            return "edit", "inspection_done_without_edit"
+        return "edit", "no_workspace_change"
+    if require_test and any_workspace_changed and not any_execute:
+        return "test", "patch_needs_validation"
+    if require_test and any_workspace_changed and any_execute and not last_has_execute:
+        return "test", "post_fix_needs_validation"
+    if any_workspace_changed and last_execute_failed:
+        return "fix", "validation_failed"
+    if any_workspace_changed and not last_workspace.get("patch_nonempty") and not any_patch_nonempty:
+        return "edit", "workspace_changed_without_patch_signal"
+    if require_test and any_workspace_changed and any_execute:
+        return None, "workspace_changed_and_validation_attempted"
+    if any_workspace_changed:
+        return None, "workspace_changed"
+    return "edit", "no_progress"
+
+
+def build_execution_loop_prompt(
+    *,
+    step_type: str,
+    task_prompt: str,
+    planning_text: str,
+    validation_command: str,
+    execution_results: list[dict[str, Any]],
+    stop_reason: str,
+) -> str:
+    prior_steps = describe_loop_steps(execution_results) if execution_results else "(no prior execution loop steps)"
+    common = (
+        f"Phase: execution_loop_{step_type}\n\n"
+        f"Loop state reason: {stop_reason}.\n\n"
+        "Do not write a plan, markdown code fence, or next-steps-only answer. "
+        "Use the available tools now. Keep the response focused on this step.\n\n"
+        "Planning output:\n"
+        f"{planning_text or '(no planning output captured)'}\n\n"
+        "Prior execution loop steps:\n"
+        f"{prior_steps}\n\n"
+    )
+    if step_type == "inspect":
+        instruction = (
+            "This is the inspect step. Use read_file, grep, glob, or ls to inspect the "
+            "specific files needed for the SWE-bench fix. Do not edit yet unless a file "
+            "is clearly missing and the task explicitly requires creating it."
+        )
+    elif step_type == "edit":
+        instruction = (
+            "This is the edit step. Use the prior inspection and call edit_file or "
+            "write_file now. If a required file is missing, create it with write_file. "
+            "Do not stop after another read unless that read returns a concrete blocker."
+        )
+    elif step_type == "test":
+        instruction = (
+            "This is the test step. Run the validation command with execute now:\n"
+            f"{validation_command}\n\n"
+            "Do not edit in this step unless the validation command cannot be run without "
+            "a tiny setup fix."
+        )
+    elif step_type == "fix":
+        instruction = (
+            "This is the fix step. The prior validation attempt appears to have failed. "
+            "Use edit_file or write_file to fix the failure, then call execute with the "
+            f"validation command: {validation_command}"
+        )
+    else:
+        raise ValueError(f"Unsupported execution loop step: {step_type}")
+    return f"{common}{instruction}\n\n{task_prompt}"
+
+
+def mark_execution_loop_result(
+    result: dict[str, Any],
+    *,
+    step_type: str,
+    step_index: int,
+    stop_reason: str,
+    workspace_dir: Path | None,
+    max_steps: int,
+    require_test: bool,
+) -> dict[str, Any]:
+    workspace = git_workspace_snapshot(workspace_dir)
+    execute_failed = execute_output_failed(result.get("response"))
+    tool_results = tool_result_texts_by_name(result.get("response"))
+    result["execution_loop"] = {
+        "enabled": True,
+        "step_index": step_index,
+        "step_type": step_type,
+        "input_reason": stop_reason,
+        "max_steps": max_steps,
+        "require_test": require_test,
+        "workspace": workspace,
+        "execute_failed": execute_failed,
+        "tool_result_names": sorted(tool_results),
+        "execute_result_preview": limit_text("\n\n".join(tool_results.get("execute", [])), 1800),
+    }
+    return result
+
+
+def run_execution_loop(
+    *,
+    frontend_url: str,
+    model: str,
+    resolved_hints: dict[str, Any],
+    task_prompt: str,
+    planning_text: str,
+    validation_command: str,
+    workspace_dir: Path | None,
+    app_variant: str,
+    task_index: int | None,
+    task_source: str | None,
+    task_metadata: dict[str, Any],
+    parent_run_id: str | None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    max_steps = execution_loop_max_steps()
+    require_test = execution_loop_require_test()
+    execution_results: list[dict[str, Any]] = []
+    next_step = "inspect"
+    reason = "start_with_inspection"
+
+    for step_index in range(max_steps):
+        prompt = build_execution_loop_prompt(
+            step_type=next_step,
+            task_prompt=task_prompt,
+            planning_text=planning_text,
+            validation_command=validation_command,
+            execution_results=execution_results,
+            stop_reason=reason,
+        )
+        result = execute_phase_agent(
+            phase="execution",
+            sequence_index=step_index,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=resolved_hints,
+            prompt=prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title=f"Execution loop {step_index}: {next_step}",
+            expected_output_tokens=2048,
+        )
+        mark_execution_loop_result(
+            result,
+            step_type=next_step,
+            step_index=step_index,
+            stop_reason=reason,
+            workspace_dir=workspace_dir,
+            max_steps=max_steps,
+            require_test=require_test,
+        )
+        execution_results.append(result)
+        next_step, reason = next_execution_loop_step(
+            execution_results=execution_results,
+            require_test=require_test,
+        )
+        log_lifecycle_event(
+            stage="execution_loop_step_completed",
+            payload={
+                "event_kind": "execution_loop",
+                "phase": "execution",
+                "parent_run_id": parent_run_id,
+                "step_index": step_index,
+                "step_type": result["execution_loop"]["step_type"],
+                "next_step_type": next_step,
+                "next_reason": reason,
+                "tool_progress": result.get("tool_progress"),
+                "workspace": result["execution_loop"]["workspace"],
+                "execute_failed": result["execution_loop"]["execute_failed"],
+            },
+        )
+        if next_step is None:
+            break
+
+    final_next_step, final_reason = next_execution_loop_step(
+        execution_results=execution_results,
+        require_test=require_test,
+    )
+    if final_next_step is not None and len(execution_results) >= max_steps:
+        final_reason = "max_steps_reached"
+
+    trace = {
+        "enabled": True,
+        "max_steps": max_steps,
+        "require_test": require_test,
+        "step_count": len(execution_results),
+        "final_reason": final_reason,
+        "completed": final_next_step is None,
+        "steps": [
+            {
+                "step_index": result.get("execution_loop", {}).get("step_index"),
+                "step_type": result.get("execution_loop", {}).get("step_type"),
+                "input_reason": result.get("execution_loop", {}).get("input_reason"),
+                "tool_progress": result.get("tool_progress"),
+                "workspace": result.get("execution_loop", {}).get("workspace"),
+                "execute_failed": result.get("execution_loop", {}).get("execute_failed"),
+                "execute_result_preview": result.get("execution_loop", {}).get("execute_result_preview"),
+                "request_context": result.get("request_context"),
+                "hints": result.get("hints"),
+            }
+            for result in execution_results
+        ],
+    }
+    return execution_results, trace
 
 
 # Reads provider metadata like finish reason and token usage from the final AI message.
@@ -208,6 +800,7 @@ def build_response_snapshot(response: Any) -> dict[str, Any]:
         "response_preview": _prompt_preview(text),
         "response_metadata": response_metadata,
         "usage_metadata": usage_metadata,
+        "tool_progress": summarize_tool_progress(response),
     }
 
 
@@ -741,6 +1334,7 @@ def execute_phase_agent(
             **build_response_snapshot(response),
         },
     )
+    tool_progress = summarize_tool_progress(response)
     return {
         "phase": phase,
         "sequence_index": sequence_index,
@@ -750,6 +1344,7 @@ def execute_phase_agent(
         "response": response,
         "response_text": response_text(response),
         "measurement": measurement,
+        "tool_progress": tool_progress,
     }
 
 
@@ -782,7 +1377,8 @@ def run_task_workflow(
     # prompt building, phase-tagged Deep Agents requests, and returned artifacts.
 
     validation_command = build_validation_command(task)
-    prompt = format_swebench_task_prompt(task)
+    task_overrides = load_task_overrides()
+    prompt = apply_task_overrides(format_swebench_task_prompt(task), task_overrides)
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
         resolved_hints.update(base_hints)
@@ -804,6 +1400,8 @@ def run_task_workflow(
             "step_limit": step_limit,
             "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
             "app_variant": app_variant,
+            "task_overrides_file": task_overrides.get("path"),
+            "task_overrides_applied": bool(task_overrides.get("text")),
         },
     )
     log_lifecycle_event(
@@ -814,6 +1412,9 @@ def run_task_workflow(
             "task_metadata": task_metadata,
             "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
             **build_prompt_snapshot(prompt),
+            "task_overrides_file": task_overrides.get("path"),
+            "task_overrides_text": task_overrides.get("text"),
+            "task_overrides_applied": bool(task_overrides.get("text")),
         },
     )
     log_lifecycle_event(
@@ -849,6 +1450,15 @@ def run_task_workflow(
         }
         step_results: list[dict] = []
         phase_results = [result]
+        execution_loop_trace = {
+            "enabled": False,
+            "max_steps": execution_loop_max_steps(),
+            "require_test": execution_loop_require_test(),
+            "step_count": 0,
+            "final_reason": "baseline_mode",
+            "completed": False,
+            "steps": [],
+        }
     else:
         phase_results: list[dict[str, Any]] = []
         planning_prompt = build_phase_prompt(phase="planning", task_prompt=prompt)
@@ -870,34 +1480,124 @@ def run_task_workflow(
         )
         phase_results.append(planning_result)
 
-        execution_prompt = build_phase_prompt(
-            phase="execution",
-            task_prompt=prompt,
-            planning_text=planning_result["response_text"],
-        )
-        execution_result = execute_phase_agent(
-            phase="execution",
-            sequence_index=0,
-            frontend_url=frontend_url,
-            model=model,
-            base_hints=resolved_hints,
-            prompt=execution_prompt,
-            workspace_dir=workspace_dir,
-            app_variant=app_variant,
-            task_index=task_index,
-            task_source=task_source,
-            task_metadata=task_metadata,
-            parent_run_id=parent_run_id,
-            step_title="Implement SWE-bench fix",
-            expected_output_tokens=2048,
-        )
-        phase_results.append(execution_result)
+        execution_loop_trace: dict[str, Any]
+        if execution_loop_enabled():
+            execution_results, execution_loop_trace = run_execution_loop(
+                frontend_url=frontend_url,
+                model=model,
+                resolved_hints=resolved_hints,
+                task_prompt=prompt,
+                planning_text=planning_result["response_text"],
+                validation_command=validation_command,
+                workspace_dir=workspace_dir,
+                app_variant=app_variant,
+                task_index=task_index,
+                task_source=task_source,
+                task_metadata=task_metadata,
+                parent_run_id=parent_run_id,
+            )
+            phase_results.extend(execution_results)
+            retry_limit = 0
+        else:
+            execution_prompt = build_phase_prompt(
+                phase="execution",
+                task_prompt=prompt,
+                planning_text=planning_result["response_text"],
+            )
+            execution_result = execute_phase_agent(
+                phase="execution",
+                sequence_index=0,
+                frontend_url=frontend_url,
+                model=model,
+                base_hints=resolved_hints,
+                prompt=execution_prompt,
+                workspace_dir=workspace_dir,
+                app_variant=app_variant,
+                task_index=task_index,
+                task_source=task_source,
+                task_metadata=task_metadata,
+                parent_run_id=parent_run_id,
+                step_title="Implement SWE-bench fix",
+                expected_output_tokens=2048,
+            )
+            execution_result["execution_guard"] = {
+                "attempt_index": 0,
+                "retry_reason": execution_retry_reason(execution_result["tool_progress"]),
+                "retry_limit": env_int("AGENTBENCH_EXECUTION_RETRY_LIMIT", default=2),
+                "guard_enabled": env_flag("AGENTBENCH_EXECUTION_GUARD", default=True),
+            }
+            phase_results.append(execution_result)
+            execution_results = [execution_result]
+
+            retry_limit = env_int("AGENTBENCH_EXECUTION_RETRY_LIMIT", default=2)
+            while (
+                (retry_reason := execution_retry_reason(execution_results[-1]["tool_progress"]))
+                and len(execution_results) <= retry_limit
+            ):
+                retry_index = len(execution_results)
+                log_lifecycle_event(
+                    stage="execution_retry_guard_triggered",
+                    payload={
+                        "event_kind": "guard",
+                        "phase": "execution",
+                        "retry_index": retry_index,
+                        "retry_reason": retry_reason,
+                        "retry_limit": retry_limit,
+                        "parent_run_id": parent_run_id,
+                        "task_source": task_source,
+                        "task_metadata": task_metadata,
+                        "previous_tool_progress": execution_results[-1].get("tool_progress"),
+                    },
+                )
+                retry_prompt = build_execution_retry_prompt(
+                    task_prompt=prompt,
+                    planning_text=planning_result["response_text"],
+                    execution_results=execution_results,
+                    retry_reason=retry_reason,
+                )
+                retry_result = execute_phase_agent(
+                    phase="execution",
+                    sequence_index=retry_index,
+                    frontend_url=frontend_url,
+                    model=model,
+                    base_hints=resolved_hints,
+                    prompt=retry_prompt,
+                    workspace_dir=workspace_dir,
+                    app_variant=app_variant,
+                    task_index=task_index,
+                    task_source=task_source,
+                    task_metadata=task_metadata,
+                    parent_run_id=parent_run_id,
+                    step_title=f"Implement SWE-bench fix retry {retry_index}",
+                    expected_output_tokens=2048,
+                )
+                retry_result["execution_guard"] = {
+                    "attempt_index": retry_index,
+                    "retry_reason": execution_retry_reason(retry_result["tool_progress"]),
+                    "previous_retry_reason": retry_reason,
+                    "retry_limit": retry_limit,
+                    "guard_enabled": env_flag("AGENTBENCH_EXECUTION_GUARD", default=True),
+                }
+                execution_results.append(retry_result)
+                phase_results.append(retry_result)
+            execution_loop_trace = {
+                "enabled": False,
+                "max_steps": execution_loop_max_steps(),
+                "require_test": execution_loop_require_test(),
+                "step_count": 0,
+                "final_reason": "disabled",
+                "completed": False,
+                "steps": [],
+            }
+
+        execution_result = execution_results[-1] if execution_results else planning_result
+        execution_text = combine_execution_attempt_text(execution_results)
 
         patch_prompt = build_phase_prompt(
             phase="patch_generation",
             task_prompt=prompt,
             planning_text=planning_result["response_text"],
-            execution_text=execution_result["response_text"],
+            execution_text=execution_text,
         )
         patch_result = execute_phase_agent(
             phase="patch_generation",
@@ -921,7 +1621,7 @@ def run_task_workflow(
             phase="review",
             task_prompt=prompt,
             planning_text=planning_result["response_text"],
-            execution_text=execution_result["response_text"],
+            execution_text=execution_text,
             patch_text=patch_result["response_text"],
         )
         review_result = execute_phase_agent(
@@ -943,6 +1643,25 @@ def run_task_workflow(
         phase_results.append(review_result)
 
         measurements = [phase_result["measurement"] for phase_result in phase_results]
+        execution_plan_steps = [
+            {
+                "phase": "execution",
+                "title": (
+                    f"Execution loop {index}: {result.get('execution_loop', {}).get('step_type')}"
+                    if execution_loop_trace.get("enabled")
+                    else (
+                        "Implement SWE-bench fix"
+                        if index == 0
+                        else f"Implement SWE-bench fix retry {index}"
+                    )
+                ),
+                "hint_probe_id": result["hints"].get("hint_probe_id"),
+                "tool_progress": result.get("tool_progress"),
+                "execution_guard": result.get("execution_guard"),
+                "execution_loop": result.get("execution_loop"),
+            }
+            for index, result in enumerate(execution_results)
+        ]
         decomposition_plan = {
             "steps": [
                 {
@@ -950,11 +1669,7 @@ def run_task_workflow(
                     "title": "Plan SWE-bench fix",
                     "hint_probe_id": planning_result["hints"].get("hint_probe_id"),
                 },
-                {
-                    "phase": "execution",
-                    "title": "Implement SWE-bench fix",
-                    "hint_probe_id": execution_result["hints"].get("hint_probe_id"),
-                },
+                *execution_plan_steps,
                 {
                     "phase": "patch_generation",
                     "title": "Consolidate patch",
@@ -979,6 +1694,9 @@ def run_task_workflow(
                 "hints": phase_result["hints"],
                 "response_text": phase_result["response_text"],
                 "measurement": phase_result["measurement"],
+                "tool_progress": phase_result.get("tool_progress"),
+                "execution_guard": phase_result.get("execution_guard"),
+                "execution_loop": phase_result.get("execution_loop"),
             }
             for phase_result in phase_results
         ]
@@ -988,6 +1706,14 @@ def run_task_workflow(
             "baseline_hints": primary_result["hints"],
             "baseline_prompt": primary_result["prompt"],
             "response_text": combine_phase_response_text(phase_results),
+            "execution_guard": {
+                "guard_enabled": env_flag("AGENTBENCH_EXECUTION_GUARD", default=True),
+                "retry_limit": retry_limit,
+                "attempt_count": len(execution_results),
+                "final_tool_progress": execution_result.get("tool_progress"),
+                "final_retry_reason": execution_retry_reason(execution_result.get("tool_progress") or {}),
+            },
+            "execution_loop": execution_loop_trace,
             "phase_results": [
                 {
                     "phase": phase_result["phase"],
@@ -997,6 +1723,9 @@ def run_task_workflow(
                     "prompt": phase_result["prompt"],
                     "response_text": phase_result["response_text"],
                     "measurement": phase_result["measurement"],
+                    "tool_progress": phase_result.get("tool_progress"),
+                    "execution_guard": phase_result.get("execution_guard"),
+                    "execution_loop": phase_result.get("execution_loop"),
                 }
                 for phase_result in phase_results
             ],
@@ -1030,12 +1759,14 @@ def run_task_workflow(
     return {
         "prompt": prompt,
         "validation_command": validation_command,
+        "task_overrides": task_overrides,
         "resolved_hints": resolved_hints,
         "app_variant": app_variant,
         "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         "decomposition_plan": decomposition_plan,
         "step_results": step_results,
         "phase_results": phase_results,
+        "execution_loop_trace": execution_loop_trace,
         "result": result,
         "measurements": measurements,
     }

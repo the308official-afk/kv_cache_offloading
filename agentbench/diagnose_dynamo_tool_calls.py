@@ -15,6 +15,9 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+THIS_FILE = Path(__file__).resolve()
+REPO_ROOT = THIS_FILE.parents[1]
+
 DEFAULT_FRONTEND_URL = "http://127.0.0.1:8000/v1/chat/completions"
 DEFAULT_MODEL = "Qwen/Qwen2.5-7B-Instruct"
 DEFAULT_TIMEOUT = 300
@@ -125,7 +128,7 @@ def make_output_dir(explicit: Path | None) -> Path:
         explicit.mkdir(parents=True, exist_ok=True)
         return explicit
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    output_dir = Path("agentbench/diagnostics") / f"dynamo_tool_calls_{timestamp}"
+    output_dir = REPO_ROOT / "experiments" / "raw" / "agentbench" / "diagnostics" / f"dynamo_tool_calls_{timestamp}"
     output_dir.mkdir(parents=True, exist_ok=True)
     return output_dir
 

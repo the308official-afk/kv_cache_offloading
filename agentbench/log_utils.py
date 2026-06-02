@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -43,6 +44,18 @@ def should_log_task(*, task_index: int | None) -> bool:
         return True
     every_n = max(1, AGENTBENCH_LOG_EVERY_N)
     return task_index % every_n == 0
+
+
+def should_print_checkpoints() -> bool:
+    value = os.environ.get("AGENTBENCH_PRINT_CHECKPOINTS")
+    if value is not None:
+        return value.strip().lower() not in {"0", "false", "no", "off"}
+
+    quiet_value = os.environ.get("AGENTBENCH_QUIET_CHECKPOINTS")
+    if quiet_value is not None:
+        return quiet_value.strip().lower() in {"0", "false", "no", "off"}
+
+    return True
 
 
 def set_checkpoint_log_file(path: str | Path | None) -> None:
@@ -121,13 +134,16 @@ def log_checkpoint(*, check_point: str, payload: dict[str, Any], task_index: int
     if not should_log_task(task_index=task_index):
         return
 
-    print(f"# [CHECK_POINT] {check_point}")
     body = {
         "check_point": check_point,
         "task_index": task_index,
         **payload,
     }
     _write_checkpoint_file(body=body)
+    if not should_print_checkpoints():
+        return
+
+    print(f"# [CHECK_POINT] {check_point}")
     if AGENTBENCH_LOG_MODE == "full":
         print(json.dumps(body, indent=2, default=str))
         return

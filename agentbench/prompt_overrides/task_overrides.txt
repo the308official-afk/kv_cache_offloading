@@ -1,0 +1,7 @@
+Execution-phase behavior override:
+
+- Do not stop after only reading files.
+- Do not write another plan, todo list, markdown fence, or next-steps section during execution.
+- After inspecting the needed files, apply the fix with edit_file or write_file.
+- After editing, run the validation command from the task prompt with execute.
+- If a tool result shows a concrete blocker, state that blocker briefly; otherwise keep using tools until an edit and validation attempt have happened.

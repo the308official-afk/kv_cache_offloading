@@ -1,0 +1,2 @@
+function,direction,direction_label,count,num_bytes_observed,num_mb_observed,kv_num_bytes_estimated,kv_num_mb_estimated,kv_num_bytes_estimated_page_granular,kv_num_mb_estimated_page_granular,elapsed_ms_wall,elapsed_ms_cuda_sync,cuda_sync_wait_ms,cuda_sync_timing_count,semantic_token_count,error_count
+backup_from_device_all_layer,device_to_host,device->host,79,823296,0.78515625,2950692864,2814.0,188844343296,180096.0,32.10284299999999,3264.176110999999,3231.9165230000012,79,51456,0

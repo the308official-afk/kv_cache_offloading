@@ -25,6 +25,15 @@ For the full phased SWE-bench workload, where only the SGLang worker is profiled
 and the report is split by `planning`, `execution`, `patch_generation`, and
 `review`, use [`README_AGENT_PHASE_REPRO.md`](README_AGENT_PHASE_REPRO.md).
 
+For a concise pitch of what the current runtime-hint/KV-cache setup can
+investigate, use
+[`README_HINT_IMPACT_PITCH.md`](README_HINT_IMPACT_PITCH.md).
+
+Before changing the AgentBench solving loop, use
+[`README_TOOL_CALL_DIAGNOSTICS.md`](README_TOOL_CALL_DIAGNOSTICS.md) to verify
+that the selected model and Dynamo parser can produce real Deep Agents tool
+calls.
+
 For where files belong in this repository, use
 [`README_REPO_STRUCTURE.md`](README_REPO_STRUCTURE.md).
 

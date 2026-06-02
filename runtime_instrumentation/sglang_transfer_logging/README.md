@@ -6,12 +6,16 @@ the repo, and bind-mounts the patched package into the Dynamo SGLang worker.
 
 ## What It Instruments
 
-The patch targets two layers:
+The patch targets four layers:
 
 - `memory_pool_host.py` for actual transfer timing, direction, tensor shapes,
   and observed bytes.
 - `hiradix_cache.py` for semantic token context around `write_backup()` and
   `load_back()`.
+- `radix_cache.py`, `schedule_batch.py`, and `schedule_policy.py` for request
+  context around cache insertion, prefix matching, and host load-back.
+- `cache_controller.py` for carrying that request/token context through async
+  cache operations into the low-level memory-pool copy.
 
 The low-level transfer functions are logged as:
 
@@ -27,7 +31,9 @@ The patch writes structured log lines with this prefix:
 Each event includes elapsed time, observed tensor bytes, tensor shapes/dtypes,
 direction, function name, cache-index previews when enabled, and semantic token
 previews when the transfer happens under HiRadix `write_backup()` or
-`load_back()`.
+`load_back()`. When request context is visible in SGLang, the event can also
+include fields like `sglang_request_id`, `runtime_context_id`, `phase`,
+`hint_profile`, and `request_context_function`.
 
 ## 1. Extract SGLang From the Worker Image
 
@@ -107,6 +113,13 @@ patched async transfer context propagation:
   - CacheOperation context capture
   - write-back transfer context (... calls)
   - load-back transfer context (... calls)
+patched request context around cache insertion:
+  - cache_finished_req request context (... occurrences)
+  - cache_unfinished_req request context (... occurrences)
+patched request context around prefix matching:
+  - Req.init_next_round_input match_prefix context (... calls)
+patched request context around host load-back:
+  - SchedulePolicy init_load_back context (... calls)
 ```
 
 If no functions are patched, inspect:
@@ -126,6 +139,11 @@ grep -n "_sgl_log_transfer_event" \
 
 grep -n "_sgl_transfer_token_context" \
   upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+
+grep -n "_sgl_transfer_request_context" \
+  upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py \
+  upstream/sglang/python/sglang/srt/managers/schedule_batch.py \
+  upstream/sglang/python/sglang/srt/managers/schedule_policy.py
 ```
 
 ## 3. Run With the Patched SGLang Overlay
@@ -323,7 +341,9 @@ SGLANG_TRANSFER_LOG_VERBOSE=1
   "semantic_token_ids_preview": [151644, 872, 198],
   "semantic_token_ids_sha256": "...",
   "token_ids_preview": [151644, 872, 198],
-  "token_preview_source": "semantic_context"
+  "token_preview_source": "semantic_context",
+  "sglang_request_id": "abc123",
+  "request_context_function": "cache_finished_req"
 }
 ```
 
@@ -354,7 +374,11 @@ fallback as debugging metadata, not tokenizer IDs.
 Default events are compact. Tensor details, empty local-token fallback fields,
 and null errors are emitted only when `SGLANG_TRANSFER_LOG_VERBOSE=1`.
 
-The next files to instrument are:
+`request_context_function` tells you where the request metadata was captured.
+The most useful values are `cache_finished_req` / `cache_unfinished_req` for
+device-to-host write-back, `Req.init_next_round_input.match_prefix` for prefix
+lookup, and `SchedulePolicy.add_one_req.init_load_back` for host-to-device
+reload.
 
-- `cache_controller.py` for transfer reasons
-- `hicache_storage.py` for storage-tier reads/writes
+The next file to instrument is `hicache_storage.py` if you need storage-tier
+read/write details below the host-memory tier.

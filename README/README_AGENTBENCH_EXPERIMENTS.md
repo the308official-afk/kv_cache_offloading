@@ -265,6 +265,14 @@ Then start a test run (don't remove this)
 ```bash
 cd ~/kv_cache_offloading
 
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \
@@ -273,7 +281,8 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
   --index 0 \
-  --prompt-evolution-value-char-limit 1000
+  --prompt-evolution-value-char-limit 1000 \
+  --quiet-checkpoints
 ```
 
 Use `--hint-profile` for controlled hint experiments. Available profiles:
@@ -291,6 +300,14 @@ short-output
 Example single-profile run:
 
 ```bash
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \
@@ -300,12 +317,21 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --split test \
   --index 0 \
   --hint-profile high-reuse \
-  --prompt-evolution-value-char-limit 1000
+  --prompt-evolution-value-char-limit 1000 \
+  --quiet-checkpoints
 ```
 
 Example matrix run:
 
 ```bash
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
 for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority long-output short-output; do
   AGENTBENCH_WORKFLOW_MODE=phased \
   python3.11 agentbench/deepagents_swebench_single_host.py \
@@ -316,7 +342,8 @@ for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority lon
     --split test \
     --index 0 \
     --hint-profile "$HINT_PROFILE" \
-    --prompt-evolution-value-char-limit 1000
+    --prompt-evolution-value-char-limit 1000 \
+    --quiet-checkpoints
 done
 ```
 
@@ -403,6 +430,16 @@ For the first run after enabling direct attribution, check whether the new
 request-matched evidence is active. `transfer_request_id_matched=True` means a
 direct request id matched. `transfer_time_window_matched=True` is weaker: it
 means a transfer event landed inside the subrequest timestamp window.
+The direct path is enabled by the SGLang patcher wrapping cache insertion,
+prefix matching, and host load-back with request context. Confirm those wrappers
+after patching:
+
+```bash
+grep -n "_sgl_transfer_request_context" \
+  "$SGLANG_ROOT/srt/mem_cache/radix_cache.py" \
+  "$SGLANG_ROOT/srt/managers/schedule_batch.py" \
+  "$SGLANG_ROOT/srt/managers/schedule_policy.py"
+```
 
 ```bash
 python3 - <<'PY'
@@ -485,7 +522,10 @@ context:
 - If the patched worker can see request context, transfer rows also include
   request attribution such as `request_id`, `external_request_id`,
   `runtime_context_id`, `sglang_request_id`, `phase`, `hint_profile`, and
-  `agent_hints_source`.
+  `agent_hints_source`. `request_context_function` shows where that context was
+  captured, such as `cache_finished_req`,
+  `Req.init_next_round_input.match_prefix`, or
+  `SchedulePolicy.add_one_req.init_load_back`.
 - `token_preview_source=semantic_context` means `token_ids_preview` is a real
   semantic token preview. `token_preview_source=local_heuristic` means the event
   did not have HiRadix token context and the preview should not be treated as
@@ -517,6 +557,44 @@ ENOENT ... config.json
 
 ## 4. Run One AgentBench Task
 
+Before running AgentBench, choose which DeepAgents Python library to import:
+
+```bash
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+```
+
+Use `upstream` for the current tool-loop experiments. The known-good run shape
+that emitted `read_file`, `write_file`, `edit_file`, and `execute` used the
+cloned DeepAgents library under `upstream/deepagents/libs/deepagents`.
+Use `python_environment` only when intentionally comparing against the installed
+DeepAgents package.
+
+`AGENTBENCH_TASK_OVERRIDES_FILE` points to an independent text file with prompt
+nudges for smaller models. Unset it or empty the file for a vanilla prompt.
+`AGENTBENCH_EXECUTION_LOOP=1` enables the harness-driven execution loop:
+inspect, edit, test, then fix/test until a patch plus validation attempt exists
+or the max step count is reached. `AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6`
+limits the loop. `AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1` requires an
+`execute` validation attempt before the loop can finish. Keep
+`AGENTBENCH_EXECUTION_GUARD=0` when the loop is enabled so the old read-only
+retry guard does not mix with the stronger loop controller. Set
+`AGENTBENCH_PRINT_CHECKPOINTS=0` or pass `--quiet-checkpoints` to keep
+`# [CHECK_POINT]` blocks out of the terminal while still saving
+`others/checkpoints.json`.
+
+Automatic SWE-bench runs use shared checkouts under `agentbench/repos/`.
+The harness now resets tracked changes and removes untracked non-ignored files
+before each shared-checkout run so stale files do not leak between experiments.
+Use `--keep-shared-workspace-changes` only when deliberately debugging a dirty
+checkout. Patch capture also includes newly-created untracked files, so
+`workspace.patch` can contain files created with `write_file`.
+
 ### 4.1 Baseline Single-Loop Run
 
 Use this first when you want a complete run that actually attempts the task.
@@ -543,6 +621,10 @@ echo "Using model: $MODEL_NAME"
 ```bash
 cd ~/kv_cache_offloading
 
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
 AGENTBENCH_WORKFLOW_MODE=baseline \
 python3.11 agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \
@@ -551,7 +633,8 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
   --index 0 \
-  --prompt-evolution-value-char-limit 1000
+  --prompt-evolution-value-char-limit 1000 \
+  --quiet-checkpoints
 ```
 
 Check if the run succeeded in executing the task assigned it
@@ -563,6 +646,7 @@ echo "$LATEST_RESULT"
 wc -c "$LATEST_RESULT/workspace.patch"
 cat "$LATEST_RESULT/others/git_status.txt"
 cat "$LATEST_RESULT/others/git_diff_stat.txt"
+cat "$LATEST_RESULT/others/git_untracked_files.txt"
 ```
 
 ### 4.2 Phased Run
@@ -574,6 +658,14 @@ planning response is empty or malformed, later phases may inherit bad context.
 ```bash
 cd ~/kv_cache_offloading
 
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \
@@ -582,11 +674,72 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
   --index 0 \
-  --prompt-evolution-value-char-limit 1000
+  --hint-profile high-reuse \
+  --prompt-evolution-value-char-limit 1000 \
+  --quiet-checkpoints
 ```
 
 The `--prompt-evolution-value-char-limit 1000` option keeps each captured
 before/after value readable by truncating long strings with an ellipsis.
+
+### 4.3 Multi-Task Run
+
+The harness runs one SWE-bench task per process via `--index`. To try multiple
+tasks, loop over indexes:
+
+```bash
+cd ~/kv_cache_offloading
+
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
+START_INDEX=0
+END_INDEX=3
+
+for INDEX in $(seq "$START_INDEX" "$END_INDEX"); do
+  echo "===== Running SWE-bench index $INDEX ====="
+
+  AGENTBENCH_WORKFLOW_MODE=phased \
+  python3.11 agentbench/deepagents_swebench_single_host.py \
+    --app-variant upstream_deploy_coding_agent \
+    --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+    --model "$MODEL_NAME" \
+    --dataset ScaleAI/SWE-bench_Pro \
+    --split test \
+    --index "$INDEX" \
+    --hint-profile high-reuse \
+    --prompt-evolution-value-char-limit 1000 \
+    --quiet-checkpoints \
+  || echo "Index $INDEX failed; continuing"
+
+  echo
+done
+```
+
+Then check which tasks produced patches:
+
+```bash
+cd ~/kv_cache_offloading
+
+for REPORT in experiments/reports/runs/*; do
+  [ -f "$REPORT/summary.md" ] || continue
+  echo "===== $(basename "$REPORT") ====="
+  grep -E "Patch nonempty|Git diff nonempty|Model|App variant|Hint profile" "$REPORT/summary.md"
+done
+```
+
+This is the fastest way to find SWE-bench tasks that produce a patch. For clean
+per-task run-level transfer totals, restart Dynamo before each task so every run
+gets a fresh `sglang_transfer_events_*.jsonl`. If you keep the same worker
+running, `subrequest_metrics.csv` is still useful because it uses per-subrequest
+time windows, but the run-level transfer total may include earlier tasks from
+the same worker session.
 
 ## 5. Find The Latest Result
 
@@ -603,7 +756,15 @@ usually leave a non-empty patch or git diff.
 ```bash
 cat "$LATEST_RESULT/others/git_status.txt"
 cat "$LATEST_RESULT/others/git_diff_stat.txt"
+cat "$LATEST_RESULT/others/git_untracked_files.txt"
 wc -c "$LATEST_RESULT/workspace.patch"
+```
+
+If the execution loop was enabled, inspect the harness-directed steps:
+
+```bash
+cat "$LATEST_RESULT/others/execution_loop_table.csv"
+cat "$LATEST_RESULT/others/execution_loop_trace.json"
 ```
 
 Useful signal:
@@ -613,6 +774,10 @@ workspace.patch size > 0
 git_status.txt or git_diff_stat.txt is non-empty
 model output includes edit/write/execute tool activity, not only ls/read_file
 ```
+
+New files are expected to appear in `git_untracked_files.txt` and are included
+in `workspace.patch`. If `git_status.txt` shows `??` files but
+`workspace.patch` is still empty, that run used an older copy of the harness.
 
 If baseline edits files but phased does not, debug the phased orchestration. If
 both baseline and phased runs fail to edit files, try the other model by

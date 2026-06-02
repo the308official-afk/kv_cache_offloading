@@ -236,6 +236,7 @@ MEASURED_FIELDS = {
     "git_head",
     "git_status",
     "git_diff_stat",
+    "git_untracked_files",
     "patch_file",
     "patch_nonempty",
     "workspace_present",
@@ -1738,6 +1739,23 @@ def ensure_shared_repo_checkout(repo_url: str) -> Path:
     return shared_repo_dir
 
 
+def clean_git_checkout(repo_dir: Path) -> dict[str, object]:
+    """Reset tracked changes and remove untracked non-ignored files."""
+    before = run_command(["git", "status", "--short"], cwd=repo_dir, check=False)
+    reset = run_command(["git", "reset", "--hard"], cwd=repo_dir, check=False)
+    clean = run_command(["git", "clean", "-fd"], cwd=repo_dir, check=False)
+    after = run_command(["git", "status", "--short"], cwd=repo_dir, check=False)
+    return {
+        "cleaned": True,
+        "status_before": before.stdout,
+        "status_after": after.stdout,
+        "reset_exit_code": reset.returncode,
+        "clean_exit_code": clean.returncode,
+        "clean_stdout": clean.stdout,
+        "clean_stderr": clean.stderr,
+    }
+
+
 def should_auto_materialize_swebench_repo(
     *,
     dataset_name: str | None,
@@ -2437,6 +2455,48 @@ def build_cache_value_analysis(measurements: list[dict]) -> dict:
 
 def build_measurements_table(measurements: list[dict]) -> list[dict]:
     return [row_with_provenance(dict(item), "measurements") for item in measurements]
+
+
+def build_execution_loop_table(trace: dict) -> list[dict]:
+    rows: list[dict] = []
+    for step in trace.get("steps", []) or []:
+        tool_progress = step.get("tool_progress") or {}
+        workspace = step.get("workspace") or {}
+        request_context = step.get("request_context") or {}
+        rows.append(
+            {
+                "enabled": trace.get("enabled"),
+                "completed": trace.get("completed"),
+                "final_reason": trace.get("final_reason"),
+                "max_steps": trace.get("max_steps"),
+                "require_test": trace.get("require_test"),
+                "step_index": step.get("step_index"),
+                "step_type": step.get("step_type"),
+                "input_reason": step.get("input_reason"),
+                "tool_call_count": tool_progress.get("tool_call_count"),
+                "tool_call_names": ", ".join(tool_progress.get("tool_call_names") or []),
+                "has_read_file": tool_progress.get("has_read_file"),
+                "has_write_or_edit": tool_progress.get("has_write_or_edit"),
+                "has_execute": tool_progress.get("has_execute"),
+                "workspace_changed": workspace.get("workspace_changed"),
+                "patch_nonempty": workspace.get("patch_nonempty"),
+                "execute_failed": step.get("execute_failed"),
+                "request_id": request_context.get("request_id"),
+                "hint_probe_id": (step.get("hints") or {}).get("hint_probe_id"),
+                "execute_result_preview": step.get("execute_result_preview"),
+            }
+        )
+    if not rows:
+        rows.append(
+            {
+                "enabled": trace.get("enabled"),
+                "completed": trace.get("completed"),
+                "final_reason": trace.get("final_reason"),
+                "max_steps": trace.get("max_steps"),
+                "require_test": trace.get("require_test"),
+            }
+        )
+    return rows
 
 
 def build_measurement_analysis_table(analysis: dict) -> list[dict]:
@@ -3884,6 +3944,7 @@ def prepare_workspace(
     checkout_commit: str | None = None,
     inferred_from_task: bool = False,
     shared_repo_source: Path | None = None,
+    clean_shared_checkout: bool = True,
 ) -> tuple[Path | None, dict]:
     # [CHECK_POINT 2] A writable repo workspace for the agent is prepared here.
     # Debugging note: this wrapper supports three workspace modes:
@@ -3928,8 +3989,11 @@ def prepare_workspace(
         return workspace_dir, metadata
 
     if shared_repo_source is not None:
-        # Debugging note: automatic SWE-bench runs now operate directly inside the shared checkout.
-        # This means repo edits persist across runs until the repo is manually cleaned or reset.
+        # Debugging note: automatic SWE-bench runs operate directly inside a shared checkout.
+        # Clean it by default so generated files from previous tasks cannot leak into this run.
+        clean_metadata: dict[str, object] = {"cleaned": False}
+        if clean_shared_checkout:
+            clean_metadata = clean_git_checkout(shared_repo_source)
         if checkout_commit:
             run_command(["git", "checkout", checkout_commit], cwd=shared_repo_source)
         metadata = {
@@ -3937,6 +4001,8 @@ def prepare_workspace(
             "source_repo_url": repo_url,
             "workspace_path": str(shared_repo_source),
             "shared_repo_path": str(shared_repo_source),
+            "clean_shared_checkout": clean_shared_checkout,
+            "clean_metadata": clean_metadata,
         }
         if checkout_commit:
             metadata["checked_out_commit"] = checkout_commit
@@ -3978,8 +4044,15 @@ def collect_workspace_artifacts(
 
     artifacts["git_repo"] = True
     status = run_command(["git", "status", "--short"], cwd=workspace_dir, check=False)
+    untracked = run_command(["git", "ls-files", "--others", "--exclude-standard"], cwd=workspace_dir, check=False)
+    untracked_files = [line for line in untracked.stdout.splitlines() if line.strip()]
+    if untracked_files:
+        # Mark untracked files intent-to-add so `git diff` emits a real patch for new files.
+        run_command(["git", "add", "-N", "--", *untracked_files], cwd=workspace_dir, check=False)
     diff = run_command(["git", "diff", "--binary"], cwd=workspace_dir, check=False)
     diff_stat = run_command(["git", "diff", "--stat"], cwd=workspace_dir, check=False)
+    if untracked_files:
+        run_command(["git", "reset", "-q", "--", *untracked_files], cwd=workspace_dir, check=False)
     head = run_command(["git", "rev-parse", "HEAD"], cwd=workspace_dir, check=False)
 
     artifact_dir = auxiliary_dir or report_dir
@@ -3990,12 +4063,14 @@ def collect_workspace_artifacts(
         legacy_patch_path.unlink()
     (artifact_dir / "git_status.txt").write_text(status.stdout, encoding="utf-8")
     (artifact_dir / "git_diff_stat.txt").write_text(diff_stat.stdout, encoding="utf-8")
+    (artifact_dir / "git_untracked_files.txt").write_text(untracked.stdout, encoding="utf-8")
 
     artifacts.update(
         {
             "git_head": head.stdout.strip(),
             "git_status": status.stdout,
             "git_diff_stat": diff_stat.stdout,
+            "git_untracked_files": untracked.stdout,
             "patch_file": str(patch_path),
             "patch_nonempty": bool(diff.stdout.strip()),
         }
@@ -4162,6 +4237,14 @@ def main() -> None:
         help="Disable automatic GitHub repo clone + base-commit checkout for SWE-bench dataset tasks.",
     )
     parser.add_argument(
+        "--keep-shared-workspace-changes",
+        action="store_true",
+        help=(
+            "Do not reset/clean the automatic shared checkout before a run. "
+            "Use only when deliberately debugging a dirty workspace."
+        ),
+    )
+    parser.add_argument(
         "--frontend-url",
         default="http://127.0.0.1:8000/v1/chat/completions",
     )
@@ -4208,12 +4291,19 @@ def main() -> None:
         help="Disable automatic curated report generation at the end of the run.",
     )
     parser.add_argument(
+        "--quiet-checkpoints",
+        action="store_true",
+        help="Do not print # [CHECK_POINT] blocks to the terminal; checkpoint artifacts are still written.",
+    )
+    parser.add_argument(
         "--sglang-transfer-log",
         type=Path,
         default=None,
         help="Specific SGLang transfer JSONL to use in the automatic curated report.",
     )
     args = parser.parse_args()
+    if args.quiet_checkpoints:
+        os.environ["AGENTBENCH_PRINT_CHECKPOINTS"] = "0"
 
     results_tz = ZoneInfo(args.results_timezone)
     run_started_at = datetime.now(results_tz)
@@ -4343,6 +4433,7 @@ def main() -> None:
         checkout_commit=inferred_checkout_commit if inferred_from_task else None,
         inferred_from_task=inferred_from_task,
         shared_repo_source=shared_repo_source,
+        clean_shared_checkout=not args.keep_shared_workspace_changes,
     )
     log_lifecycle_event(
         stage="workspace_prepared",
@@ -4420,6 +4511,21 @@ def main() -> None:
         annotate=False,
     )
     log_artifact_written_event(artifact_name="step_results", artifact_path=step_results_file)
+    execution_loop_trace = workflow.get("execution_loop_trace") or {}
+    execution_loop_trace_file = write_json_artifact(
+        others_dir,
+        "execution_loop_trace.json",
+        execution_loop_trace,
+        "execution_loop_trace",
+    )
+    log_artifact_written_event(artifact_name="execution_loop_trace", artifact_path=execution_loop_trace_file)
+    execution_loop_table = build_execution_loop_table(execution_loop_trace)
+    execution_loop_table_file = write_csv_table(
+        others_dir,
+        "execution_loop_table.csv",
+        execution_loop_table,
+    )
+    log_artifact_written_event(artifact_name="execution_loop_table", artifact_path=execution_loop_table_file)
     measurements = workflow["measurements"]
     measurements_file = write_json_artifact(others_dir, "measurements.json", measurements, "measurements")
     log_artifact_written_event(artifact_name="measurements", artifact_path=measurements_file)
@@ -4750,6 +4856,7 @@ def main() -> None:
             "runtime_hint_summary": build_runtime_hint_alignment_summary_table(runtime_hint_alignment_analysis),
             "stage_lifecycle": stage_lifecycle_table,
             "prompt_evolution_report": build_prompt_evolution_csv_rows(prompt_evolution_report),
+            "execution_loop": execution_loop_table,
             "run_summary": run_summary_table,
         },
     )
@@ -4772,6 +4879,7 @@ def main() -> None:
         "active_harness": "agentbench.deepagents_app",
         "app_variant": workflow["app_variant"],
         "deepagents_runtime_source": workflow["deepagents_runtime_source"],
+        "task_overrides": workflow.get("task_overrides"),
         "checkpoint_log_file": str(checkpoint_log_path),
         "auto_repo_checkout": auto_repo_checkout,
         "workspace": workspace_metadata,
@@ -4789,6 +4897,9 @@ def main() -> None:
         "step_results": step_results,
         "plan_file": str(plan_file),
         "step_results_file": str(step_results_file),
+        "execution_loop_trace": execution_loop_trace,
+        "execution_loop_trace_file": str(execution_loop_trace_file),
+        "execution_loop_table_file": str(execution_loop_table_file),
         "measurements_file": str(measurements_file),
         "measurements_summary": summarize_measurements(measurements),
         "measurements_table_file": str(measurements_table_file),
