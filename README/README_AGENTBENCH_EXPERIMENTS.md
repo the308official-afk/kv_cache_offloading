@@ -154,8 +154,18 @@ Prepare the SGLang overlay once:
 ```bash
 cd ~/kv_cache_offloading
 
-SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+
+docker image inspect "$WORKER_IMAGE" >/dev/null
+
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+cat upstream/sglang/SOURCE_IMAGE.txt
 
 if [ -d upstream/sglang/python/sglang ]; then
   export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
@@ -191,6 +201,18 @@ grep -n "_sgl_transfer_token_context" \
 #   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 ```
 
+If you encounter an out-of-host memory error, Try clearing page cache first
+
+```bash
+cd ~/kv_cache_offloading
+
+./run_dynamo_single_host.sh stop
+
+free -h
+sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+free -h
+```
+
 Preferred current extraction path is `upstream/sglang/python/sglang`. Older EC2
 copies may still extract to `runtime_upstream/sglang/python/sglang`; the
 `SGLANG_ROOT` detection above supports both. If the `grep` for
@@ -207,9 +229,12 @@ WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
 SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
+DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
 DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+WORKER_IMAGE="$WORKER_IMAGE" \
 ./run_dynamo_single_host.sh start
 ```
 
@@ -226,9 +251,12 @@ SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS=4 \
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0 \
 SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 SGLANG_TRANSFER_LOG_VERBOSE=0 \
+DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
 DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+WORKER_IMAGE="$WORKER_IMAGE" \
 ./run_dynamo_single_host.sh start
 ```
 
@@ -248,8 +276,70 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --prompt-evolution-value-char-limit 1000
 ```
 
-If startup fails with `Not enough host memory available`, lower
-`--hicache-ratio` to `0.05` or free host memory before starting the worker.
+Use `--hint-profile` for controlled hint experiments. Available profiles:
+
+```text
+baseline
+high-reuse
+low-reuse
+high-priority
+low-priority
+long-output
+short-output
+```
+
+Example single-profile run:
+
+```bash
+AGENTBENCH_WORKFLOW_MODE=phased \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --hint-profile high-reuse \
+  --prompt-evolution-value-char-limit 1000
+```
+
+Example matrix run:
+
+```bash
+for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority long-output short-output; do
+  AGENTBENCH_WORKFLOW_MODE=phased \
+  python3.11 agentbench/deepagents_swebench_single_host.py \
+    --app-variant upstream_deploy_coding_agent \
+    --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+    --model "$MODEL_NAME" \
+    --dataset ScaleAI/SWE-bench_Pro \
+    --split test \
+    --index 0 \
+    --hint-profile "$HINT_PROFILE" \
+    --prompt-evolution-value-char-limit 1000
+done
+```
+
+At the end of the run, AgentBench automatically builds the curated report under:
+
+```text
+experiments/reports/runs/<run_id>/
+  run_manifest.json
+  run_metrics.json
+  run_metrics.csv
+  transfer_summary.csv
+  summary.md
+```
+
+It uses the exact AgentBench result directory and the current SGLang transfer
+log. To disable this post-run report hook for a run, pass `--no-run-report` or
+set `AGENTBENCH_AUTO_RUN_REPORT=0`.
+
+This SGLang HiCache protocol expects the host pool to be larger than the device
+KV pool, so do not lower `--hicache-ratio` below `1` on this runtime. If startup
+fails with `Not enough host memory available`, either free host RAM and keep
+`--hicache-ratio 1`, or reduce the GPU KV pool by lowering
+`--mem-fraction-static` while keeping `--hicache-ratio 1`.
 
 Transfer events are written to:
 
@@ -298,42 +388,77 @@ head -20 experiments/parsed/sglang_transfer_logs/transfer_events.csv
 cat experiments/parsed/sglang_transfer_logs/transfer_summary.csv
 ```
 
-Build a run-level report that combines AgentBench latency/cache metrics with
-SGLang transfer totals:
+AgentBench builds the run-level report automatically. To inspect the latest
+curated report:
 
 ```bash
-python3 experiments/scripts/agentbench_report/build_run_report.py
-
 LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
 cat "$LATEST_RUN_REPORT/summary.md"
 cat "$LATEST_RUN_REPORT/run_metrics.csv"
+cat "$LATEST_RUN_REPORT/subrequest_metrics.csv"
 cat "$LATEST_RUN_REPORT/transfer_summary.csv"
 ```
 
-Run-level reports are written to:
+For the first run after enabling direct attribution, check whether the new
+request-matched evidence is active. `transfer_request_id_matched=True` means a
+direct request id matched. `transfer_time_window_matched=True` is weaker: it
+means a transfer event landed inside the subrequest timestamp window.
 
-```text
-experiments/reports/runs/<run_id>/
-  run_manifest.json
-  run_metrics.json
-  run_metrics.csv
-  transfer_summary.csv
-  summary.md
+```bash
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+report = Path(__import__("os").environ["LATEST_RUN_REPORT"])
+with (report / "run_metrics.csv").open() as handle:
+    for row in csv.DictReader(handle):
+        print(
+            row["phase"],
+            "worker_runtime_json_matched=", row.get("worker_runtime_json_matched"),
+            "transfer_request_id_matched=", row.get("transfer_request_id_matched"),
+        )
+with (report / "subrequest_metrics.csv").open() as handle:
+    for row in csv.DictReader(handle):
+        print(
+            row["phase"],
+            "subrequest=", row.get("subrequest_index"),
+            "sglang_request_id=", row.get("sglang_request_id"),
+            "ttft_ms=", row.get("ttft_ms"),
+            "cached_tokens=", row.get("cached_token_count"),
+            "transfer_request_id_matched=", row.get("transfer_request_id_matched"),
+            "transfer_time_window_matched=", row.get("transfer_time_window_matched"),
+        )
+PY
+```
+
+For old runs, or when you want to rebuild a report manually:
+
+```bash
+LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
+
+python3 experiments/scripts/agentbench_report/build_run_report.py \
+  --agentbench-result-dir "$LATEST_RESULT" \
+  --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
 ```
 
 `run_metrics.json` keeps the old runtime cache fields as
 `runtime_*_reported`, but its main `cache_hit`, `cached_token_count`,
 `recomputed_prefix_tokens`, and `cache_reuse_ratio` fields are effective values
 derived from API usage, SGLang worker prefill logs, scheduler cached blocks, and
-runtime events. For non-streaming runs, `ttft_ms` is worker-derived from the
-frontend request timestamp to the first SGLang decode batch and marked with
-`ttft_source=worker_runtime.request_to_first_decode`.
+runtime events. For non-streaming runs, `ttft_ms` uses the best available
+evidence in this order: `runtime_events.latency.ttft_ms`, worker
+`[RUNTIME_JSON]` request-received to request-attached timing, then plain worker
+logs from frontend request timestamp to first SGLang decode batch.
 
 For source clarity, `run_metrics.json` includes `metric_sources`. Fields prefixed
 with `sglang_*` are parsed directly from SGLang worker logs; transfer totals are
-parsed from the SGLang transfer JSONL. AgentBench still supplies phase names,
-request IDs, hint metadata, task metadata, patch outcome, and client/API usage
-accounting because those labels are not emitted by the worker logs yet.
+parsed from the SGLang transfer JSONL. When worker `[RUNTIME_JSON]` or transfer
+events include request metadata, the report uses direct request-id matching.
+Otherwise, AgentBench still supplies phase names, request IDs, hint metadata,
+task metadata, patch outcome, and client/API usage accounting.
+`subrequest_metrics.csv` is the best file when one phase sends multiple model
+requests, because it splits rows by SGLang `runtime_context_id` /
+`sglang_request_id`.
 
 See the detailed workflow in
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -343,6 +468,8 @@ context:
 
 - `num_bytes_observed` and `elapsed_ms_wall` come from `memory_pool_host.py`.
   `elapsed_ms` is kept as a compatibility alias for wall time.
+- `timestamp` is the UTC wall-clock time emitted by the transfer logger.
+  `timestamp_ns` is kept for high-resolution ordering.
 - `direction` is `device_to_host` for GPU/HBM to host write-back, or
   `host_to_device` for host to GPU/HBM reload. The parsed
   `transfer_events.csv` also includes `direction_label` as `device->host` or
@@ -355,6 +482,10 @@ context:
 - `semantic_token_ids_preview`, `semantic_token_count`, and
   `semantic_token_source` come from HiRadix `write_backup()` / `load_back()`;
   the extractor follows nested fields such as `node.key.token_ids`.
+- If the patched worker can see request context, transfer rows also include
+  request attribution such as `request_id`, `external_request_id`,
+  `runtime_context_id`, `sglang_request_id`, `phase`, `hint_profile`, and
+  `agent_hints_source`.
 - `token_preview_source=semantic_context` means `token_ids_preview` is a real
   semantic token preview. `token_preview_source=local_heuristic` means the event
   did not have HiRadix token context and the preview should not be treated as
@@ -537,12 +668,47 @@ cat "$LATEST_RESULT/others/kv_hierarchy_summary_table.csv"
 For comparisons across hint configurations, prefer the curated run report:
 
 ```bash
-python3 experiments/scripts/agentbench_report/build_run_report.py \
-  --agentbench-result-dir "$LATEST_RESULT"
-
 LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
 cat "$LATEST_RUN_REPORT/run_metrics.csv"
 ```
+
+Build a multi-run comparison after a profile matrix:
+
+```bash
+COMPARISON_ID="hint_matrix_$(date +%Y%m%d_%H%M%S)"
+
+python3 experiments/scripts/agentbench_report/build_comparison_report.py \
+  --latest 7 \
+  --comparison-id "$COMPARISON_ID"
+
+LATEST_COMPARISON="$(ls -td experiments/reports/comparisons/* | head -1)"
+cat "$LATEST_COMPARISON/summary.md"
+cat "$LATEST_COMPARISON/runs.csv"
+cat "$LATEST_COMPARISON/phase_metrics.csv"
+cat "$LATEST_COMPARISON/transfer_metrics.csv"
+cat "$LATEST_COMPARISON/profile_phase_summary.csv"
+```
+
+The comparison report writes:
+
+```text
+experiments/reports/comparisons/<comparison_id>/
+  comparison_manifest.json
+  comparison_metrics.json
+  runs.csv
+  phase_metrics.csv
+  transfer_metrics.csv
+  profile_phase_summary.csv
+  summary.md
+```
+
+`phase_metrics.csv` includes direct-attribution columns when available:
+`worker_runtime_json_matched`, `worker_runtime_json_cached_tokens`,
+`worker_runtime_json_request_received_to_attached_ms`,
+`transfer_request_id_matched`,
+`transfer_device_to_host_kv_mb_for_request`,
+`transfer_host_to_device_kv_mb_for_request`, and
+`transfer_cuda_sync_ms_for_request`.
 
 For phase-level runs, inspect:
 

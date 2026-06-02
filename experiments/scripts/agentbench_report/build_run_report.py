@@ -17,6 +17,7 @@ from typing import Any
 
 
 TRANSFER_PREFIX = "[SGLANG_TRANSFER_JSON] "
+RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 TIMESTAMP_RE = re.compile(r"(?P<timestamp>\d{4}-\d{2}-\d{2}T[^\s]+Z)")
 PREFILL_RE = re.compile(
@@ -55,6 +56,10 @@ def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
 
 
+def dict_or_empty(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
 def parse_timestamp(value: Any) -> datetime | None:
     if not value:
         return None
@@ -78,6 +83,72 @@ def ms_between(start: datetime | None, end: datetime | None) -> float | None:
 
 def clean_log_line(line: str) -> str:
     return ANSI_RE.sub("", line)
+
+
+def parse_runtime_json_payload(line: str) -> dict[str, Any] | None:
+    if RUNTIME_JSON_PREFIX not in line:
+        return None
+    payload = line.split(RUNTIME_JSON_PREFIX, 1)[1].strip()
+    json_start = payload.find("{")
+    if json_start >= 0:
+        payload = payload[json_start:]
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    request_context = record.get("request_context")
+    if isinstance(request_context, dict):
+        return request_context
+
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        request_context = runtime_observability.get("request_context")
+        if isinstance(request_context, dict):
+            return request_context
+        nvext = runtime_observability.get("nvext")
+        if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+            return nvext["request_context"]
+
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+        return nvext["request_context"]
+    return {}
+
+
+def record_request_ids(record: dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    for key in (
+        "request_id",
+        "external_request_id",
+        "runtime_request_id",
+        "runtime_context_id",
+        "frontend_request_id",
+        "sglang_request_id",
+    ):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    request_context = request_context_from_record(record)
+    for key in ("request_id", "parent_run_id", "task_instance_id"):
+        value = request_context.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    hint_probe_id = record.get("hint_probe_id")
+    if isinstance(hint_probe_id, str) and hint_probe_id:
+        values.add(hint_probe_id)
+    return values
+
+
+def runtime_records_by_request(records: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    by_request: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for record in records:
+        for request_id in record_request_ids(record):
+            by_request[request_id].append(record)
+    return dict(by_request)
 
 
 def latest_agentbench_result(root: Path) -> Path:
@@ -151,17 +222,72 @@ def git_sha(root: Path) -> str | None:
         return None
 
 
+def infer_hint_profile(hints: dict[str, Any]) -> str:
+    profile_shapes = {
+        "baseline": {
+            "priority": 5,
+            "reuse_likelihood": 0.9,
+            "latency_sensitivity": 0.7,
+            "expected_output_tokens": 512,
+        },
+        "high-reuse": {
+            "priority": 5,
+            "reuse_likelihood": 1.0,
+            "latency_sensitivity": 0.5,
+            "expected_output_tokens": 512,
+        },
+        "low-reuse": {
+            "priority": 5,
+            "reuse_likelihood": 0.0,
+            "latency_sensitivity": 0.5,
+            "expected_output_tokens": 512,
+        },
+        "high-priority": {
+            "priority": 10,
+            "reuse_likelihood": 0.5,
+            "latency_sensitivity": 1.0,
+            "expected_output_tokens": 512,
+        },
+        "low-priority": {
+            "priority": 1,
+            "reuse_likelihood": 0.5,
+            "latency_sensitivity": 0.2,
+            "expected_output_tokens": 512,
+        },
+        "long-output": {
+            "priority": 5,
+            "reuse_likelihood": 0.8,
+            "latency_sensitivity": 0.5,
+            "expected_output_tokens": 2048,
+        },
+        "short-output": {
+            "priority": 5,
+            "reuse_likelihood": 0.8,
+            "latency_sensitivity": 0.5,
+            "expected_output_tokens": 128,
+        },
+    }
+    for profile, expected in profile_shapes.items():
+        if all(as_float(hints.get(key), default=-1.0) == float(value) for key, value in expected.items()):
+            return profile
+    return "unknown"
+
+
 def parse_worker_runtime_log(path: Path) -> dict[str, Any]:
     prefill_events: list[dict[str, Any]] = []
     decode_events: list[dict[str, Any]] = []
+    runtime_json_events: list[dict[str, Any]] = []
     if not path.exists():
         return {
             "source": str(path),
             "prefill_events": prefill_events,
             "decode_events": decode_events,
+            "runtime_json_events": runtime_json_events,
+            "runtime_json_by_request": {},
             "summary": {
                 "prefill_event_count": 0,
                 "decode_event_count": 0,
+                "runtime_json_event_count": 0,
                 "prefill_cached_token_total_line_sum": 0,
                 "prefill_cached_token_max": 0,
                 "prefill_events_with_cached_tokens": 0,
@@ -173,6 +299,13 @@ def parse_worker_runtime_log(path: Path) -> dict[str, Any]:
         timestamp_match = TIMESTAMP_RE.search(line)
         timestamp = timestamp_match.group("timestamp") if timestamp_match else None
         parsed_timestamp = parse_timestamp(timestamp)
+        runtime_json = parse_runtime_json_payload(line)
+        if runtime_json is not None:
+            runtime_json.setdefault("line_number", line_number)
+            runtime_json.setdefault("timestamp", timestamp)
+            runtime_json["_timestamp_sort"] = parsed_timestamp
+            runtime_json_events.append(runtime_json)
+            continue
         prefill_match = PREFILL_RE.search(line)
         if prefill_match:
             groups = prefill_match.groupdict()
@@ -211,9 +344,11 @@ def parse_worker_runtime_log(path: Path) -> dict[str, Any]:
 
     prefill_events.sort(key=lambda event: event["_timestamp_sort"] or datetime.min.replace(tzinfo=timezone.utc))
     decode_events.sort(key=lambda event: event["_timestamp_sort"] or datetime.min.replace(tzinfo=timezone.utc))
+    runtime_json_events.sort(key=lambda event: event["_timestamp_sort"] or datetime.min.replace(tzinfo=timezone.utc))
     summary = {
         "prefill_event_count": len(prefill_events),
         "decode_event_count": len(decode_events),
+        "runtime_json_event_count": len(runtime_json_events),
         "prefill_new_token_total_line_sum": sum(event["new_token"] for event in prefill_events),
         "prefill_cached_token_total_line_sum": sum(event["cached_token"] for event in prefill_events),
         "prefill_cached_token_max": max((event["cached_token"] for event in prefill_events), default=0),
@@ -221,12 +356,14 @@ def parse_worker_runtime_log(path: Path) -> dict[str, Any]:
         "decode_token_max": max((event["token"] for event in decode_events), default=0),
         "decode_gen_throughput_tps_max": max((event["gen_throughput_tps"] for event in decode_events), default=0.0),
     }
-    for event in prefill_events + decode_events:
+    for event in prefill_events + decode_events + runtime_json_events:
         event.pop("_timestamp_sort", None)
     return {
         "source": str(path),
         "prefill_events": prefill_events,
         "decode_events": decode_events,
+        "runtime_json_events": runtime_json_events,
+        "runtime_json_by_request": runtime_records_by_request(runtime_json_events),
         "summary": summary,
     }
 
@@ -378,6 +515,46 @@ def summarize_transfers(events: list[dict[str, Any]]) -> tuple[dict[str, Any], l
     return totals, rows
 
 
+def transfer_phase_evidence(events: list[dict[str, Any]], request_id: str | None) -> dict[str, Any]:
+    if not request_id:
+        return {
+            "transfer_request_id_matched": False,
+            "transfer_event_count_for_request": 0,
+        }
+    matched = [
+        event
+        for event in events
+        if request_id
+        in {
+            str(event.get("request_id") or ""),
+            str(event.get("external_request_id") or ""),
+            str(event.get("runtime_context_id") or ""),
+            str(event.get("sglang_request_id") or ""),
+            str(event.get("hint_probe_id") or ""),
+        }
+    ]
+    if not matched:
+        return {
+            "transfer_request_id_matched": False,
+            "transfer_event_count_for_request": 0,
+        }
+
+    totals, _rows = summarize_transfers(matched)
+    by_direction = totals.get("by_direction", {})
+    device_to_host = by_direction.get("device_to_host", {})
+    host_to_device = by_direction.get("host_to_device", {})
+    return {
+        "transfer_request_id_matched": True,
+        "transfer_event_count_for_request": len(matched),
+        "transfer_request_id_source": "sglang_transfer_event.request_id/external_request_id/hint_probe_id",
+        "transfer_device_to_host_kv_mb_for_request": device_to_host.get("kv_num_mb_estimated", 0.0),
+        "transfer_host_to_device_kv_mb_for_request": host_to_device.get("kv_num_mb_estimated", 0.0),
+        "transfer_cuda_sync_ms_for_request": totals.get("elapsed_ms_cuda_sync", 0.0),
+        "transfer_has_device_to_host_for_request": totals.get("has_device_to_host", False),
+        "transfer_has_host_to_device_for_request": totals.get("has_host_to_device", False),
+    }
+
+
 def write_transfer_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "function",
@@ -398,7 +575,7 @@ def write_transfer_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "error_count",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -407,13 +584,108 @@ def event_timestamp(event: dict[str, Any]) -> datetime | None:
     return parse_timestamp(event.get("timestamp"))
 
 
+def runtime_json_records_evidence(
+    records: list[dict[str, Any]],
+    *,
+    request_id_source: str,
+) -> dict[str, Any]:
+    if not records:
+        return {}
+
+    records = sorted(records, key=lambda item: event_timestamp(item) or datetime.min.replace(tzinfo=timezone.utc))
+    event_types = [str(record.get("event_type") or "") for record in records if record.get("event_type")]
+    received = next((record for record in records if str(record.get("event_type", "")).endswith("request_received")), None)
+    attached = next((record for record in records if str(record.get("event_type", "")).endswith("request_attached")), None)
+    completed = next((record for record in reversed(records) if str(record.get("event_type", "")).endswith("request_completed")), None)
+
+    usage = dict_or_empty(completed.get("completion_usage") if isinstance(completed, dict) else None)
+    prompt_details = dict_or_empty(usage.get("prompt_tokens_details"))
+    cached_tokens = as_int(prompt_details.get("cached_tokens"))
+    prompt_tokens = as_int(usage.get("prompt_tokens"))
+    completion_tokens = as_int(usage.get("completion_tokens"))
+    received_at = event_timestamp(received or {})
+    attached_at = event_timestamp(attached or {})
+    completed_at = event_timestamp(completed or {})
+    request_context = request_context_from_record(records[0])
+    agent_hints = next((record.get("agent_hints") for record in records if isinstance(record.get("agent_hints"), dict)), None)
+    hint_probe_id = next((record.get("hint_probe_id") for record in records if record.get("hint_probe_id")), None)
+    sglang_request_id = next((record.get("sglang_request_id") for record in records if record.get("sglang_request_id")), None)
+    runtime_context_id = next((record.get("runtime_context_id") for record in records if record.get("runtime_context_id")), None)
+    external_request_id = next((record.get("external_request_id") for record in records if record.get("external_request_id")), None)
+
+    ttft_ms = ms_between(received_at, attached_at)
+    return {
+        "worker_runtime_json_matched": True,
+        "worker_runtime_json_event_count": len(records),
+        "worker_runtime_json_event_types": event_types,
+        "worker_runtime_json_request_id_source": request_id_source,
+        "worker_runtime_json_external_request_id": external_request_id,
+        "worker_runtime_json_runtime_context_id": runtime_context_id,
+        "worker_runtime_json_sglang_request_id": sglang_request_id,
+        "worker_runtime_json_request_context": request_context,
+        "worker_runtime_json_agent_hints": agent_hints,
+        "worker_runtime_json_agent_hints_source": next(
+            (record.get("agent_hints_source") for record in records if record.get("agent_hints_source")),
+            None,
+        ),
+        "worker_runtime_json_hint_probe_id": hint_probe_id,
+        "worker_runtime_json_request_received_timestamp": received.get("timestamp") if received else None,
+        "worker_runtime_json_request_attached_timestamp": attached.get("timestamp") if attached else None,
+        "worker_runtime_json_request_completed_timestamp": completed.get("timestamp") if completed else None,
+        "worker_runtime_json_request_received_to_attached_ms": ttft_ms,
+        "worker_runtime_json_request_received_to_completed_ms": ms_between(received_at, completed_at),
+        "worker_runtime_json_prompt_tokens": prompt_tokens,
+        "worker_runtime_json_completion_tokens": completion_tokens,
+        "worker_runtime_json_cached_tokens": cached_tokens,
+        "worker_runtime_json_cache_hit": cached_tokens > 0,
+    }
+
+
+def runtime_json_worker_evidence(
+    *,
+    request_id: str | None,
+    worker_runtime: dict[str, Any],
+) -> dict[str, Any]:
+    if not request_id:
+        return {}
+
+    records = worker_runtime.get("runtime_json_by_request", {}).get(request_id, [])
+    return runtime_json_records_evidence(
+        records,
+        request_id_source="worker_runtime_json.external_request_id/request_context",
+    )
+
+
+def runtime_json_subrequest_groups(records: list[dict[str, Any]]) -> list[tuple[str, list[dict[str, Any]]]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    fallback_index = 0
+    for record in records:
+        group_key = (
+            record.get("runtime_context_id")
+            or record.get("sglang_request_id")
+            or f"subrequest-{fallback_index}"
+        )
+        if group_key == f"subrequest-{fallback_index}":
+            fallback_index += 1
+        grouped[str(group_key)].append(record)
+    return sorted(
+        grouped.items(),
+        key=lambda item: event_timestamp(item[1][0]) or datetime.min.replace(tzinfo=timezone.utc),
+    )
+
+
 def worker_phase_evidence(
     *,
+    request_id: str | None = None,
     phase_start: datetime | None,
     worker_runtime: dict[str, Any],
 ) -> dict[str, Any]:
+    direct_evidence = runtime_json_worker_evidence(
+        request_id=request_id,
+        worker_runtime=worker_runtime,
+    )
     if phase_start is None:
-        return {}
+        return direct_evidence
 
     prefill_events = worker_runtime.get("prefill_events", [])
     decode_events = worker_runtime.get("decode_events", [])
@@ -439,7 +711,7 @@ def worker_phase_evidence(
     cached_values = [as_int(event.get("cached_token")) for event in prefill_window]
     new_values = [as_int(event.get("new_token")) for event in prefill_window]
     sglang_ttft_ms = ms_between(first_prefill_at, first_decode_at)
-    return {
+    evidence = {
         "sglang_cache_hit": max(cached_values, default=0) > 0,
         "sglang_cached_token_count": max(cached_values, default=0),
         "sglang_cache_source": "worker_runtime.prefill.cached_token" if cached_values else "none",
@@ -457,10 +729,32 @@ def worker_phase_evidence(
         "worker_prefill_cached_token_sum_before_first_decode": sum(cached_values),
         "worker_prefill_new_token_sum_before_first_decode": sum(new_values),
     }
+    if direct_evidence:
+        direct_cached_tokens = as_int(direct_evidence.get("worker_runtime_json_cached_tokens"))
+        if direct_cached_tokens > 0:
+            evidence["sglang_cache_hit"] = True
+            evidence["sglang_cached_token_count"] = direct_cached_tokens
+            evidence["sglang_cache_source"] = "worker_runtime_json.completion_usage.cached_tokens"
+        if direct_evidence.get("worker_runtime_json_request_received_to_attached_ms") is not None:
+            evidence["sglang_ttft_ms_prefill_to_first_decode"] = direct_evidence[
+                "worker_runtime_json_request_received_to_attached_ms"
+            ]
+            evidence["sglang_ttft_source"] = "worker_runtime_json.request_received_to_attached"
+        evidence.update(direct_evidence)
+    else:
+        evidence["worker_runtime_json_matched"] = False
+        evidence["worker_runtime_json_event_count"] = 0
+        evidence["worker_runtime_json_request_id_source"] = "none"
+    return evidence
 
 
-def phase_metrics(result_dir: Path, worker_runtime: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+def phase_metrics(
+    result_dir: Path,
+    worker_runtime: dict[str, Any] | None = None,
+    transfer_events: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     worker_runtime = worker_runtime or {}
+    transfer_events = transfer_events or []
     runtime_events = load_json(result_dir / "others/runtime_events.json", [])
     measurements = load_json(result_dir / "others/measurements.json", [])
     measurements_by_request = {
@@ -477,14 +771,18 @@ def phase_metrics(result_dir: Path, worker_runtime: dict[str, Any] | None = None
         hints = scalar(event.get("request_hints", {}) or {})
         phase_start = parse_timestamp(event.get("timestamp"))
         worker_evidence = worker_phase_evidence(
+            request_id=request_id,
             phase_start=phase_start,
             worker_runtime=worker_runtime,
         )
+        per_request_transfer = transfer_phase_evidence(transfer_events, request_id)
         runtime_cache_hit = as_bool(cache.get("cache_hit"))
         runtime_cached_tokens = as_int(cache.get("cached_token_count"))
         runtime_recomputed_tokens = as_int(cache.get("recomputed_prefix_tokens"))
         api_cached_tokens = as_int(measurement.get("cached_prompt_tokens"))
-        worker_cached_tokens = as_int(worker_evidence.get("worker_prefill_cached_token_max_before_first_decode"))
+        worker_prefill_cached_tokens = as_int(worker_evidence.get("worker_prefill_cached_token_max_before_first_decode"))
+        direct_worker_cached_tokens = as_int(worker_evidence.get("worker_runtime_json_cached_tokens"))
+        worker_cached_tokens = max(worker_prefill_cached_tokens, direct_worker_cached_tokens)
         scheduler_cached_blocks = as_int(scheduler.get("cached_blocks"))
         effective_cached_tokens = max(api_cached_tokens, runtime_cached_tokens, worker_cached_tokens)
         prompt_tokens = as_int(measurement.get("prompt_tokens"))
@@ -497,14 +795,19 @@ def phase_metrics(result_dir: Path, worker_runtime: dict[str, Any] | None = None
             cache_sources.append("api_usage.cached_prompt_tokens")
         if runtime_cached_tokens > 0 or runtime_cache_hit:
             cache_sources.append("runtime_events.cache")
-        if worker_cached_tokens > 0:
+        if worker_prefill_cached_tokens > 0:
             cache_sources.append("worker_runtime.prefill.cached_token")
+        if direct_worker_cached_tokens > 0:
+            cache_sources.append("worker_runtime_json.completion_usage.cached_tokens")
         if scheduler_cached_blocks > 0:
             cache_sources.append("frontend_scheduler.cached_blocks")
         cache_hit = bool(effective_cached_tokens > 0 or runtime_cache_hit or scheduler_cached_blocks > 0)
         reuse_denominator = effective_cached_tokens + effective_recomputed_tokens
         ttft_ms = latency.get("ttft_ms")
         ttft_source = "runtime_events.latency.ttft_ms" if ttft_ms not in (None, "") else None
+        if ttft_ms in (None, "") and worker_evidence.get("worker_runtime_json_request_received_to_attached_ms") is not None:
+            ttft_ms = worker_evidence["worker_runtime_json_request_received_to_attached_ms"]
+            ttft_source = "worker_runtime_json.request_received_to_attached"
         if ttft_ms in (None, "") and worker_evidence.get("worker_request_to_first_decode_ms") is not None:
             ttft_ms = worker_evidence["worker_request_to_first_decode_ms"]
             ttft_source = "worker_runtime.request_to_first_decode"
@@ -563,9 +866,228 @@ def phase_metrics(result_dir: Path, worker_runtime: dict[str, Any] | None = None
                 "worker_max_gen_throughput_tps": worker.get("max_gen_throughput_tps"),
                 "worker_metrics_reported_source": "agentbench.runtime_events.worker_metrics",
                 **worker_evidence,
+                **per_request_transfer,
             }
         )
     return rows
+
+
+def transfer_evidence_for_ids(events: list[dict[str, Any]], match_ids: set[str]) -> dict[str, Any]:
+    clean_ids = {value for value in match_ids if value}
+    if not clean_ids:
+        return {
+            "transfer_request_id_matched": False,
+            "transfer_event_count_for_request": 0,
+        }
+    matched = [
+        event
+        for event in events
+        if clean_ids
+        & {
+            str(event.get("request_id") or ""),
+            str(event.get("external_request_id") or ""),
+            str(event.get("runtime_context_id") or ""),
+            str(event.get("sglang_request_id") or ""),
+            str(event.get("hint_probe_id") or ""),
+        }
+    ]
+    if not matched:
+        return {
+            "transfer_request_id_matched": False,
+            "transfer_event_count_for_request": 0,
+        }
+
+    totals, _rows = summarize_transfers(matched)
+    by_direction = totals.get("by_direction", {})
+    device_to_host = by_direction.get("device_to_host", {})
+    host_to_device = by_direction.get("host_to_device", {})
+    return {
+        "transfer_request_id_matched": True,
+        "transfer_event_count_for_request": len(matched),
+        "transfer_request_id_source": "sglang_transfer_event.request_id/external_request_id/runtime_context_id/sglang_request_id/hint_probe_id",
+        "transfer_device_to_host_kv_mb_for_request": device_to_host.get("kv_num_mb_estimated", 0.0),
+        "transfer_host_to_device_kv_mb_for_request": host_to_device.get("kv_num_mb_estimated", 0.0),
+        "transfer_cuda_sync_ms_for_request": totals.get("elapsed_ms_cuda_sync", 0.0),
+        "transfer_has_device_to_host_for_request": totals.get("has_device_to_host", False),
+        "transfer_has_host_to_device_for_request": totals.get("has_host_to_device", False),
+    }
+
+
+def transfer_evidence_for_time_window(
+    events: list[dict[str, Any]],
+    *,
+    start: datetime | None,
+    end: datetime | None,
+) -> dict[str, Any]:
+    if start is None or end is None:
+        return {
+            "transfer_time_window_matched": False,
+            "transfer_event_count_for_time_window": 0,
+        }
+    matched = [
+        event
+        for event in events
+        if start <= (event_timestamp(event) or datetime.min.replace(tzinfo=timezone.utc)) <= end
+    ]
+    if not matched:
+        return {
+            "transfer_time_window_matched": False,
+            "transfer_event_count_for_time_window": 0,
+        }
+
+    totals, _rows = summarize_transfers(matched)
+    by_direction = totals.get("by_direction", {})
+    device_to_host = by_direction.get("device_to_host", {})
+    host_to_device = by_direction.get("host_to_device", {})
+    return {
+        "transfer_time_window_matched": True,
+        "transfer_event_count_for_time_window": len(matched),
+        "transfer_time_window_source": "sglang_transfer_event.timestamp within worker_runtime_json subrequest window",
+        "transfer_device_to_host_kv_mb_for_time_window": device_to_host.get("kv_num_mb_estimated", 0.0),
+        "transfer_host_to_device_kv_mb_for_time_window": host_to_device.get("kv_num_mb_estimated", 0.0),
+        "transfer_cuda_sync_ms_for_time_window": totals.get("elapsed_ms_cuda_sync", 0.0),
+        "transfer_has_device_to_host_for_time_window": totals.get("has_device_to_host", False),
+        "transfer_has_host_to_device_for_time_window": totals.get("has_host_to_device", False),
+    }
+
+
+def subrequest_metrics(
+    result_dir: Path,
+    worker_runtime: dict[str, Any] | None = None,
+    transfer_events: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    worker_runtime = worker_runtime or {}
+    transfer_events = transfer_events or []
+    runtime_events = load_json(result_dir / "others/runtime_events.json", [])
+    rows: list[dict[str, Any]] = []
+
+    for event in runtime_events:
+        phase_request_id = event.get("request_id")
+        if not phase_request_id:
+            continue
+        records = worker_runtime.get("runtime_json_by_request", {}).get(phase_request_id, [])
+        for subrequest_index, (_group_key, group_records) in enumerate(runtime_json_subrequest_groups(records)):
+            evidence = runtime_json_records_evidence(
+                group_records,
+                request_id_source="worker_runtime_json.runtime_context_id/sglang_request_id",
+            )
+            if not evidence:
+                continue
+            hints = dict_or_empty(evidence.get("worker_runtime_json_agent_hints"))
+            request_context = dict_or_empty(evidence.get("worker_runtime_json_request_context"))
+            prompt_tokens = as_int(evidence.get("worker_runtime_json_prompt_tokens"))
+            cached_tokens = as_int(evidence.get("worker_runtime_json_cached_tokens"))
+            recomputed_tokens = max(prompt_tokens - cached_tokens, 0) if prompt_tokens else 0
+            reuse_denominator = cached_tokens + recomputed_tokens
+            match_ids = {
+                str(phase_request_id),
+                str(evidence.get("worker_runtime_json_external_request_id") or ""),
+                str(evidence.get("worker_runtime_json_runtime_context_id") or ""),
+                str(evidence.get("worker_runtime_json_sglang_request_id") or ""),
+                str(evidence.get("worker_runtime_json_hint_probe_id") or ""),
+                str(hints.get("hint_probe_id") or ""),
+                str(request_context.get("request_id") or ""),
+            }
+            transfer_evidence = transfer_evidence_for_ids(transfer_events, match_ids)
+            if not transfer_evidence.get("transfer_request_id_matched"):
+                transfer_evidence.update(
+                    transfer_evidence_for_time_window(
+                        transfer_events,
+                        start=parse_timestamp(evidence.get("worker_runtime_json_request_received_timestamp")),
+                        end=parse_timestamp(evidence.get("worker_runtime_json_request_completed_timestamp")),
+                    )
+                )
+            rows.append(
+                {
+                    "phase": event.get("phase"),
+                    "phase_request_id": phase_request_id,
+                    "subrequest_index": subrequest_index,
+                    "runtime_context_id": evidence.get("worker_runtime_json_runtime_context_id"),
+                    "sglang_request_id": evidence.get("worker_runtime_json_sglang_request_id"),
+                    "external_request_id": evidence.get("worker_runtime_json_external_request_id"),
+                    "request_received_timestamp": evidence.get("worker_runtime_json_request_received_timestamp"),
+                    "request_attached_timestamp": evidence.get("worker_runtime_json_request_attached_timestamp"),
+                    "request_completed_timestamp": evidence.get("worker_runtime_json_request_completed_timestamp"),
+                    "ttft_ms": evidence.get("worker_runtime_json_request_received_to_attached_ms"),
+                    "request_received_to_completed_ms": evidence.get("worker_runtime_json_request_received_to_completed_ms"),
+                    "prompt_tokens": evidence.get("worker_runtime_json_prompt_tokens"),
+                    "completion_tokens": evidence.get("worker_runtime_json_completion_tokens"),
+                    "cached_token_count": cached_tokens,
+                    "recomputed_prefix_tokens": recomputed_tokens,
+                    "cache_hit": cached_tokens > 0,
+                    "cache_reuse_ratio": cached_tokens / reuse_denominator if reuse_denominator else 0.0,
+                    "hint_priority": hints.get("priority"),
+                    "hint_reuse_likelihood": hints.get("reuse_likelihood"),
+                    "hint_latency_sensitivity": hints.get("latency_sensitivity"),
+                    "hint_expected_output_tokens": hints.get("expected_output_tokens"),
+                    "hint_agent_phase": hints.get("agent_phase"),
+                    "hint_profile": hints.get("hint_profile"),
+                    "hint_probe_id": hints.get("hint_probe_id"),
+                    **transfer_evidence,
+                }
+            )
+    return rows
+
+
+def write_subrequest_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str, Any]) -> None:
+    fields = [
+        "run_id",
+        "model",
+        "app_variant",
+        "run_hint_profile",
+        "phase",
+        "phase_request_id",
+        "subrequest_index",
+        "runtime_context_id",
+        "sglang_request_id",
+        "external_request_id",
+        "request_received_timestamp",
+        "request_attached_timestamp",
+        "request_completed_timestamp",
+        "ttft_ms",
+        "request_received_to_completed_ms",
+        "prompt_tokens",
+        "completion_tokens",
+        "cached_token_count",
+        "recomputed_prefix_tokens",
+        "cache_hit",
+        "cache_reuse_ratio",
+        "hint_priority",
+        "hint_reuse_likelihood",
+        "hint_latency_sensitivity",
+        "hint_expected_output_tokens",
+        "hint_agent_phase",
+        "hint_profile",
+        "hint_probe_id",
+        "transfer_request_id_matched",
+        "transfer_event_count_for_request",
+        "transfer_request_id_source",
+        "transfer_device_to_host_kv_mb_for_request",
+        "transfer_host_to_device_kv_mb_for_request",
+        "transfer_cuda_sync_ms_for_request",
+        "transfer_has_device_to_host_for_request",
+        "transfer_has_host_to_device_for_request",
+        "transfer_time_window_matched",
+        "transfer_event_count_for_time_window",
+        "transfer_time_window_source",
+        "transfer_device_to_host_kv_mb_for_time_window",
+        "transfer_host_to_device_kv_mb_for_time_window",
+        "transfer_cuda_sync_ms_for_time_window",
+        "transfer_has_device_to_host_for_time_window",
+        "transfer_has_host_to_device_for_time_window",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            out = {
+                "run_id": run_level.get("run_id"),
+                "model": run_level.get("model"),
+                "app_variant": run_level.get("app_variant"),
+                "run_hint_profile": run_level.get("hint_profile"),
+            }
+            out.update({field: row.get(field) for field in fields if field not in out})
+            writer.writerow(out)
 
 
 def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str, Any]) -> None:
@@ -573,6 +1095,7 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
         "run_id",
         "model",
         "app_variant",
+        "hint_profile",
         "phase",
         "request_id",
         "phase_source",
@@ -621,7 +1144,33 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
         "worker_prefill_cached_token_max_before_first_decode",
         "worker_prefill_cached_token_sum_before_first_decode",
         "worker_prefill_new_token_sum_before_first_decode",
+        "worker_runtime_json_matched",
+        "worker_runtime_json_event_count",
+        "worker_runtime_json_event_types",
+        "worker_runtime_json_request_id_source",
+        "worker_runtime_json_external_request_id",
+        "worker_runtime_json_runtime_context_id",
+        "worker_runtime_json_sglang_request_id",
+        "worker_runtime_json_agent_hints_source",
+        "worker_runtime_json_hint_probe_id",
+        "worker_runtime_json_request_received_timestamp",
+        "worker_runtime_json_request_attached_timestamp",
+        "worker_runtime_json_request_completed_timestamp",
+        "worker_runtime_json_request_received_to_attached_ms",
+        "worker_runtime_json_request_received_to_completed_ms",
+        "worker_runtime_json_prompt_tokens",
+        "worker_runtime_json_completion_tokens",
+        "worker_runtime_json_cached_tokens",
+        "worker_runtime_json_cache_hit",
         "worker_metrics_reported_source",
+        "transfer_request_id_matched",
+        "transfer_event_count_for_request",
+        "transfer_request_id_source",
+        "transfer_device_to_host_kv_mb_for_request",
+        "transfer_host_to_device_kv_mb_for_request",
+        "transfer_cuda_sync_ms_for_request",
+        "transfer_has_device_to_host_for_request",
+        "transfer_has_host_to_device_for_request",
         "transfer_device_to_host_kv_mb",
         "transfer_host_to_device_kv_mb",
         "transfer_cuda_sync_ms",
@@ -629,13 +1178,14 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
         "git_diff_nonempty",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             out = {
                 "run_id": run_level.get("run_id"),
                 "model": run_level.get("model"),
                 "app_variant": run_level.get("app_variant"),
+                "hint_profile": run_level.get("hint_profile"),
                 "transfer_device_to_host_kv_mb": run_level.get("transfer_device_to_host_kv_mb"),
                 "transfer_host_to_device_kv_mb": run_level.get("transfer_host_to_device_kv_mb"),
                 "transfer_cuda_sync_ms": run_level.get("transfer_cuda_sync_ms"),
@@ -653,11 +1203,13 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
     transfer = metrics["transfer_totals"]
     outcome = metrics["agent_outcome"]
     phase_rows = metrics["phase_metrics"]
+    subrequest_rows = metrics.get("subrequest_metrics", [])
     lines = [
         f"# Run Report: {manifest['run_id']}",
         "",
         f"- Model: `{manifest.get('model')}`",
         f"- App variant: `{manifest.get('app_variant')}`",
+        f"- Hint profile: `{manifest.get('hint_profile')}`",
         f"- AgentBench result: `{manifest['paths']['agentbench_result_dir']}`",
         f"- SGLang transfer log: `{manifest['paths'].get('sglang_transfer_log')}`",
         "",
@@ -706,6 +1258,36 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
             "",
         ]
     )
+    if subrequest_rows:
+        transfer_matched = sum(1 for row in subrequest_rows if row.get("transfer_request_id_matched"))
+        time_matched = sum(1 for row in subrequest_rows if row.get("transfer_time_window_matched"))
+        lines.extend(
+            [
+                "## Worker Subrequests",
+                "",
+                f"- Subrequests: `{len(subrequest_rows)}`",
+                f"- Transfer request-id matches: `{transfer_matched}`",
+                f"- Transfer time-window matches: `{time_matched}`",
+                "",
+                "| Phase | Subrequest | TTFT ms | Prompt tokens | Cached tokens | Reuse ratio | SGLang request id | Transfer ID match | Transfer time match |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+            ]
+        )
+        for row in subrequest_rows:
+            lines.append(
+                "| {phase} | {index} | {ttft} | {prompt} | {cached} | {ratio:.4f} | {sglang_request_id} | {transfer_matched} | {time_matched} |".format(
+                    phase=row.get("phase", ""),
+                    index=row.get("subrequest_index", ""),
+                    ttft=display(row.get("ttft_ms")),
+                    prompt=display(row.get("prompt_tokens")),
+                    cached=display(row.get("cached_token_count")),
+                    ratio=as_float(row.get("cache_reuse_ratio")),
+                    sglang_request_id=display(row.get("sglang_request_id")),
+                    transfer_matched=display(row.get("transfer_request_id_matched")),
+                    time_matched=display(row.get("transfer_time_window_matched")),
+                )
+            )
+        lines.append("")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
@@ -720,7 +1302,8 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     events = parse_transfer_events(transfer_log)
     transfer_totals, transfer_rows = summarize_transfers(events)
     worker_runtime = parse_worker_runtime_log(result_dir / "others/worker_runtime.log")
-    phase_rows = phase_metrics(result_dir, worker_runtime)
+    phase_rows = phase_metrics(result_dir, worker_runtime, events)
+    subrequest_rows = subrequest_metrics(result_dir, worker_runtime, events)
 
     transfer_by_direction = transfer_totals.get("by_direction", {})
     device_to_host = transfer_by_direction.get("device_to_host", {})
@@ -729,6 +1312,13 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     git_diff_stat = result_dir / "others/git_diff_stat.txt"
     git_status = result_dir / "others/git_status.txt"
     patch_bytes = workspace_patch.stat().st_size if workspace_patch.exists() else 0
+    resolved_hints = scalar(result.get("hint_json") or {})
+    hint_profile = (
+        result.get("hint_profile")
+        or resolved_hints.get("hint_profile")
+        or run_summary.get("hint_profile")
+        or infer_hint_profile(resolved_hints)
+    )
 
     manifest = {
         "run_id": run_id,
@@ -736,6 +1326,8 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "repo_commit": git_sha(root),
         "model": result.get("model") or run_summary.get("model"),
         "app_variant": result.get("app_variant"),
+        "hint_profile": hint_profile,
+        "resolved_hints": resolved_hints,
         "frontend_url": result.get("frontend_url"),
         "run_started_at": result.get("run_started_at"),
         "task": {
@@ -769,6 +1361,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "run_id": run_id,
         "model": manifest.get("model"),
         "app_variant": manifest.get("app_variant"),
+        "hint_profile": manifest.get("hint_profile"),
         "transfer_device_to_host_kv_mb": device_to_host.get("kv_num_mb_estimated", 0.0),
         "transfer_host_to_device_kv_mb": host_to_device.get("kv_num_mb_estimated", 0.0),
         "transfer_cuda_sync_ms": transfer_totals.get("elapsed_ms_cuda_sync", 0.0),
@@ -776,28 +1369,40 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "git_diff_nonempty": git_diff_stat.exists() and bool(git_diff_stat.read_text(encoding="utf-8", errors="replace").strip()),
     }
     metric_sources = {
-        "sglang_worker_log": {
-            "path": str((result_dir / "others/worker_runtime.log").resolve()),
-            "fields": [
+            "sglang_worker_log": {
+                "path": str((result_dir / "others/worker_runtime.log").resolve()),
+                "fields": [
                 "sglang_cache_hit",
                 "sglang_cached_token_count",
                 "sglang_new_token_count",
                 "sglang_ttft_ms_prefill_to_first_decode",
-                "worker_runtime_log",
-                "worker_request_to_first_decode_ms",
-                "worker_first_prefill_to_first_decode_ms",
+                "worker_runtime_json_matched",
+                "worker_runtime_json_request_received_to_attached_ms",
+                "worker_runtime_json_cached_tokens",
+                    "worker_runtime_json_sglang_request_id",
+                    "subrequest_metrics",
+                    "worker_runtime_log",
+                    "worker_request_to_first_decode_ms",
+                    "worker_first_prefill_to_first_decode_ms",
             ],
         },
-        "sglang_transfer_log": {
-            "path": str(transfer_log.resolve()) if transfer_log else None,
-            "fields": [
+            "sglang_transfer_log": {
+                "path": str(transfer_log.resolve()) if transfer_log else None,
+                "fields": [
                 "transfer_totals",
                 "transfer_by_function_direction",
                 "transfer_device_to_host_kv_mb",
                 "transfer_host_to_device_kv_mb",
                 "transfer_cuda_sync_ms",
-            ],
-        },
+                    "transfer_request_id_matched",
+                    "transfer_device_to_host_kv_mb_for_request",
+                    "transfer_host_to_device_kv_mb_for_request",
+                    "transfer_time_window_matched",
+                    "transfer_device_to_host_kv_mb_for_time_window",
+                    "transfer_host_to_device_kv_mb_for_time_window",
+                    "subrequest_metrics.transfer_*",
+                ],
+            },
         "agentbench_result_metadata": {
             "path": str(result_dir.resolve()),
             "fields": [
@@ -813,8 +1418,9 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
                 "app_variant",
             ],
             "note": (
-                "SGLang logs do not currently include AgentBench phase names, hint metadata, task metadata, "
-                "or patch outcome. Those fields still come from the AgentBench result directory."
+                "When worker [RUNTIME_JSON] or transfer events include request metadata, the report uses those "
+                "direct request ids. Otherwise phase names, hint metadata, task metadata, and patch outcome still "
+                "come from the AgentBench result directory."
             ),
         },
         "agentbench_api_measurements": {
@@ -867,12 +1473,18 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
             ),
             "ttft_ms": (
                 "ttft_ms uses runtime_events.latency.ttft_ms when present. For non-streaming runs where that field "
-                "is missing, it is derived from worker logs as frontend request timestamp to first SGLang decode batch "
-                "and marked with ttft_source=worker_runtime.request_to_first_decode."
+                "is missing, it falls back first to worker [RUNTIME_JSON] request_received-to-attached timing, then "
+                "to plain worker logs as frontend request timestamp to first SGLang decode batch."
             ),
             "sglang_ttft_ms_prefill_to_first_decode": (
                 "sglang_ttft_ms_prefill_to_first_decode is the SGLang-log-only timing from first prefill batch "
                 "to first decode batch for the phase window."
+            ),
+            "subrequest_metrics": (
+                "subrequest_metrics splits worker [RUNTIME_JSON] records by runtime_context_id/sglang_request_id. "
+                "Use subrequest_metrics.csv when a single AgentBench phase sends multiple model requests. "
+                "transfer_request_id_matched means direct id attribution; transfer_time_window_matched is a weaker "
+                "timestamp-window fallback."
             ),
         },
         "agent_outcome": {
@@ -883,6 +1495,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
             "git_diff_stat": git_diff_stat.read_text(encoding="utf-8", errors="replace") if git_diff_stat.exists() else "",
         },
         "phase_metrics": phase_rows,
+        "subrequest_metrics": subrequest_rows,
         "worker_runtime_log": worker_runtime,
         "transfer_totals": transfer_totals,
         "transfer_by_function_direction": transfer_rows,
@@ -891,6 +1504,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     write_json(out_dir / "run_manifest.json", manifest)
     write_json(out_dir / "run_metrics.json", metrics)
     write_phase_csv(out_dir / "run_metrics.csv", phase_rows, run_level)
+    write_subrequest_csv(out_dir / "subrequest_metrics.csv", subrequest_rows, run_level)
     write_transfer_csv(out_dir / "transfer_summary.csv", transfer_rows)
     write_summary_md(out_dir / "summary.md", manifest, metrics)
 

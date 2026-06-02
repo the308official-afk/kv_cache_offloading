@@ -1,0 +1,10 @@
+{
+  "comparison_id": "smoke_latest3",
+  "generated_at": "2026-06-02T16:21:40.749120+00:00",
+  "run_count": 3,
+  "source_runs": [
+    "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-nodebb_20260601_200503",
+    "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-nodebb_20260601_192108",
+    "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-nodebb_20260601_184042"
+  ]
+}

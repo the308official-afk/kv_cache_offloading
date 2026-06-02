@@ -2,6 +2,7 @@
 
 - Model: `Qwen/Qwen2.5-Coder-7B-Instruct`
 - App variant: `upstream_deploy_coding_agent`
+- Hint profile: `baseline`
 - AgentBench result: `/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-nodebb_20260601_192108`
 - SGLang transfer log: `/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_001506_43231.jsonl`
 

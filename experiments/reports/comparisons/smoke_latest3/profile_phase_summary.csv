@@ -1,0 +1,5 @@
+hint_profile,phase,model,app_variant,run_count,row_count,avg_latency_ms,avg_ttft_ms,avg_sglang_ttft_ms_prefill_to_first_decode,avg_cache_reuse_ratio,avg_cached_token_count,avg_sglang_cached_token_count,avg_prompt_tokens,avg_completion_tokens,avg_device_to_host_kv_mb,avg_host_to_device_kv_mb,host_to_device_seen,patch_seen
+baseline,execution,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,3,3,3674.720333333333,1601.3769999999997,1001.1930000000001,0.7767840846869868,8512.0,8512.0,10958.0,82.0,1151.5,0.0,False,False
+baseline,patch_generation,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,3,3,17934.984999999997,993.4546666666666,670.1506666666667,0.933243425488874,11072.0,8512.0,11864.0,6.0,1151.5,0.0,False,False
+baseline,planning,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,3,3,28849.650333333335,9295.375666666667,4647.189666666666,0.0,0.0,0.0,10324.0,617.0,1151.5,0.0,False,False
+baseline,review,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,3,3,17922.836,1595.9946666666665,943.4383333333334,0.9330074997893317,11072.0,9280.0,11867.0,6.0,1151.5,0.0,False,False

@@ -16,6 +16,7 @@ Current experiment families:
 - `raw/agentbench/results/`
 - `raw/sglang_transfer_logs/`
 - `reports/runs/`
+- `reports/comparisons/`
 
 Prefer adding new experiment code under `scripts/<experiment_name>/` and writing
 new generated outputs under `raw/`, `parsed/`, or `reports/`.

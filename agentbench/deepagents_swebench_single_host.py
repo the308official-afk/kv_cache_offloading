@@ -79,6 +79,45 @@ DEFAULT_HINTS = {
     "context_type": "software_engineering_long_horizon",
     "expected_output_tokens": 512,
 }
+HINT_PROFILES = {
+    "baseline": {},
+    "high-reuse": {
+        "priority": 5,
+        "reuse_likelihood": 1.0,
+        "latency_sensitivity": 0.5,
+        "expected_output_tokens": 512,
+    },
+    "low-reuse": {
+        "priority": 5,
+        "reuse_likelihood": 0.0,
+        "latency_sensitivity": 0.5,
+        "expected_output_tokens": 512,
+    },
+    "high-priority": {
+        "priority": 10,
+        "reuse_likelihood": 0.5,
+        "latency_sensitivity": 1.0,
+        "expected_output_tokens": 512,
+    },
+    "low-priority": {
+        "priority": 1,
+        "reuse_likelihood": 0.5,
+        "latency_sensitivity": 0.2,
+        "expected_output_tokens": 512,
+    },
+    "long-output": {
+        "priority": 5,
+        "reuse_likelihood": 0.8,
+        "latency_sensitivity": 0.5,
+        "expected_output_tokens": 2048,
+    },
+    "short-output": {
+        "priority": 5,
+        "reuse_likelihood": 0.8,
+        "latency_sensitivity": 0.5,
+        "expected_output_tokens": 128,
+    },
+}
 FRONTEND_CONTAINER_NAME = "dynamo-frontend"
 WORKER_CONTAINER_NAME = "dynamo-sglang-worker"
 ANSI_ESCAPE_RE = re.compile(r"\x1B\[[0-?]*[ -/]*[@-~]")
@@ -184,6 +223,7 @@ MEASURED_FIELDS = {
     "workspace",
     "workspace_artifacts",
     "hint_json",
+    "hint_profile",
     "run_started_at",
     "active_harness",
     "deepagents_runtime_source",
@@ -3963,6 +4003,140 @@ def collect_workspace_artifacts(
     return artifacts
 
 
+def resolve_agent_hints(*, hint_profile: str, hint_json: str) -> dict[str, object]:
+    try:
+        hint_overrides = json.loads(hint_json or "{}")
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"--hint-json must be a JSON object: {exc}") from exc
+    if not isinstance(hint_overrides, dict):
+        raise SystemExit("--hint-json must be a JSON object.")
+
+    profile_values = HINT_PROFILES.get(hint_profile)
+    if profile_values is None:
+        raise SystemExit(f"Unknown --hint-profile {hint_profile!r}. Choose one of: {', '.join(sorted(HINT_PROFILES))}")
+
+    hints: dict[str, object] = dict(DEFAULT_HINTS)
+    hints.update(profile_values)
+    hints.update(hint_overrides)
+    hints["hint_profile"] = hint_profile
+    return hints
+
+
+def env_flag(name: str, *, default: bool = True) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in {"0", "false", "no", "off"}
+
+
+def resolve_host_path(path: Path | str) -> Path:
+    resolved = Path(path).expanduser()
+    if resolved.is_absolute():
+        return resolved
+    return REPO_ROOT / resolved
+
+
+def default_sglang_transfer_log_dir() -> Path:
+    return resolve_host_path(
+        os.environ.get(
+            "SGLANG_TRANSFER_LOG_DIR",
+            str(REPO_ROOT / "experiments/raw/sglang_transfer_logs"),
+        )
+    )
+
+
+def resolve_sglang_transfer_log(
+    *,
+    explicit_log: Path | None,
+    run_started_at: datetime,
+) -> Path | None:
+    if explicit_log is not None:
+        return resolve_host_path(explicit_log)
+
+    log_dir = default_sglang_transfer_log_dir()
+    env_log_path = os.environ.get("SGLANG_TRANSFER_LOG_PATH")
+    candidates: list[Path] = []
+    if env_log_path:
+        if env_log_path.startswith("/transfer-logs/"):
+            candidates.append(log_dir / Path(env_log_path).name)
+        else:
+            candidates.append(resolve_host_path(env_log_path))
+
+    latest_link = log_dir / "latest_sglang_transfer_events.jsonl"
+    if latest_link.exists() or latest_link.is_symlink():
+        candidates.append(latest_link)
+
+    if log_dir.exists():
+        candidates.extend(
+            sorted(
+                log_dir.glob("sglang_transfer_events*.jsonl"),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+        )
+
+    run_started_epoch = run_started_at.timestamp()
+    for candidate in candidates:
+        if candidate.is_symlink() and not candidate.exists():
+            return candidate
+        if not candidate.exists():
+            continue
+        try:
+            if candidate.stat().st_mtime + 5 >= run_started_epoch:
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
+def build_curated_run_report(
+    *,
+    run_dir: Path,
+    parent_run_id: str,
+    transfer_log: Path | None,
+) -> dict[str, object]:
+    report_script = REPO_ROOT / "experiments/scripts/agentbench_report/build_run_report.py"
+    if not report_script.exists():
+        return {
+            "enabled": True,
+            "success": False,
+            "reason": "report_script_missing",
+            "report_script": str(report_script),
+        }
+
+    selected_transfer_log = transfer_log or (run_dir / "others/sglang_transfer_log_not_found.jsonl")
+    command = [
+        sys.executable,
+        str(report_script),
+        "--agentbench-result-dir",
+        str(run_dir),
+        "--transfer-log",
+        str(selected_transfer_log),
+        "--run-id",
+        parent_run_id,
+    ]
+    completed = subprocess.run(  # noqa: S603
+        command,
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    report_dir = REPO_ROOT / "experiments/reports/runs" / parent_run_id
+    return {
+        "enabled": True,
+        "success": completed.returncode == 0,
+        "exit_code": completed.returncode,
+        "command": command,
+        "transfer_log": str(selected_transfer_log),
+        "report_dir": str(report_dir),
+        "summary_file": str(report_dir / "summary.md"),
+        "run_metrics_file": str(report_dir / "run_metrics.json"),
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
 def main() -> None:
     # Debugging note: main() is the wrapper entry point.
     # It is responsible for the outer pipeline:
@@ -3999,9 +4173,15 @@ def main() -> None:
         help="Choose whether to run the local Deep Agents app or the cloned upstream deploy-coding-agent instructions/skills.",
     )
     parser.add_argument(
+        "--hint-profile",
+        default="baseline",
+        choices=sorted(HINT_PROFILES),
+        help="Named AgentBench hint profile for repeatable cache/scheduling experiments.",
+    )
+    parser.add_argument(
         "--hint-json",
-        default=json.dumps(DEFAULT_HINTS),
-        help="JSON object passed as nvext.agent_hints on every model call.",
+        default="{}",
+        help="JSON object merged on top of the selected --hint-profile before sending nvext.agent_hints.",
     )
     parser.add_argument(
         "--results-timezone",
@@ -4021,6 +4201,17 @@ def main() -> None:
             "Character cap for string values inside per-stage prompt evolution before/after payloads. "
             "Long string fields are truncated with '...'."
         ),
+    )
+    parser.add_argument(
+        "--no-run-report",
+        action="store_true",
+        help="Disable automatic curated report generation at the end of the run.",
+    )
+    parser.add_argument(
+        "--sglang-transfer-log",
+        type=Path,
+        default=None,
+        help="Specific SGLang transfer JSONL to use in the automatic curated report.",
     )
     args = parser.parse_args()
 
@@ -4066,6 +4257,7 @@ def main() -> None:
             "dataset": args.dataset,
             "split": args.split,
             "instance_id": task.get("instance_id"),
+            "hint_profile": args.hint_profile,
             "results_timezone": args.results_timezone,
             "step_limit": args.step_limit,
             "run_started_at": run_started_at.isoformat(),
@@ -4174,7 +4366,7 @@ def main() -> None:
             },
         )
 
-    base_hints = json.loads(args.hint_json)
+    base_hints = resolve_agent_hints(hint_profile=args.hint_profile, hint_json=args.hint_json)
     if "hint_probe_id" not in base_hints:
         base_hints["hint_probe_id"] = f"{parent_run_id}::hint_probe"
     log_lifecycle_event(
@@ -4183,6 +4375,7 @@ def main() -> None:
             "event_kind": "workflow",
             "parent_run_id": parent_run_id,
             "task_source": task_source,
+            "hint_profile": args.hint_profile,
             "base_hints": base_hints,
             "app_variant": args.app_variant,
         },
@@ -4561,12 +4754,19 @@ def main() -> None:
         },
     )
 
+    auto_run_report = {
+        "enabled": env_flag("AGENTBENCH_AUTO_RUN_REPORT", default=True) and not args.no_run_report,
+        "success": None,
+        "reason": "pending",
+    }
+
     payload = {
         "run_started_at": run_started_at.isoformat(),
         "parent_run_id": parent_run_id,
         "legacy_instance_slug": legacy_instance_slug,
         "frontend_url": args.frontend_url,
         "model": args.model,
+        "hint_profile": args.hint_profile,
         "hint_json": workflow["resolved_hints"],
         "task": task,
         "active_harness": "agentbench.deepagents_app",
@@ -4630,13 +4830,43 @@ def main() -> None:
         "analysis_workbook_file": str(workbook_file),
         "measurements": measurements,
         "result": result,
+        "auto_run_report": auto_run_report,
     }
     save_result(others_dir, annotate_with_provenance(payload, "result"))
     set_checkpoint_log_file(None)
 
+    if auto_run_report["enabled"]:
+        transfer_log = resolve_sglang_transfer_log(
+            explicit_log=args.sglang_transfer_log,
+            run_started_at=run_started_at,
+        )
+        auto_run_report = build_curated_run_report(
+            run_dir=run_dir,
+            parent_run_id=parent_run_id,
+            transfer_log=transfer_log,
+        )
+        (others_dir / "auto_run_report.json").write_text(
+            json.dumps(auto_run_report, indent=2, default=stringify_unknown),
+            encoding="utf-8",
+        )
+        payload["auto_run_report"] = auto_run_report
+        save_result(others_dir, annotate_with_provenance(payload, "result"))
+    else:
+        auto_run_report["reason"] = "disabled"
+        (others_dir / "auto_run_report.json").write_text(
+            json.dumps(auto_run_report, indent=2, default=stringify_unknown),
+            encoding="utf-8",
+        )
+        payload["auto_run_report"] = auto_run_report
+        save_result(others_dir, annotate_with_provenance(payload, "result"))
+
     print(f"AgentBench run complete: {parent_run_id}")
     print(f"Run directory: {run_dir}")
     print(f"Result file: {others_dir / 'result.json'}")
+    if auto_run_report.get("enabled"):
+        print(f"Run report: {auto_run_report.get('report_dir')}")
+        if not auto_run_report.get("success"):
+            print(f"Run report generation failed: {auto_run_report.get('stderr')}", file=sys.stderr)
 
 
 if __name__ == "__main__":

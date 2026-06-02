@@ -19,12 +19,14 @@ from __future__ import annotations
 
 import contextlib
 import contextvars
+import copy
 import hashlib
 import json
 import os
 import sys
 import threading
 import time
+from datetime import datetime, timezone
 from typing import Any
 
 try:
@@ -41,6 +43,54 @@ _INDEX_PREVIEW = int(os.environ.get("SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT", "
 _MAX_TOKEN_ID = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_REASONABLE_TOKEN_ID", "10000000") or 10000000)
 _MAX_SEMANTIC_TOKENS = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_SEMANTIC_TOKENS", "1000000") or 1000000)
 _SEMANTIC_CONTEXT = contextvars.ContextVar("sglang_transfer_semantic_context", default=None)
+_REQUEST_METADATA_KEYS = (
+    "request_id",
+    "external_request_id",
+    "runtime_request_id",
+    "runtime_context_id",
+    "frontend_request_id",
+    "sglang_request_id",
+    "parent_run_id",
+    "task_instance_id",
+    "phase",
+    "agent_phase",
+    "step_index",
+    "step_title",
+    "app_variant",
+    "hint_profile",
+    "hint_probe_id",
+)
+_REQUEST_METADATA_ALIASES = {
+    "rid": "sglang_request_id",
+    "req_id": "sglang_request_id",
+    "request_uuid": "sglang_request_id",
+    "request_id": "request_id",
+    "external_request_id": "external_request_id",
+    "runtime_request_id": "runtime_request_id",
+    "runtime_context_id": "runtime_context_id",
+    "frontend_request_id": "frontend_request_id",
+    "sglang_request_id": "sglang_request_id",
+    "agent_phase": "agent_phase",
+    "phase": "phase",
+}
+_REQUEST_CONTEXT_KEYS = ("request_context", "runtime_observability", "nvext")
+_AGENT_HINT_KEYS = ("agent_hints", "hints", "request_hints")
+_REQUEST_LOOKUP_HINTS = (
+    "request",
+    "context",
+    "hint",
+    "req",
+    "rid",
+    "runtime",
+    "observability",
+    "metadata",
+    "meta",
+    "nvext",
+    "agent",
+    "operation",
+    "op",
+    "node",
+)
 _TOKEN_ATTR_NAMES = (
     "token_ids",
     "input_ids",
@@ -152,6 +202,140 @@ def _hash_ints(values: list[int]) -> str:
     return hashlib.sha256(
         json.dumps(values, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
+
+
+def _sanitize_metadata(value: Any, depth: int = 0) -> Any:
+    if depth > 4:
+        return str(type(value).__name__)
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    if isinstance(value, dict):
+        return {
+            str(key): _sanitize_metadata(item, depth + 1)
+            for key, item in value.items()
+            if key is not None
+        }
+    if isinstance(value, (list, tuple, set)):
+        return [_sanitize_metadata(item, depth + 1) for item in list(value)[:64]]
+    return str(value)
+
+
+def _is_metadata_scalar(value: Any) -> bool:
+    return value is None or isinstance(value, (bool, int, float, str))
+
+
+def _merge_request_metadata(target: dict[str, Any], source: dict[str, Any], source_name: str) -> None:
+    for alias, canonical in _REQUEST_METADATA_ALIASES.items():
+        value = source.get(alias)
+        if _is_metadata_scalar(value) and value not in (None, "") and canonical not in target:
+            target[canonical] = _sanitize_metadata(value)
+            target.setdefault("request_metadata_source", f"{source_name}.{alias}")
+
+    for key in _REQUEST_METADATA_KEYS:
+        value = source.get(key)
+        if value not in (None, "") and key not in target:
+            target[key] = _sanitize_metadata(value)
+            target.setdefault("request_metadata_source", source_name)
+
+    for key in _AGENT_HINT_KEYS:
+        value = source.get(key)
+        if isinstance(value, dict):
+            target.setdefault("agent_hints", _sanitize_metadata(value))
+            target.setdefault("agent_hints_source", f"{source_name}.{key}")
+            if "hint_probe_id" not in target and value.get("hint_probe_id") not in (None, ""):
+                target["hint_probe_id"] = _sanitize_metadata(value["hint_probe_id"])
+            if "phase" not in target and value.get("agent_phase") not in (None, ""):
+                target["phase"] = _sanitize_metadata(value["agent_phase"])
+
+    request_context = source.get("request_context")
+    if isinstance(request_context, dict):
+        target.setdefault("request_context", _sanitize_metadata(request_context))
+        _merge_request_metadata(target, request_context, f"{source_name}.request_context")
+
+    runtime_observability = source.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        target.setdefault("runtime_observability", _sanitize_metadata(runtime_observability))
+        _merge_request_metadata(target, runtime_observability, f"{source_name}.runtime_observability")
+
+    nvext = source.get("nvext")
+    if isinstance(nvext, dict):
+        if isinstance(nvext.get("request_context"), dict):
+            target.setdefault("request_context", _sanitize_metadata(nvext["request_context"]))
+        _merge_request_metadata(target, nvext, f"{source_name}.nvext")
+
+
+def _request_metadata_candidates_from_value(
+    source: str,
+    value: Any,
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> dict[str, Any]:
+    if depth > 4:
+        return {}
+    if seen is None:
+        seen = set()
+    if not isinstance(value, (str, bytes, int, float, bool, list, tuple, dict)) and not _is_tensor(value):
+        ident = id(value)
+        if ident in seen:
+            return {}
+        seen.add(ident)
+
+    metadata: dict[str, Any] = {}
+    if isinstance(value, dict):
+        _merge_request_metadata(metadata, value, source)
+        for key, item in list(value.items())[:128]:
+            if item is None:
+                continue
+            key_text = str(key).lower()
+            if key in _REQUEST_CONTEXT_KEYS + _AGENT_HINT_KEYS or any(hint in key_text for hint in _REQUEST_LOOKUP_HINTS):
+                nested = _request_metadata_candidates_from_value(
+                    f"{source}.{key}", item, depth=depth + 1, seen=seen
+                )
+                _merge_request_metadata(metadata, nested, f"{source}.{key}")
+        return metadata
+
+    object_values: dict[str, Any] = {}
+    for attr in _REQUEST_METADATA_KEYS + tuple(_REQUEST_METADATA_ALIASES) + _REQUEST_CONTEXT_KEYS + _AGENT_HINT_KEYS:
+        try:
+            object_values[attr] = getattr(value, attr)
+        except Exception:
+            continue
+    try:
+        object_vars = vars(value)
+    except Exception:
+        object_vars = {}
+    if isinstance(object_vars, dict):
+        for key, item in list(object_vars.items())[:128]:
+            key_text = str(key).lower()
+            if key in _REQUEST_CONTEXT_KEYS + _AGENT_HINT_KEYS or any(hint in key_text for hint in _REQUEST_LOOKUP_HINTS):
+                object_values.setdefault(str(key), item)
+
+    if object_values:
+        _merge_request_metadata(metadata, object_values, source)
+        for key, item in list(object_values.items())[:128]:
+            if item is not None:
+                nested = _request_metadata_candidates_from_value(
+                    f"{source}.{key}", item, depth=depth + 1, seen=seen
+                )
+                _merge_request_metadata(metadata, nested, f"{source}.{key}")
+        return metadata
+    return metadata
+
+
+def _request_metadata_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
+    metadata: dict[str, Any] = {}
+    for name, value in locals_dict.items():
+        if name == "self" or name.startswith("__sgl_transfer"):
+            continue
+        lowered = name.lower()
+        if (
+            any(key in lowered for key in _REQUEST_LOOKUP_HINTS)
+            or isinstance(value, dict)
+        ):
+            nested = _request_metadata_candidates_from_value(name, value)
+            _merge_request_metadata(metadata, nested, name)
+    return metadata
 
 
 def _looks_like_token_ids(values: list[int]) -> bool:
@@ -275,6 +459,9 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
     }
     if os.environ.get("SGLANG_TRANSFER_LOG_FULL_TOKENS") == "1":
         summary["semantic_token_ids"] = values
+    request_metadata = _request_metadata_summary(locals_dict)
+    if request_metadata:
+        summary.update(request_metadata)
     return summary
 
 
@@ -292,6 +479,66 @@ def _looks_like_token_name(name: str) -> bool:
 def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
     context = _semantic_token_summary(function, locals_dict)
     token = _SEMANTIC_CONTEXT.set(context)
+    try:
+        yield
+    finally:
+        _SEMANTIC_CONTEXT.reset(token)
+
+
+def current_transfer_context() -> dict[str, Any] | None:
+    context = _SEMANTIC_CONTEXT.get()
+    if isinstance(context, dict):
+        return copy.deepcopy(context)
+    return None
+
+
+def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, Any] | None:
+    valid = [context for context in contexts if isinstance(context, dict)]
+    if not valid:
+        return None
+    merged: dict[str, Any] = {}
+    token_ids: list[int] = []
+    token_hashes: list[str] = []
+    token_sources: list[str] = []
+    for context in valid:
+        for key, value in context.items():
+            if key in {
+                "semantic_token_ids",
+                "semantic_token_ids_preview",
+                "semantic_token_ids_sha256",
+                "semantic_token_source",
+                "semantic_token_count",
+                "semantic_token_preview_count",
+            }:
+                continue
+            merged.setdefault(key, copy.deepcopy(value))
+        if isinstance(context.get("semantic_token_ids"), list):
+            token_ids.extend(int(value) for value in context["semantic_token_ids"] if isinstance(value, int))
+        if context.get("semantic_token_ids_sha256"):
+            token_hashes.append(str(context["semantic_token_ids_sha256"]))
+        if context.get("semantic_token_source"):
+            token_sources.append(str(context["semantic_token_source"]))
+
+    if token_ids:
+        preview = token_ids[:_TOKEN_PREVIEW]
+        merged["semantic_token_ids"] = token_ids
+        merged["semantic_token_ids_preview"] = preview
+        merged["semantic_token_preview_count"] = len(preview)
+        merged["semantic_token_count"] = len(token_ids)
+        merged["semantic_token_ids_sha256"] = _hash_ints(token_ids)
+        merged["semantic_token_source"] = ",".join(sorted(set(token_sources))) or "merged_cache_operations"
+    elif token_hashes:
+        merged["semantic_token_ids_sha256_parts"] = sorted(set(token_hashes))
+        merged["semantic_token_source"] = ",".join(sorted(set(token_sources))) or "merged_cache_operations"
+    return merged
+
+
+@contextlib.contextmanager
+def transfer_existing_context(context: dict[str, Any] | None):
+    if not isinstance(context, dict):
+        yield
+        return
+    token = _SEMANTIC_CONTEXT.set(copy.deepcopy(context))
     try:
         yield
     finally:
@@ -507,6 +754,7 @@ def log_transfer_event(
         "event": "sglang.transfer",
         "function": function,
         "direction": direction,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "timestamp_ns": time.time_ns(),
         "elapsed_ms": wall_ms,
         "elapsed_ms_wall": wall_ms,
@@ -546,6 +794,8 @@ def log_transfer_event(
         payload["token_ids_preview"] = []
         payload["token_preview_count"] = 0
         payload["token_preview_source"] = "none"
+
+    payload.update(_request_metadata_summary(locals_dict))
 
     payload.update(_index_summary(locals_dict))
     payload.update(_kv_payload_summary(function, locals_dict))
@@ -635,6 +885,20 @@ def insert_hiradix_imports(text: str) -> str:
             "from .transfer_logging import transfer_token_context as _sgl_transfer_token_context\n",
         ],
         "from .transfer_logging import transfer_token_context as _sgl_transfer_token_context",
+    )
+
+
+def insert_cache_controller_imports(text: str) -> str:
+    return insert_after_future(
+        text,
+        [
+            "from sglang.srt.mem_cache.transfer_logging import (\n",
+            "    current_transfer_context as _sgl_current_transfer_context,\n",
+            "    merge_transfer_contexts as _sgl_merge_transfer_contexts,\n",
+            "    transfer_existing_context as _sgl_transfer_existing_context,\n",
+            ")\n",
+        ],
+        "from sglang.srt.mem_cache.transfer_logging import (",
     )
 
 
@@ -771,6 +1035,76 @@ def wrap_context_function(text: str, function_name: str) -> tuple[str, int]:
     return "".join(lines), changed
 
 
+def add_cache_operation_context_capture(text: str) -> tuple[str, bool]:
+    if "self.sglang_transfer_context = _sgl_current_transfer_context()" in text:
+        return text, False
+
+    pattern = re.compile(r"^(\s*)self\.node_ids\s*=\s*\[node_id\]\s*$", re.MULTILINE)
+    match = pattern.search(text)
+    if not match:
+        return text, False
+    indent = match.group(1)
+    insert_at = match.end()
+    insertion = (
+        "\n"
+        f"{indent}self.sglang_transfer_context = _sgl_current_transfer_context()"
+    )
+    return text[:insert_at] + insertion + text[insert_at:], True
+
+
+def add_cache_operation_merge_context(text: str) -> tuple[str, bool]:
+    if "merged_op.sglang_transfer_context = _sgl_merge_transfer_contexts" in text:
+        return text, False
+
+    pattern = re.compile(r"^(\s*)merged_op\.node_ids\s*=\s*node_ids\s*$", re.MULTILINE)
+    match = pattern.search(text)
+    if not match:
+        return text, False
+    indent = match.group(1)
+    insert_at = match.end()
+    insertion = (
+        "\n"
+        f"{indent}merged_op.sglang_transfer_context = _sgl_merge_transfer_contexts(\n"
+        f"{indent}    [getattr(op, \"sglang_transfer_context\", None) for op in ops]\n"
+        f"{indent})"
+    )
+    return text[:insert_at] + insertion + text[insert_at:], True
+
+
+def wrap_call_with_operation_context(text: str, call_marker: str) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    changed = 0
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if call_marker not in line:
+            index += 1
+            continue
+        if index > 0 and "_sgl_transfer_existing_context" in lines[index - 1]:
+            index += 1
+            continue
+
+        indent_len = len(line) - len(line.lstrip(" "))
+        indent = " " * indent_len
+        call_end = index
+        paren_balance = line.count("(") - line.count(")")
+        while call_end + 1 < len(lines) and paren_balance > 0:
+            call_end += 1
+            paren_balance += lines[call_end].count("(") - lines[call_end].count(")")
+
+        block = lines[index : call_end + 1]
+        wrapped = [
+            f"{indent}with _sgl_transfer_existing_context("
+            "getattr(locals().get(\"op\"), \"sglang_transfer_context\", None)"
+            "):\n"
+        ]
+        wrapped.extend("    " + item if item.strip() else item for item in block)
+        lines[index : call_end + 1] = wrapped
+        changed += 1
+        index += len(wrapped)
+    return "".join(lines), changed
+
+
 def patch_memory_pool_host(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     text = insert_memory_imports(text)
@@ -797,6 +1131,32 @@ def patch_hiradix_cache(path: Path) -> list[str]:
     return patched
 
 
+def patch_cache_controller(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    text = insert_cache_controller_imports(text)
+    patched: list[str] = []
+
+    text, changed = add_cache_operation_context_capture(text)
+    if changed:
+        patched.append("CacheOperation context capture")
+
+    text, changed = add_cache_operation_merge_context(text)
+    if changed:
+        patched.append("CacheOperation merge context")
+
+    for marker, label in (
+        ("self.mem_pool_host.backup_from_device_all_layer(", "write-back transfer context"),
+        ("self.mem_pool_host.load_to_device_per_layer(", "load-back transfer context"),
+    ):
+        text, changed_count = wrap_call_with_operation_context(text, marker)
+        if changed_count:
+            patched.append(f"{label} ({changed_count} call{'s' if changed_count != 1 else ''})")
+
+    if patched:
+        path.write_text(text, encoding="utf-8")
+    return patched
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -810,11 +1170,13 @@ def main() -> int:
     sglang_root = args.sglang_root.resolve()
     memory_pool_host = find_first(sglang_root, "memory_pool_host.py")
     hiradix_cache = find_optional_first(sglang_root, "hiradix_cache.py")
+    cache_controller = find_optional_first(sglang_root, "cache_controller.py")
 
     helper_path = memory_pool_host.with_name("transfer_logging.py")
     helper_path.write_text(HELPER_SOURCE + "\n", encoding="utf-8")
     memory_patched = patch_memory_pool_host(memory_pool_host)
     hiradix_patched = patch_hiradix_cache(hiradix_cache) if hiradix_cache else []
+    cache_controller_patched = patch_cache_controller(cache_controller) if cache_controller else []
 
     print(f"memory_pool_host: {memory_pool_host}")
     print(f"transfer_logging: {helper_path}")
@@ -835,6 +1197,17 @@ def main() -> int:
             print("no semantic context functions patched; they may already be instrumented or absent")
     else:
         print("hiradix_cache: not found; semantic token context was not patched")
+
+    if cache_controller:
+        print(f"cache_controller: {cache_controller}")
+        if cache_controller_patched:
+            print("patched async transfer context propagation:")
+            for item in cache_controller_patched:
+                print(f"  - {item}")
+        else:
+            print("no cache-controller propagation patched; it may already be instrumented or unsupported")
+    else:
+        print("cache_controller: not found; async transfer context propagation was not patched")
 
     return 0
 

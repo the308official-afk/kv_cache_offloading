@@ -36,14 +36,18 @@ Use the same image you plan to run:
 ```bash
 cd ~/kv_cache_offloading
 
-SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 ```
 
-If you use a local instrumented worker image:
+Extract from the same worker image that will run the overlay. The SGLang Python
+source and compiled `sgl_kernel` package must match. If they do not, startup can
+fail with imports such as `cannot import name ... from sgl_kernel`.
+
+If you want to use the stock NGC image instead:
 
 ```bash
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 ```
 
@@ -99,6 +103,10 @@ patched transfer functions:
 patched semantic context functions:
   - write_backup (... occurrences)
   - load_back (... occurrences)
+patched async transfer context propagation:
+  - CacheOperation context capture
+  - write-back transfer context (... calls)
+  - load-back transfer context (... calls)
 ```
 
 If no functions are patched, inspect:
@@ -130,9 +138,16 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=0 \
+DYN_RUNTIME_JSON_LOGS=1 \
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 ./run_dynamo_single_host.sh start
 ```
+
+`DYN_RUNTIME_JSON_LOGS=1` plus the local instrumented Dynamo images are needed
+when you want request IDs, phase labels, and hints to show up directly in
+worker-side reports. The SGLang overlay still provides the transfer rows.
 
 Worker-only:
 
@@ -142,7 +157,7 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=0 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 ./run_dynamo_worker.sh start
 ```
 
@@ -184,7 +199,7 @@ movement functions yet. Enable HiCache and use enough cache pressure to trigger
 `backup_from_device_all_layer()` / `load_to_device_per_layer()`:
 
 ```bash
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --hicache-ratio 0.1' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
@@ -192,8 +207,9 @@ SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 ./run_dynamo_single_host.sh start
 ```
 
-If startup fails with `Not enough host memory available`, lower
-`--hicache-ratio` to `0.05` or free host memory before starting the worker.
+This runtime expects the host pool to be larger than the device KV pool. Keep
+`--hicache-ratio 1`; if host RAM is too tight, lower `--mem-fraction-static` or
+free host memory before starting the worker.
 
 ## 4. Summarize Transfer Events
 
@@ -226,9 +242,12 @@ transfer_summary.csv
 ```
 
 `transfer_events.csv` is the easiest file for per-line inspection. It includes
-the source log line number, `direction`, a readable `direction_label`
-(`host->device` or `device->host`), function name, token preview, estimated KV
-MB, and timing fields.
+the source log line number, `timestamp`, `timestamp_ns`, `direction`, a readable
+`direction_label` (`host->device` or `device->host`), function name, token
+preview, estimated KV MB, and timing fields. When request metadata is visible
+inside the patched worker, it also includes attribution fields such as
+`request_id`, `external_request_id`, `runtime_context_id`, `sglang_request_id`,
+`phase`, `hint_profile`, and `agent_hints_source`.
 
 ## Useful Knobs
 
@@ -243,9 +262,14 @@ SGLANG_TRANSFER_LOG_FULL_TOKENS=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT=32
 SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC=0
-SGLANG_TRANSFER_LOG_SYNC_TIMING=0
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1
 SGLANG_TRANSFER_LOG_VERBOSE=0
 ```
+
+`SGLANG_TRANSFER_LOG_SYNC_TIMING=1` is preferred for transfer timing because it
+synchronizes CUDA devices before the event is written. The transfer logger also
+emits a UTC `timestamp`; the run report can use that as a weaker time-window
+fallback when direct request-id attribution is not visible.
 
 Use full semantic-token logging only for small requests:
 
