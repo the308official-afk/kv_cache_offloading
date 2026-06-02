@@ -210,6 +210,12 @@ def as_bool(value: Any) -> bool | None:
     return None
 
 
+def limit_text(text: str, limit: int = 3000) -> str:
+    if len(text) <= limit:
+        return text
+    return text[: max(limit - 3, 0)] + "..."
+
+
 def git_sha(root: Path) -> str | None:
     try:
         return subprocess.check_output(
@@ -1196,6 +1202,686 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
             writer.writerow(out)
 
 
+def normalize_step_results(value: Any) -> list[dict[str, Any]]:
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, dict)]
+    if not isinstance(value, dict):
+        return []
+
+    def sort_key(item: tuple[Any, Any]) -> tuple[int, str]:
+        key = str(item[0])
+        return (as_int(key, 10**9), key)
+
+    return [item for _key, item in sorted(value.items(), key=sort_key) if isinstance(item, dict)]
+
+
+def load_step_results(result_dir: Path, result: dict[str, Any]) -> list[dict[str, Any]]:
+    step_results = load_json(result_dir / "step_results.json", None)
+    if step_results is None:
+        step_results = result.get("step_results")
+    return normalize_step_results(step_results)
+
+
+def list_from_any(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, tuple):
+        return [str(item) for item in value if str(item)]
+    if isinstance(value, str) and value.strip():
+        return [item.strip() for item in value.split(",") if item.strip()]
+    return []
+
+
+def tool_progress_from_step(step: dict[str, Any]) -> dict[str, Any]:
+    progress = dict_or_empty(step.get("tool_progress"))
+    names = list_from_any(progress.get("tool_call_names"))
+    unique_names = list_from_any(progress.get("unique_tool_call_names")) or sorted(set(names))
+    count = as_int(progress.get("tool_call_count"), len(names))
+    if not progress and not names and count == 0:
+        return {}
+    return {
+        "tool_call_count": count,
+        "tool_call_names": names,
+        "unique_tool_call_names": unique_names,
+        "has_read_file": bool(progress.get("has_read_file") or "read_file" in unique_names),
+        "has_write_or_edit": bool(
+            progress.get("has_write_or_edit") or bool({"write_file", "edit_file"} & set(unique_names))
+        ),
+        "has_execute": bool(progress.get("has_execute") or "execute" in unique_names),
+        "has_edit_plus_validation": bool(
+            progress.get("has_edit_plus_validation")
+            or (bool({"write_file", "edit_file"} & set(unique_names)) and "execute" in unique_names)
+        ),
+    }
+
+
+def model_behavior_tool_summary(result_dir: Path) -> dict[str, Any]:
+    behavior = load_json(result_dir / "prompt_evolution_values/07_model_behavior.json", {})
+    after = dict_or_empty(behavior.get("after"))
+    names = list_from_any(after.get("observed_tool_call_names"))
+    count = as_int(after.get("observed_tool_call_count"))
+    if names or count:
+        return {
+            "tool_call_count": count,
+            "unique_tool_call_names": names,
+            "tool_call_names": names,
+            "source": "prompt_evolution_values/07_model_behavior.json",
+            "workspace_changed": after.get("workspace_changed"),
+            "finish_reason": after.get("finish_reason"),
+        }
+
+    alignment = load_json(result_dir / "runtime_alignment_analysis.json", {})
+    for row in dict_or_empty(alignment).get("rows", []):
+        if not isinstance(row, dict) or row.get("decision_type") != "tool_use":
+            continue
+        evidence = str(row.get("evidence") or "")
+        count_match = re.search(r"tool_call_count=(\d+)", evidence)
+        tools_match = re.search(r"tool_calls=([^;]+)", evidence)
+        names = list_from_any(tools_match.group(1)) if tools_match else []
+        count = as_int(count_match.group(1)) if count_match else len(names)
+        if names or count:
+            return {
+                "tool_call_count": count,
+                "unique_tool_call_names": names,
+                "tool_call_names": names,
+                "source": "runtime_alignment_analysis.json",
+            }
+    return {
+        "tool_call_count": 0,
+        "unique_tool_call_names": [],
+        "tool_call_names": [],
+        "source": "unavailable",
+    }
+
+
+def summarize_step_tools(step_results: list[dict[str, Any]]) -> dict[str, Any]:
+    phase_counts: dict[str, int] = Counter()
+    phase_tools: dict[str, list[str]] = defaultdict(list)
+    phase_tool_counts: dict[str, int] = Counter()
+    phase_has_progress: dict[str, bool] = defaultdict(bool)
+    total_names: list[str] = []
+    total_count = 0
+    has_progress = False
+
+    for step in step_results:
+        phase = str(step.get("phase") or "unknown")
+        phase_counts[phase] += 1
+        progress = tool_progress_from_step(step)
+        if not progress:
+            continue
+        has_progress = True
+        phase_has_progress[phase] = True
+        names = list_from_any(progress.get("tool_call_names"))
+        count = as_int(progress.get("tool_call_count"), len(names))
+        total_count += count
+        total_names.extend(names)
+        phase_tool_counts[phase] += count
+        phase_tools[phase].extend(names)
+
+    return {
+        "has_step_tool_progress": has_progress,
+        "total_tool_call_count": total_count,
+        "total_tool_call_names": total_names,
+        "total_unique_tool_call_names": sorted(set(total_names)),
+        "phase_request_counts": dict(phase_counts),
+        "phase_tool_counts": dict(phase_tool_counts),
+        "phase_tool_names": {phase: names for phase, names in phase_tools.items()},
+        "phase_has_progress": dict(phase_has_progress),
+    }
+
+
+def repo_display_name(repo: Any) -> str:
+    if not repo:
+        return "unknown"
+    text = str(repo)
+    return text.rsplit("/", 1)[-1] if "/" in text else text
+
+
+def run_short_id(run_id: str) -> str:
+    return str(run_id).rsplit("_", 1)[-1]
+
+
+def runtime_label(result: dict[str, Any]) -> str:
+    source = str(result.get("deepagents_runtime_source") or "")
+    if not source:
+        return "unknown"
+    if source == "python_environment":
+        return "python_environment"
+    if "/upstream/deepagents/" in source or source.endswith("/upstream/deepagents/libs/deepagents"):
+        return "upstream"
+    if "site-packages" in source:
+        return "python_environment"
+    return Path(source).name or source
+
+
+def display_tools(names: list[str]) -> str:
+    unique = sorted({name for name in names if name})
+    return ", ".join(unique) if unique else "none"
+
+
+def display_bytes(num_bytes: Any) -> str:
+    value = as_float(num_bytes)
+    if value < 1024:
+        return f"{int(value)} bytes"
+    if value < 1024 * 1024:
+        return f"{value / 1024:.1f} KB"
+    return f"{value / (1024 * 1024):.2f} MB"
+
+
+def average(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def phase_runtime_summaries(phase_rows: list[dict[str, Any]], subrequest_rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in phase_rows:
+        grouped[str(row.get("phase") or "unknown")].append(row)
+
+    subrequest_counts: dict[str, int] = Counter()
+    for row in subrequest_rows:
+        subrequest_counts[str(row.get("phase") or "unknown")] += 1
+
+    summaries: dict[str, dict[str, Any]] = {}
+    for phase, rows in grouped.items():
+        latency_values = [as_float(row.get("latency_ms")) for row in rows if row.get("latency_ms") not in (None, "")]
+        ttft_values = [as_float(row.get("ttft_ms")) for row in rows if row.get("ttft_ms") not in (None, "")]
+        reuse_values = [
+            as_float(row.get("cache_reuse_ratio"))
+            for row in rows
+            if row.get("cache_reuse_ratio") not in (None, "")
+        ]
+        summaries[phase] = {
+            "phase_request_count": len(rows),
+            "worker_subrequest_count": subrequest_counts.get(phase, 0),
+            "latency_ms_total": sum(latency_values),
+            "latency_ms_avg": average(latency_values),
+            "ttft_ms_avg": average(ttft_values),
+            "ttft_ms_min": min(ttft_values) if ttft_values else None,
+            "prompt_tokens_sum": sum(as_int(row.get("prompt_tokens")) for row in rows),
+            "completion_tokens_sum": sum(as_int(row.get("completion_tokens") or row.get("output_tokens")) for row in rows),
+            "cache_hit": any(bool(row.get("cache_hit")) for row in rows),
+            "cached_token_count_max": max((as_int(row.get("cached_token_count")) for row in rows), default=0),
+            "cached_token_count_sum": sum(as_int(row.get("cached_token_count")) for row in rows),
+            "cache_reuse_ratio_avg": average(reuse_values),
+            "cache_reuse_ratio_max": max(reuse_values) if reuse_values else None,
+            "transfer_device_to_host_kv_mb": sum(
+                as_float(row.get("transfer_device_to_host_kv_mb_for_request")) for row in rows
+            ),
+            "transfer_host_to_device_kv_mb": sum(
+                as_float(row.get("transfer_host_to_device_kv_mb_for_request")) for row in rows
+            ),
+            "transfer_cuda_sync_ms": sum(as_float(row.get("transfer_cuda_sync_ms_for_request")) for row in rows),
+        }
+    for phase, count in subrequest_counts.items():
+        summaries.setdefault(phase, {"phase_request_count": 0})["worker_subrequest_count"] = count
+    return summaries
+
+
+def execution_loop_rows(result_dir: Path, result: dict[str, Any]) -> list[dict[str, Any]]:
+    trace = load_json(result_dir / "others/execution_loop_trace.json", None)
+    if trace is None:
+        trace = result.get("execution_loop_trace") or dict_or_empty(result.get("result")).get("execution_loop")
+    steps = dict_or_empty(trace).get("steps")
+    if isinstance(steps, list):
+        return [step for step in steps if isinstance(step, dict)]
+    return []
+
+
+def build_agent_behavior_summary(
+    *,
+    result_dir: Path,
+    result: dict[str, Any],
+    manifest: dict[str, Any],
+    run_level: dict[str, Any],
+    phase_rows: list[dict[str, Any]],
+    subrequest_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    step_results = load_step_results(result_dir, result)
+    step_summary = summarize_step_tools(step_results)
+    behavior_fallback = model_behavior_tool_summary(result_dir)
+    use_step_tools = bool(step_summary["has_step_tool_progress"])
+    total_tools = (
+        as_int(step_summary["total_tool_call_count"])
+        if use_step_tools
+        else as_int(behavior_fallback.get("tool_call_count"))
+    )
+    total_tool_names = (
+        list_from_any(step_summary["total_tool_call_names"])
+        if use_step_tools
+        else list_from_any(behavior_fallback.get("tool_call_names"))
+    )
+    tool_source = "step_results.tool_progress" if use_step_tools else behavior_fallback.get("source")
+    phase_runtime = phase_runtime_summaries(phase_rows, subrequest_rows)
+    phase_names = sorted(
+        set(phase_runtime)
+        | set(step_summary["phase_request_counts"])
+        | {str(row.get("phase") or "unknown") for row in phase_rows}
+    )
+    preferred_order = {"planning": 0, "execution": 1, "patch_generation": 2, "review": 3}
+    phase_names.sort(key=lambda item: (preferred_order.get(item, 100), item))
+
+    phase_summaries: list[dict[str, Any]] = []
+    for phase in phase_names:
+        phase_tool_names = list_from_any(step_summary["phase_tool_names"].get(phase, []))
+        phase_tool_count = as_int(step_summary["phase_tool_counts"].get(phase))
+        phase_source = "step_results.tool_progress" if step_summary["phase_has_progress"].get(phase) else "unavailable"
+        runtime = phase_runtime.get(phase, {})
+        phase_summaries.append(
+            {
+                "phase": phase,
+                "phase_request_count": step_summary["phase_request_counts"].get(
+                    phase, runtime.get("phase_request_count", 0)
+                ),
+                "worker_subrequest_count": runtime.get("worker_subrequest_count", 0),
+                "tool_call_count": phase_tool_count,
+                "tools_used": display_tools(phase_tool_names),
+                "tool_source": phase_source,
+                "has_read_file": "read_file" in set(phase_tool_names),
+                "has_write_or_edit": bool({"write_file", "edit_file"} & set(phase_tool_names)),
+                "has_execute": "execute" in set(phase_tool_names),
+                "has_edit_plus_validation": bool({"write_file", "edit_file"} & set(phase_tool_names))
+                and "execute" in set(phase_tool_names),
+                **runtime,
+            }
+        )
+
+    repo_name = repo_display_name(manifest.get("task", {}).get("repo"))
+    loop_steps = execution_loop_rows(result_dir, result)
+    run_summary = {
+        "run_id": manifest["run_id"],
+        "run_short": run_short_id(manifest["run_id"]),
+        "repo": repo_name,
+        "repo_full_name": manifest.get("task", {}).get("repo"),
+        "runtime": runtime_label(result),
+        "model": manifest.get("model"),
+        "app_variant": manifest.get("app_variant"),
+        "hint_profile": manifest.get("hint_profile"),
+        "execution_subrequests": step_summary["phase_request_counts"].get("execution", 0),
+        "worker_subrequests_total": len(subrequest_rows),
+        "tool_call_count": total_tools,
+        "tools_used": display_tools(total_tool_names),
+        "tool_source": tool_source,
+        "execution_tool_call_count": step_summary["phase_tool_counts"].get("execution", 0),
+        "execution_tools_used": display_tools(step_summary["phase_tool_names"].get("execution", [])),
+        "patch_bytes": run_level.get("workspace_patch_bytes", 0),
+        "patch": display_bytes(run_level.get("workspace_patch_bytes", 0)),
+        "patch_nonempty": run_level.get("patch_nonempty"),
+        "git_diff_nonempty": run_level.get("git_diff_nonempty"),
+        "execution_loop_enabled": bool(loop_steps),
+        "execution_loop_steps": len(loop_steps),
+        "source_note": (
+            "Precise per-phase tool counts come from step_results.tool_progress. "
+            "Older runs may only have aggregate prompt-evolution evidence."
+        ),
+    }
+    return {
+        "run": run_summary,
+        "phases": phase_summaries,
+        "execution_loop_steps": loop_steps,
+    }
+
+
+def write_agent_behavior_csv(path: Path, summary: dict[str, Any]) -> None:
+    run = dict_or_empty(summary.get("run"))
+    fields = [
+        "run_id",
+        "run_short",
+        "repo",
+        "runtime",
+        "model",
+        "app_variant",
+        "hint_profile",
+        "phase",
+        "phase_request_count",
+        "execution_subrequests",
+        "worker_subrequest_count",
+        "tool_call_count",
+        "tools_used",
+        "tool_source",
+        "has_read_file",
+        "has_write_or_edit",
+        "has_execute",
+        "has_edit_plus_validation",
+        "patch_bytes",
+        "patch",
+        "patch_nonempty",
+        "git_diff_nonempty",
+        "latency_ms_total",
+        "latency_ms_avg",
+        "ttft_ms_avg",
+        "ttft_ms_min",
+        "prompt_tokens_sum",
+        "completion_tokens_sum",
+        "cache_hit",
+        "cached_token_count_max",
+        "cached_token_count_sum",
+        "cache_reuse_ratio_avg",
+        "cache_reuse_ratio_max",
+        "transfer_device_to_host_kv_mb",
+        "transfer_host_to_device_kv_mb",
+        "transfer_cuda_sync_ms",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for phase in summary.get("phases", []):
+            out = {
+                "run_id": run.get("run_id"),
+                "run_short": run.get("run_short"),
+                "repo": run.get("repo"),
+                "runtime": run.get("runtime"),
+                "model": run.get("model"),
+                "app_variant": run.get("app_variant"),
+                "hint_profile": run.get("hint_profile"),
+                "execution_subrequests": run.get("execution_subrequests"),
+                "patch_bytes": run.get("patch_bytes"),
+                "patch": run.get("patch"),
+                "patch_nonempty": run.get("patch_nonempty"),
+                "git_diff_nonempty": run.get("git_diff_nonempty"),
+            }
+            out.update({field: phase.get(field) for field in fields if field not in out})
+            writer.writerow(out)
+
+
+def write_agent_behavior_md(path: Path, summary: dict[str, Any]) -> None:
+    run = dict_or_empty(summary.get("run"))
+    phases = summary.get("phases", [])
+    lines = [
+        f"# Agent Behavior Summary: {run.get('run_id')}",
+        "",
+        "## Tool Results",
+        "",
+        "| Run | Repo | Runtime | Execution subrequests | Tool calls | Tools used | Patch |",
+        "| --- | --- | --- | ---: | ---: | --- | ---: |",
+        "| {run_short} | {repo} | {runtime} | {execution_subrequests} | {tool_call_count} | {tools_used} | {patch} |".format(
+            run_short=run.get("run_short"),
+            repo=run.get("repo"),
+            runtime=run.get("runtime"),
+            execution_subrequests=run.get("execution_subrequests"),
+            tool_call_count=run.get("tool_call_count"),
+            tools_used=run.get("tools_used"),
+            patch=run.get("patch"),
+        ),
+        "",
+        "## Phase Results",
+        "",
+        "| Phase | Requests | Worker subrequests | Tool calls | Tools used | TTFT avg ms | Cache hit | Cached max | H2D KV MB | D2H KV MB |",
+        "| --- | ---: | ---: | ---: | --- | ---: | --- | ---: | ---: | ---: |",
+    ]
+    for phase in phases:
+        lines.append(
+            "| {phase} | {requests} | {worker_subrequests} | {tool_calls} | {tools} | {ttft} | {cache_hit} | {cached} | {h2d:.3f} | {d2h:.3f} |".format(
+                phase=phase.get("phase"),
+                requests=phase.get("phase_request_count", 0),
+                worker_subrequests=phase.get("worker_subrequest_count", 0),
+                tool_calls=phase.get("tool_call_count", 0),
+                tools=phase.get("tools_used", "none"),
+                ttft="n/a" if phase.get("ttft_ms_avg") is None else f"{as_float(phase.get('ttft_ms_avg')):.3f}",
+                cache_hit=phase.get("cache_hit", False),
+                cached=phase.get("cached_token_count_max", 0),
+                h2d=as_float(phase.get("transfer_host_to_device_kv_mb")),
+                d2h=as_float(phase.get("transfer_device_to_host_kv_mb")),
+            )
+        )
+    lines.extend(
+        [
+            "",
+            "## Notes",
+            "",
+            "- Exact tool-call arguments and command strings: `agent_tool_calls.md`",
+            f"- Tool source: `{run.get('tool_source')}`",
+            f"- Execution loop steps: `{run.get('execution_loop_steps')}`",
+            f"- Patch nonempty: `{run.get('patch_nonempty')}`",
+            f"- Git diff nonempty: `{run.get('git_diff_nonempty')}`",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def detail_args(detail: dict[str, Any]) -> dict[str, Any]:
+    args = detail.get("args")
+    return args if isinstance(args, dict) else {}
+
+
+def detail_command(detail: dict[str, Any]) -> str | None:
+    args = detail_args(detail)
+    value = detail.get("command") or detail.get("cmd") or args.get("command") or args.get("cmd")
+    return str(value) if value not in (None, "") else None
+
+
+def detail_path(detail: dict[str, Any]) -> str | None:
+    args = detail_args(detail)
+    for key in ("file_path", "path", "target_file", "filename"):
+        value = detail.get(key) or args.get(key)
+        if value not in (None, ""):
+            return str(value)
+    return None
+
+
+def normalize_tool_detail(
+    detail: dict[str, Any],
+    *,
+    run_id: str,
+    phase: str,
+    step_index: Any,
+    loop_step_type: Any = None,
+    source: str,
+) -> dict[str, Any]:
+    args = detail.get("args")
+    if isinstance(args, str):
+        try:
+            parsed_args = json.loads(args)
+            args = parsed_args if isinstance(parsed_args, dict) else {"raw": detail.get("args")}
+        except json.JSONDecodeError:
+            args = {"raw": detail.get("args")}
+    elif not isinstance(args, dict):
+        args = {}
+    normalized = {
+        "run_id": run_id,
+        "phase": phase,
+        "step_index": step_index,
+        "loop_step_type": loop_step_type,
+        "tool_call_index": detail.get("tool_call_index"),
+        "tool_call_id": detail.get("tool_call_id"),
+        "tool_name": detail.get("tool_name") or detail.get("name"),
+        "command": detail_command({**detail, "args": args}),
+        "file_path": detail_path({**detail, "args": args}),
+        "args": args,
+        "args_json": json.dumps(args, sort_keys=True, default=str),
+        "result_preview": limit_text(str(detail.get("result_preview") or ""), 1000),
+        "source": detail.get("source") or source,
+    }
+    return normalized
+
+
+def tool_result_previews_from_messages(messages: list[dict[str, Any]]) -> dict[str, str]:
+    previews: dict[str, str] = {}
+    for message in messages:
+        if not isinstance(message, dict) or message.get("type") != "tool":
+            continue
+        call_id = message.get("tool_call_id")
+        if call_id:
+            previews[str(call_id)] = limit_text(str(message.get("text") or message.get("content") or ""), 1000)
+    return previews
+
+
+def tool_details_from_messages(
+    messages: list[dict[str, Any]],
+    *,
+    run_id: str,
+    phase: str,
+    step_index: Any,
+    source: str,
+) -> list[dict[str, Any]]:
+    previews = tool_result_previews_from_messages(messages)
+    rows: list[dict[str, Any]] = []
+    for message_index, message in enumerate(messages):
+        if not isinstance(message, dict):
+            continue
+        tool_calls = message.get("tool_calls")
+        if not isinstance(tool_calls, list):
+            continue
+        for call in tool_calls:
+            if not isinstance(call, dict):
+                continue
+            args = call.get("args")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except json.JSONDecodeError:
+                    args = {"raw": call.get("args")}
+            detail = {
+                "message_index": message_index,
+                "tool_call_index": len(rows),
+                "tool_call_id": call.get("id"),
+                "tool_name": call.get("name"),
+                "args": args if isinstance(args, dict) else {},
+                "result_preview": previews.get(str(call.get("id") or ""), ""),
+            }
+            rows.append(
+                normalize_tool_detail(
+                    detail,
+                    run_id=run_id,
+                    phase=phase,
+                    step_index=step_index,
+                    source=source,
+                )
+            )
+    return rows
+
+
+def collect_agent_tool_calls(result_dir: Path, result: dict[str, Any], run_id: str) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+
+    def add_row(row: dict[str, Any]) -> None:
+        key = (
+            row.get("phase"),
+            row.get("step_index"),
+            row.get("tool_call_id"),
+            row.get("tool_name"),
+            row.get("command"),
+            row.get("file_path"),
+            row.get("args_json"),
+        )
+        if key in seen:
+            return
+        seen.add(key)
+        rows.append(row)
+
+    for step in load_step_results(result_dir, result):
+        phase = str(step.get("phase") or "unknown")
+        step_index = step.get("sequence_index")
+        loop_step_type = dict_or_empty(step.get("execution_loop")).get("step_type")
+        for detail in step.get("tool_call_details") or []:
+            if isinstance(detail, dict):
+                add_row(
+                    normalize_tool_detail(
+                        detail,
+                        run_id=run_id,
+                        phase=phase,
+                        step_index=step_index,
+                        loop_step_type=loop_step_type,
+                        source="step_results.tool_call_details",
+                    )
+                )
+
+    for phase_result in dict_or_empty(result.get("result")).get("phase_results") or []:
+        if not isinstance(phase_result, dict):
+            continue
+        phase = str(phase_result.get("phase") or "unknown")
+        step_index = phase_result.get("sequence_index")
+        loop_step_type = dict_or_empty(phase_result.get("execution_loop")).get("step_type")
+        for detail in phase_result.get("tool_call_details") or []:
+            if isinstance(detail, dict):
+                add_row(
+                    normalize_tool_detail(
+                        detail,
+                        run_id=run_id,
+                        phase=phase,
+                        step_index=step_index,
+                        loop_step_type=loop_step_type,
+                        source="result.phase_results.tool_call_details",
+                    )
+                )
+
+    result_response = dict_or_empty(dict_or_empty(result.get("result")).get("response"))
+    messages = result_response.get("messages")
+    if isinstance(messages, list):
+        for row in tool_details_from_messages(
+            messages,
+            run_id=run_id,
+            phase=str(dict_or_empty(result.get("result")).get("phase") or "unknown"),
+            step_index=dict_or_empty(result.get("result")).get("sequence_index"),
+            source="others/result.json.result.response.messages",
+        ):
+            add_row(row)
+
+    behavior = load_json(result_dir / "prompt_evolution_values/07_model_behavior.json", {})
+    behavior_messages = dict_or_empty(behavior.get("after")).get("messages")
+    if isinstance(behavior_messages, list):
+        for row in tool_details_from_messages(
+            behavior_messages,
+            run_id=run_id,
+            phase="execution",
+            step_index=0,
+            source="prompt_evolution_values/07_model_behavior.json",
+        ):
+            add_row(row)
+
+    return rows
+
+
+def write_agent_tool_calls_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "run_id",
+        "phase",
+        "step_index",
+        "loop_step_type",
+        "tool_call_index",
+        "tool_call_id",
+        "tool_name",
+        "command",
+        "file_path",
+        "args_json",
+        "result_preview",
+        "source",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in fields})
+
+
+def write_agent_tool_calls_md(path: Path, rows: list[dict[str, Any]]) -> None:
+    lines = [
+        "# Agent Tool Calls",
+        "",
+        "| Phase | Step | Tool | Command | File path | Result preview |",
+        "| --- | ---: | --- | --- | --- | --- |",
+    ]
+    if not rows:
+        lines.append("| n/a | n/a | none | n/a | n/a | No exact tool-call details available for this run. |")
+    for row in rows:
+        command = row.get("command") or ""
+        file_path = row.get("file_path") or ""
+        preview = (row.get("result_preview") or "").replace("\n", " ")
+        lines.append(
+            "| {phase} | {step} | {tool} | {command} | {file_path} | {preview} |".format(
+                phase=row.get("phase") or "",
+                step=row.get("step_index") if row.get("step_index") not in (None, "") else "",
+                tool=row.get("tool_name") or "",
+                command=command.replace("|", "\\|"),
+                file_path=file_path.replace("|", "\\|"),
+                preview=limit_text(preview, 180).replace("|", "\\|"),
+            )
+        )
+    lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, Any]) -> None:
     def display(value: Any) -> Any:
         return "n/a" if value in (None, "") else value
@@ -1366,6 +2052,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "transfer_host_to_device_kv_mb": host_to_device.get("kv_num_mb_estimated", 0.0),
         "transfer_cuda_sync_ms": transfer_totals.get("elapsed_ms_cuda_sync", 0.0),
         "patch_nonempty": patch_bytes > 0,
+        "workspace_patch_bytes": patch_bytes,
         "git_diff_nonempty": git_diff_stat.exists() and bool(git_diff_stat.read_text(encoding="utf-8", errors="replace").strip()),
     }
     metric_sources = {
@@ -1500,13 +2187,45 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "transfer_totals": transfer_totals,
         "transfer_by_function_direction": transfer_rows,
     }
+    behavior_summary = build_agent_behavior_summary(
+        result_dir=result_dir,
+        result=result,
+        manifest=manifest,
+        run_level=run_level,
+        phase_rows=phase_rows,
+        subrequest_rows=subrequest_rows,
+    )
+    agent_tool_calls = collect_agent_tool_calls(result_dir, result, run_id)
+    metrics["agent_behavior_summary"] = behavior_summary
+    metrics["agent_tool_calls"] = {
+        "tool_call_count": len(agent_tool_calls),
+        "execute_command_count": sum(1 for row in agent_tool_calls if row.get("tool_name") == "execute"),
+        "source_note": (
+            "Exact arguments come from step_results.tool_call_details on new runs. "
+            "Older runs fall back to prompt-evolution or result response transcripts when available."
+        ),
+    }
 
     write_json(out_dir / "run_manifest.json", manifest)
     write_json(out_dir / "run_metrics.json", metrics)
     write_phase_csv(out_dir / "run_metrics.csv", phase_rows, run_level)
     write_subrequest_csv(out_dir / "subrequest_metrics.csv", subrequest_rows, run_level)
     write_transfer_csv(out_dir / "transfer_summary.csv", transfer_rows)
+    write_json(out_dir / "agent_behavior_summary.json", behavior_summary)
+    write_agent_behavior_csv(out_dir / "agent_behavior_summary.csv", behavior_summary)
+    write_agent_behavior_md(out_dir / "agent_behavior_summary.md", behavior_summary)
+    write_json(out_dir / "agent_tool_calls.json", agent_tool_calls)
+    write_agent_tool_calls_csv(out_dir / "agent_tool_calls.csv", agent_tool_calls)
+    write_agent_tool_calls_md(out_dir / "agent_tool_calls.md", agent_tool_calls)
     write_summary_md(out_dir / "summary.md", manifest, metrics)
+
+    default_out_root = (root / "experiments/reports/runs").resolve()
+    if out_root.resolve() == default_out_root:
+        latest_behavior_csv = root / "experiments/reports/latest_agent_behavior_summary.csv"
+        latest_behavior_csv.parent.mkdir(parents=True, exist_ok=True)
+        write_agent_behavior_csv(latest_behavior_csv, behavior_summary)
+        latest_tool_calls_csv = root / "experiments/reports/latest_agent_tool_calls.csv"
+        write_agent_tool_calls_csv(latest_tool_calls_csv, agent_tool_calls)
 
     for rel in [
         "others/run_summary_table.csv",
@@ -1553,6 +2272,8 @@ def main() -> int:
     print(f"manifest: {out_dir / 'run_manifest.json'}")
     print(f"metrics: {out_dir / 'run_metrics.json'}")
     print(f"csv: {out_dir / 'run_metrics.csv'}")
+    print(f"agent behavior: {out_dir / 'agent_behavior_summary.md'}")
+    print(f"agent tool calls: {out_dir / 'agent_tool_calls.md'}")
     return 0
 
 

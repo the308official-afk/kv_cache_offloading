@@ -62,6 +62,11 @@ others/run_summary_table.csv
 Start the published default Dynamo/SGLang runtime:
 
 ```bash
+cd ~/kv_cache_offloading
+
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+
 ./run_dynamo_single_host.sh stop
 
 DYN_TOOL_CALL_PARSER=hermes \
@@ -272,6 +277,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
@@ -307,6 +313,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
@@ -331,6 +338,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority long-output short-output; do
   AGENTBENCH_WORKFLOW_MODE=phased \
@@ -567,6 +575,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 ```
 
 Use `upstream` for the current tool-loop experiments. The known-good run shape
@@ -586,7 +595,10 @@ limits the loop. `AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1` requires an
 retry guard does not mix with the stronger loop controller. Set
 `AGENTBENCH_PRINT_CHECKPOINTS=0` or pass `--quiet-checkpoints` to keep
 `# [CHECK_POINT]` blocks out of the terminal while still saving
-`others/checkpoints.json`.
+`others/checkpoints.json`. `PYTHONWARNINGS` hides dependency deprecation
+warnings from the live terminal output. If Hugging Face warns about
+unauthenticated requests, optionally set `HF_TOKEN` in your shell before
+starting Dynamo or AgentBench.
 
 Automatic SWE-bench runs use shared checkouts under `agentbench/repos/`.
 The harness now resets tracked changes and removes untracked non-ignored files
@@ -624,6 +636,7 @@ cd ~/kv_cache_offloading
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 AGENTBENCH_WORKFLOW_MODE=baseline \
 python3.11 agentbench/deepagents_swebench_single_host.py \
@@ -665,6 +678,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
@@ -698,6 +712,7 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=0
 export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 START_INDEX=0
 END_INDEX=3
@@ -836,6 +851,25 @@ For comparisons across hint configurations, prefer the curated run report:
 LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
 cat "$LATEST_RUN_REPORT/run_metrics.csv"
 ```
+
+For the compact agent-behavior view, use:
+
+```bash
+cat "$LATEST_RUN_REPORT/agent_behavior_summary.md"
+cat "$LATEST_RUN_REPORT/agent_behavior_summary.csv"
+cat "$LATEST_RUN_REPORT/agent_tool_calls.md"
+cat "$LATEST_RUN_REPORT/agent_tool_calls.csv"
+cat experiments/reports/latest_agent_behavior_summary.csv
+cat experiments/reports/latest_agent_tool_calls.csv
+```
+
+This is the quick table to check after each run. It reports the run/repo/runtime,
+execution subrequest count, tool calls, tools used, patch size, and phase-level
+runtime/cache/transfer fields.
+
+`agent_tool_calls.md` shows the exact tool-call arguments when available. For
+`execute`, check the `Command` column to confirm whether the model actually ran
+the expected validation command.
 
 Build a multi-run comparison after a profile matrix:
 

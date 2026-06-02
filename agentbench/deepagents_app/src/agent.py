@@ -7,6 +7,7 @@ phase logic out of the repo-local runner and into a source-level Deep Agents app
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import time
@@ -209,6 +210,24 @@ def _tool_call_name(tool_call: Any) -> str | None:
     return str(name) if name else None
 
 
+def _tool_call_args(tool_call: Any) -> Any:
+    if isinstance(tool_call, Mapping):
+        if "args" in tool_call:
+            return tool_call.get("args")
+        function = tool_call.get("function")
+        if isinstance(function, Mapping):
+            return function.get("arguments")
+    return getattr(tool_call, "args", None)
+
+
+def _jsonable(value: Any) -> Any:
+    try:
+        json.dumps(value)
+        return value
+    except TypeError:
+        return response_text(value)
+
+
 def _message_tool_call_names(message: Any) -> list[str]:
     tool_calls = None
     if isinstance(message, Mapping):
@@ -218,6 +237,75 @@ def _message_tool_call_names(message: Any) -> list[str]:
     if not isinstance(tool_calls, list):
         return []
     return [name for item in tool_calls if (name := _tool_call_name(item))]
+
+
+def extract_tool_call_details(response: Any) -> list[dict[str, Any]]:
+    details: list[dict[str, Any]] = []
+    call_id_to_index: dict[str, int] = {}
+    call_id_to_name: dict[str, str] = {}
+
+    for message_index, message in enumerate(_response_messages(response)):
+        tool_calls = None
+        if isinstance(message, Mapping):
+            tool_calls = message.get("tool_calls")
+        if tool_calls is None:
+            tool_calls = getattr(message, "tool_calls", None)
+        if isinstance(tool_calls, list):
+            for tool_call in tool_calls:
+                name = _tool_call_name(tool_call) or "unknown"
+                call_id = _tool_call_id(tool_call)
+                args = _jsonable(_tool_call_args(tool_call))
+                row = {
+                    "message_index": message_index,
+                    "tool_call_index": len(details),
+                    "tool_call_id": call_id,
+                    "tool_name": name,
+                    "args": args,
+                    "command": args.get("command") if isinstance(args, Mapping) else None,
+                    "cmd": args.get("cmd") if isinstance(args, Mapping) else None,
+                    "file_path": (
+                        args.get("file_path")
+                        or args.get("path")
+                        or args.get("target_file")
+                        if isinstance(args, Mapping)
+                        else None
+                    ),
+                    "result_preview": None,
+                    "source": "deepagents_response.messages.tool_calls",
+                }
+                if call_id:
+                    call_id_to_index[call_id] = len(details)
+                    call_id_to_name[call_id] = name
+                details.append(row)
+
+        if _message_type(message) != "tool":
+            continue
+        if isinstance(message, Mapping):
+            tool_call_id = message.get("tool_call_id")
+            name = message.get("name")
+        else:
+            tool_call_id = getattr(message, "tool_call_id", None)
+            name = getattr(message, "name", None)
+        resolved_name = str(name or call_id_to_name.get(str(tool_call_id)) or "unknown")
+        preview = _message_text(message)[:1000]
+        if tool_call_id and str(tool_call_id) in call_id_to_index:
+            details[call_id_to_index[str(tool_call_id)]]["result_preview"] = preview
+        else:
+            details.append(
+                {
+                    "message_index": message_index,
+                    "tool_call_index": len(details),
+                    "tool_call_id": str(tool_call_id) if tool_call_id else None,
+                    "tool_name": resolved_name,
+                    "args": None,
+                    "command": None,
+                    "cmd": None,
+                    "file_path": None,
+                    "result_preview": preview,
+                    "source": "deepagents_response.messages.tool_result",
+                }
+            )
+    return details
 
 
 def summarize_tool_progress(response: Any) -> dict[str, Any]:
@@ -658,6 +746,7 @@ def run_execution_loop(
                 "next_step_type": next_step,
                 "next_reason": reason,
                 "tool_progress": result.get("tool_progress"),
+                "tool_call_details": result.get("tool_call_details"),
                 "workspace": result["execution_loop"]["workspace"],
                 "execute_failed": result["execution_loop"]["execute_failed"],
             },
@@ -685,6 +774,7 @@ def run_execution_loop(
                 "step_type": result.get("execution_loop", {}).get("step_type"),
                 "input_reason": result.get("execution_loop", {}).get("input_reason"),
                 "tool_progress": result.get("tool_progress"),
+                "tool_call_details": result.get("tool_call_details"),
                 "workspace": result.get("execution_loop", {}).get("workspace"),
                 "execute_failed": result.get("execution_loop", {}).get("execute_failed"),
                 "execute_result_preview": result.get("execution_loop", {}).get("execute_result_preview"),
@@ -955,6 +1045,7 @@ def build_agent_backend(workspace_dir: Path | None):
         root_dir=root_dir,
         inherit_env=True,
         env=os.environ.copy(),
+        virtual_mode=False,
     )
     return CompositeBackend(
         default=shell_backend,
@@ -1335,6 +1426,7 @@ def execute_phase_agent(
         },
     )
     tool_progress = summarize_tool_progress(response)
+    tool_call_details = extract_tool_call_details(response)
     return {
         "phase": phase,
         "sequence_index": sequence_index,
@@ -1345,6 +1437,7 @@ def execute_phase_agent(
         "response_text": response_text(response),
         "measurement": measurement,
         "tool_progress": tool_progress,
+        "tool_call_details": tool_call_details,
     }
 
 
@@ -1657,6 +1750,7 @@ def run_task_workflow(
                 ),
                 "hint_probe_id": result["hints"].get("hint_probe_id"),
                 "tool_progress": result.get("tool_progress"),
+                "tool_call_details": result.get("tool_call_details"),
                 "execution_guard": result.get("execution_guard"),
                 "execution_loop": result.get("execution_loop"),
             }
@@ -1695,6 +1789,7 @@ def run_task_workflow(
                 "response_text": phase_result["response_text"],
                 "measurement": phase_result["measurement"],
                 "tool_progress": phase_result.get("tool_progress"),
+                "tool_call_details": phase_result.get("tool_call_details"),
                 "execution_guard": phase_result.get("execution_guard"),
                 "execution_loop": phase_result.get("execution_loop"),
             }
@@ -1724,6 +1819,7 @@ def run_task_workflow(
                     "response_text": phase_result["response_text"],
                     "measurement": phase_result["measurement"],
                     "tool_progress": phase_result.get("tool_progress"),
+                    "tool_call_details": phase_result.get("tool_call_details"),
                     "execution_guard": phase_result.get("execution_guard"),
                     "execution_loop": phase_result.get("execution_loop"),
                 }

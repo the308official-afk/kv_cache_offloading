@@ -18,6 +18,9 @@ Use the same model/parser you plan to benchmark:
 cd ~/kv_cache_offloading
 
 export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+# Optional, if Hugging Face warns about unauthenticated requests:
+# export HF_TOKEN='<your-hugging-face-token>'
 
 ./run_dynamo_single_host.sh stop
 
