@@ -2555,8 +2555,12 @@ names look token-related, and it skips CUDA tensors to avoid synchronizing GPU
 data back to CPU. As a result, a transfer can have thousands of tensor elements
 while the token preview is empty or contains one unrelated scalar-like value.
 
-For transfer-size accounting, trust `tensor_details`, `num_bytes_observed`,
-`num_kb_observed`, and `num_mb_observed`.
+For low-level frame accounting, use `num_bytes_observed`, `num_kb_observed`,
+and `num_mb_observed`. For actual KV payload volume, prefer
+`kv_num_bytes_estimated` / `kv_num_mb_estimated`; those estimates are now
+token-granular and come from memory-pool shape metadata rather than the visible
+index tensors. The page-granular comparison remains available under
+`kv_num_bytes_estimated_page_granular`.
 
 The transfer patcher now instruments both layers:
 
@@ -2570,7 +2574,7 @@ When the semantic context is active, events include:
 "token_preview_source":"semantic_context",
 "semantic_token_ids_preview":[151644,872,198],
 "semantic_token_count":64,
-"semantic_token_source":"write_backup.node.key"
+"semantic_token_source":"write_backup.node.key.token_ids"
 ```
 
 If `token_preview_source` is `local_heuristic`, the event did not occur under a
@@ -2578,3 +2582,8 @@ HiRadix token context. Treat that preview as low-level debug metadata, not true
 token IDs. Use `SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1` only when you want an
 explicit preview of CUDA index tensors such as `host_indices` or
 `device_indices`; it introduces a small GPU-to-CPU sync.
+
+Default events are compact. Use `SGLANG_TRANSFER_LOG_VERBOSE=1` for tensor
+details and empty fallback diagnostics. Use `SGLANG_TRANSFER_LOG_SYNC_TIMING=1`
+when you want `elapsed_ms_cuda_sync` and `cuda_sync_wait_ms`; that adds a device
+synchronization while logging.

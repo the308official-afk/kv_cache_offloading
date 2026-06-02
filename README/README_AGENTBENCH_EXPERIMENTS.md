@@ -157,16 +157,6 @@ cd ~/kv_cache_offloading
 SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
-# If a worker container already exists, this avoids pulling another image:
-# SGLANG_CONTAINER=dynamo-sglang-worker \
-# ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-
-# If extraction fails, confirm this script is up to date:
-# grep -n "importlib.util.find_spec" \
-#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-# grep -n "tar -C" \
-#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-
 if [ -d upstream/sglang/python/sglang ]; then
   export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
 elif [ -d runtime_upstream/sglang/python/sglang ]; then
@@ -189,6 +179,16 @@ grep -n "_sgl_log_transfer_event" \
 
 grep -n "_sgl_transfer_token_context" \
   "$SGLANG_ROOT/srt/mem_cache/hiradix_cache.py"
+
+# If a worker container already exists, this avoids pulling another image:
+# SGLANG_CONTAINER=dynamo-sglang-worker \
+# ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+# If extraction fails, confirm this script is up to date:
+# grep -n "importlib.util.find_spec" \
+#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+# grep -n "tar -C" \
+#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 ```
 
 Preferred current extraction path is `upstream/sglang/python/sglang`. Older EC2
@@ -206,6 +206,7 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
 DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
@@ -223,10 +224,28 @@ SGLANG_TRANSFER_LOG_FULL_TOKENS=0 \
 SGLANG_TRANSFER_LOG_TOKEN_PREVIEW=8 \
 SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS=4 \
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
+SGLANG_TRANSFER_LOG_VERBOSE=0 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
 DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 ./run_dynamo_single_host.sh start
+```
+
+Then start a test run (don't remove this)
+
+```bash
+cd ~/kv_cache_offloading
+
+AGENTBENCH_WORKFLOW_MODE=phased \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --prompt-evolution-value-char-limit 1000
 ```
 
 If startup fails with `Not enough host memory available`, lower
@@ -275,8 +294,46 @@ python3 runtime_instrumentation/sglang_transfer_logging/parse_transfer_events.py
   "$LATEST_TRANSFER_LOG" \
   --out-dir experiments/parsed/sglang_transfer_logs
 
+head -20 experiments/parsed/sglang_transfer_logs/transfer_events.csv
 cat experiments/parsed/sglang_transfer_logs/transfer_summary.csv
 ```
+
+Build a run-level report that combines AgentBench latency/cache metrics with
+SGLang transfer totals:
+
+```bash
+python3 experiments/scripts/agentbench_report/build_run_report.py
+
+LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+cat "$LATEST_RUN_REPORT/summary.md"
+cat "$LATEST_RUN_REPORT/run_metrics.csv"
+cat "$LATEST_RUN_REPORT/transfer_summary.csv"
+```
+
+Run-level reports are written to:
+
+```text
+experiments/reports/runs/<run_id>/
+  run_manifest.json
+  run_metrics.json
+  run_metrics.csv
+  transfer_summary.csv
+  summary.md
+```
+
+`run_metrics.json` keeps the old runtime cache fields as
+`runtime_*_reported`, but its main `cache_hit`, `cached_token_count`,
+`recomputed_prefix_tokens`, and `cache_reuse_ratio` fields are effective values
+derived from API usage, SGLang worker prefill logs, scheduler cached blocks, and
+runtime events. For non-streaming runs, `ttft_ms` is worker-derived from the
+frontend request timestamp to the first SGLang decode batch and marked with
+`ttft_source=worker_runtime.request_to_first_decode`.
+
+For source clarity, `run_metrics.json` includes `metric_sources`. Fields prefixed
+with `sglang_*` are parsed directly from SGLang worker logs; transfer totals are
+parsed from the SGLang transfer JSONL. AgentBench still supplies phase names,
+request IDs, hint metadata, task metadata, patch outcome, and client/API usage
+accounting because those labels are not emitted by the worker logs yet.
 
 See the detailed workflow in
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -284,14 +341,26 @@ See the detailed workflow in
 Transfer JSON now separates the low-level copy facts from semantic token
 context:
 
-- `tensor_details`, `num_bytes_observed`, and `elapsed_ms` come from
-  `memory_pool_host.py`.
+- `num_bytes_observed` and `elapsed_ms_wall` come from `memory_pool_host.py`.
+  `elapsed_ms` is kept as a compatibility alias for wall time.
+- `direction` is `device_to_host` for GPU/HBM to host write-back, or
+  `host_to_device` for host to GPU/HBM reload. The parsed
+  `transfer_events.csv` also includes `direction_label` as `device->host` or
+  `host->device` for each source log line.
+- `kv_num_bytes_estimated` and `kv_num_mb_estimated` estimate the actual KV
+  payload size using token-granular memory-pool metadata. Prefer these for
+  transfer volume.
+- `kv_num_bytes_estimated_page_granular` is emitted separately for comparison
+  when page-granular accounting is useful.
 - `semantic_token_ids_preview`, `semantic_token_count`, and
-  `semantic_token_source` come from HiRadix `write_backup()` / `load_back()`.
+  `semantic_token_source` come from HiRadix `write_backup()` / `load_back()`;
+  the extractor follows nested fields such as `node.key.token_ids`.
 - `token_preview_source=semantic_context` means `token_ids_preview` is a real
   semantic token preview. `token_preview_source=local_heuristic` means the event
   did not have HiRadix token context and the preview should not be treated as
   tokenizer IDs.
+- `SGLANG_TRANSFER_LOG_VERBOSE=1` restores tensor details and empty diagnostic
+  fields. `SGLANG_TRANSFER_LOG_SYNC_TIMING=1` adds synchronized CUDA timing.
 
 ## 3. Prepare AgentBench Environment
 
@@ -463,6 +532,16 @@ cat "$LATEST_RESULT/others/run_summary_table.csv"
 cat "$LATEST_RESULT/others/measurement_summary_table.csv"
 cat "$LATEST_RESULT/others/cache_value_summary_table.csv"
 cat "$LATEST_RESULT/others/kv_hierarchy_summary_table.csv"
+```
+
+For comparisons across hint configurations, prefer the curated run report:
+
+```bash
+python3 experiments/scripts/agentbench_report/build_run_report.py \
+  --agentbench-result-dir "$LATEST_RESULT"
+
+LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+cat "$LATEST_RUN_REPORT/run_metrics.csv"
 ```
 
 For phase-level runs, inspect:

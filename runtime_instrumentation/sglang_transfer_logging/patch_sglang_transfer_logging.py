@@ -41,10 +41,30 @@ _INDEX_PREVIEW = int(os.environ.get("SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT", "
 _MAX_TOKEN_ID = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_REASONABLE_TOKEN_ID", "10000000") or 10000000)
 _MAX_SEMANTIC_TOKENS = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_SEMANTIC_TOKENS", "1000000") or 1000000)
 _SEMANTIC_CONTEXT = contextvars.ContextVar("sglang_transfer_semantic_context", default=None)
+_TOKEN_ATTR_NAMES = (
+    "token_ids",
+    "input_ids",
+    "output_ids",
+    "tokens",
+    "input_tokens",
+    "prefix_tokens",
+    "new_input_tokens",
+    "origin_input_ids",
+    "fill_ids",
+)
+_STRUCTURAL_TOKEN_ATTR_NAMES = ("key",)
 
 
 def _enabled() -> bool:
     return os.environ.get("SGLANG_TRANSFER_LOG") == "1"
+
+
+def _verbose() -> bool:
+    return os.environ.get("SGLANG_TRANSFER_LOG_VERBOSE") == "1"
+
+
+def _sync_timing_enabled() -> bool:
+    return os.environ.get("SGLANG_TRANSFER_LOG_SYNC_TIMING") == "1"
 
 
 def _is_tensor(value: Any) -> bool:
@@ -149,6 +169,68 @@ def _semantic_token_candidate(source: str, value: Any) -> tuple[str, list[int]] 
     return source, values
 
 
+def _semantic_token_candidates_from_value(
+    source: str,
+    value: Any,
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> list[tuple[str, list[int]]]:
+    if depth > 4:
+        return []
+    if seen is None:
+        seen = set()
+    if not isinstance(value, (str, bytes, int, float, bool, list, tuple, dict)) and not _is_tensor(value):
+        ident = id(value)
+        if ident in seen:
+            return []
+        seen.add(ident)
+
+    candidates: list[tuple[str, list[int]]] = []
+    candidate = _semantic_token_candidate(source, value)
+    if candidate:
+        candidates.append(candidate)
+
+    if isinstance(value, dict):
+        for key, item in list(value.items())[:64]:
+            key_text = str(key)
+            if key_text in _TOKEN_ATTR_NAMES or key_text in _STRUCTURAL_TOKEN_ATTR_NAMES:
+                candidates.extend(
+                    _semantic_token_candidates_from_value(
+                        f"{source}.{key_text}", item, depth=depth + 1, seen=seen
+                    )
+                )
+        return candidates
+
+    if isinstance(value, (list, tuple)):
+        combined: list[int] = []
+        for index, item in enumerate(value[:64]):
+            nested = _semantic_token_candidates_from_value(
+                f"{source}[{index}]", item, depth=depth + 1, seen=seen
+            )
+            if not nested:
+                continue
+            _, nested_values = max(nested, key=lambda item: len(item[1]))
+            combined.extend(nested_values)
+            if len(combined) >= _MAX_SEMANTIC_TOKENS:
+                break
+        if combined:
+            candidates.append((f"{source}[*]", combined[:_MAX_SEMANTIC_TOKENS]))
+        return candidates
+
+    for attr in _TOKEN_ATTR_NAMES + _STRUCTURAL_TOKEN_ATTR_NAMES:
+        try:
+            attr_value = getattr(value, attr)
+        except Exception:
+            continue
+        candidates.extend(
+            _semantic_token_candidates_from_value(
+                f"{source}.{attr}", attr_value, depth=depth + 1, seen=seen
+            )
+        )
+    return candidates
+
+
 def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
     direct_names = (
         "token_ids",
@@ -158,35 +240,21 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
         "input_tokens",
         "prefix_tokens",
     )
-    attr_names = (
-        "token_ids",
-        "input_ids",
-        "output_ids",
-        "tokens",
-        "prefix_tokens",
-        "prefix",
-        "key",
-    )
-    object_name_hints = ("node", "leaf", "root", "req", "request", "cache", "entry")
+    object_name_hints = ("node", "nodes", "leaf", "root", "req", "request", "operation", "cache", "entry", "key")
 
     candidates: list[tuple[str, list[int]]] = []
     for name, value in locals_dict.items():
         if name == "self" or name.startswith("__sgl_transfer"):
             continue
         lowered = name.lower()
-        if any(candidate == lowered or candidate in lowered for candidate in direct_names):
-            candidate = _semantic_token_candidate(f"{function}.{name}", value)
-            if candidate:
-                candidates.append(candidate)
-        if any(hint in lowered for hint in object_name_hints):
-            for attr in attr_names:
-                try:
-                    attr_value = getattr(value, attr)
-                except Exception:
-                    continue
-                candidate = _semantic_token_candidate(f"{function}.{name}.{attr}", attr_value)
-                if candidate:
-                    candidates.append(candidate)
+        if (
+            any(candidate == lowered or candidate in lowered for candidate in direct_names)
+            or any(hint in lowered for hint in object_name_hints)
+            or isinstance(value, (list, tuple, dict))
+        ):
+            candidates.extend(
+                _semantic_token_candidates_from_value(f"{function}.{name}", value)
+            )
 
     if not candidates:
         return {
@@ -210,6 +278,16 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
     return summary
 
 
+def _looks_like_token_name(name: str) -> bool:
+    lowered = name.lower()
+    if "__sgl_transfer" in lowered:
+        return False
+    clean = lowered.strip("_")
+    if clean in _TOKEN_ATTR_NAMES:
+        return True
+    return clean.endswith("_token_ids") or clean.endswith("_input_ids")
+
+
 @contextlib.contextmanager
 def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
     context = _semantic_token_summary(function, locals_dict)
@@ -222,18 +300,12 @@ def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
 
 def _local_token_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     token_values: list[int] = []
-    candidate_names = (
-        "token_ids",
-        "input_ids",
-        "output_ids",
-        "tokens",
-        "token",
-        "input_tokens",
-    )
     source = None
     for name, value in locals_dict.items():
         lowered = name.lower()
-        if any(candidate in lowered for candidate in candidate_names):
+        if "__sgl_transfer" in lowered:
+            continue
+        if _looks_like_token_name(name):
             values = _flatten_ints(value, _TOKEN_PREVIEW - len(token_values))
             if values and source is None:
                 source = name
@@ -248,28 +320,156 @@ def _local_token_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _safe_int(value: Any, default: int | None = None) -> int | None:
+    try:
+        return int(value)
+    except Exception:
+        return default
+
+
+def _dtype_itemsize(dtype: Any) -> int | None:
+    if dtype is None:
+        return None
+    try:
+        return torch.empty((), dtype=dtype).element_size() if torch is not None else None
+    except Exception:
+        return _safe_int(getattr(dtype, "itemsize", None))
+
+
+def _num_items(value: Any) -> int | None:
+    if _is_tensor(value):
+        try:
+            return int(value.numel())
+        except Exception:
+            return None
+    try:
+        return len(value)
+    except Exception:
+        return None
+
+
+def _kv_payload_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
+    self_obj = locals_dict.get("self")
+    if self_obj is None:
+        return {}
+
+    num_items = _num_items(locals_dict.get("host_indices"))
+    if num_items is None:
+        num_items = _num_items(locals_dict.get("device_indices"))
+    if not num_items:
+        return {}
+
+    page_size = _safe_int(getattr(self_obj, "page_size", 1), 1) or 1
+    layer_count = 1 if function == "load_to_device_per_layer" else _safe_int(
+        getattr(self_obj, "layer_num", None)
+    )
+    if not layer_count:
+        return {}
+
+    dtype_itemsize = _dtype_itemsize(getattr(self_obj, "dtype", None))
+    bytes_per_token_per_layer = None
+    formula = None
+    head_num = _safe_int(getattr(self_obj, "head_num", None))
+    head_dim = _safe_int(getattr(self_obj, "head_dim", None))
+    if head_num and head_dim and dtype_itemsize:
+        bytes_per_token_per_layer = 2 * head_num * head_dim * dtype_itemsize
+        formula = "2*head_num*head_dim*dtype.itemsize"
+    else:
+        element_dim = _safe_int(getattr(self_obj, "element_dim", None))
+        if element_dim and dtype_itemsize:
+            bytes_per_token_per_layer = 2 * element_dim * dtype_itemsize
+            formula = "2*element_dim*dtype.itemsize"
+
+    if not bytes_per_token_per_layer:
+        return {}
+
+    bytes_per_token_all_layers = bytes_per_token_per_layer * layer_count
+    bytes_per_page_all_layers = bytes_per_token_all_layers * page_size
+    token_total = int(num_items * bytes_per_token_all_layers)
+    page_total = int(num_items * bytes_per_page_all_layers)
+    return {
+        "kv_num_items": int(num_items),
+        "kv_item_granularity_assumption": "token",
+        "kv_page_size": int(page_size),
+        "kv_layer_count_estimated": int(layer_count),
+        "kv_dtype_itemsize": int(dtype_itemsize) if dtype_itemsize else None,
+        "kv_bytes_per_token_per_layer_estimated": int(bytes_per_token_per_layer),
+        "kv_bytes_per_token_all_layers_estimated": int(bytes_per_token_all_layers),
+        "kv_bytes_per_page_all_layers_estimated": int(bytes_per_page_all_layers),
+        "kv_bytes_per_item_estimated": int(bytes_per_token_all_layers),
+        "kv_num_bytes_estimated": token_total,
+        "kv_num_kb_estimated": token_total / 1024.0,
+        "kv_num_mb_estimated": token_total / (1024.0 * 1024.0),
+        "kv_num_bytes_estimated_token_granular": token_total,
+        "kv_num_mb_estimated_token_granular": token_total / (1024.0 * 1024.0),
+        "kv_num_bytes_estimated_page_granular": page_total,
+        "kv_num_mb_estimated_page_granular": page_total / (1024.0 * 1024.0),
+        "kv_estimate_formula": formula,
+    }
+
+
 def _index_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     for name, value in locals_dict.items():
         lowered = name.lower()
         if lowered not in {"host_indices", "device_indices", "indices", "cache_loc", "cache_indices"}:
             continue
-        count = None
+        count = _num_items(value)
         if _is_tensor(value):
             try:
                 count = int(value.numel())
             except Exception:
                 count = None
-            if str(value.device) != "cpu" and not _allow_cuda_index_sync():
-                summary[f"{lowered}_count"] = count
-                summary[f"{lowered}_preview"] = []
-                summary[f"{lowered}_preview_skipped"] = "cuda_tensor_set_SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1"
-                continue
-        preview = _flatten_ints(value, _INDEX_PREVIEW, allow_cuda_tensor_sync=_allow_cuda_index_sync())
+        if not _allow_cuda_index_sync():
+            summary[f"{lowered}_count"] = count
+            continue
+        preview = _flatten_ints(value, _INDEX_PREVIEW, allow_cuda_tensor_sync=True)
         summary[f"{lowered}_count"] = count if count is not None else len(preview)
-        summary[f"{lowered}_preview"] = preview
-        summary[f"{lowered}_preview_count"] = len(preview)
+        if preview or _verbose():
+            summary[f"{lowered}_preview"] = preview
+            summary[f"{lowered}_preview_count"] = len(preview)
     return summary
+
+
+def _walk_cuda_devices(value: Any, devices: set[Any], depth: int = 0) -> None:
+    if depth > 3 or torch is None:
+        return
+    if _is_tensor(value):
+        try:
+            if str(value.device).startswith("cuda"):
+                devices.add(value.device)
+        except Exception:
+            return
+        return
+    if isinstance(value, dict):
+        for item in list(value.values())[:64]:
+            _walk_cuda_devices(item, devices, depth + 1)
+        return
+    if isinstance(value, (list, tuple)):
+        for item in value[:64]:
+            _walk_cuda_devices(item, devices, depth + 1)
+
+
+def _synchronize_cuda_tensors(locals_dict: dict[str, Any]) -> int:
+    if torch is None or not hasattr(torch, "cuda"):
+        return 0
+    try:
+        if not torch.cuda.is_available():
+            return 0
+    except Exception:
+        return 0
+
+    devices: set[Any] = set()
+    for name, value in locals_dict.items():
+        if name == "self" or name.startswith("__sgl_transfer"):
+            continue
+        _walk_cuda_devices(value, devices)
+    for device in devices:
+        try:
+            torch.cuda.synchronize(device)
+        except Exception:
+            pass
+    return len(devices)
 
 
 def log_transfer_event(
@@ -283,7 +483,19 @@ def log_transfer_event(
     if not _enabled():
         return
 
-    ended_ns = time.perf_counter_ns()
+    wall_ended_ns = time.perf_counter_ns()
+    wall_ms = (wall_ended_ns - started_ns) / 1_000_000.0
+    cuda_sync_device_count = 0
+    cuda_sync_wait_ms = None
+    elapsed_ms_cuda_sync = None
+    if _sync_timing_enabled():
+        sync_started_ns = time.perf_counter_ns()
+        cuda_sync_device_count = _synchronize_cuda_tensors(locals_dict)
+        sync_ended_ns = time.perf_counter_ns()
+        if cuda_sync_device_count:
+            cuda_sync_wait_ms = (sync_ended_ns - sync_started_ns) / 1_000_000.0
+            elapsed_ms_cuda_sync = (sync_ended_ns - started_ns) / 1_000_000.0
+
     tensor_details: list[dict[str, Any]] = []
     total_bytes = 0
     for name, value in locals_dict.items():
@@ -296,27 +508,47 @@ def log_transfer_event(
         "function": function,
         "direction": direction,
         "timestamp_ns": time.time_ns(),
-        "elapsed_ms": (ended_ns - started_ns) / 1_000_000.0,
+        "elapsed_ms": wall_ms,
+        "elapsed_ms_wall": wall_ms,
         "num_bytes_observed": total_bytes,
         "num_kb_observed": total_bytes / 1024.0,
         "num_mb_observed": total_bytes / (1024.0 * 1024.0),
-        "tensor_details": tensor_details,
-        "error": error,
     }
+    if _verbose():
+        payload["tensor_details"] = tensor_details
+    if error or _verbose():
+        payload["error"] = error
+    if elapsed_ms_cuda_sync is not None:
+        payload["elapsed_ms_cuda_sync"] = elapsed_ms_cuda_sync
+        payload["cuda_sync_wait_ms"] = cuda_sync_wait_ms
+        payload["cuda_sync_device_count"] = cuda_sync_device_count
 
     local_summary = _local_token_summary(locals_dict)
     semantic_context = _SEMANTIC_CONTEXT.get()
-    if semantic_context:
+    has_semantic_tokens = bool(
+        semantic_context and int(semantic_context.get("semantic_token_count") or 0) > 0
+    )
+    has_local_tokens = bool(local_summary["local_token_preview_count"])
+    if has_semantic_tokens:
         payload.update(semantic_context)
         payload["token_ids_preview"] = semantic_context.get("semantic_token_ids_preview", [])
         payload["token_preview_count"] = semantic_context.get("semantic_token_preview_count", 0)
         payload["token_preview_source"] = "semantic_context"
-    else:
+    elif has_local_tokens:
         payload["token_ids_preview"] = local_summary["local_token_ids_preview"]
         payload["token_preview_count"] = local_summary["local_token_preview_count"]
         payload["token_preview_source"] = "local_heuristic"
-    payload.update(local_summary)
+        payload.update(local_summary)
+    elif _verbose():
+        if semantic_context:
+            payload.update(semantic_context)
+        payload.update(local_summary)
+        payload["token_ids_preview"] = []
+        payload["token_preview_count"] = 0
+        payload["token_preview_source"] = "none"
+
     payload.update(_index_summary(locals_dict))
+    payload.update(_kv_payload_summary(function, locals_dict))
 
     line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
     with _LOCK:

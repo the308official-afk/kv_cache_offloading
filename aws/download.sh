@@ -20,10 +20,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./download.sh
-    Download AgentBench results and SGLang transfer report from server 0
+    Download AgentBench results, reports, and SGLang transfer logs from server 0
 
   ./download.sh <server-index>
-    Download AgentBench results and SGLang transfer report from the given server
+    Download AgentBench results, reports, and SGLang transfer logs from the given server
 
 Examples:
   ./download.sh
@@ -37,6 +37,8 @@ LOCAL_RESULTS_DIR="${REPO_ROOT}/experiments/raw/agentbench/results"
 REMOTE_TRANSFER_LOG_DIR="${REMOTE_PROJECT_DIR}/experiments/raw/sglang_transfer_logs"
 REMOTE_TRANSFER_REPORT_LEGACY="${REMOTE_PROJECT_DIR}/experiments/sglang_transfer_logs/sglang_transfer_events.jsonl"
 LOCAL_TRANSFER_LOG_DIR="${REPO_ROOT}/experiments/raw/sglang_transfer_logs"
+REMOTE_RUN_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports/runs"
+LOCAL_RUN_REPORTS_DIR="${REPO_ROOT}/experiments/reports/runs"
 INDEX="0"
 
 if [[ $# -gt 1 ]]; then
@@ -63,6 +65,7 @@ fi
 chmod 400 "$PEM"
 mkdir -p "$LOCAL_RESULTS_DIR"
 mkdir -p "$LOCAL_TRANSFER_LOG_DIR"
+mkdir -p "$LOCAL_RUN_REPORTS_DIR"
 
 SSH_OPTS=(
   -i "$PEM"
@@ -136,6 +139,27 @@ else
     echo "  ${REMOTE_TRANSFER_LOG_DIR}/sglang_transfer_events*.jsonl" >&2
     echo "  ${REMOTE_TRANSFER_REPORT_LEGACY}" >&2
     exit 1
+  fi
+fi
+
+echo "==== Downloading run-level reports from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_RUN_REPORTS_DIR}/"
+echo "Local dest:    ${LOCAL_RUN_REPORTS_DIR}/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_RUN_REPORTS_DIR}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_RUN_REPORTS_DIR}/" \
+    "${LOCAL_RUN_REPORTS_DIR}/"
+else
+  echo "Remote run-level reports directory not found; local report builder can regenerate it." >&2
+fi
+
+if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then
+  echo "==== Building local latest run report ===="
+  if ! python3 "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py"; then
+    echo "Warning: local report builder failed; raw downloads are still present." >&2
   fi
 fi
 

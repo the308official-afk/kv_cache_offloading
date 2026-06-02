@@ -43,7 +43,9 @@ Use `README/README.md` as the main index.
 - `experiments/raw/`: raw profiler captures, logs, transfer JSONL files, and
   first-pass output.
 - `experiments/parsed/`: derived CSV/JSON summaries from raw data.
-- `experiments/reports/`: curated report-like outputs and final summaries.
+- `experiments/reports/runs/`: curated per-run reports that join AgentBench
+  latency/cache metrics, SGLang transfer summaries, run manifests, and outcome
+  flags.
 - `outputs/`: generated artifacts from local/manual runs.
 - `presentations/`: presentation decks and rendered presentation assets.
 

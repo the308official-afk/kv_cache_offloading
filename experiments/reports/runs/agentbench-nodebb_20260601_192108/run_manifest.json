@@ -1,0 +1,21 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {},
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-02T00:53:53.828781+00:00",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-nodebb_20260601_192108",
+    "report_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-nodebb_20260601_192108",
+    "sglang_transfer_log": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_001506_43231.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": "20989586c6f1fa664a449cf8ccf1e9ec3bc7f2b2",
+  "run_id": "agentbench-nodebb_20260601_192108",
+  "run_started_at": "2026-06-01T19:21:08.161477-05:00",
+  "task": {
+    "base_commit": "1e137b07052bc3ea0da44ed201702c94055b8ad2",
+    "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "repo": "NodeBB/NodeBB"
+  }
+}

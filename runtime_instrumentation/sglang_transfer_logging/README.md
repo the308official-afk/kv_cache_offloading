@@ -130,6 +130,7 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=0 \
 ./run_dynamo_single_host.sh start
 ```
 
@@ -141,6 +142,7 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=0 \
 ./run_dynamo_worker.sh start
 ```
 
@@ -186,6 +188,7 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 ./run_dynamo_single_host.sh start
 ```
 
@@ -218,8 +221,14 @@ Main outputs:
 
 ```text
 transfer_events.jsonl
+transfer_events.csv
 transfer_summary.csv
 ```
+
+`transfer_events.csv` is the easiest file for per-line inspection. It includes
+the source log line number, `direction`, a readable `direction_label`
+(`host->device` or `device->host`), function name, token preview, estimated KV
+MB, and timing fields.
 
 ## Useful Knobs
 
@@ -234,6 +243,8 @@ SGLANG_TRANSFER_LOG_FULL_TOKENS=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT=32
 SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC=0
+SGLANG_TRANSFER_LOG_SYNC_TIMING=0
+SGLANG_TRANSFER_LOG_VERBOSE=0
 ```
 
 Use full semantic-token logging only for small requests:
@@ -249,6 +260,20 @@ sync for index tensors:
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1
 ```
 
+Use synchronized CUDA timing only for measurement runs. It inserts a device
+sync while logging, so it is more honest but heavier:
+
+```bash
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1
+```
+
+Use verbose mode when you want tensor details, empty fallback fields, and other
+diagnostics in every event:
+
+```bash
+SGLANG_TRANSFER_LOG_VERBOSE=1
+```
+
 ## Expected Event Shape
 
 ```json
@@ -257,27 +282,24 @@ SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1
   "function": "backup_from_device_all_layer",
   "direction": "device_to_host",
   "elapsed_ms": 0.42,
-  "num_bytes_observed": 1048576,
-  "num_mb_observed": 1.0,
-  "tensor_details": [
-    {
-      "name": "cache_loc",
-      "shape": [64],
-      "dtype": "torch.int64",
-      "device": "cuda:0",
-      "num_bytes": 512
-    }
-  ],
+  "elapsed_ms_wall": 0.42,
+  "num_bytes_observed": 1024,
+  "num_mb_observed": 0.0009765625,
+  "host_indices_count": 64,
+  "device_indices_count": 64,
+  "kv_item_granularity_assumption": "token",
+  "kv_num_bytes_estimated": 3670016,
+  "kv_num_mb_estimated": 3.5,
+  "kv_num_bytes_estimated_page_granular": 234881024,
+  "kv_num_mb_estimated_page_granular": 224.0,
+  "kv_estimate_formula": "2*head_num*head_dim*dtype.itemsize",
   "semantic_context_function": "write_backup",
-  "semantic_token_source": "write_backup.node.key",
+  "semantic_token_source": "write_backup.node.key.token_ids",
   "semantic_token_count": 64,
   "semantic_token_ids_preview": [151644, 872, 198],
   "semantic_token_ids_sha256": "...",
   "token_ids_preview": [151644, 872, 198],
-  "token_preview_source": "semantic_context",
-  "device_indices_count": 2048,
-  "device_indices_preview": [],
-  "device_indices_preview_skipped": "cuda_tensor_set_SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1"
+  "token_preview_source": "semantic_context"
 }
 ```
 
@@ -286,11 +308,27 @@ SGLANG_TRANSFER_LOG_INDEX_PREVIEW=1
 `token_ids_preview` is now semantic when a transfer occurs under
 `hiradix_cache.py`'s `write_backup()` or `load_back()`. In that case,
 `token_preview_source` is `semantic_context`, and the same values are available
-under `semantic_token_ids_preview`.
+under `semantic_token_ids_preview`. The extractor follows nested HiRadix fields
+such as `node.key.token_ids`, which is where the semantic token IDs are still
+available before the lower memory-pool copy.
+
+`num_bytes_observed` is a conservative scan of tensors visible in the Python
+frame, often just `host_indices` and `device_indices`. For KV payload size, use
+`kv_num_bytes_estimated` / `kv_num_mb_estimated`; those are token-granular and
+computed from the memory-pool shape metadata, dtype item size, and layer count.
+The page-granular estimate is still emitted separately as
+`kv_num_bytes_estimated_page_granular` for comparison.
+
+`elapsed_ms` is kept as a compatibility alias for `elapsed_ms_wall`. When
+`SGLANG_TRANSFER_LOG_SYNC_TIMING=1`, events also include
+`elapsed_ms_cuda_sync` and `cuda_sync_wait_ms`.
 
 If no semantic context is active, the event falls back to a low-level local
 heuristic and marks `token_preview_source` as `local_heuristic`. Treat that
 fallback as debugging metadata, not tokenizer IDs.
+
+Default events are compact. Tensor details, empty local-token fallback fields,
+and null errors are emitted only when `SGLANG_TRANSFER_LOG_VERBOSE=1`.
 
 The next files to instrument are:
 
