@@ -1,0 +1,28 @@
+{
+  "execution_loop_steps": [],
+  "phases": [],
+  "run": {
+    "app_variant": null,
+    "execution_loop_enabled": false,
+    "execution_loop_steps": 0,
+    "execution_subrequests": 0,
+    "execution_tool_call_count": 0,
+    "execution_tools_used": "none",
+    "git_diff_nonempty": false,
+    "hint_profile": "unknown",
+    "model": null,
+    "patch": "0 bytes",
+    "patch_bytes": 0,
+    "patch_nonempty": false,
+    "repo": "unknown",
+    "repo_full_name": null,
+    "run_id": "agentbench-20260603_150846",
+    "run_short": "150846",
+    "runtime": "unknown",
+    "source_note": "Precise per-phase tool counts come from step_results.tool_progress. Older runs may only have aggregate prompt-evolution evidence.",
+    "tool_call_count": 0,
+    "tool_source": "unavailable",
+    "tools_used": "none",
+    "worker_subrequests_total": 0
+  }
+}

@@ -10,9 +10,9 @@ PEM="/Users/oluwolejaiyeoba/Documents/GitHub/secrets/projectonekeypair.pem"
 REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 SERVERS=(
-  "44.211.175.29"
-  "3.86.105.253"
-  "44.211.226.196"
+  ""
+  "3.83.157.148"
+  ""
 )
 LABELS=("S0" "S1" "S2")
 

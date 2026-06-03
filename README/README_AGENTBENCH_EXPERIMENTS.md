@@ -20,7 +20,7 @@ startup and the AgentBench run command.
 ```bash
 cd ~/kv_cache_offloading
 
-MODEL_KIND="coder30b"  # coder, coder30b, or instruct
+MODEL_KIND="coder"  # coder, coder30b, or instruct
 case "$MODEL_KIND" in
   coder)
     MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
@@ -365,10 +365,10 @@ At the end of the run, AgentBench automatically builds the curated report under:
 ```text
 experiments/reports/runs/<run_id>/
   run_manifest.json
-  run_metrics.json
-  run_metrics.csv
-  transfer_summary.csv
-  summary.md
+  runtime_metrics.json
+  phase_runtime_metrics.csv
+  transfer_events_by_function.csv
+  run_overview.md
 ```
 
 New runs use timestamp-first IDs such as `agentbench-20260602_190012`. The
@@ -437,10 +437,10 @@ curated report:
 
 ```bash
 LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
-cat "$LATEST_RUN_REPORT/summary.md"
-cat "$LATEST_RUN_REPORT/run_metrics.csv"
-cat "$LATEST_RUN_REPORT/subrequest_metrics.csv"
-cat "$LATEST_RUN_REPORT/transfer_summary.csv"
+cat "$LATEST_RUN_REPORT/run_overview.md"
+cat "$LATEST_RUN_REPORT/phase_runtime_metrics.csv"
+cat "$LATEST_RUN_REPORT/model_request_metrics.csv"
+cat "$LATEST_RUN_REPORT/transfer_events_by_function.csv"
 ```
 
 For the first run after enabling direct attribution, check whether the new
@@ -464,14 +464,14 @@ import csv
 from pathlib import Path
 
 report = Path(__import__("os").environ["LATEST_RUN_REPORT"])
-with (report / "run_metrics.csv").open() as handle:
+with (report / "phase_runtime_metrics.csv").open() as handle:
     for row in csv.DictReader(handle):
         print(
             row["phase"],
             "worker_runtime_json_matched=", row.get("worker_runtime_json_matched"),
             "transfer_request_id_matched=", row.get("transfer_request_id_matched"),
         )
-with (report / "subrequest_metrics.csv").open() as handle:
+with (report / "model_request_metrics.csv").open() as handle:
     for row in csv.DictReader(handle):
         print(
             row["phase"],
@@ -495,7 +495,7 @@ python3 experiments/scripts/agentbench_report/build_run_report.py \
   --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
 ```
 
-`run_metrics.json` keeps the old runtime cache fields as
+`runtime_metrics.json` keeps the old runtime cache fields as
 `runtime_*_reported`, but its main `cache_hit`, `cached_token_count`,
 `recomputed_prefix_tokens`, and `cache_reuse_ratio` fields are effective values
 derived from API usage, SGLang worker prefill logs, scheduler cached blocks, and
@@ -504,13 +504,13 @@ evidence in this order: `runtime_events.latency.ttft_ms`, worker
 `[RUNTIME_JSON]` request-received to request-attached timing, then plain worker
 logs from frontend request timestamp to first SGLang decode batch.
 
-For source clarity, `run_metrics.json` includes `metric_sources`. Fields prefixed
+For source clarity, `runtime_metrics.json` includes `metric_sources`. Fields prefixed
 with `sglang_*` are parsed directly from SGLang worker logs; transfer totals are
 parsed from the SGLang transfer JSONL. When worker `[RUNTIME_JSON]` or transfer
 events include request metadata, the report uses direct request-id matching.
 Otherwise, AgentBench still supplies phase names, request IDs, hint metadata,
 task metadata, patch outcome, and client/API usage accounting.
-`subrequest_metrics.csv` is the best file when one phase sends multiple model
+`model_request_metrics.csv` is the best file when one phase sends multiple model
 requests, because it splits rows by SGLang `runtime_context_id` /
 `sglang_request_id`.
 
@@ -717,7 +717,7 @@ before/after value readable by truncating long strings with an ellipsis.
 The harness runs one SWE-bench task per process via `--index`. To try multiple
 tasks, loop over indexes:
 
-```bash
+<!-- ```bash
 cd ~/kv_cache_offloading
 
 export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
@@ -731,7 +731,7 @@ export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 START_INDEX=0
-END_INDEX=3
+END_INDEX=4
 
 for INDEX in $(seq "$START_INDEX" "$END_INDEX"); do
   echo "===== Running SWE-bench index $INDEX ====="
@@ -751,6 +751,46 @@ for INDEX in $(seq "$START_INDEX" "$END_INDEX"); do
 
   echo
 done
+``` -->
+
+If you want the rolling report files refreshed and announced after every
+iteration, use the batch wrapper instead of a hand-written loop:
+
+```bash
+cd ~/kv_cache_offloading
+
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
+export AGENTBENCH_EXECUTION_GUARD=1
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+
+START_INDEX=0 \
+END_INDEX=30 \
+HINT_PROFILE=high-reuse \
+./agentbench/run_swebench_batch_single_host.sh
+```
+
+That wrapper explicitly rebuilds the latest curated report after each completed
+task and keeps batch-local progress artifacts under:
+
+```text
+experiments/reports/batches/<batch_id>/
+  progress.log
+  progress_overview.csv
+```
+
+After each iteration it also refreshes and prints the paths to:
+
+```text
+experiments/reports/latest_runs_overview.md
+experiments/reports/all_runs_overview.csv
+experiments/reports/latest_runs_execution_prompts.md
+experiments/reports/all_runs_execution_prompts.csv
 ```
 
 Then check which tasks produced patches:
@@ -759,16 +799,16 @@ Then check which tasks produced patches:
 cd ~/kv_cache_offloading
 
 for REPORT in experiments/reports/runs/*; do
-  [ -f "$REPORT/summary.md" ] || continue
+  [ -f "$REPORT/run_overview.md" ] || continue
   echo "===== $(basename "$REPORT") ====="
-  grep -E "Patch nonempty|Git diff nonempty|Model|App variant|Hint profile" "$REPORT/summary.md"
+  grep -E "Patch nonempty|Git diff nonempty|Model|App variant|Hint profile" "$REPORT/run_overview.md"
 done
 ```
 
 This is the fastest way to find SWE-bench tasks that produce a patch. For clean
 per-task run-level transfer totals, restart Dynamo before each task so every run
 gets a fresh `sglang_transfer_events_*.jsonl`. If you keep the same worker
-running, `subrequest_metrics.csv` is still useful because it uses per-subrequest
+running, `model_request_metrics.csv` is still useful because it uses per-subrequest
 time windows, but the run-level transfer total may include earlier tasks from
 the same worker session.
 
@@ -865,27 +905,44 @@ For comparisons across hint configurations, prefer the curated run report:
 
 ```bash
 LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
-cat "$LATEST_RUN_REPORT/run_metrics.csv"
+cat "$LATEST_RUN_REPORT/phase_runtime_metrics.csv"
 ```
 
 For the compact agent-behavior view, use:
 
 ```bash
-cat "$LATEST_RUN_REPORT/agent_behavior_summary.md"
-cat "$LATEST_RUN_REPORT/agent_behavior_summary.csv"
-cat "$LATEST_RUN_REPORT/agent_tool_calls.md"
-cat "$LATEST_RUN_REPORT/agent_tool_calls.csv"
-cat experiments/reports/latest_agent_behavior_summary.csv
-cat experiments/reports/latest_agent_tool_calls.csv
-cat experiments/reports/latest_runs_tool_summary.md
-cat experiments/reports/all_runs_tool_summary.md
+cat "$LATEST_RUN_REPORT/phase_summary.md"
+cat "$LATEST_RUN_REPORT/phase_summary.csv"
+cat "$LATEST_RUN_REPORT/tool_call_details.md"
+cat "$LATEST_RUN_REPORT/tool_call_details.csv"
+cat experiments/reports/latest_run_phase_summary.csv
+cat experiments/reports/latest_run_tool_call_details.csv
+cat experiments/reports/latest_runs_overview.md
+cat experiments/reports/all_runs_overview.md
+cat experiments/reports/latest_runs_execution_prompts.md
+cat experiments/reports/all_runs_execution_prompts.csv
+cat experiments/reports/latest_runs_task_summary.md
+cat experiments/reports/all_runs_task_summary.csv
 ```
 
 This is the quick table to check after each run. It reports the run/repo/runtime,
 execution subrequest count, tool calls, tools used, patch size, and phase-level
 runtime/cache/transfer fields.
 
-`agent_tool_calls.md` shows the exact tool-call arguments when available. For
+For audience-friendly orientation, the task-summary reports give a short,
+deterministic summary of what each SWE-bench task is asking for:
+
+- `latest_runs_task_summary.md`
+- `all_runs_task_summary.csv`
+
+They also include:
+
+- `expected_agent_action`: the short operational expectation, such as
+  `edit repo code and run validation` or `modify routing/controller logic and run targeted tests`
+- `validation_expectation`: the expected validation style, such as
+  `run targeted tests` or `run validation command (...)`
+
+`tool_call_details.md` shows the exact tool-call arguments when available. For
 `execute`, check the `Command` column to confirm whether the model actually ran
 the expected validation command.
 

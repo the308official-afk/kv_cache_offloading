@@ -4,9 +4,9 @@
 
 # Define your public IPs in an array
 IPS=(
-  "44.211.175.29"   
-  "3.86.105.253"
-  "44.211.226.196"
+  ""   
+  "3.83.157.148"
+  ""
 )
 
 # Check if an argument was passed

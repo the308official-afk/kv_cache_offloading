@@ -1,0 +1,40 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {},
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-03T20:21:00.282504+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614",
+    "report_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_151614",
+    "sglang_transfer_log": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": "2ac881eca510bd605696df11b3adfa1ef32f1934",
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-20260603_151614::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-20260603_151614",
+  "run_started_at": "2026-06-03T15:16:14.808324-05:00",
+  "task": {
+    "base_commit": "eca1d01746c031f95e8df1ef3eea36d31416633d",
+    "expected_agent_action": "refactor code organization",
+    "instance_id": "instance_gravitational__teleport-eefac60a350930e5f295f94a2d55b94c1988c04e-vee9b09fb20c43af7e520f57e9239bbcf46b7113d",
+    "patch_expected": true,
+    "problem_statement_preview": "Teleport should provide utility functions to programmatically retrieve system metadata from the Linux DMI interface (`/sys/class/dmi/id`) and from the `/etc/os-release` file. Functions should extract known fields from...",
+    "problem_statement_summary": "Lack of utility functions for extracting system metadata",
+    "repo": "gravitational/teleport",
+    "selected_tests_preview": "",
+    "task_source": null,
+    "validation_expectation": "no explicit validation command provided"
+  }
+}

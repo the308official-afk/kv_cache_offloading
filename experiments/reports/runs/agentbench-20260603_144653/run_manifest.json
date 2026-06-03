@@ -1,0 +1,42 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {
+    "MODEL_NAME": "Qwen/Qwen2.5-Coder-7B-Instruct"
+  },
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-03T19:47:55.577127+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_144653",
+    "report_dir": "/home/ec2-user/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_144653",
+    "sglang_transfer_log": "/home/ec2-user/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": null,
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-20260603_144653::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-20260603_144653",
+  "run_started_at": "2026-06-03T14:46:53.076300-05:00",
+  "task": {
+    "base_commit": "2e65f731b1b615b5cd60417c00b6993c2295e9f8",
+    "expected_agent_action": "fix validation logic",
+    "instance_id": "instance_qutebrowser__qutebrowser-96b997802e942937e81d2b8a32d08f00d3f4bc4e-v5fc38aaf22415ab0b70567368332beee7955b367",
+    "patch_expected": true,
+    "problem_statement_preview": "The helper responsible for parsing duration strings does not properly validate input or return consistent millisecond values. Inputs such as negative values (`-1s`), duplicate units (`34ss`), or fractional seconds (`6...",
+    "problem_statement_summary": "Bug Report: `parse_duration` accepts invalid formats and miscalculates durations",
+    "repo": "qutebrowser/qutebrowser",
+    "selected_tests_preview": "",
+    "task_source": null,
+    "validation_expectation": "no explicit validation command provided"
+  }
+}

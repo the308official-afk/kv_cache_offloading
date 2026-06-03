@@ -4204,8 +4204,12 @@ def build_curated_run_report(
         "command": command,
         "transfer_log": str(selected_transfer_log),
         "report_dir": str(report_dir),
-        "summary_file": str(report_dir / "summary.md"),
-        "run_metrics_file": str(report_dir / "run_metrics.json"),
+        "summary_file": str(report_dir / "run_overview.md"),
+        "run_metrics_file": str(report_dir / "runtime_metrics.json"),
+        "latest_runs_overview_file": str(REPO_ROOT / "experiments/reports/latest_runs_overview.md"),
+        "all_runs_overview_file": str(REPO_ROOT / "experiments/reports/all_runs_overview.csv"),
+        "latest_runs_execution_prompts_file": str(REPO_ROOT / "experiments/reports/latest_runs_execution_prompts.md"),
+        "all_runs_execution_prompts_file": str(REPO_ROOT / "experiments/reports/all_runs_execution_prompts.csv"),
         "stdout": completed.stdout,
         "stderr": completed.stderr,
     }
@@ -4975,6 +4979,10 @@ def main() -> None:
     print(f"Result file: {others_dir / 'result.json'}")
     if auto_run_report.get("enabled"):
         print(f"Run report: {auto_run_report.get('report_dir')}")
+        print(f"Latest overview: {auto_run_report.get('latest_runs_overview_file')}")
+        print(f"All runs overview: {auto_run_report.get('all_runs_overview_file')}")
+        print(f"Latest execution prompts: {auto_run_report.get('latest_runs_execution_prompts_file')}")
+        print(f"All execution prompts: {auto_run_report.get('all_runs_execution_prompts_file')}")
         if not auto_run_report.get("success"):
             print(f"Run report generation failed: {auto_run_report.get('stderr')}", file=sys.stderr)
 

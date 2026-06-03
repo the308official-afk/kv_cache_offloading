@@ -1,0 +1,2 @@
+gpu_candidates,cpu_candidates,nvme_candidates,drop_candidates
+[],"['execution', 'execution', 'execution', 'patch_generation']","['planning', 'review']",[]

@@ -1,0 +1,42 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {
+    "MODEL_NAME": "Qwen/Qwen2.5-Coder-7B-Instruct"
+  },
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-03T19:36:44.421331+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_143449",
+    "report_dir": "/home/ec2-user/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_143449",
+    "sglang_transfer_log": "/home/ec2-user/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": null,
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-20260603_143449::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-20260603_143449",
+  "run_started_at": "2026-06-03T14:34:49.401577-05:00",
+  "task": {
+    "base_commit": "481158d6310e36e3c1115e25ab3fdf1c1ed45e60",
+    "expected_agent_action": "modify routing/controller logic",
+    "instance_id": "instance_gravitational__teleport-3fa6904377c006497169945428e8197158667910-v626ec2a48416b10a88641359a169d99e935ff037",
+    "patch_expected": true,
+    "problem_statement_preview": "kubectl exec interactive sessions fail due to missing session uploader initialization in Kubernetes service **Expected behavior:** When using the Kubernetes integration in Teleport, executing `kubectl exec` against a ...",
+    "problem_statement_summary": "kubectl exec interactive sessions fail due to missing session uploader initialization in Kubernetes service",
+    "repo": "gravitational/teleport",
+    "selected_tests_preview": "",
+    "task_source": null,
+    "validation_expectation": "no explicit validation command provided"
+  }
+}

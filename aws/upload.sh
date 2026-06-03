@@ -13,9 +13,9 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 # SERVERS=("44.201.229.234" "44.202.2.239" "3.88.7.135")
 SERVERS=(
-  "44.211.175.29"   
-  "3.86.105.253"
-  "44.211.226.196"
+  ""   
+  "3.83.157.148"
+  ""
 )
 LABELS=("S0" "S1" "S2")
 
@@ -61,7 +61,10 @@ RSYNC_EXCLUDES=(
   --exclude '.venv/'
   --exclude 'venv/'
   --exclude 'agentbench/results/'
-  --exclude 'experiments/'
+  --include 'experiments/'
+  --include 'experiments/scripts/'
+  --include 'experiments/scripts/***'
+  --exclude 'experiments/*'
 )
 
 rsync_upload_repo() {

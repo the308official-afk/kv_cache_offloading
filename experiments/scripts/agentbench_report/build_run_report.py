@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import hashlib
 import json
 import os
 import re
@@ -54,6 +55,13 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
 
 def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+
+
+def unlink_if_exists(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
 
 
 def dict_or_empty(value: Any) -> dict[str, Any]:
@@ -214,6 +222,85 @@ def limit_text(text: str, limit: int = 3000) -> str:
     if len(text) <= limit:
         return text
     return text[: max(limit - 3, 0)] + "..."
+
+
+def compact_text(text: Any, limit: int = 220) -> str:
+    normalized = " ".join(str(text or "").split())
+    return limit_text(normalized, limit=limit)
+
+
+def strip_wrapping_quotes(text: str) -> str:
+    text = text.strip()
+    if len(text) >= 2 and text[0] == text[-1] == '"':
+        return text[1:-1].strip()
+    return text
+
+
+def clean_problem_statement_text(text: Any) -> str:
+    raw = strip_wrapping_quotes(str(text or ""))
+    raw = raw.replace("\\r\\n", "\n").replace("\\n", "\n")
+    lines = [line.strip() for line in raw.splitlines()]
+    cleaned: list[str] = []
+    for line in lines:
+        if not line:
+            continue
+        if line.startswith("#"):
+            continue
+        line = re.sub(r'^\*\*Title:\s*(.+?)\*\*$', r"\1", line, flags=re.IGNORECASE)
+        line = re.sub(r"^\*\*Title:\*\*\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^\*\*Description:\*\*\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^\*\*Issue Description\*\*\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^Title:\s*", "", line, flags=re.IGNORECASE)
+        line = re.sub(r"^Description:\s*", "", line, flags=re.IGNORECASE)
+        cleaned.append(line)
+    normalized = " ".join(cleaned)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized
+
+
+def summarize_problem_statement(text: Any, limit: int = 180) -> str:
+    raw = strip_wrapping_quotes(str(text or ""))
+    raw = raw.replace("\\r\\n", "\n").replace("\\n", "\n")
+    title_match = re.search(r"##\s*Title:?\s*(.+?)(?:\n##|\Z)", raw, flags=re.IGNORECASE | re.DOTALL)
+    if title_match:
+        title = " ".join(title_match.group(1).split()).strip()
+        if title:
+            return limit_text(title, limit=limit)
+    inline_bold_title_match = re.search(r"\*\*Title:\s*(.+?)\*\*", raw, flags=re.IGNORECASE | re.DOTALL)
+    if inline_bold_title_match:
+        title = " ".join(inline_bold_title_match.group(1).split()).strip()
+        if title:
+            return limit_text(title, limit=limit)
+    bold_title_match = re.search(r"\*\*Title:\*\*\s*(.+?)(?:\n|$)", raw, flags=re.IGNORECASE)
+    if bold_title_match:
+        title = " ".join(bold_title_match.group(1).split()).strip()
+        if title:
+            return limit_text(title, limit=limit)
+    hash_title_match = re.search(r"#\s*title:\s*(.+?)(?:\n|$)", raw, flags=re.IGNORECASE)
+    if hash_title_match:
+        title = " ".join(hash_title_match.group(1).split()).strip()
+        if title:
+            return limit_text(title, limit=limit)
+    cleaned = clean_problem_statement_text(raw)
+    if not cleaned:
+        return ""
+    sentence_match = re.match(r"(.+?[.!?])(?:\s|$)", cleaned)
+    if sentence_match:
+        return limit_text(sentence_match.group(1).strip(), limit=limit)
+    return limit_text(cleaned, limit=limit)
+
+
+def run_timestamp_text(run_id: str) -> str:
+    text = str(run_id)
+    if text.startswith("agentbench-"):
+        text = text[len("agentbench-") :]
+    parts = text.split("_")
+    if len(parts) >= 2 and parts[0].isdigit() and len(parts[0]) == 8 and parts[1].isdigit() and len(parts[1]) == 6:
+        timestamp = f"{parts[0]}_{parts[1]}"
+        if len(parts) >= 3 and parts[2].isdigit():
+            timestamp = f"{timestamp}_{parts[2]}"
+        return timestamp
+    return text
 
 
 def git_sha(root: Path) -> str | None:
@@ -1639,7 +1726,7 @@ def write_agent_behavior_md(path: Path, summary: dict[str, Any]) -> None:
             "",
             "## Notes",
             "",
-            "- Exact tool-call arguments and command strings: `agent_tool_calls.md`",
+            "- Exact tool-call arguments and command strings: `tool_call_details.md`",
             f"- Tool source: `{run.get('tool_source')}`",
             f"- Execution loop steps: `{run.get('execution_loop_steps')}`",
             f"- Patch nonempty: `{run.get('patch_nonempty')}`",
@@ -1670,13 +1757,20 @@ def iter_run_report_dirs(runs_root: Path) -> list[Path]:
         return []
     run_dirs = [
         path for path in runs_root.iterdir()
-        if path.is_dir() and (path / "agent_behavior_summary.json").exists()
+        if path.is_dir() and ((path / "phase_summary.json").exists() or (path / "agent_behavior_summary.json").exists())
     ]
     return sorted(run_dirs, key=lambda path: sort_run_id_key(path.name))
 
 
+def load_phase_summary(report_dir: Path) -> dict[str, Any]:
+    return load_json(
+        report_dir / "phase_summary.json",
+        load_json(report_dir / "agent_behavior_summary.json", {}),
+    )
+
+
 def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
-    summary = load_json(report_dir / "agent_behavior_summary.json", {})
+    summary = load_phase_summary(report_dir)
     run = dict_or_empty(summary.get("run"))
     phases_raw = summary.get("phases")
     phases = phases_raw if isinstance(phases_raw, list) else []
@@ -1829,19 +1923,349 @@ def refresh_aggregate_tool_summaries(root: Path, runs_root: Path, *, latest_limi
     reports_root = root / "experiments/reports"
     reports_root.mkdir(parents=True, exist_ok=True)
 
-    write_aggregate_tool_summary_csv(reports_root / "all_runs_tool_summary.csv", rows)
+    write_aggregate_tool_summary_csv(reports_root / "all_runs_overview.csv", rows)
     write_aggregate_tool_summary_md(
-        reports_root / "all_runs_tool_summary.md",
+        reports_root / "all_runs_overview.md",
         rows,
-        title="All Runs Tool Summary",
+        title="All Runs Overview",
     )
 
     latest_rows = rows[-latest_limit:]
-    write_aggregate_tool_summary_csv(reports_root / "latest_runs_tool_summary.csv", latest_rows)
+    write_aggregate_tool_summary_csv(reports_root / "latest_runs_overview.csv", latest_rows)
     write_aggregate_tool_summary_md(
-        reports_root / "latest_runs_tool_summary.md",
+        reports_root / "latest_runs_overview.md",
         latest_rows,
-        title=f"Latest {len(latest_rows)} Runs Tool Summary",
+        title=f"Latest {len(latest_rows)} Runs Overview",
+    )
+    for legacy_name in (
+        "all_runs_tool_summary.csv",
+        "all_runs_tool_summary.md",
+        "latest_runs_tool_summary.csv",
+        "latest_runs_tool_summary.md",
+    ):
+        unlink_if_exists(reports_root / legacy_name)
+
+
+def prompt_mentions_validation(prompt: str) -> bool:
+    lowered = prompt.lower()
+    keywords = ("test", "pytest", "mocha", "validate", "validation", "execute")
+    return any(keyword in lowered for keyword in keywords)
+
+
+def derive_expected_agent_action(
+    *,
+    problem_statement: str,
+    requirements: str,
+    selected_tests: list[str],
+    validation_command: str,
+    patch_expected: bool,
+) -> str:
+    text = " ".join(
+        part for part in [problem_statement, requirements, validation_command, " ".join(selected_tests)] if part
+    ).lower()
+    has_refactor_signal = bool(
+        re.search(r"\b(move|moved|refactor|split|separate|relocate|relocation)\b", text)
+    )
+
+    if any(token in text for token in ("route", "router", "endpoint", "controller", "webfinger", ".well-known")):
+        base_action = "modify routing/controller logic"
+    elif has_refactor_signal:
+        base_action = "refactor code organization"
+    elif any(token in text for token in ("validation", "invalid", "reject", "accept", "keyword")):
+        base_action = "fix validation logic"
+    elif any(token in text for token in ("subdomain", "hostname", "domain", "blocking", "blocklist")):
+        base_action = "fix host-matching logic"
+    else:
+        base_action = ""
+
+    if not base_action and patch_expected:
+        base_action = "edit repo code"
+
+    if selected_tests or validation_command:
+        if base_action:
+            return f"{base_action} and run targeted tests"
+        return "edit repo code and run validation"
+    if base_action:
+        return base_action
+    return "edit repo code"
+
+
+def derive_validation_expectation(selected_tests: list[str], validation_command: str) -> str:
+    command = str(validation_command or "").strip()
+    if command:
+        compact_command = compact_text(command, limit=120)
+        if selected_tests:
+            return f"run targeted tests ({compact_command})"
+        return f"run validation command ({compact_command})"
+    if selected_tests:
+        if len(selected_tests) == 1:
+            return "run targeted test file"
+        return "run targeted tests"
+    return "no explicit validation command provided"
+
+
+def resolve_agentbench_result_dir(report_dir: Path, run: dict[str, Any]) -> Path | None:
+    manifest = load_json(report_dir / "run_manifest.json", {})
+    manifest_paths = dict_or_empty(manifest.get("paths"))
+    manifest_value = manifest_paths.get("agentbench_result_dir")
+    candidates: list[Path] = []
+    if manifest_value:
+        manifest_path = Path(str(manifest_value))
+        candidates.append(manifest_path)
+        if not manifest_path.is_absolute():
+            candidates.append(repo_root() / manifest_path)
+    run_id = str(run.get("run_id") or report_dir.name)
+    if run_id:
+        candidates.append(repo_root() / "experiments/raw/agentbench/results" / run_id)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0] if candidates else None
+
+
+def task_info_from_report_dir(report_dir: Path, run: dict[str, Any]) -> dict[str, Any]:
+    result_dir = resolve_agentbench_result_dir(report_dir, run)
+    result = load_json(result_dir / "others/result.json", {}) if result_dir else {}
+    task = dict_or_empty(result.get("task"))
+    problem_statement = str(task.get("problem_statement") or "")
+    requirements = str(task.get("requirements") or "")
+    selected_tests = task.get("selected_test_files_to_run")
+    if not isinstance(selected_tests, list):
+        selected_tests = []
+    validation_command = str(task.get("validation_command") or "")
+    patch_expected = bool(task.get("patch"))
+    return {
+        "task_source": result.get("task_source"),
+        "instance_id": task.get("instance_id"),
+        "repo": task.get("repo"),
+        "base_commit": task.get("base_commit"),
+        "problem_statement_summary": summarize_problem_statement(problem_statement),
+        "problem_statement_preview": compact_text(clean_problem_statement_text(problem_statement), limit=220),
+        "selected_test_count": len(selected_tests),
+        "selected_tests_preview": ", ".join(str(item) for item in selected_tests[:3]),
+        "patch_expected": patch_expected,
+        "expected_agent_action": derive_expected_agent_action(
+            problem_statement=clean_problem_statement_text(problem_statement),
+            requirements=clean_problem_statement_text(requirements),
+            selected_tests=[str(item) for item in selected_tests],
+            validation_command=validation_command,
+            patch_expected=patch_expected,
+        ),
+        "validation_expectation": derive_validation_expectation(
+            [str(item) for item in selected_tests],
+            validation_command,
+        ),
+    }
+
+
+def aggregate_execution_prompt_rows(report_dir: Path) -> list[dict[str, Any]]:
+    summary = load_phase_summary(report_dir)
+    run = dict_or_empty(summary.get("run"))
+    if not run:
+        return []
+
+    result_dir = resolve_agentbench_result_dir(report_dir, run)
+    result = load_json(result_dir / "others/result.json", {}) if result_dir else {}
+    phase_results = dict_or_empty(result.get("result")).get("phase_results") or []
+    if not isinstance(phase_results, list):
+        return []
+
+    rows: list[dict[str, Any]] = []
+    for phase_result in phase_results:
+        if not isinstance(phase_result, dict):
+            continue
+        phase_name = str(phase_result.get("phase") or "")
+        if not phase_name.startswith("execution"):
+            continue
+        prompt = str(phase_result.get("prompt") or "")
+        progress = tool_progress_from_step(phase_result)
+        tool_names = list_from_any(progress.get("tool_call_names"))
+        tool_count = as_int(progress.get("tool_call_count"), len(tool_names))
+        rows.append(
+            {
+                "run_id": run.get("run_id"),
+                "run_short": run.get("run_short"),
+                "repo": run.get("repo"),
+                "runtime": run.get("runtime"),
+                "model": run.get("model"),
+                "hint_profile": run.get("hint_profile"),
+                "phase": phase_name,
+                "execution_step": phase_result.get("sequence_index"),
+                "request_id": dict_or_empty(phase_result.get("request_context")).get("request_id"),
+                "parent_run_id": dict_or_empty(phase_result.get("request_context")).get("parent_run_id"),
+                "prompt_preview": compact_text(prompt, limit=220),
+                "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest() if prompt else "",
+                "prompt_chars": len(prompt),
+                "prompt_lines": len(prompt.splitlines()) if prompt else 0,
+                "prompt_mentions_validation": prompt_mentions_validation(prompt),
+                "tool_call_count": tool_count,
+                "tools_called": display_tools(tool_names),
+                "patch_bytes": run.get("patch_bytes"),
+            }
+        )
+    return rows
+
+
+def write_execution_prompt_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "run_id",
+        "run_short",
+        "repo",
+        "runtime",
+        "model",
+        "hint_profile",
+        "phase",
+        "execution_step",
+        "request_id",
+        "parent_run_id",
+        "prompt_preview",
+        "prompt_sha256",
+        "prompt_chars",
+        "prompt_lines",
+        "prompt_mentions_validation",
+        "tool_call_count",
+        "tools_called",
+        "patch_bytes",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in fields})
+
+
+def write_execution_prompt_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Repo | Step | Prompt preview | Tools called | Patch |",
+        "| --- | --- | ---: | --- | --- | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run_short} | {repo} | {execution_step} | {prompt_preview} | {tool_call_count} ({tools_called}) | {patch_bytes} |".format(
+                run_short=row.get("run_short", ""),
+                repo=row.get("repo", ""),
+                execution_step=row.get("execution_step", ""),
+                prompt_preview=row.get("prompt_preview", ""),
+                tool_call_count=row.get("tool_call_count", 0),
+                tools_called=row.get("tools_called", "none"),
+                patch_bytes=row.get("patch_bytes", 0),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def refresh_execution_prompt_summaries(root: Path, runs_root: Path, *, latest_limit: int = 10) -> None:
+    run_dirs = iter_run_report_dirs(runs_root)
+    rows: list[dict[str, Any]] = []
+    for run_dir in run_dirs:
+        rows.extend(aggregate_execution_prompt_rows(run_dir))
+
+    reports_root = root / "experiments/reports"
+    reports_root.mkdir(parents=True, exist_ok=True)
+    write_execution_prompt_summary_csv(reports_root / "all_runs_execution_prompts.csv", rows)
+
+    latest_run_ids = {run_dir.name for run_dir in run_dirs[-latest_limit:]}
+    latest_rows = [row for row in rows if row.get("run_id") in latest_run_ids]
+    write_execution_prompt_summary_md(
+        reports_root / "latest_runs_execution_prompts.md",
+        latest_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Execution Prompts",
+    )
+    for legacy_name in (
+        "all_runs_execution_prompt_summary.csv",
+        "latest_runs_execution_prompt_summary.md",
+    ):
+        unlink_if_exists(reports_root / legacy_name)
+
+
+def aggregate_task_summary_row(report_dir: Path) -> dict[str, Any] | None:
+    summary = load_phase_summary(report_dir)
+    run = dict_or_empty(summary.get("run"))
+    if not run:
+        return None
+    task = task_info_from_report_dir(report_dir, run)
+    return {
+        "run_id": run.get("run_id"),
+        "run_short": run.get("run_short"),
+        "timestamp": run_timestamp_text(str(run.get("run_id") or report_dir.name)),
+        "repo": task.get("repo") or run.get("repo"),
+        "instance_id": task.get("instance_id"),
+        "task_source": task.get("task_source"),
+        "problem_statement_summary": task.get("problem_statement_summary"),
+        "problem_statement_preview": task.get("problem_statement_preview"),
+        "expected_agent_action": task.get("expected_agent_action"),
+        "validation_expectation": task.get("validation_expectation"),
+        "base_commit": task.get("base_commit"),
+        "patch_expected": task.get("patch_expected"),
+        "selected_test_count": task.get("selected_test_count"),
+        "selected_tests_preview": task.get("selected_tests_preview"),
+        "runtime": run.get("runtime"),
+        "model": run.get("model"),
+        "hint_profile": run.get("hint_profile"),
+    }
+
+
+def write_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "run_id",
+        "run_short",
+        "timestamp",
+        "repo",
+        "instance_id",
+        "task_source",
+        "problem_statement_summary",
+        "problem_statement_preview",
+        "expected_agent_action",
+        "validation_expectation",
+        "base_commit",
+        "patch_expected",
+        "selected_test_count",
+        "selected_tests_preview",
+        "runtime",
+        "model",
+        "hint_profile",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in fields})
+
+
+def write_task_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Repo | Task summary | Expected action | Validation expectation |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run_short} | {repo} | {summary} | {action} | {validation} |".format(
+                run_short=row.get("run_short", ""),
+                repo=row.get("repo", ""),
+                summary=(row.get("problem_statement_summary") or "").replace("|", "\\|"),
+                action=(row.get("expected_agent_action") or "").replace("|", "\\|"),
+                validation=(row.get("validation_expectation") or "").replace("|", "\\|"),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def refresh_task_summaries(root: Path, runs_root: Path, *, latest_limit: int = 10) -> None:
+    run_dirs = iter_run_report_dirs(runs_root)
+    rows = [aggregate_task_summary_row(run_dir) for run_dir in run_dirs]
+    rows = [row for row in rows if row]
+    reports_root = root / "experiments/reports"
+    reports_root.mkdir(parents=True, exist_ok=True)
+    write_task_summary_csv(reports_root / "all_runs_task_summary.csv", rows)
+    latest_rows = rows[-latest_limit:]
+    write_task_summary_md(
+        reports_root / "latest_runs_task_summary.md",
+        latest_rows,
+        title=f"Latest {len(latest_rows)} Runs Task Summary",
     )
 
 
@@ -2105,6 +2529,18 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
         f"- AgentBench result: `{manifest['paths']['agentbench_result_dir']}`",
         f"- SGLang transfer log: `{manifest['paths'].get('sglang_transfer_log')}`",
         "",
+        "## Task Summary",
+        "",
+        f"- Repo: `{manifest['task'].get('repo')}`",
+        f"- Instance id: `{display(manifest['task'].get('instance_id'))}`",
+        f"- Base commit: `{display(manifest['task'].get('base_commit'))}`",
+        f"- Task source: `{display(manifest['task'].get('task_source'))}`",
+        f"- Summary: {display(manifest['task'].get('problem_statement_summary'))}",
+        f"- Expected action: {display(manifest['task'].get('expected_agent_action'))}",
+        f"- Validation expectation: {display(manifest['task'].get('validation_expectation'))}",
+        f"- Problem preview: {display(manifest['task'].get('problem_statement_preview'))}",
+        f"- Selected tests: `{display(manifest['task'].get('selected_tests_preview'))}`",
+        "",
         "## Outcome",
         "",
         f"- Patch nonempty: `{outcome['patch_nonempty']}`",
@@ -2212,6 +2648,12 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         or infer_hint_profile(resolved_hints)
     )
 
+    task_payload = dict_or_empty(result.get("task"))
+    problem_statement = str(task_payload.get("problem_statement") or "")
+    selected_tests = task_payload.get("selected_test_files_to_run")
+    if not isinstance(selected_tests, list):
+        selected_tests = []
+
     manifest = {
         "run_id": run_id,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -2223,9 +2665,25 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "frontend_url": result.get("frontend_url"),
         "run_started_at": result.get("run_started_at"),
         "task": {
-            "instance_id": (result.get("task") or {}).get("instance_id") or run_summary.get("instance_id"),
-            "repo": (result.get("task") or {}).get("repo") or run_summary.get("repo"),
-            "base_commit": (result.get("task") or {}).get("base_commit"),
+            "instance_id": task_payload.get("instance_id") or run_summary.get("instance_id"),
+            "repo": task_payload.get("repo") or run_summary.get("repo"),
+            "base_commit": task_payload.get("base_commit"),
+            "task_source": result.get("task_source"),
+            "problem_statement_summary": summarize_problem_statement(problem_statement),
+            "problem_statement_preview": compact_text(clean_problem_statement_text(problem_statement), limit=220),
+            "selected_tests_preview": ", ".join(str(item) for item in selected_tests[:3]),
+            "patch_expected": bool(task_payload.get("patch")),
+            "expected_agent_action": derive_expected_agent_action(
+                problem_statement=clean_problem_statement_text(problem_statement),
+                requirements=clean_problem_statement_text(task_payload.get("requirements") or ""),
+                selected_tests=[str(item) for item in selected_tests],
+                validation_command=str(task_payload.get("validation_command") or ""),
+                patch_expected=bool(task_payload.get("patch")),
+            ),
+            "validation_expectation": derive_validation_expectation(
+                [str(item) for item in selected_tests],
+                str(task_payload.get("validation_command") or ""),
+            ),
         },
         "prompt_evolution_value_char_limit": result.get("prompt_evolution_value_char_limit"),
         "paths": {
@@ -2413,26 +2871,44 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     }
 
     write_json(out_dir / "run_manifest.json", manifest)
-    write_json(out_dir / "run_metrics.json", metrics)
-    write_phase_csv(out_dir / "run_metrics.csv", phase_rows, run_level)
-    write_subrequest_csv(out_dir / "subrequest_metrics.csv", subrequest_rows, run_level)
-    write_transfer_csv(out_dir / "transfer_summary.csv", transfer_rows)
-    write_json(out_dir / "agent_behavior_summary.json", behavior_summary)
-    write_agent_behavior_csv(out_dir / "agent_behavior_summary.csv", behavior_summary)
-    write_agent_behavior_md(out_dir / "agent_behavior_summary.md", behavior_summary)
-    write_json(out_dir / "agent_tool_calls.json", agent_tool_calls)
-    write_agent_tool_calls_csv(out_dir / "agent_tool_calls.csv", agent_tool_calls)
-    write_agent_tool_calls_md(out_dir / "agent_tool_calls.md", agent_tool_calls)
-    write_summary_md(out_dir / "summary.md", manifest, metrics)
+    write_json(out_dir / "runtime_metrics.json", metrics)
+    write_phase_csv(out_dir / "phase_runtime_metrics.csv", phase_rows, run_level)
+    write_subrequest_csv(out_dir / "model_request_metrics.csv", subrequest_rows, run_level)
+    write_transfer_csv(out_dir / "transfer_events_by_function.csv", transfer_rows)
+    write_json(out_dir / "phase_summary.json", behavior_summary)
+    write_agent_behavior_csv(out_dir / "phase_summary.csv", behavior_summary)
+    write_agent_behavior_md(out_dir / "phase_summary.md", behavior_summary)
+    write_json(out_dir / "tool_call_details.json", agent_tool_calls)
+    write_agent_tool_calls_csv(out_dir / "tool_call_details.csv", agent_tool_calls)
+    write_agent_tool_calls_md(out_dir / "tool_call_details.md", agent_tool_calls)
+    write_summary_md(out_dir / "run_overview.md", manifest, metrics)
+    for legacy_name in (
+        "run_metrics.json",
+        "run_metrics.csv",
+        "subrequest_metrics.csv",
+        "transfer_summary.csv",
+        "agent_behavior_summary.json",
+        "agent_behavior_summary.csv",
+        "agent_behavior_summary.md",
+        "agent_tool_calls.json",
+        "agent_tool_calls.csv",
+        "agent_tool_calls.md",
+        "summary.md",
+    ):
+        unlink_if_exists(out_dir / legacy_name)
 
     default_out_root = (root / "experiments/reports/runs").resolve()
     if out_root.resolve() == default_out_root:
-        latest_behavior_csv = root / "experiments/reports/latest_agent_behavior_summary.csv"
+        latest_behavior_csv = root / "experiments/reports/latest_run_phase_summary.csv"
         latest_behavior_csv.parent.mkdir(parents=True, exist_ok=True)
         write_agent_behavior_csv(latest_behavior_csv, behavior_summary)
-        latest_tool_calls_csv = root / "experiments/reports/latest_agent_tool_calls.csv"
+        latest_tool_calls_csv = root / "experiments/reports/latest_run_tool_call_details.csv"
         write_agent_tool_calls_csv(latest_tool_calls_csv, agent_tool_calls)
+        unlink_if_exists(root / "experiments/reports/latest_agent_behavior_summary.csv")
+        unlink_if_exists(root / "experiments/reports/latest_agent_tool_calls.csv")
         refresh_aggregate_tool_summaries(root, default_out_root)
+        refresh_execution_prompt_summaries(root, default_out_root)
+        refresh_task_summaries(root, default_out_root)
 
     for rel in [
         "others/run_summary_table.csv",
@@ -2477,10 +2953,10 @@ def main() -> int:
     out_dir = build_report(root, result_dir, transfer_log, args.out_root, args.run_id)
     print(f"report: {out_dir}")
     print(f"manifest: {out_dir / 'run_manifest.json'}")
-    print(f"metrics: {out_dir / 'run_metrics.json'}")
-    print(f"csv: {out_dir / 'run_metrics.csv'}")
-    print(f"agent behavior: {out_dir / 'agent_behavior_summary.md'}")
-    print(f"agent tool calls: {out_dir / 'agent_tool_calls.md'}")
+    print(f"metrics: {out_dir / 'runtime_metrics.json'}")
+    print(f"csv: {out_dir / 'phase_runtime_metrics.csv'}")
+    print(f"phase summary: {out_dir / 'phase_summary.md'}")
+    print(f"tool call details: {out_dir / 'tool_call_details.md'}")
     return 0
 
 

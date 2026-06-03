@@ -1,0 +1,42 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {
+    "MODEL_NAME": "Qwen/Qwen2.5-Coder-7B-Instruct"
+  },
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-03T19:31:11.889909+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_142838",
+    "report_dir": "/home/ec2-user/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_142838",
+    "sglang_transfer_log": "/home/ec2-user/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": null,
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-20260603_142838::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-20260603_142838",
+  "run_started_at": "2026-06-03T14:28:38.798777-05:00",
+  "task": {
+    "base_commit": "90475fb6c168e8317e22bd5fbe057d98e570a715",
+    "expected_agent_action": "fix validation logic",
+    "instance_id": "instance_internetarchive__openlibrary-4a5d2a7d24c9e4c11d3069220c0685b736d5ecde-v13642507b4fc1f8d234172bf8129942da2c2ca26",
+    "patch_expected": true,
+    "problem_statement_preview": "Incomplete Retrieval of Property Statement Values in Wikidata Entities. Wikidata entities currently store property statements, but the code does not provide a mechanism to access all the values associated with a speci...",
+    "problem_statement_summary": "Incomplete Retrieval of Property Statement Values in Wikidata Entities.",
+    "repo": "internetarchive/openlibrary",
+    "selected_tests_preview": "",
+    "task_source": null,
+    "validation_expectation": "no explicit validation command provided"
+  }
+}
