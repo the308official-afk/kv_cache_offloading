@@ -1457,16 +1457,19 @@ Choose the model with `MODEL_KIND`:
 ```bash
 cd ~/kv_cache_offloading
 
-MODEL_KIND="${MODEL_KIND:-coder}"  # coder or instruct
+MODEL_KIND="${MODEL_KIND:-coder}"  # coder, coder30b, or instruct
 case "$MODEL_KIND" in
   coder)
     MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+    ;;
+  coder30b)
+    MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct'
     ;;
   instruct)
     MODEL_NAME='Qwen/Qwen2.5-7B-Instruct'
     ;;
   *)
-    echo "MODEL_KIND must be coder or instruct" >&2
+    echo "MODEL_KIND must be coder, coder30b, or instruct" >&2
     exit 1
     ;;
 esac

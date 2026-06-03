@@ -61,8 +61,7 @@ RSYNC_EXCLUDES=(
   --exclude '.venv/'
   --exclude 'venv/'
   --exclude 'agentbench/results/'
-  --exclude 'experiments/raw/'
-  --exclude 'experiments/parsed/'
+  --exclude 'experiments/'
 )
 
 rsync_upload_repo() {

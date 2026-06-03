@@ -1,0 +1,33 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {},
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-02T23:15:39.601728+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-qutebrowser_20260602_181353",
+    "report_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-qutebrowser_20260602_181353",
+    "sglang_transfer_log": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": "6e69338fbcb24117e92a05efe194dd03884fa838",
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-qutebrowser_20260602_181353::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-qutebrowser_20260602_181353",
+  "run_started_at": "2026-06-02T18:13:53.336556-05:00",
+  "task": {
+    "base_commit": "0b8cc812fd0b73e296a3f93db02ce5d0b35714fc",
+    "instance_id": "instance_qutebrowser__qutebrowser-c580ebf0801e5a3ecabc54f327498bb753c6d5f2-v2ef375ac784985212b1805e1d0431dc8f1b3c171",
+    "repo": "qutebrowser/qutebrowser"
+  }
+}

@@ -14,28 +14,33 @@ SWE-bench Pro -> AgentBench runner -> prompt builder -> Deep Agents
 ## 1. Choose Model
 
 Use `MODEL_KIND` to switch between the general Instruct model and the
-code-specialized Coder model. Keep the same selected model for both Dynamo
+code-specialized Coder models. Keep the same selected model for both Dynamo
 startup and the AgentBench run command.
 
 ```bash
 cd ~/kv_cache_offloading
 
-MODEL_KIND="coder"  # coder or instruct
+MODEL_KIND="coder30b"  # coder, coder30b, or instruct
 case "$MODEL_KIND" in
   coder)
     MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+    ;;
+  coder30b)
+    MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct'
     ;;
   instruct)
     MODEL_NAME='Qwen/Qwen2.5-7B-Instruct'
     ;;
   *)
-    echo "MODEL_KIND must be coder or instruct" >&2
+    echo "MODEL_KIND must be coder, coder30b, or instruct" >&2
     exit 1
     ;;
 esac
 
 echo "Using model: $MODEL_NAME"
 ```
+
+`coder30b` needs substantially more GPU memory than the 7B options.
 
 ## 2. Start Dynamo/SGLang
 
@@ -366,6 +371,10 @@ experiments/reports/runs/<run_id>/
   summary.md
 ```
 
+New runs use timestamp-first IDs such as `agentbench-20260602_190012`. The
+repo being worked on is recorded inside the report files instead of being baked
+into the directory name.
+
 It uses the exact AgentBench result directory and the current SGLang transfer
 log. To disable this post-run report hook for a run, pass `--no-run-report` or
 set `AGENTBENCH_AUTO_RUN_REPORT=0`.
@@ -616,14 +625,21 @@ work into separate planning/execution/review calls.
 ```bash
 cd ~/kv_cache_offloading
 
-MODEL_KIND=coder  # coder or instruct
+MODEL_KIND=coder  # coder, coder30b, or instruct
 
 case "$MODEL_KIND" in
   coder)
     MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
     ;;
+  coder30b)
+    MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct'
+    ;;
   instruct)
     MODEL_NAME='Qwen/Qwen2.5-7B-Instruct'
+    ;;
+  *)
+    echo "MODEL_KIND must be coder, coder30b, or instruct" >&2
+    exit 1
     ;;
 esac
 
@@ -707,10 +723,10 @@ cd ~/kv_cache_offloading
 export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
+export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
@@ -861,6 +877,8 @@ cat "$LATEST_RUN_REPORT/agent_tool_calls.md"
 cat "$LATEST_RUN_REPORT/agent_tool_calls.csv"
 cat experiments/reports/latest_agent_behavior_summary.csv
 cat experiments/reports/latest_agent_tool_calls.csv
+cat experiments/reports/latest_runs_tool_summary.md
+cat experiments/reports/all_runs_tool_summary.md
 ```
 
 This is the quick table to check after each run. It reports the run/repo/runtime,

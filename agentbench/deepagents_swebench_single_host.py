@@ -3920,9 +3920,8 @@ def slugify_piece(value: Any, *, max_words: int | None = None, max_chars: int = 
 
 
 def result_directory_name(task: dict[str, Any], *, run_id: str, index: int) -> str:
-    repo_name = str(task.get("repo") or "task").split("/")[-1]
-    repo_slug = slugify_piece(repo_name, max_words=3, max_chars=28) or "task"
-    return f"agentbench-{repo_slug}_{run_id}"
+    del task, index
+    return f"agentbench-{run_id}"
 
 
 def unique_result_directory(base_name: str) -> Path:

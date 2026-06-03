@@ -176,6 +176,7 @@ Run the same diagnostics across model/parser combinations:
 ```bash
 for MODEL_NAME in \
   Qwen/Qwen2.5-Coder-7B-Instruct \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct \
   Qwen/Qwen2.5-7B-Instruct
 do
   ./run_dynamo_single_host.sh stop

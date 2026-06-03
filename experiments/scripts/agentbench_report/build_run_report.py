@@ -1338,7 +1338,16 @@ def repo_display_name(repo: Any) -> str:
 
 
 def run_short_id(run_id: str) -> str:
-    return str(run_id).rsplit("_", 1)[-1]
+    text = str(run_id)
+    if text.startswith("agentbench-"):
+        text = text[len("agentbench-") :]
+    parts = text.split("_")
+    if len(parts) >= 2 and parts[0].isdigit() and len(parts[0]) == 8 and parts[1].isdigit() and len(parts[1]) == 6:
+        short = parts[1]
+        if len(parts) >= 3 and parts[2].isdigit():
+            short = f"{short}_{parts[2]}"
+        return short
+    return text.rsplit("_", 1)[-1]
 
 
 def runtime_label(result: dict[str, Any]) -> str:
@@ -1573,7 +1582,9 @@ def write_agent_behavior_csv(path: Path, summary: dict[str, Any]) -> None:
                 "model": run.get("model"),
                 "app_variant": run.get("app_variant"),
                 "hint_profile": run.get("hint_profile"),
-                "execution_subrequests": run.get("execution_subrequests"),
+                "execution_subrequests": (
+                    run.get("execution_subrequests") if phase.get("phase") == "execution" else ""
+                ),
                 "patch_bytes": run.get("patch_bytes"),
                 "patch": run.get("patch"),
                 "patch_nonempty": run.get("patch_nonempty"),
@@ -1637,6 +1648,201 @@ def write_agent_behavior_md(path: Path, summary: dict[str, Any]) -> None:
         ]
     )
     path.write_text("\n".join(lines), encoding="utf-8")
+
+
+def parse_display_tools(value: Any) -> list[str]:
+    if value in (None, "", "none"):
+        return []
+    if isinstance(value, list):
+        return [str(item).strip() for item in value if str(item).strip()]
+    return [item.strip() for item in str(value).split(",") if item.strip() and item.strip() != "none"]
+
+
+def sort_run_id_key(run_id: str) -> tuple[str, str]:
+    text = str(run_id)
+    if text.startswith("agentbench-"):
+        text = text[len("agentbench-") :]
+    return (text, str(run_id))
+
+
+def iter_run_report_dirs(runs_root: Path) -> list[Path]:
+    if not runs_root.exists():
+        return []
+    run_dirs = [
+        path for path in runs_root.iterdir()
+        if path.is_dir() and (path / "agent_behavior_summary.json").exists()
+    ]
+    return sorted(run_dirs, key=lambda path: sort_run_id_key(path.name))
+
+
+def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
+    summary = load_json(report_dir / "agent_behavior_summary.json", {})
+    run = dict_or_empty(summary.get("run"))
+    phases_raw = summary.get("phases")
+    phases = phases_raw if isinstance(phases_raw, list) else []
+    if not run:
+        return None
+
+    execution_phase = next(
+        (phase for phase in phases if isinstance(phase, dict) and phase.get("phase") == "execution"),
+        {},
+    )
+    planning_phase = next(
+        (phase for phase in phases if isinstance(phase, dict) and phase.get("phase") == "planning"),
+        {},
+    )
+    patch_generation_phase = next(
+        (phase for phase in phases if isinstance(phase, dict) and phase.get("phase") == "patch_generation"),
+        {},
+    )
+    review_phase = next(
+        (phase for phase in phases if isinstance(phase, dict) and phase.get("phase") == "review"),
+        {},
+    )
+    other_phases = [
+        phase for phase in phases
+        if isinstance(phase, dict) and phase.get("phase") != "execution"
+    ]
+
+    def phase_tool_breakdown(phase: dict[str, Any], phase_name: str) -> str:
+        tool_names = parse_display_tools(phase.get("tools_used"))
+        tool_count = as_int(phase.get("tool_call_count"))
+        if tool_count <= 0 or not tool_names:
+            return f"{phase_name}: 0 x none"
+        if len(tool_names) == 1:
+            return f"{phase_name}: {tool_count} x {tool_names[0]}"
+
+        counts = Counter()
+        remaining = tool_count
+        for tool_name in tool_names:
+            counts[tool_name] += 1
+            remaining -= 1
+        if remaining > 0:
+            counts[tool_names[0]] += remaining
+        parts = [f"{count} x {tool_name}" for tool_name, count in counts.items()]
+        return f"{phase_name}: {', '.join(parts)}"
+
+    other_tool_count = sum(as_int(phase.get("tool_call_count")) for phase in other_phases)
+    other_tools: list[str] = []
+    for phase in other_phases:
+        other_tools.extend(parse_display_tools(phase.get("tools_used")))
+    other_tools = sorted(set(other_tools))
+    other_phase_breakdowns = [
+        phase_tool_breakdown(phase, str(phase.get("phase") or "unknown"))
+        for phase in other_phases
+        if as_int(phase.get("tool_call_count")) > 0
+    ]
+
+    return {
+        "run_id": run.get("run_id"),
+        "run_short": run.get("run_short"),
+        "timestamp": str(run.get("run_id") or "").removeprefix("agentbench-"),
+        "repo": run.get("repo"),
+        "runtime": run.get("runtime"),
+        "model": run.get("model"),
+        "hint_profile": run.get("hint_profile"),
+        "execution_steps": run.get("execution_subrequests"),
+        "planning_tool_calls": as_int(planning_phase.get("tool_call_count")),
+        "planning_tools": planning_phase.get("tools_used", "none"),
+        "execution_phase_tool_calls": as_int(execution_phase.get("tool_call_count")),
+        "execution_phase_tools": execution_phase.get("tools_used", "none"),
+        "execution_phase_breakdown": phase_tool_breakdown(execution_phase, "execution"),
+        "patch_generation_tool_calls": as_int(patch_generation_phase.get("tool_call_count")),
+        "patch_generation_tools": patch_generation_phase.get("tools_used", "none"),
+        "review_tool_calls": as_int(review_phase.get("tool_call_count")),
+        "review_tools": review_phase.get("tools_used", "none"),
+        "other_phase_tool_calls": other_tool_count,
+        "other_phase_tools": display_tools(other_tools),
+        "other_phase_breakdown": "; ".join(other_phase_breakdowns) if other_phase_breakdowns else "none",
+        "total_tool_calls": run.get("tool_call_count"),
+        "patch_bytes": run.get("patch_bytes"),
+        "patch": run.get("patch"),
+        "patch_nonempty": run.get("patch_nonempty"),
+        "git_diff_nonempty": run.get("git_diff_nonempty"),
+    }
+
+
+def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "run_id",
+        "run_short",
+        "timestamp",
+        "repo",
+        "runtime",
+        "model",
+        "hint_profile",
+        "execution_steps",
+        "planning_tool_calls",
+        "planning_tools",
+        "execution_phase_tool_calls",
+        "execution_phase_tools",
+        "execution_phase_breakdown",
+        "patch_generation_tool_calls",
+        "patch_generation_tools",
+        "review_tool_calls",
+        "review_tools",
+        "other_phase_tool_calls",
+        "other_phase_tools",
+        "other_phase_breakdown",
+        "total_tool_calls",
+        "patch_bytes",
+        "patch",
+        "patch_nonempty",
+        "git_diff_nonempty",
+    ]
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in fields})
+
+
+def write_aggregate_tool_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Repo | Runtime | Execution steps | Execution-phase tool calls | Execution-phase tools | Other tool calls | Patch |",
+        "| --- | --- | --- | ---: | ---: | --- | --- | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run_short} | {repo} | {runtime} | {execution_steps} | {execution_phase_tool_calls} ({execution_phase_breakdown}) | {execution_phase_tools} | {other_phase_tool_calls} ({other_phase_breakdown}) | {patch} |".format(
+                run_short=row.get("run_short", ""),
+                repo=row.get("repo", ""),
+                runtime=row.get("runtime", ""),
+                execution_steps=row.get("execution_steps", ""),
+                execution_phase_tool_calls=row.get("execution_phase_tool_calls", 0),
+                execution_phase_breakdown=row.get("execution_phase_breakdown", "none"),
+                execution_phase_tools=row.get("execution_phase_tools", "none"),
+                other_phase_tool_calls=row.get("other_phase_tool_calls", 0),
+                other_phase_breakdown=row.get("other_phase_breakdown", "none"),
+                patch=row.get("patch", "0 bytes"),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def refresh_aggregate_tool_summaries(root: Path, runs_root: Path, *, latest_limit: int = 10) -> None:
+    run_dirs = iter_run_report_dirs(runs_root)
+    rows = [aggregate_run_tool_summary(run_dir) for run_dir in run_dirs]
+    rows = [row for row in rows if row]
+    reports_root = root / "experiments/reports"
+    reports_root.mkdir(parents=True, exist_ok=True)
+
+    write_aggregate_tool_summary_csv(reports_root / "all_runs_tool_summary.csv", rows)
+    write_aggregate_tool_summary_md(
+        reports_root / "all_runs_tool_summary.md",
+        rows,
+        title="All Runs Tool Summary",
+    )
+
+    latest_rows = rows[-latest_limit:]
+    write_aggregate_tool_summary_csv(reports_root / "latest_runs_tool_summary.csv", latest_rows)
+    write_aggregate_tool_summary_md(
+        reports_root / "latest_runs_tool_summary.md",
+        latest_rows,
+        title=f"Latest {len(latest_rows)} Runs Tool Summary",
+    )
 
 
 def detail_args(detail: dict[str, Any]) -> dict[str, Any]:
@@ -2226,6 +2432,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         write_agent_behavior_csv(latest_behavior_csv, behavior_summary)
         latest_tool_calls_csv = root / "experiments/reports/latest_agent_tool_calls.csv"
         write_agent_tool_calls_csv(latest_tool_calls_csv, agent_tool_calls)
+        refresh_aggregate_tool_summaries(root, default_out_root)
 
     for rel in [
         "others/run_summary_table.csv",
