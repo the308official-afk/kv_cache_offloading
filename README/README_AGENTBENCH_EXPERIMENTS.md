@@ -11,6 +11,121 @@ SWE-bench Pro -> AgentBench runner -> prompt builder -> Deep Agents
 -> Dynamo frontend -> SGLang worker -> result artifacts
 ```
 
+## 0. Machine Setup
+
+If you move this repo to a fresh machine, the local `upstream/` checkouts do not
+come along automatically. Set them up before running AgentBench.
+
+### 0.1 Minimum Setup For `AGENTBENCH_DEEPAGENTS_SOURCE=upstream`
+
+If you want to run with:
+
+```bash
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+```
+
+then you need the upstream Deep Agents checkout plus the Python dependencies:
+
+```bash
+cd ~
+git clone https://github.com/the308official-afk/kv_cache_offloading.git kv_cache_offloading
+cd ~/kv_cache_offloading
+
+mkdir -p upstream
+
+if [ ! -f upstream/deepagents/libs/deepagents/pyproject.toml ]; then
+  git clone https://github.com/langchain-ai/deepagents.git upstream/deepagents
+  git -C upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+fi
+
+python3.11 -m pip install --upgrade pip
+python3.11 -m pip install ./upstream/deepagents/libs/deepagents
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+Quick verification:
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 -m pip show deepagents
+
+python3.11 - <<'PY'
+import deepagents
+print("deepagents:", deepagents.__file__)
+PY
+```
+
+### 0.2 Dynamo Source For Instrumented Local Images
+
+You only need `upstream/dynamo` if you want the local instrumented Dynamo image
+path. If you only use the published default Dynamo images, you can skip this.
+
+Prepare the Dynamo source clone:
+
+```bash
+cd ~/kv_cache_offloading
+
+rm -rf upstream/dynamo
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+```
+
+That script will create:
+
+```text
+upstream/dynamo/
+```
+
+Then build the instrumented images:
+
+```bash
+cd ~/kv_cache_offloading
+
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+This produces:
+
+```text
+local/dynamo-frontend:runtime-json-logs
+local/dynamo-sglang:runtime-json-logs
+```
+
+### 0.3 SGLang Source Overlay For Transfer Logging
+
+You only need `upstream/sglang` if you want the SGLang host/device transfer
+logging path.
+
+Extract the worker's SGLang source overlay:
+
+```bash
+cd ~/kv_cache_offloading
+
+./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+```
+
+Preferred current path:
+
+```text
+upstream/sglang/python/sglang
+```
+
+Older EC2 copies may still use:
+
+```text
+runtime_upstream/sglang/python/sglang
+```
+
+### 0.4 Quick Rule Of Thumb
+
+- Want `AGENTBENCH_DEEPAGENTS_SOURCE=upstream`?
+  Set up `upstream/deepagents`.
+- Want local instrumented Dynamo images?
+  Set up `upstream/dynamo`.
+- Want SGLang transfer logging?
+  Set up `upstream/sglang`.
+
 ## 1. Choose Model
 
 Use `MODEL_KIND` to switch between the general Instruct model and the
