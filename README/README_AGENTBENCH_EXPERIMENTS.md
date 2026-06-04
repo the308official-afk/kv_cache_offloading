@@ -1,136 +1,30 @@
-# AgentBench Experiment Runs
+# AgentBench Experiments
 
-This guide runs one SWE-bench Pro task through the local AgentBench/Deep Agents
-harness via Dynamo and SGLang. Use it to collect prompt-evolution artifacts,
-runtime-hint evidence, cache/token stats, and task-completion evidence.
+Use this guide as a live EC2 runbook for AgentBench + Deep Agents + Dynamo +
+SGLang experiments.
 
-The core path is:
-
-```text
-SWE-bench Pro -> AgentBench runner -> prompt builder -> Deep Agents
--> Dynamo frontend -> SGLang worker -> result artifacts
-```
-
-## 0. Machine Setup
-
-If you move this repo to a fresh machine, the local `upstream/` checkouts do not
-come along automatically. Set them up before running AgentBench.
-
-### 0.1 Minimum Setup For `AGENTBENCH_DEEPAGENTS_SOURCE=upstream`
-
-If you want to run with:
-
-```bash
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-```
-
-then you need the upstream Deep Agents checkout plus the Python dependencies:
-
-```bash
-cd ~
-git clone https://github.com/the308official-afk/kv_cache_offloading.git kv_cache_offloading
-cd ~/kv_cache_offloading
-
-mkdir -p upstream
-
-if [ ! -f upstream/deepagents/libs/deepagents/pyproject.toml ]; then
-  git clone https://github.com/langchain-ai/deepagents.git upstream/deepagents
-  git -C upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
-fi
-
-python3.11 -m pip install --upgrade pip
-python3.11 -m pip install ./upstream/deepagents/libs/deepagents
-python3.11 -m pip install -r agentbench/requirements.txt
-```
-
-Quick verification:
-
-```bash
-cd ~/kv_cache_offloading
-
-python3.11 -m pip show deepagents
-
-python3.11 - <<'PY'
-import deepagents
-print("deepagents:", deepagents.__file__)
-PY
-```
-
-### 0.2 Dynamo Source For Instrumented Local Images
-
-You only need `upstream/dynamo` if you want the local instrumented Dynamo image
-path. If you only use the published default Dynamo images, you can skip this.
-
-Prepare the Dynamo source clone:
-
-```bash
-cd ~/kv_cache_offloading
-
-rm -rf upstream/dynamo
-./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
-```
-
-That script will create:
+The runtime path is:
 
 ```text
-upstream/dynamo/
+SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -> reports
 ```
 
-Then build the instrumented images:
+## Quick Decision Guide
 
-```bash
-cd ~/kv_cache_offloading
+- **Basic AgentBench run**: use Experiment 1.
+- **Model/tool-call debugging**: use Experiment 2.
+- **Precise KV-transfer attribution**: use Experiment 3.
+- **Hint-profile comparisons**: use Experiment 4.
+- **Many SWE-bench tasks**: use Experiment 5.
 
-LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
-./runtime_instrumentation/build_instrumented_dynamo_images.sh
-```
+For transfer-logging internals, see
+[runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
+For tool-call diagnostics, see
+[README_TOOL_CALL_DIAGNOSTICS.md](README_TOOL_CALL_DIAGNOSTICS.md).
 
-This produces:
+## Common Setup
 
-```text
-local/dynamo-frontend:runtime-json-logs
-local/dynamo-sglang:runtime-json-logs
-```
-
-### 0.3 SGLang Source Overlay For Transfer Logging
-
-You only need `upstream/sglang` if you want the SGLang host/device transfer
-logging path.
-
-Extract the worker's SGLang source overlay:
-
-```bash
-cd ~/kv_cache_offloading
-
-./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-```
-
-Preferred current path:
-
-```text
-upstream/sglang/python/sglang
-```
-
-Older EC2 copies may still use:
-
-```text
-runtime_upstream/sglang/python/sglang
-```
-
-### 0.4 Quick Rule Of Thumb
-
-- Want `AGENTBENCH_DEEPAGENTS_SOURCE=upstream`?
-  Set up `upstream/deepagents`.
-- Want local instrumented Dynamo images?
-  Set up `upstream/dynamo`.
-- Want SGLang transfer logging?
-  Set up `upstream/sglang`.
-
-## 1. Choose Model
-
-Use `MODEL_KIND` to switch between the general Instruct model and the
-code-specialized Coder models. Keep the same selected model for both Dynamo
-startup and the AgentBench run command.
+Run this once per shell before an experiment.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -152,40 +46,54 @@ case "$MODEL_KIND" in
     ;;
 esac
 
+export MODEL_NAME
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
+export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+
 echo "Using model: $MODEL_NAME"
 ```
 
-`coder30b` needs substantially more GPU memory than the 7B options.
-
-## 2. Start Dynamo/SGLang
-
-Experiment artifacts can be collected with either non-instrumented or
-instrumented Dynamo/SGLang.
-
-- Use **non-instrumented** Dynamo/SGLang when the goal is only the prompt
-  evolution story and AgentBench-side measurements.
-- Use **instrumented** Dynamo/SGLang when the run also needs worker-side
-  `agent_hints`, `hint_probe_id`, and `worker.decode.*` proof.
-
-### 2.1 Non-Instrumented Run
-
-Use this faster path when the only goal is to collect:
-
-```text
-prompt_evolution_report.*
-prompt_evolution_values/*.json
-others/measurements.*
-others/cache_value_analysis.*
-others/run_summary_table.csv
-```
-
-Start the published default Dynamo/SGLang runtime:
+If this is a fresh machine, install the upstream Deep Agents dependency first:
 
 ```bash
 cd ~/kv_cache_offloading
 
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+mkdir -p upstream
+
+if [ ! -f upstream/deepagents/libs/deepagents/pyproject.toml ]; then
+  git clone https://github.com/langchain-ai/deepagents.git upstream/deepagents
+  git -C upstream/deepagents checkout 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+fi
+
+python3.11 -m pip install --upgrade pip
+python3.11 -m pip install ./upstream/deepagents/libs/deepagents
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
+Before NodeBB SWE-bench tasks, complete
+[README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md). Do not run
+AgentBench while that preflight still fails with missing `node`, missing npm
+modules, or missing `config.json`.
+
+## Experiment 1: Basic AgentBench Run
+
+Use this to test whether Dynamo, the model, Deep Agents, and AgentBench can run
+without SGLang transfer instrumentation.
+
+This collects prompt evolution, AgentBench measurements, tool behavior, patch
+output, and curated reports. It does **not** collect host/device KV-transfer
+events.
+
+### Step 1: Start Non-Instrumented Dynamo
+
+```bash
+cd ~/kv_cache_offloading
 
 ./run_dynamo_single_host.sh stop
 
@@ -195,102 +103,134 @@ DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 ./run_dynamo_single_host.sh start
 ```
 
-Do not set `FRONTEND_IMAGE` or `WORKER_IMAGE` for the non-instrumented path.
-Leaving them unset uses the published default image instead of local
-instrumented images.
-
-Verify the model is available:
+Verify:
 
 ```bash
 curl -fsS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/models
 ```
 
-If this run hits the 32k context limit, restart with the larger SGLang context
-override:
-
-```bash
-./run_dynamo_single_host.sh stop
-
-SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
-./run_dynamo_single_host.sh start
-```
-
-### 2.2 Instrumented Run
-
-Use this path when the experiment should also include strong runtime-hint
-evidence from worker logs.
-
-If the SWE-bench prompt exceeds the default 32k context window, restart with the
-larger SGLang context override:
-
-```bash
-./run_dynamo_single_host.sh stop
-
-SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 \
-DYN_RUNTIME_JSON_LOGS=1 \
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --context-length 65536' \
-./run_dynamo_single_host.sh start
-```
-
-See logs
-
-```bash
-docker logs -f dynamo-sglang-worker
-```
-
-Verify the model is available:
-
-```bash
-curl -fsS http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/models
-```
-
-Verify the long-context override reached the worker container:
-
-```bash
-docker inspect dynamo-sglang-worker \
-  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
-  grep SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN
-```
-
-Expected:
-
-```text
-SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1
-```
-
-### 2.3 SGLang Host/Device Transfer Logging
-
-Use this path when you want the SGLang worker to log host/device KV movement
-directly. It bind-mounts a patched SGLang Python package into the worker and
-emits structured transfer events from functions such as
-`backup_from_device_all_layer()` and `load_to_device_per_layer()`.
-
-Prepare the SGLang overlay once:
+### Step 2: Run One Task
 
 ```bash
 cd ~/kv_cache_offloading
 
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+AGENTBENCH_WORKFLOW_MODE=baseline \
+python3.11 agentbench/deepagents_swebench_single_host.py \
+  --app-variant upstream_deploy_coding_agent \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --index 0 \
+  --prompt-evolution-value-char-limit 1000 \
+  --quiet-checkpoints
+```
+
+### Step 3: Check Result
+
+```bash
+LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
+LATEST_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+
+echo "$LATEST_RESULT"
+echo "$LATEST_REPORT"
+
+wc -c "$LATEST_RESULT/workspace.patch"
+cat "$LATEST_RESULT/others/git_status.txt"
+cat "$LATEST_RESULT/others/git_diff_stat.txt"
+cat "$LATEST_REPORT/phase_summary.md"
+cat "$LATEST_REPORT/tool_call_details.md"
+```
+
+Success signal:
+
+```text
+workspace.patch size > 0
+tool_call_details shows edit/write/execute activity
+```
+
+## Experiment 2: Tool-Call Diagnostics
+
+Use this when the model is not reliably editing files or calling tools. This is
+the fastest way to separate model/parser issues from AgentBench issues.
+
+### Step 1: Start Dynamo
+
+Use the same non-instrumented Dynamo command from Experiment 1.
+
+### Step 2: Probe Raw Dynamo Tool Calls
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 agentbench/diagnose_dynamo_tool_calls.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME"
+```
+
+Success signal:
+
+```text
+required tool_choice returns finish_reason='tool_calls'
+named tool_choice returns finish_reason='tool_calls'
+```
+
+### Step 3: Probe Deep Agents Tool Loop
+
+```bash
+python3.11 agentbench/diagnose_deepagents_tool_loop.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --case ls-read-execute
+
+python3.11 agentbench/diagnose_deepagents_tool_loop.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --case edit-validate
+```
+
+Success signal:
+
+```text
+case_success=True
+required_tools_observed=True
+multi_tool_loop_observed=True
+```
+
+Diagnostics are written under:
+
+```text
+experiments/raw/agentbench/diagnostics/
+```
+
+## Experiment 3: Precise KV Transfer Attribution
+
+Use this to answer, per phase/request:
+
+- Did this request reuse more cached KV?
+- Did it move less data?
+- Did it trigger host-to-device reloads?
+- Did TTFT improve?
+- Which AgentBench phase caused the transfer?
+
+This is the main experiment for hint-impact analysis. It uses instrumented
+Dynamo images, a patched SGLang overlay, HiCache, runtime JSON logs, and
+request-id transfer attribution.
+
+### Step 1: Build Images And Patch SGLang
+
+```bash
+cd ~/kv_cache_offloading
+
 export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
 export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
 
-docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+   ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
-
-docker image inspect "$WORKER_IMAGE" >/dev/null
+fi
 
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-
-cat upstream/sglang/SOURCE_IMAGE.txt
 
 if [ -d upstream/sglang/python/sglang ]; then
   export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
@@ -301,69 +241,30 @@ else
   exit 1
 fi
 
-echo "Using SGLang root: $SGLANG_ROOT"
-
-grep -n "SEMANTIC_CONTEXT_FUNCTIONS\|patch_hiradix_cache\|transfer_token_context" \
-  runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py
-
 python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
   --sglang-root "$SGLANG_ROOT"
+```
 
+Verify the patch:
+
+```bash
 grep -n "_sgl_log_transfer_event" \
   "$SGLANG_ROOT/srt/mem_cache/memory_pool_host.py"
 
 grep -n "_sgl_transfer_token_context" \
   "$SGLANG_ROOT/srt/mem_cache/hiradix_cache.py"
 
-# If a worker container already exists, this avoids pulling another image:
-# SGLANG_CONTAINER=dynamo-sglang-worker \
-# ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-
-# If extraction fails, confirm this script is up to date:
-# grep -n "importlib.util.find_spec" \
-#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-# grep -n "tar -C" \
-#   runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+grep -n "_sgl_transfer_request_context" \
+  "$SGLANG_ROOT/srt/mem_cache/radix_cache.py" \
+  "$SGLANG_ROOT/srt/managers/schedule_batch.py" \
+  "$SGLANG_ROOT/srt/managers/schedule_policy.py"
 ```
 
-If you encounter an out-of-host memory error, Try clearing page cache first
+### Step 2: Start Instrumented Dynamo/SGLang
 
 ```bash
 cd ~/kv_cache_offloading
 
-./run_dynamo_single_host.sh stop
-
-free -h
-sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
-free -h
-```
-
-Preferred current extraction path is `upstream/sglang/python/sglang`. Older EC2
-copies may still extract to `runtime_upstream/sglang/python/sglang`; the
-`SGLANG_ROOT` detection above supports both. If the `grep` for
-`SEMANTIC_CONTEXT_FUNCTIONS` prints nothing, sync the latest repo changes before
-patching because that machine still has the older memory-pool-only patcher.
-
-Start Dynamo/SGLang with the patched SGLang overlay and HiCache enabled:
-
-```bash
-./run_dynamo_single_host.sh stop
-
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
-WORKER_SGLANG_DEV_MODE=1 \
-WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
-SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
-DYN_RUNTIME_JSON_LOGS=1 \
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE="$FRONTEND_IMAGE" \
-WORKER_IMAGE="$WORKER_IMAGE" \
-./run_dynamo_single_host.sh start
-```
-
-```bash
 ./run_dynamo_single_host.sh stop
 
 WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
@@ -385,60 +286,54 @@ WORKER_IMAGE="$WORKER_IMAGE" \
 ./run_dynamo_single_host.sh start
 ```
 
-Then start a test run (don't remove this)
+If startup fails with host-memory pressure, stop Dynamo and clear page cache:
+
+```bash
+./run_dynamo_single_host.sh stop
+free -h
+sudo sh -c 'sync; echo 3 > /proc/sys/vm/drop_caches'
+free -h
+```
+
+This HiCache runtime expects the host pool to be larger than the device KV pool,
+so keep `--hicache-ratio 1` or higher.
+
+### Step 3: Verify Instrumentation Is Active
+
+```bash
+docker inspect dynamo-sglang-worker \
+  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
+  grep -E 'SGLANG_TRANSFER_LOG|SGLANG_TRANSFER_LOG_SYNC_TIMING|DYN_RUNTIME_JSON_LOGS'
+
+docker inspect dynamo-sglang-worker \
+  --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' | \
+  grep sglang_transfer_overlay
+
+docker exec dynamo-sglang-worker python3 - <<'PY'
+import inspect
+import sglang.srt.mem_cache.memory_pool_host as mph
+print(mph.__file__)
+print("_sgl_log_transfer_event:", "_sgl_log_transfer_event" in inspect.getsource(mph))
+PY
+```
+
+Expected:
+
+```text
+SGLANG_TRANSFER_LOG=1
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1
+_sgl_log_transfer_event: True
+```
+
+### Step 4: Run One Phased Task
 
 ```bash
 cd ~/kv_cache_offloading
 
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
 AGENTBENCH_WORKFLOW_MODE=phased \
 python3.11 agentbench/deepagents_swebench_single_host.py \
   --app-variant upstream_deploy_coding_agent \
-  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
-  --model "$MODEL_NAME" \
-  --dataset ScaleAI/SWE-bench_Pro \
-  --split test \
-  --index 0 \
-  --prompt-evolution-value-char-limit 1000 \
-  --quiet-checkpoints
-```
-
-Use `--hint-profile` for controlled hint experiments. Available profiles:
-
-```text
-baseline
-high-reuse
-low-reuse
-high-priority
-low-priority
-long-output
-short-output
-```
-
-Example single-profile run:
-
-```bash
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
-AGENTBENCH_WORKFLOW_MODE=phased \
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --app-variant upstream_deploy_coding_agent \
-  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
   --model "$MODEL_NAME" \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
@@ -448,23 +343,87 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --quiet-checkpoints
 ```
 
-Example matrix run:
+### Step 5: Check Direct Attribution
 
 ```bash
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+export LATEST_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+echo "$LATEST_REPORT"
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+report = Path(__import__("os").environ["LATEST_REPORT"])
+rows = list(csv.DictReader((report / "phase_runtime_metrics.csv").open()))
+
+for row in rows:
+    print(
+        row.get("phase"),
+        "request_id=", row.get("request_id"),
+        "worker_json=", row.get("worker_runtime_json_matched"),
+        "transfer_id=", row.get("transfer_request_id_matched"),
+        "ttft_source=", row.get("ttft_source"),
+        "cache_source=", row.get("cache_hit_source"),
+        "h2d_mb=", row.get("transfer_host_to_device_kv_mb_for_request"),
+        "d2h_mb=", row.get("transfer_device_to_host_kv_mb_for_request"),
+    )
+PY
+```
+
+Precision success criteria:
+
+```text
+worker_runtime_json_matched=True
+transfer_request_id_matched=True
+ttft_source=worker_runtime_json.request_received_to_attached
+```
+
+If `transfer_request_id_matched=True`, the transfer evidence is matched by
+request/context ID, not just timestamp windows.
+
+### Step 6: Inspect Transfer Logs
+
+```bash
+ls -lh experiments/raw/sglang_transfer_logs/
+tail -5 experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
+
+cat "$LATEST_REPORT/phase_runtime_metrics.csv"
+cat "$LATEST_REPORT/model_request_metrics.csv"
+cat "$LATEST_REPORT/transfer_events_by_function.csv"
+cat "$LATEST_REPORT/phase_summary.md"
+```
+
+Important fields:
+
+```text
+direction
+function
+request_id / external_request_id / sglang_request_id
+phase
+hint_profile
+semantic_token_ids_preview
+semantic_token_count
+kv_num_mb_estimated
+elapsed_ms_cuda_sync
+```
+
+## Experiment 4: Hint Profile Comparison
+
+Use this after Experiment 3 is running successfully. It compares hint profiles
+on the same SWE-bench task.
+
+### Step 1: Run The Matrix
+
+```bash
+cd ~/kv_cache_offloading
 
 for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority long-output short-output; do
+  echo "===== $HINT_PROFILE ====="
+
   AGENTBENCH_WORKFLOW_MODE=phased \
   python3.11 agentbench/deepagents_swebench_single_host.py \
     --app-variant upstream_deploy_coding_agent \
-    --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
+    --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
     --model "$MODEL_NAME" \
     --dataset ScaleAI/SWE-bench_Pro \
     --split test \
@@ -475,593 +434,7 @@ for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority lon
 done
 ```
 
-At the end of the run, AgentBench automatically builds the curated report under:
-
-```text
-experiments/reports/runs/<run_id>/
-  run_manifest.json
-  runtime_metrics.json
-  phase_runtime_metrics.csv
-  transfer_events_by_function.csv
-  run_overview.md
-```
-
-New runs use timestamp-first IDs such as `agentbench-20260602_190012`. The
-repo being worked on is recorded inside the report files instead of being baked
-into the directory name.
-
-It uses the exact AgentBench result directory and the current SGLang transfer
-log. To disable this post-run report hook for a run, pass `--no-run-report` or
-set `AGENTBENCH_AUTO_RUN_REPORT=0`.
-
-This SGLang HiCache protocol expects the host pool to be larger than the device
-KV pool, so do not lower `--hicache-ratio` below `1` on this runtime. If startup
-fails with `Not enough host memory available`, either free host RAM and keep
-`--hicache-ratio 1`, or reduce the GPU KV pool by lowering
-`--mem-fraction-static` while keeping `--hicache-ratio 1`.
-
-Transfer events are written to:
-
-```text
-experiments/raw/sglang_transfer_logs/sglang_transfer_events_<YYYYmmdd_HHMMSS>_<pid>.jsonl
-experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl -> latest timestamped file
-```
-
-Inspect them:
-
-```bash
-ls -lh experiments/raw/sglang_transfer_logs/
-tail -20 experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
-```
-
-If the directory exists but no event file appears, first verify the patched
-overlay reached the worker:
-
-```bash
-docker inspect dynamo-sglang-worker \
-  --format '{{range .Config.Env}}{{println .}}{{end}}' | \
-  grep -E 'SGLANG_TRANSFER_LOG|SGLANG_TRANSFER_LOG_PATH'
-
-docker inspect dynamo-sglang-worker \
-  --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' | \
-  grep sglang_transfer_overlay
-
-docker exec dynamo-sglang-worker python3 - <<'PY'
-import inspect
-import sglang.srt.mem_cache.memory_pool_host as mph
-print(mph.__file__)
-print("transfer marker:", "_sgl_log_transfer_event" in inspect.getsource(mph))
-PY
-```
-
-Summarize transfer counts, MB totals, and timing:
-
-```bash
-LATEST_TRANSFER_LOG="$(ls -t experiments/raw/sglang_transfer_logs/sglang_transfer_events_*.jsonl | head -1)"
-
-python3 runtime_instrumentation/sglang_transfer_logging/parse_transfer_events.py \
-  "$LATEST_TRANSFER_LOG" \
-  --out-dir experiments/parsed/sglang_transfer_logs
-
-head -20 experiments/parsed/sglang_transfer_logs/transfer_events.csv
-cat experiments/parsed/sglang_transfer_logs/transfer_summary.csv
-```
-
-AgentBench builds the run-level report automatically. To inspect the latest
-curated report:
-
-```bash
-LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
-cat "$LATEST_RUN_REPORT/run_overview.md"
-cat "$LATEST_RUN_REPORT/phase_runtime_metrics.csv"
-cat "$LATEST_RUN_REPORT/model_request_metrics.csv"
-cat "$LATEST_RUN_REPORT/transfer_events_by_function.csv"
-```
-
-For the first run after enabling direct attribution, check whether the new
-request-matched evidence is active. `transfer_request_id_matched=True` means a
-direct request id matched. `transfer_time_window_matched=True` is weaker: it
-means a transfer event landed inside the subrequest timestamp window.
-The direct path is enabled by the SGLang patcher wrapping cache insertion,
-prefix matching, and host load-back with request context. Confirm those wrappers
-after patching:
-
-```bash
-grep -n "_sgl_transfer_request_context" \
-  "$SGLANG_ROOT/srt/mem_cache/radix_cache.py" \
-  "$SGLANG_ROOT/srt/managers/schedule_batch.py" \
-  "$SGLANG_ROOT/srt/managers/schedule_policy.py"
-```
-
-```bash
-python3 - <<'PY'
-import csv
-from pathlib import Path
-
-report = Path(__import__("os").environ["LATEST_RUN_REPORT"])
-with (report / "phase_runtime_metrics.csv").open() as handle:
-    for row in csv.DictReader(handle):
-        print(
-            row["phase"],
-            "worker_runtime_json_matched=", row.get("worker_runtime_json_matched"),
-            "transfer_request_id_matched=", row.get("transfer_request_id_matched"),
-        )
-with (report / "model_request_metrics.csv").open() as handle:
-    for row in csv.DictReader(handle):
-        print(
-            row["phase"],
-            "subrequest=", row.get("subrequest_index"),
-            "sglang_request_id=", row.get("sglang_request_id"),
-            "ttft_ms=", row.get("ttft_ms"),
-            "cached_tokens=", row.get("cached_token_count"),
-            "transfer_request_id_matched=", row.get("transfer_request_id_matched"),
-            "transfer_time_window_matched=", row.get("transfer_time_window_matched"),
-        )
-PY
-```
-
-For old runs, or when you want to rebuild a report manually:
-
-```bash
-LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
-
-python3 experiments/scripts/agentbench_report/build_run_report.py \
-  --agentbench-result-dir "$LATEST_RESULT" \
-  --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
-```
-
-`runtime_metrics.json` keeps the old runtime cache fields as
-`runtime_*_reported`, but its main `cache_hit`, `cached_token_count`,
-`recomputed_prefix_tokens`, and `cache_reuse_ratio` fields are effective values
-derived from API usage, SGLang worker prefill logs, scheduler cached blocks, and
-runtime events. For non-streaming runs, `ttft_ms` uses the best available
-evidence in this order: `runtime_events.latency.ttft_ms`, worker
-`[RUNTIME_JSON]` request-received to request-attached timing, then plain worker
-logs from frontend request timestamp to first SGLang decode batch.
-
-For source clarity, `runtime_metrics.json` includes `metric_sources`. Fields prefixed
-with `sglang_*` are parsed directly from SGLang worker logs; transfer totals are
-parsed from the SGLang transfer JSONL. When worker `[RUNTIME_JSON]` or transfer
-events include request metadata, the report uses direct request-id matching.
-Otherwise, AgentBench still supplies phase names, request IDs, hint metadata,
-task metadata, patch outcome, and client/API usage accounting.
-`model_request_metrics.csv` is the best file when one phase sends multiple model
-requests, because it splits rows by SGLang `runtime_context_id` /
-`sglang_request_id`.
-
-See the detailed workflow in
-[runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
-
-Transfer JSON now separates the low-level copy facts from semantic token
-context:
-
-- `num_bytes_observed` and `elapsed_ms_wall` come from `memory_pool_host.py`.
-  `elapsed_ms` is kept as a compatibility alias for wall time.
-- `timestamp` is the UTC wall-clock time emitted by the transfer logger.
-  `timestamp_ns` is kept for high-resolution ordering.
-- `direction` is `device_to_host` for GPU/HBM to host write-back, or
-  `host_to_device` for host to GPU/HBM reload. The parsed
-  `transfer_events.csv` also includes `direction_label` as `device->host` or
-  `host->device` for each source log line.
-- `kv_num_bytes_estimated` and `kv_num_mb_estimated` estimate the actual KV
-  payload size using token-granular memory-pool metadata. Prefer these for
-  transfer volume.
-- `kv_num_bytes_estimated_page_granular` is emitted separately for comparison
-  when page-granular accounting is useful.
-- `semantic_token_ids_preview`, `semantic_token_count`, and
-  `semantic_token_source` come from HiRadix `write_backup()` / `load_back()`;
-  the extractor follows nested fields such as `node.key.token_ids`.
-- If the patched worker can see request context, transfer rows also include
-  request attribution such as `request_id`, `external_request_id`,
-  `runtime_context_id`, `sglang_request_id`, `phase`, `hint_profile`, and
-  `agent_hints_source`. `request_context_function` shows where that context was
-  captured, such as `cache_finished_req`,
-  `Req.init_next_round_input.match_prefix`, or
-  `SchedulePolicy.add_one_req.init_load_back`.
-- `token_preview_source=semantic_context` means `token_ids_preview` is a real
-  semantic token preview. `token_preview_source=local_heuristic` means the event
-  did not have HiRadix token context and the preview should not be treated as
-  tokenizer IDs.
-- `SGLANG_TRANSFER_LOG_VERBOSE=1` restores tensor details and empty diagnostic
-  fields. `SGLANG_TRANSFER_LOG_SYNC_TIMING=1` adds synchronized CUDA timing.
-
-## 3. Prepare AgentBench Environment
-
-Before running the task on a new machine, complete
-[README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md).
-
-That setup verifies:
-
-- the harness writes `workspace.patch` at the report root
-- Node is visible from the shell used to launch AgentBench
-- NodeBB npm dependencies are installed
-- Redis-backed NodeBB test dependencies are available
-- `nodebb-test-redis` and `config.json` exist
-- selected NodeBB tests get past environment setup errors
-
-Do not rerun AgentBench while the manual preflight still fails with:
-
-```text
-node: command not found
-Cannot find module '...'
-ENOENT ... config.json
-```
-
-## 4. Run One AgentBench Task
-
-Before running AgentBench, choose which DeepAgents Python library to import:
-
-```bash
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-```
-
-Use `upstream` for the current tool-loop experiments. The known-good run shape
-that emitted `read_file`, `write_file`, `edit_file`, and `execute` used the
-cloned DeepAgents library under `upstream/deepagents/libs/deepagents`.
-Use `python_environment` only when intentionally comparing against the installed
-DeepAgents package.
-
-`AGENTBENCH_TASK_OVERRIDES_FILE` points to an independent text file with prompt
-nudges for smaller models. Unset it or empty the file for a vanilla prompt.
-`AGENTBENCH_EXECUTION_LOOP=1` enables the harness-driven execution loop:
-inspect, edit, test, then fix/test until a patch plus validation attempt exists
-or the max step count is reached. `AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6`
-limits the loop. `AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1` requires an
-`execute` validation attempt before the loop can finish. Keep
-`AGENTBENCH_EXECUTION_GUARD=0` when the loop is enabled so the old read-only
-retry guard does not mix with the stronger loop controller. Set
-`AGENTBENCH_PRINT_CHECKPOINTS=0` or pass `--quiet-checkpoints` to keep
-`# [CHECK_POINT]` blocks out of the terminal while still saving
-`others/checkpoints.json`. `PYTHONWARNINGS` hides dependency deprecation
-warnings from the live terminal output. If Hugging Face warns about
-unauthenticated requests, optionally set `HF_TOKEN` in your shell before
-starting Dynamo or AgentBench.
-
-Automatic SWE-bench runs use shared checkouts under `agentbench/repos/`.
-The harness now resets tracked changes and removes untracked non-ignored files
-before each shared-checkout run so stale files do not leak between experiments.
-Use `--keep-shared-workspace-changes` only when deliberately debugging a dirty
-checkout. Patch capture also includes newly-created untracked files, so
-`workspace.patch` can contain files created with `write_file`.
-
-### 4.1 Baseline Single-Loop Run
-
-Use this first when you want a complete run that actually attempts the task.
-This mode gives Deep Agents one continuous tool loop instead of splitting the
-work into separate planning/execution/review calls.
-
-```bash
-cd ~/kv_cache_offloading
-
-MODEL_KIND=coder  # coder, coder30b, or instruct
-
-case "$MODEL_KIND" in
-  coder)
-    MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
-    ;;
-  coder30b)
-    MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct'
-    ;;
-  instruct)
-    MODEL_NAME='Qwen/Qwen2.5-7B-Instruct'
-    ;;
-  *)
-    echo "MODEL_KIND must be coder, coder30b, or instruct" >&2
-    exit 1
-    ;;
-esac
-
-echo "Using model: $MODEL_NAME"
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
-AGENTBENCH_WORKFLOW_MODE=baseline \
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --app-variant upstream_deploy_coding_agent \
-  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
-  --model "$MODEL_NAME" \
-  --dataset ScaleAI/SWE-bench_Pro \
-  --split test \
-  --index 0 \
-  --prompt-evolution-value-char-limit 1000 \
-  --quiet-checkpoints
-```
-
-Check if the run succeeded in executing the task assigned it
-
-```bash
-LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
-echo "$LATEST_RESULT"
-
-wc -c "$LATEST_RESULT/workspace.patch"
-cat "$LATEST_RESULT/others/git_status.txt"
-cat "$LATEST_RESULT/others/git_diff_stat.txt"
-cat "$LATEST_RESULT/others/git_untracked_files.txt"
-```
-
-### 4.2 Phased Run
-
-Use this when the goal is phase-level stats: planning, execution,
-patch-generation, and review. It is better for runtime analysis, but if the
-planning response is empty or malformed, later phases may inherit bad context.
-
-```bash
-cd ~/kv_cache_offloading
-
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
-AGENTBENCH_WORKFLOW_MODE=phased \
-python3.11 agentbench/deepagents_swebench_single_host.py \
-  --app-variant upstream_deploy_coding_agent \
-  --frontend-url http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions \
-  --model "$MODEL_NAME" \
-  --dataset ScaleAI/SWE-bench_Pro \
-  --split test \
-  --index 0 \
-  --hint-profile high-reuse \
-  --prompt-evolution-value-char-limit 1000 \
-  --quiet-checkpoints
-```
-
-The `--prompt-evolution-value-char-limit 1000` option keeps each captured
-before/after value readable by truncating long strings with an ellipsis.
-
-### 4.3 Multi-Task Run
-
-The harness runs one SWE-bench task per process via `--index`. To try multiple
-tasks, loop over indexes:
-
-<!-- ```bash
-cd ~/kv_cache_offloading
-
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=0
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
-export AGENTBENCH_EXECUTION_GUARD=1
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
-START_INDEX=0
-END_INDEX=4
-
-for INDEX in $(seq "$START_INDEX" "$END_INDEX"); do
-  echo "===== Running SWE-bench index $INDEX ====="
-
-  AGENTBENCH_WORKFLOW_MODE=phased \
-  python3.11 agentbench/deepagents_swebench_single_host.py \
-    --app-variant upstream_deploy_coding_agent \
-    --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
-    --model "$MODEL_NAME" \
-    --dataset ScaleAI/SWE-bench_Pro \
-    --split test \
-    --index "$INDEX" \
-    --hint-profile high-reuse \
-    --prompt-evolution-value-char-limit 1000 \
-    --quiet-checkpoints \
-  || echo "Index $INDEX failed; continuing"
-
-  echo
-done
-``` -->
-
-If you want the rolling report files refreshed and announced after every
-iteration, use the batch wrapper instead of a hand-written loop:
-
-```bash
-cd ~/kv_cache_offloading
-
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=0
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
-export AGENTBENCH_EXECUTION_GUARD=1
-export AGENTBENCH_PRINT_CHECKPOINTS=0
-export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-
-START_INDEX=0 \
-END_INDEX=30 \
-HINT_PROFILE=high-reuse \
-./agentbench/run_swebench_batch_single_host.sh
-```
-
-That wrapper explicitly rebuilds the latest curated report after each completed
-task and keeps batch-local progress artifacts under:
-
-```text
-experiments/reports/batches/<batch_id>/
-  progress.log
-  progress_overview.csv
-```
-
-After each iteration it also refreshes and prints the paths to:
-
-```text
-experiments/reports/latest_runs_overview.md
-experiments/reports/all_runs_overview.csv
-experiments/reports/latest_runs_execution_prompts.md
-experiments/reports/all_runs_execution_prompts.csv
-```
-
-Then check which tasks produced patches:
-
-```bash
-cd ~/kv_cache_offloading
-
-for REPORT in experiments/reports/runs/*; do
-  [ -f "$REPORT/run_overview.md" ] || continue
-  echo "===== $(basename "$REPORT") ====="
-  grep -E "Patch nonempty|Git diff nonempty|Model|App variant|Hint profile" "$REPORT/run_overview.md"
-done
-```
-
-This is the fastest way to find SWE-bench tasks that produce a patch. For clean
-per-task run-level transfer totals, restart Dynamo before each task so every run
-gets a fresh `sglang_transfer_events_*.jsonl`. If you keep the same worker
-running, `model_request_metrics.csv` is still useful because it uses per-subrequest
-time windows, but the run-level transfer total may include earlier tasks from
-the same worker session.
-
-## 5. Find The Latest Result
-
-```bash
-LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
-echo "$LATEST_RESULT"
-```
-
-## 6. Check Task Completion
-
-Use this before reading the richer reports. A complete task attempt should
-usually leave a non-empty patch or git diff.
-
-```bash
-cat "$LATEST_RESULT/others/git_status.txt"
-cat "$LATEST_RESULT/others/git_diff_stat.txt"
-cat "$LATEST_RESULT/others/git_untracked_files.txt"
-wc -c "$LATEST_RESULT/workspace.patch"
-```
-
-If the execution loop was enabled, inspect the harness-directed steps:
-
-```bash
-cat "$LATEST_RESULT/others/execution_loop_table.csv"
-cat "$LATEST_RESULT/others/execution_loop_trace.json"
-```
-
-Useful signal:
-
-```text
-workspace.patch size > 0
-git_status.txt or git_diff_stat.txt is non-empty
-model output includes edit/write/execute tool activity, not only ls/read_file
-```
-
-New files are expected to appear in `git_untracked_files.txt` and are included
-in `workspace.patch`. If `git_status.txt` shows `??` files but
-`workspace.patch` is still empty, that run used an older copy of the harness.
-
-If baseline edits files but phased does not, debug the phased orchestration. If
-both baseline and phased runs fail to edit files, try the other model by
-rerunning from **1. Choose Model** with `MODEL_KIND=instruct` or
-`MODEL_KIND=coder`.
-
-If the latest run still writes `others/workspace.patch`, that run used an older
-copy of the harness or was created before the report-layout update. New runs
-should write:
-
-```text
-experiments/raw/agentbench/results/<run_id>/workspace.patch
-```
-
-## 7. Inspect Prompt Evolution Artifacts
-
-```bash
-cat "$LATEST_RESULT/prompt_evolution_values/index.json"
-ls "$LATEST_RESULT/prompt_evolution_values"
-cat "$LATEST_RESULT/prompt_evolution_report.md"
-```
-
-Main prompt-evolution artifacts:
-
-```text
-prompt_evolution_report.json
-prompt_evolution_report.md
-prompt_evolution_report.csv
-prompt_evolution_values/index.json
-prompt_evolution_values/*.json
-```
-
-The per-stage value files under `prompt_evolution_values/` contain:
-
-```json
-{
-  "stage": "...",
-  "diff_summary": {},
-  "before": {},
-  "after": {}
-}
-```
-
-## 8. Inspect Measurement And Cache Stats
-
-```bash
-cat "$LATEST_RESULT/others/run_summary_table.csv"
-cat "$LATEST_RESULT/others/measurement_summary_table.csv"
-cat "$LATEST_RESULT/others/cache_value_summary_table.csv"
-cat "$LATEST_RESULT/others/kv_hierarchy_summary_table.csv"
-```
-
-For comparisons across hint configurations, prefer the curated run report:
-
-```bash
-LATEST_RUN_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
-cat "$LATEST_RUN_REPORT/phase_runtime_metrics.csv"
-```
-
-For the compact agent-behavior view, use:
-
-```bash
-cat "$LATEST_RUN_REPORT/phase_summary.md"
-cat "$LATEST_RUN_REPORT/phase_summary.csv"
-cat "$LATEST_RUN_REPORT/tool_call_details.md"
-cat "$LATEST_RUN_REPORT/tool_call_details.csv"
-cat experiments/reports/latest_run_phase_summary.csv
-cat experiments/reports/latest_run_tool_call_details.csv
-cat experiments/reports/latest_runs_overview.md
-cat experiments/reports/all_runs_overview.md
-cat experiments/reports/latest_runs_execution_prompts.md
-cat experiments/reports/all_runs_execution_prompts.csv
-cat experiments/reports/latest_runs_task_summary.md
-cat experiments/reports/all_runs_task_summary.csv
-```
-
-This is the quick table to check after each run. It reports the run/repo/runtime,
-execution subrequest count, tool calls, tools used, patch size, and phase-level
-runtime/cache/transfer fields.
-
-For audience-friendly orientation, the task-summary reports give a short,
-deterministic summary of what each SWE-bench task is asking for:
-
-- `latest_runs_task_summary.md`
-- `all_runs_task_summary.csv`
-
-They also include:
-
-- `expected_agent_action`: the short operational expectation, such as
-  `edit repo code and run validation` or `modify routing/controller logic and run targeted tests`
-- `validation_expectation`: the expected validation style, such as
-  `run targeted tests` or `run validation command (...)`
-
-`tool_call_details.md` shows the exact tool-call arguments when available. For
-`execute`, check the `Command` column to confirm whether the model actually ran
-the expected validation command.
-
-Build a multi-run comparison after a profile matrix:
+### Step 2: Build Comparison Report
 
 ```bash
 COMPARISON_ID="hint_matrix_$(date +%Y%m%d_%H%M%S)"
@@ -1071,6 +444,7 @@ python3 experiments/scripts/agentbench_report/build_comparison_report.py \
   --comparison-id "$COMPARISON_ID"
 
 LATEST_COMPARISON="$(ls -td experiments/reports/comparisons/* | head -1)"
+
 cat "$LATEST_COMPARISON/summary.md"
 cat "$LATEST_COMPARISON/runs.csv"
 cat "$LATEST_COMPARISON/phase_metrics.csv"
@@ -1078,35 +452,115 @@ cat "$LATEST_COMPARISON/transfer_metrics.csv"
 cat "$LATEST_COMPARISON/profile_phase_summary.csv"
 ```
 
-The comparison report writes:
+Use these fields to compare hint impact:
 
 ```text
-experiments/reports/comparisons/<comparison_id>/
-  comparison_manifest.json
-  comparison_metrics.json
-  runs.csv
-  phase_metrics.csv
-  transfer_metrics.csv
-  profile_phase_summary.csv
-  summary.md
+hint_profile
+phase
+ttft_ms
+cached_token_count
+recomputed_prefix_tokens
+cache_reuse_ratio
+transfer_request_id_matched
+transfer_host_to_device_kv_mb_for_request
+transfer_device_to_host_kv_mb_for_request
+transfer_cuda_sync_ms_for_request
 ```
 
-`phase_metrics.csv` includes direct-attribution columns when available:
-`worker_runtime_json_matched`, `worker_runtime_json_cached_tokens`,
-`worker_runtime_json_request_received_to_attached_ms`,
-`transfer_request_id_matched`,
-`transfer_device_to_host_kv_mb_for_request`,
-`transfer_host_to_device_kv_mb_for_request`, and
-`transfer_cuda_sync_ms_for_request`.
+Recommended statistics:
 
-For phase-level runs, inspect:
+```text
+TTFT p50/p95
+cache reuse ratio
+cached tokens
+recomputed prefix tokens
+host->device transfer count and MB
+device->host transfer count and MB
+transfer ms per MB
+transfer ms per cached token
+direct attribution rate
+semantic token count
+unique semantic token hashes
+```
+
+## Experiment 5: Multi-Task Batch
+
+Use this to scan many SWE-bench tasks and find runs where the model actually
+edits files and creates patches.
 
 ```bash
-cat "$LATEST_RESULT/step_results.json"
-cat "$LATEST_RESULT/stage_lifecycle_table.csv"
+cd ~/kv_cache_offloading
+
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
+export AGENTBENCH_EXECUTION_GUARD=1
+
+START_INDEX=0 \
+END_INDEX=30 \
+HINT_PROFILE=high-reuse \
+./agentbench/run_swebench_batch_single_host.sh
 ```
 
-## 9. Verify Runtime-Hint Evidence
+Batch outputs:
+
+```text
+experiments/reports/batches/<batch_id>/
+  progress.log
+  progress_overview.csv
+```
+
+Global summaries:
+
+```bash
+cat experiments/reports/latest_runs_overview.md
+cat experiments/reports/latest_runs_task_summary.md
+cat experiments/reports/latest_runs_execution_prompts.md
+cat experiments/reports/all_runs_overview.csv
+cat experiments/reports/all_runs_task_summary.csv
+cat experiments/reports/all_runs_execution_prompts.csv
+```
+
+## Utilities
+
+### Latest Result And Report
+
+```bash
+LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
+LATEST_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+
+echo "$LATEST_RESULT"
+echo "$LATEST_REPORT"
+```
+
+### Patch And Tool Activity
+
+```bash
+wc -c "$LATEST_RESULT/workspace.patch"
+cat "$LATEST_RESULT/others/git_status.txt"
+cat "$LATEST_RESULT/others/git_diff_stat.txt"
+cat "$LATEST_REPORT/tool_call_details.md"
+cat "$LATEST_REPORT/tool_call_details.csv"
+```
+
+### Phase Metrics
+
+```bash
+cat "$LATEST_REPORT/phase_summary.md"
+cat "$LATEST_REPORT/phase_summary.csv"
+cat "$LATEST_REPORT/phase_runtime_metrics.csv"
+cat "$LATEST_REPORT/model_request_metrics.csv"
+```
+
+### Prompt Evolution
+
+```bash
+cat "$LATEST_RESULT/prompt_evolution_report.md"
+cat "$LATEST_RESULT/prompt_evolution_values/index.json"
+ls "$LATEST_RESULT/prompt_evolution_values"
+```
+
+### Runtime Hint Evidence
 
 ```bash
 grep -R "hint_probe_id\|agent_hints\|worker.decode" -n "$LATEST_RESULT" | head -50
@@ -1114,23 +568,38 @@ cat "$LATEST_RESULT/runtime_hint_alignment_analysis.md"
 cat "$LATEST_RESULT/others/runtime_hint_alignment_summary_table.csv"
 ```
 
-Success signal: `others/worker_runtime.log` contains
-`worker.decode.request_received`, `worker.decode.request_attached`, or
-`worker.decode.request_completed` events with AgentBench `agent_hints`, including
-`hint_probe_id: "...::hint_probe"`.
+Worker-side hint proof requires the instrumented runtime. A non-instrumented run
+can still produce prompt-evolution files, but it cannot prove that hints reached
+SGLang worker logs.
 
-This worker-side success signal requires the instrumented runtime. A
-non-instrumented run can still produce the prompt-evolution files, but it will
-not prove that hints reached the SGLang worker logs.
+### Rebuild Latest Run Report
 
-## 10. Expected Prompt Evolution Stages
+```bash
+LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
 
-Typical stages include:
+python3 experiments/scripts/agentbench_report/build_run_report.py \
+  --agentbench-result-dir "$LATEST_RESULT" \
+  --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
+```
 
-- `task_input`
-- `formatted_prompt`
-- `final_model_request`
-- `system_context`
-- `tool_runtime_context`
-- `runtime_preprocessing`
-- `model_behavior`
+### Stop Dynamo
+
+```bash
+./run_dynamo_single_host.sh stop
+```
+
+## Report Field Notes
+
+- `worker_runtime_json_matched=True` means worker runtime logs were matched by
+  request/context ID.
+- `transfer_request_id_matched=True` means transfer events were matched by
+  request/context ID. This is the precise attribution signal.
+- `transfer_time_window_matched=True` is weaker; it means events fell inside the
+  request timestamp window.
+- `cache_hit`, `cached_token_count`, `recomputed_prefix_tokens`, and
+  `cache_reuse_ratio` are effective values derived from the best available
+  evidence.
+- `ttft_ms` uses the best available source. Prefer
+  `ttft_source=worker_runtime_json.request_received_to_attached`.
+- `model_request_metrics.csv` is the best file when one phase sends multiple
+  SGLang requests.
