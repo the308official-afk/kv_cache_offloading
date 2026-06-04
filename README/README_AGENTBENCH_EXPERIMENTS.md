@@ -49,15 +49,18 @@ esac
 export MODEL_NAME
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
-export AGENTBENCH_EXECUTION_LOOP=1
+export AGENTBENCH_EXECUTION_LOOP=0
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=0
+export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
 
 echo "Using model: $MODEL_NAME"
 ```
+
+All experiments below inherit this execution policy unless you explicitly
+override it in the shell.
 
 If this is a fresh machine, install the upstream Deep Agents dependency first:
 
@@ -492,8 +495,8 @@ edits files and creates patches.
 cd ~/kv_cache_offloading
 
 export AGENTBENCH_EXECUTION_LOOP=0
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 
 START_INDEX=0 \
