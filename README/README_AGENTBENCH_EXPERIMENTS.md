@@ -106,6 +106,12 @@ DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 ./run_dynamo_single_host.sh start
 ```
 
+Watch the SGLang worker logs after restart:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
 Verify:
 
 ```bash
@@ -282,6 +288,12 @@ DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 FRONTEND_IMAGE="$FRONTEND_IMAGE" \
 WORKER_IMAGE="$WORKER_IMAGE" \
 ./run_dynamo_single_host.sh start
+```
+
+Watch the SGLang worker logs after restart:
+
+```bash
+docker logs -f dynamo-sglang-worker
 ```
 
 If startup fails with host-memory pressure, stop Dynamo and clear page cache:
