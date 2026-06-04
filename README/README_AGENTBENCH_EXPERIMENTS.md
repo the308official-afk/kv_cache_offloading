@@ -309,7 +309,7 @@ docker inspect dynamo-sglang-worker \
   --format '{{range .Mounts}}{{println .Source "->" .Destination}}{{end}}' | \
   grep sglang_transfer_overlay
 
-docker exec dynamo-sglang-worker python3 - <<'PY'
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
 import inspect
 import sglang.srt.mem_cache.memory_pool_host as mph
 print(mph.__file__)
