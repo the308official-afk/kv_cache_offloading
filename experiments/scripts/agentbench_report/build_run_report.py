@@ -1468,6 +1468,19 @@ def average(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
 
+def percentile(values: list[float], pct: float) -> float | None:
+    clean = sorted(value for value in values if value is not None)
+    if not clean:
+        return None
+    if len(clean) == 1:
+        return clean[0]
+    rank = (len(clean) - 1) * pct
+    lower = int(rank)
+    upper = min(lower + 1, len(clean) - 1)
+    weight = rank - lower
+    return clean[lower] * (1 - weight) + clean[upper] * weight
+
+
 def phase_runtime_summaries(phase_rows: list[dict[str, Any]], subrequest_rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for row in phase_rows:
@@ -2269,6 +2282,637 @@ def refresh_task_summaries(root: Path, runs_root: Path, *, latest_limit: int = 1
     )
 
 
+def run_metadata_for_aggregate(report_dir: Path) -> dict[str, Any]:
+    manifest = load_json(report_dir / "run_manifest.json", {})
+    summary = load_phase_summary(report_dir)
+    run = dict_or_empty(summary.get("run"))
+    task = dict_or_empty(manifest.get("task"))
+    task_label = task.get("repo") or run.get("repo")
+    instance_id = task.get("instance_id")
+    return {
+        "run_id": manifest.get("run_id") or run.get("run_id") or report_dir.name,
+        "task_label": task_label,
+        "instance_id_short": short_instance_id(instance_id),
+        "model": manifest.get("model") or run.get("model"),
+        "app_variant": manifest.get("app_variant") or run.get("app_variant"),
+        "hint_profile": manifest.get("hint_profile") or run.get("hint_profile"),
+        "source_report_dir": str(report_dir),
+    }
+
+
+def short_instance_id(value: Any) -> str:
+    text = str(value or "")
+    if not text:
+        return ""
+    match = re.search(r"([0-9a-f]{8,})", text, flags=re.IGNORECASE)
+    if match:
+        return match.group(1)[:8]
+    return compact_text(text, limit=24)
+
+
+def phase_request_index(value: Any) -> str:
+    text = str(value or "")
+    match = re.search(r"::(\d+)$", text)
+    return match.group(1) if match else ""
+
+
+def aggregate_report_csv_rows(
+    run_dirs: list[Path],
+    *,
+    file_name: str,
+    source_file: str,
+) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for run_dir in run_dirs:
+        source = run_dir / file_name
+        metadata = run_metadata_for_aggregate(run_dir)
+        for row in read_csv_rows(source):
+            merged = dict(metadata)
+            merged["source_file"] = source_file
+            for key, value in row.items():
+                if key in {"run_id", "model", "app_variant", "hint_profile"} and value in ("", None):
+                    continue
+                merged[key] = value
+            if not merged.get("hint_profile") and merged.get("run_hint_profile"):
+                merged["hint_profile"] = merged.get("run_hint_profile")
+            merged["phase_request_index"] = phase_request_index(
+                merged.get("phase_request_id") or merged.get("request_id")
+            )
+            merged["host_to_device_kv_mb"] = first_nonempty(
+                merged.get("host_to_device_kv_mb"),
+                merged.get("transfer_host_to_device_kv_mb_for_request"),
+            )
+            merged["device_to_host_kv_mb"] = first_nonempty(
+                merged.get("device_to_host_kv_mb"),
+                merged.get("transfer_device_to_host_kv_mb_for_request"),
+            )
+            merged["transfer_cuda_sync_ms"] = first_nonempty(
+                merged.get("transfer_cuda_sync_ms"),
+                merged.get("transfer_cuda_sync_ms_for_request"),
+            )
+            merged["ttft_ms"] = nonnegative_metric(merged.get("ttft_ms"))
+            rows.append(merged)
+    return rows
+
+
+def write_rows_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({field: row.get(field) for field in fields})
+
+
+AGG_PHASE_FIELDS = [
+    "run_id",
+    "task_label",
+    "instance_id_short",
+    "hint_profile",
+    "phase",
+    "phase_request_index",
+    "ttft_ms",
+    "latency_ms",
+    "prompt_tokens",
+    "completion_tokens",
+    "cache_hit",
+    "cached_token_count",
+    "recomputed_prefix_tokens",
+    "cache_reuse_ratio",
+    "worker_runtime_json_matched",
+    "transfer_request_id_matched",
+    "host_to_device_kv_mb",
+    "device_to_host_kv_mb",
+    "transfer_cuda_sync_ms",
+    "patch_nonempty",
+]
+
+
+AGG_SUBREQUEST_FIELDS = [
+    "run_id",
+    "task_label",
+    "instance_id_short",
+    "hint_profile",
+    "phase",
+    "phase_request_index",
+    "subrequest_index",
+    "ttft_ms",
+    "prompt_tokens",
+    "completion_tokens",
+    "cache_hit",
+    "cached_token_count",
+    "recomputed_prefix_tokens",
+    "cache_reuse_ratio",
+    "transfer_request_id_matched",
+    "transfer_time_window_matched",
+    "host_to_device_kv_mb",
+    "device_to_host_kv_mb",
+    "transfer_cuda_sync_ms",
+]
+
+
+REQUEST_PHASE_FIELDS = [
+    "run_id",
+    "task_label",
+    "instance_id_short",
+    "hint_profile",
+    "phase",
+    "phase_request_index",
+    "subrequest_index",
+    "ttft_ms",
+    "cache_hit",
+    "cached_token_count",
+    "recomputed_prefix_tokens",
+    "cache_reuse_ratio",
+    "prompt_tokens",
+    "completion_tokens",
+    "transfer_request_id_matched",
+    "transfer_time_window_matched",
+    "host_to_device_kv_mb",
+    "device_to_host_kv_mb",
+    "transfer_cuda_sync_ms",
+    "worker_runtime_json_matched",
+    "patch_nonempty",
+    "source_level",
+]
+
+
+AGG_TRANSFER_FIELDS = [
+    "run_id",
+    "task_label",
+    "instance_id_short",
+    "hint_profile",
+    "function",
+    "direction",
+    "count",
+    "kv_num_mb_estimated",
+    "elapsed_ms_cuda_sync",
+    "semantic_token_count",
+    "error_count",
+]
+
+
+HINT_IMPACT_FIELDS = [
+    "hint_profile",
+    "phase",
+    "run_count",
+    "request_count",
+    "worker_runtime_json_match_rate",
+    "direct_transfer_attribution_rate",
+    "ttft_ms_avg",
+    "ttft_ms_p50",
+    "ttft_ms_p95",
+    "cache_reuse_ratio_avg",
+    "cached_token_count_avg",
+    "recomputed_prefix_tokens_avg",
+    "host_to_device_kv_mb_total",
+    "device_to_host_kv_mb_total",
+    "transfer_cuda_sync_ms_total",
+    "host_to_device_seen_count",
+    "device_to_host_seen_count",
+]
+
+
+def bool_rate(rows: list[dict[str, Any]], field: str) -> float:
+    if not rows:
+        return 0.0
+    return sum(1 for row in rows if as_bool(row.get(field)) is True) / len(rows)
+
+
+def aggregate_hint_impact_rows(phase_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for row in phase_rows:
+        grouped[(str(row.get("hint_profile") or "unknown"), str(row.get("phase") or "unknown"))].append(row)
+
+    rows: list[dict[str, Any]] = []
+    for (hint_profile, phase), items in sorted(grouped.items()):
+        ttft_values = [
+            as_float(row.get("ttft_ms"))
+            for row in items
+            if row.get("ttft_ms") not in (None, "") and as_float(row.get("ttft_ms")) >= 0
+        ]
+        reuse_values = [
+            as_float(row.get("cache_reuse_ratio"))
+            for row in items
+            if row.get("cache_reuse_ratio") not in (None, "")
+        ]
+        cached_values = [
+            as_float(row.get("cached_token_count"))
+            for row in items
+            if row.get("cached_token_count") not in (None, "")
+        ]
+        recomputed_values = [
+            as_float(row.get("recomputed_prefix_tokens"))
+            for row in items
+            if row.get("recomputed_prefix_tokens") not in (None, "")
+        ]
+        h2d_values = [as_float(row.get("transfer_host_to_device_kv_mb_for_request")) for row in items]
+        d2h_values = [as_float(row.get("transfer_device_to_host_kv_mb_for_request")) for row in items]
+        run_ids = {str(row.get("run_id")) for row in items if row.get("run_id")}
+        rows.append(
+            {
+                "hint_profile": hint_profile,
+                "phase": phase,
+                "run_count": len(run_ids),
+                "request_count": len(items),
+                "worker_runtime_json_match_rate": bool_rate(items, "worker_runtime_json_matched"),
+                "direct_transfer_attribution_rate": bool_rate(items, "transfer_request_id_matched"),
+                "ttft_ms_avg": average(ttft_values),
+                "ttft_ms_p50": percentile(ttft_values, 0.50),
+                "ttft_ms_p95": percentile(ttft_values, 0.95),
+                "cache_reuse_ratio_avg": average(reuse_values),
+                "cached_token_count_avg": average(cached_values),
+                "recomputed_prefix_tokens_avg": average(recomputed_values),
+                "host_to_device_kv_mb_total": sum(h2d_values),
+                "device_to_host_kv_mb_total": sum(d2h_values),
+                "transfer_cuda_sync_ms_total": sum(
+                    as_float(row.get("transfer_cuda_sync_ms_for_request")) for row in items
+                ),
+                "host_to_device_seen_count": sum(
+                    1
+                    for row in items
+                    if as_bool(row.get("transfer_has_host_to_device_for_request")) is True
+                    or as_float(row.get("transfer_host_to_device_kv_mb_for_request")) > 0
+                ),
+                "device_to_host_seen_count": sum(
+                    1
+                    for row in items
+                    if as_bool(row.get("transfer_has_device_to_host_for_request")) is True
+                    or as_float(row.get("transfer_device_to_host_kv_mb_for_request")) > 0
+                ),
+            }
+        )
+    return rows
+
+
+def format_metric(value: Any, digits: int = 3) -> str:
+    if value in (None, ""):
+        return "n/a"
+    try:
+        return f"{float(value):.{digits}f}"
+    except (TypeError, ValueError):
+        return str(value)
+
+
+def first_nonempty(*values: Any) -> Any:
+    for value in values:
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def phase_lookup_key(row: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(row.get("run_id") or ""),
+        str(row.get("phase") or ""),
+        str(row.get("request_id") or row.get("phase_request_id") or ""),
+    )
+
+
+def nonnegative_metric(value: Any) -> Any:
+    if value in (None, ""):
+        return None
+    numeric = as_float(value)
+    return value if numeric >= 0 else None
+
+
+def aggregate_request_phase_rows(
+    phase_rows: list[dict[str, Any]],
+    subrequest_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    phase_by_key = {phase_lookup_key(row): row for row in phase_rows}
+    subrequest_keys: set[tuple[str, str, str]] = set()
+    rows: list[dict[str, Any]] = []
+
+    for sub in subrequest_rows:
+        key = phase_lookup_key(sub)
+        phase = phase_by_key.get(key, {})
+        subrequest_keys.add(key)
+        rows.append(
+            {
+                "run_id": first_nonempty(sub.get("run_id"), phase.get("run_id")),
+                "task_label": first_nonempty(sub.get("task_label"), phase.get("task_label")),
+                "instance_id_short": first_nonempty(sub.get("instance_id_short"), phase.get("instance_id_short")),
+                "model": first_nonempty(sub.get("model"), phase.get("model")),
+                "app_variant": first_nonempty(sub.get("app_variant"), phase.get("app_variant")),
+                "hint_profile": first_nonempty(
+                    sub.get("hint_profile"),
+                    sub.get("run_hint_profile"),
+                    phase.get("hint_profile"),
+                ),
+                "phase": first_nonempty(sub.get("phase"), phase.get("phase")),
+                "phase_request_id": first_nonempty(sub.get("phase_request_id"), phase.get("request_id")),
+                "phase_request_index": phase_request_index(
+                    first_nonempty(sub.get("phase_request_id"), phase.get("request_id"))
+                ),
+                "subrequest_index": sub.get("subrequest_index"),
+                "runtime_context_id": sub.get("runtime_context_id"),
+                "sglang_request_id": sub.get("sglang_request_id"),
+                "ttft_ms": nonnegative_metric(first_nonempty(sub.get("ttft_ms"), phase.get("ttft_ms"))),
+                "ttft_source": phase.get("ttft_source"),
+                "cache_hit": first_nonempty(sub.get("cache_hit"), phase.get("cache_hit")),
+                "cache_hit_source": phase.get("cache_hit_source"),
+                "cached_token_count": first_nonempty(sub.get("cached_token_count"), phase.get("cached_token_count")),
+                "recomputed_prefix_tokens": first_nonempty(
+                    sub.get("recomputed_prefix_tokens"),
+                    phase.get("recomputed_prefix_tokens"),
+                ),
+                "cache_reuse_ratio": first_nonempty(sub.get("cache_reuse_ratio"), phase.get("cache_reuse_ratio")),
+                "prompt_tokens": first_nonempty(sub.get("prompt_tokens"), phase.get("prompt_tokens")),
+                "completion_tokens": first_nonempty(sub.get("completion_tokens"), phase.get("completion_tokens")),
+                "transfer_request_id_matched": first_nonempty(
+                    sub.get("transfer_request_id_matched"),
+                    phase.get("transfer_request_id_matched"),
+                ),
+                "transfer_time_window_matched": sub.get("transfer_time_window_matched"),
+                "host_to_device_kv_mb": first_nonempty(
+                    sub.get("transfer_host_to_device_kv_mb_for_request"),
+                    phase.get("transfer_host_to_device_kv_mb_for_request"),
+                ),
+                "device_to_host_kv_mb": first_nonempty(
+                    sub.get("transfer_device_to_host_kv_mb_for_request"),
+                    phase.get("transfer_device_to_host_kv_mb_for_request"),
+                ),
+                "transfer_cuda_sync_ms": first_nonempty(
+                    sub.get("transfer_cuda_sync_ms_for_request"),
+                    phase.get("transfer_cuda_sync_ms_for_request"),
+                ),
+                "worker_runtime_json_matched": phase.get("worker_runtime_json_matched"),
+                "patch_nonempty": phase.get("patch_nonempty"),
+                "source_level": "model_request",
+                "source_report_dir": first_nonempty(sub.get("source_report_dir"), phase.get("source_report_dir")),
+            }
+        )
+
+    for phase in phase_rows:
+        key = phase_lookup_key(phase)
+        if key in subrequest_keys:
+            continue
+        rows.append(
+            {
+                "run_id": phase.get("run_id"),
+                "task_label": phase.get("task_label"),
+                "instance_id_short": phase.get("instance_id_short"),
+                "model": phase.get("model"),
+                "app_variant": phase.get("app_variant"),
+                "hint_profile": phase.get("hint_profile"),
+                "phase": phase.get("phase"),
+                "phase_request_id": phase.get("request_id"),
+                "phase_request_index": phase_request_index(phase.get("request_id")),
+                "subrequest_index": "",
+                "runtime_context_id": phase.get("worker_runtime_json_runtime_context_id"),
+                "sglang_request_id": phase.get("worker_runtime_json_sglang_request_id"),
+                "ttft_ms": nonnegative_metric(phase.get("ttft_ms")),
+                "ttft_source": phase.get("ttft_source"),
+                "cache_hit": phase.get("cache_hit"),
+                "cache_hit_source": phase.get("cache_hit_source"),
+                "cached_token_count": phase.get("cached_token_count"),
+                "recomputed_prefix_tokens": phase.get("recomputed_prefix_tokens"),
+                "cache_reuse_ratio": phase.get("cache_reuse_ratio"),
+                "prompt_tokens": phase.get("prompt_tokens"),
+                "completion_tokens": phase.get("completion_tokens"),
+                "transfer_request_id_matched": phase.get("transfer_request_id_matched"),
+                "transfer_time_window_matched": "",
+                "host_to_device_kv_mb": phase.get("transfer_host_to_device_kv_mb_for_request"),
+                "device_to_host_kv_mb": phase.get("transfer_device_to_host_kv_mb_for_request"),
+                "transfer_cuda_sync_ms": phase.get("transfer_cuda_sync_ms_for_request"),
+                "worker_runtime_json_matched": phase.get("worker_runtime_json_matched"),
+                "patch_nonempty": phase.get("patch_nonempty"),
+                "source_level": "phase_fallback",
+                "source_report_dir": phase.get("source_report_dir"),
+            }
+        )
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            str(row.get("run_id") or ""),
+            str(row.get("phase") or ""),
+            as_int(row.get("subrequest_index"), -1),
+            str(row.get("phase_request_id") or ""),
+        ),
+    )
+
+
+def write_latest_request_phase_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Reuse | Cached | Recomputed | H2D MB | D2H MB | Direct | Worker JSON | Source | Patch |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {request} | {ttft} | {reuse} | {cached} | {recomputed} | {h2d} | {d2h} | {direct} | {worker} | {source} | {patch} |".format(
+                run=row.get("run_id"),
+                task=row.get("task_label"),
+                case=row.get("instance_id_short"),
+                hint=row.get("hint_profile"),
+                phase=row.get("phase"),
+                phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
+                request=row.get("subrequest_index") if row.get("subrequest_index") not in (None, "") else "-",
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                reuse=format_metric(row.get("cache_reuse_ratio")),
+                cached=format_metric(row.get("cached_token_count"), digits=0),
+                recomputed=format_metric(row.get("recomputed_prefix_tokens"), digits=0),
+                h2d=format_metric(row.get("host_to_device_kv_mb")),
+                d2h=format_metric(row.get("device_to_host_kv_mb")),
+                direct=row.get("transfer_request_id_matched"),
+                worker=row.get("worker_runtime_json_matched"),
+                source=row.get("source_level"),
+                patch=row.get("patch_nonempty"),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_hint_impact_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Hint profile | Phase | Runs | Requests | Direct attribution | Worker JSON | TTFT p50 ms | TTFT p95 ms | Reuse avg | H2D MB | D2H MB |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {hint} | {phase} | {runs} | {requests} | {direct} | {worker} | {p50} | {p95} | {reuse} | {h2d} | {d2h} |".format(
+                hint=row.get("hint_profile"),
+                phase=row.get("phase"),
+                runs=row.get("run_count"),
+                requests=row.get("request_count"),
+                direct=format_metric(row.get("direct_transfer_attribution_rate")),
+                worker=format_metric(row.get("worker_runtime_json_match_rate")),
+                p50=format_metric(row.get("ttft_ms_p50")),
+                p95=format_metric(row.get("ttft_ms_p95")),
+                reuse=format_metric(row.get("cache_reuse_ratio_avg")),
+                h2d=format_metric(row.get("host_to_device_kv_mb_total")),
+                d2h=format_metric(row.get("device_to_host_kv_mb_total")),
+            )
+        )
+    low_direct = [
+        row for row in rows
+        if as_float(row.get("direct_transfer_attribution_rate")) < 1.0
+        and as_int(row.get("request_count")) > 0
+    ]
+    if low_direct:
+        lines.extend(
+            [
+                "",
+                "## Attribution Note",
+                "",
+                "Some rows have direct transfer attribution below `1.0`. Treat transfer causality carefully for those rows.",
+            ]
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_latest_phase_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Task | Case | Hint | Phase | Phase req | TTFT ms | Cache reuse | Cached tokens | Direct transfer | H2D MB | D2H MB |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {ttft} | {reuse} | {cached} | {direct} | {h2d} | {d2h} |".format(
+                run=row.get("run_id"),
+                task=row.get("task_label"),
+                case=row.get("instance_id_short"),
+                hint=row.get("hint_profile"),
+                phase=row.get("phase"),
+                phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                reuse=format_metric(row.get("cache_reuse_ratio")),
+                cached=format_metric(row.get("cached_token_count"), digits=0),
+                direct=row.get("transfer_request_id_matched"),
+                h2d=format_metric(row.get("transfer_host_to_device_kv_mb_for_request")),
+                d2h=format_metric(row.get("transfer_device_to_host_kv_mb_for_request")),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_latest_subrequest_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Cache reuse | Direct transfer | Time-window transfer | H2D MB | D2H MB |",
+        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {index} | {ttft} | {reuse} | {direct} | {window} | {h2d} | {d2h} |".format(
+                run=row.get("run_id"),
+                task=row.get("task_label"),
+                case=row.get("instance_id_short"),
+                hint=row.get("hint_profile") or row.get("run_hint_profile"),
+                phase=row.get("phase"),
+                phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
+                index=row.get("subrequest_index"),
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                reuse=format_metric(row.get("cache_reuse_ratio")),
+                direct=row.get("transfer_request_id_matched"),
+                window=row.get("transfer_time_window_matched"),
+                h2d=format_metric(row.get("transfer_host_to_device_kv_mb_for_request")),
+                d2h=format_metric(row.get("transfer_device_to_host_kv_mb_for_request")),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def write_latest_transfer_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Task | Case | Hint | Function | Direction | Count | KV MB | CUDA sync ms | Semantic tokens |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run} | {task} | {case} | {hint} | {function} | {direction} | {count} | {kv_mb} | {cuda_ms} | {tokens} |".format(
+                run=row.get("run_id"),
+                task=row.get("task_label"),
+                case=row.get("instance_id_short"),
+                hint=row.get("hint_profile"),
+                function=row.get("function"),
+                direction=row.get("direction"),
+                count=row.get("count"),
+                kv_mb=format_metric(row.get("kv_num_mb_estimated")),
+                cuda_ms=format_metric(row.get("elapsed_ms_cuda_sync")),
+                tokens=format_metric(row.get("semantic_token_count"), digits=0),
+            )
+        )
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
+def refresh_runtime_metric_summaries(root: Path, runs_root: Path, *, latest_limit: int = 10) -> None:
+    run_dirs = iter_run_report_dirs(runs_root)
+    reports_root = root / "experiments/reports"
+    reports_root.mkdir(parents=True, exist_ok=True)
+
+    phase_rows = aggregate_report_csv_rows(
+        run_dirs,
+        file_name="phase_runtime_metrics.csv",
+        source_file="phase_runtime_metrics.csv",
+    )
+    subrequest_rows = aggregate_report_csv_rows(
+        run_dirs,
+        file_name="model_request_metrics.csv",
+        source_file="model_request_metrics.csv",
+    )
+    transfer_rows = aggregate_report_csv_rows(
+        run_dirs,
+        file_name="transfer_events_by_function.csv",
+        source_file="transfer_events_by_function.csv",
+    )
+    request_phase_rows = aggregate_request_phase_rows(phase_rows, subrequest_rows)
+    hint_rows = aggregate_hint_impact_rows(phase_rows)
+
+    write_rows_csv(reports_root / "all_runs_phase_metrics.csv", phase_rows, AGG_PHASE_FIELDS)
+    write_rows_csv(reports_root / "all_runs_phase_request_metrics.csv", subrequest_rows, AGG_SUBREQUEST_FIELDS)
+    write_rows_csv(reports_root / "all_runs_task_phase_request_metrics.csv", request_phase_rows, REQUEST_PHASE_FIELDS)
+    write_rows_csv(reports_root / "all_runs_kv_transfer_metrics.csv", transfer_rows, AGG_TRANSFER_FIELDS)
+    write_rows_csv(reports_root / "all_runs_hint_profile_impact.csv", hint_rows, HINT_IMPACT_FIELDS)
+    write_hint_impact_md(
+        reports_root / "all_runs_hint_profile_impact.md",
+        hint_rows,
+        title="All Runs Hint Impact Summary",
+    )
+
+    latest_run_ids = {run_dir.name for run_dir in run_dirs[-latest_limit:]}
+    latest_phase_rows = [row for row in phase_rows if row.get("run_id") in latest_run_ids]
+    latest_subrequest_rows = [row for row in subrequest_rows if row.get("run_id") in latest_run_ids]
+    latest_request_phase_rows = [row for row in request_phase_rows if row.get("run_id") in latest_run_ids]
+    latest_transfer_rows = [row for row in transfer_rows if row.get("run_id") in latest_run_ids]
+    latest_hint_rows = aggregate_hint_impact_rows(latest_phase_rows)
+
+    write_latest_phase_md(
+        reports_root / "latest_runs_phase_metrics.md",
+        latest_phase_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Phase Metrics",
+    )
+    write_latest_subrequest_md(
+        reports_root / "latest_runs_phase_request_metrics.md",
+        latest_subrequest_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Model Request Metrics",
+    )
+    write_latest_request_phase_md(
+        reports_root / "latest_runs_task_phase_request_metrics.md",
+        latest_request_phase_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Request/Phase Metrics",
+    )
+    write_latest_transfer_md(
+        reports_root / "latest_runs_kv_transfer_metrics.md",
+        latest_transfer_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Transfer Metrics",
+    )
+    write_hint_impact_md(
+        reports_root / "latest_runs_hint_profile_impact.md",
+        latest_hint_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Hint Impact Summary",
+    )
+
+
 def detail_args(detail: dict[str, Any]) -> dict[str, Any]:
     args = detail.get("args")
     return args if isinstance(args, dict) else {}
@@ -2909,6 +3553,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         refresh_aggregate_tool_summaries(root, default_out_root)
         refresh_execution_prompt_summaries(root, default_out_root)
         refresh_task_summaries(root, default_out_root)
+        refresh_runtime_metric_summaries(root, default_out_root)
 
     for rel in [
         "others/run_summary_table.csv",

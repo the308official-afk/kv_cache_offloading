@@ -1,0 +1,46 @@
+# Latest 10 Runs Request/Phase Metrics
+
+| Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Reuse | Cached | Recomputed | H2D MB | D2H MB | Direct | Worker JSON | Source | Patch |
+| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 0 | - | 1257.117 | 0.796 | 8640 | 2221 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 1 | - | n/a | 0.776 | 8640 | 2499 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 2 | - | 1803.072 | 0.791 | 8896 | 2348 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | patch_generation | 0 | - | n/a | 0.985 | 9344 | 146 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | planning | 0 | - | 916.114 | 0.817 | 8640 | 1932 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | review | 0 | - | 167.782 | 0.987 | 9472 | 129 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 0 | - | 798.276 | 0.981 | 11776 | 226 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 1 | - | 1461.296 | 0.927 | 10624 | 836 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 2 | - | 256.170 | 0.992 | 11392 | 89 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | patch_generation | 0 | - | 773.203 | 1.000 | 11520 | 0 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | planning | 0 | - | 1485.413 | 0.871 | 8640 | 1277 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | review | 0 | - | 841.956 | 1.000 | 11776 | 0 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | execution | 0 | - | 1025.558 | 0.787 | 8640 | 2338 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | execution | 1 | - | n/a | 0.769 | 8640 | 2593 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | execution | 2 | - | 800.489 | 0.784 | 8896 | 2447 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | patch_generation | 0 | - | n/a | 0.890 | 9472 | 1171 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | planning | 0 | - | 1035.417 | 0.818 | 8640 | 1916 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150628 | internetarchive/openlibrary | 25858f9f | high-reuse | review | 0 | - | 1011.812 | 0.896 | 10624 | 1236 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | execution | 0 | - | 1973.505 | 0.752 | 8640 | 2846 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | execution | 1 | - | n/a | 0.743 | 8640 | 2984 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | execution | 2 | - | 1692.813 | 0.747 | 8768 | 2964 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | patch_generation | 0 | - | n/a | 0.935 | 11264 | 782 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | planning | 0 | - | 512.808 | 0.839 | 8640 | 1661 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_150713 | element-hq/element-web | 5dfde12c | high-reuse | review | 0 | - | 1535.921 | 0.945 | 11328 | 662 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | execution | 0 | - | 1254.858 | 0.811 | 8640 | 2009 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | execution | 1 | - | 1493.070 | 0.795 | 8640 | 2228 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | execution | 2 | - | n/a | 0.805 | 8832 | 2137 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | patch_generation | 0 | - | 569.059 | 0.932 | 10688 | 785 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | planning | 0 | - | 818.932 | 0.844 | 8640 | 1602 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151318 | flipt-io/flipt | 3b2c25ee | high-reuse | review | 0 | - | n/a | 0.931 | 10688 | 791 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | execution | 0 | - | 1009.463 | 0.988 | 10496 | 131 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | execution | 1 | - | 223.272 | 0.990 | 10432 | 110 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | execution | 2 | - | 205.719 | 0.994 | 19200 | 124 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | patch_generation | 0 | - | 664.645 | 0.991 | 11200 | 102 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | planning | 0 | - | 631.930 | 0.865 | 8640 | 1350 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151402 | NodeBB/NodeBB | a5afad27 | high-reuse | review | 0 | - | 525.362 | 0.991 | 11200 | 106 | n/a | n/a | False | False | phase_fallback | False |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | execution | 0 | - | 1091.428 | 0.993 | 11328 | 81 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | execution | 1 | - | n/a | 0.953 | 12032 | 594 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | execution | 2 | - | n/a | 0.935 | 12032 | 842 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | patch_generation | 0 | - | 916.236 | 1.000 | 11392 | 0 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | planning | 0 | - | 565.365 | 0.855 | 8640 | 1469 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | review | 0 | - | n/a | 1.000 | 12032 | 0 | n/a | n/a | False | False | phase_fallback | True |

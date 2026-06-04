@@ -271,12 +271,7 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_FULL_TOKENS=0 \
-SGLANG_TRANSFER_LOG_TOKEN_PREVIEW=8 \
-SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS=4 \
-SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0 \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
-SGLANG_TRANSFER_LOG_VERBOSE=0 \
+SGLANG_TRANSFER_LOG_PROFILE=light \
 DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
@@ -321,9 +316,13 @@ Expected:
 
 ```text
 SGLANG_TRANSFER_LOG=1
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1
+SGLANG_TRANSFER_LOG_PROFILE=light
 _sgl_log_transfer_event: True
 ```
+
+Use `SGLANG_TRANSFER_LOG_PROFILE=timing` for synchronized CUDA transfer timing.
+Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token ID
+previews and token hashes.
 
 ### Step 4: Run One Phased Task
 
@@ -401,11 +400,12 @@ function
 request_id / external_request_id / sglang_request_id
 phase
 hint_profile
-semantic_token_ids_preview
-semantic_token_count
 kv_num_mb_estimated
 elapsed_ms_cuda_sync
 ```
+
+`semantic_token_ids_preview` and `semantic_token_count` appear only with
+`SGLANG_TRANSFER_LOG_PROFILE=full`.
 
 ## Experiment 4: Hint Profile Comparison
 
@@ -551,6 +551,37 @@ cat "$LATEST_REPORT/phase_summary.csv"
 cat "$LATEST_REPORT/phase_runtime_metrics.csv"
 cat "$LATEST_REPORT/model_request_metrics.csv"
 ```
+
+### All-Runs Runtime Metrics
+
+These top-level reports refresh whenever a normal run report is built:
+
+```bash
+cat experiments/reports/all_runs_task_phase_request_metrics.csv
+cat experiments/reports/all_runs_hint_profile_impact.csv
+cat experiments/reports/all_runs_phase_metrics.csv
+cat experiments/reports/all_runs_phase_request_metrics.csv
+cat experiments/reports/all_runs_kv_transfer_metrics.csv
+
+cat experiments/reports/latest_runs_task_phase_request_metrics.md
+cat experiments/reports/latest_runs_hint_profile_impact.md
+cat experiments/reports/latest_runs_phase_metrics.md
+cat experiments/reports/latest_runs_phase_request_metrics.md
+cat experiments/reports/latest_runs_kv_transfer_metrics.md
+```
+
+Use `all_runs_task_phase_request_metrics.csv` first when you want the broad
+drilldown view: every run, every phase, and every model request inside each
+phase. Use `all_runs_hint_profile_impact.csv` when comparing hint profiles
+across phases.
+
+`all_runs_phase_metrics.csv` has one row per AgentBench phase.
+`all_runs_phase_request_metrics.csv` has one row per model/API request inside a
+phase.
+
+These all-runs files keep compact identity columns only: `run_id`,
+`task_label`, `instance_id_short`, `hint_profile`, `phase`, and request indexes.
+Use the per-run report folders when you need full raw IDs or debug provenance.
 
 ### Prompt Evolution
 

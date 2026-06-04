@@ -37,8 +37,34 @@ except Exception:  # pragma: no cover - instrumentation must not break startup.
 
 _PREFIX = "[SGLANG_TRANSFER_JSON] "
 _LOCK = threading.Lock()
-_DETAIL_LIMIT = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS", "16") or 16)
-_TOKEN_PREVIEW = int(os.environ.get("SGLANG_TRANSFER_LOG_TOKEN_PREVIEW", "32") or 32)
+_VALID_PROFILES = {"off", "light", "timing", "full"}
+
+
+def _profile() -> str:
+    raw = (os.environ.get("SGLANG_TRANSFER_LOG_PROFILE") or "").strip().lower()
+    if not raw:
+        return "light" if os.environ.get("SGLANG_TRANSFER_LOG") == "1" else "off"
+    if raw not in _VALID_PROFILES:
+        return "light"
+    return raw
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    value = os.environ.get(name)
+    if value is None or value == "":
+        return default
+    return value.lower() in {"1", "true", "yes", "on"}
+
+
+def _env_int(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name, "") or default)
+    except Exception:
+        return default
+
+
+_DETAIL_LIMIT = _env_int("SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS", 16 if _profile() == "full" else 4)
+_TOKEN_PREVIEW = _env_int("SGLANG_TRANSFER_LOG_TOKEN_PREVIEW", 8 if _profile() == "full" else 0)
 _INDEX_PREVIEW = int(os.environ.get("SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT", "32") or 32)
 _MAX_TOKEN_ID = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_REASONABLE_TOKEN_ID", "10000000") or 10000000)
 _MAX_SEMANTIC_TOKENS = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_SEMANTIC_TOKENS", "1000000") or 1000000)
@@ -106,15 +132,19 @@ _STRUCTURAL_TOKEN_ATTR_NAMES = ("key",)
 
 
 def _enabled() -> bool:
-    return os.environ.get("SGLANG_TRANSFER_LOG") == "1"
+    return os.environ.get("SGLANG_TRANSFER_LOG") == "1" and _profile() != "off"
 
 
 def _verbose() -> bool:
-    return os.environ.get("SGLANG_TRANSFER_LOG_VERBOSE") == "1"
+    return _env_bool("SGLANG_TRANSFER_LOG_VERBOSE", False)
 
 
 def _sync_timing_enabled() -> bool:
-    return os.environ.get("SGLANG_TRANSFER_LOG_SYNC_TIMING") == "1"
+    return _env_bool("SGLANG_TRANSFER_LOG_SYNC_TIMING", _profile() in {"timing", "full"})
+
+
+def _semantic_tokens_enabled() -> bool:
+    return _env_bool("SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS", _profile() == "full")
 
 
 def _is_tensor(value: Any) -> bool:
@@ -167,11 +197,11 @@ def _walk_tensors(name: str, value: Any, details: list[dict[str, Any]], depth: i
 
 
 def _allow_cuda_token_sync() -> bool:
-    return os.environ.get("SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC") == "1"
+    return _env_bool("SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC", False)
 
 
 def _allow_cuda_index_sync() -> bool:
-    return os.environ.get("SGLANG_TRANSFER_LOG_INDEX_PREVIEW") == "1"
+    return _env_bool("SGLANG_TRANSFER_LOG_INDEX_PREVIEW", False)
 
 
 def _flatten_ints(value: Any, limit: int, *, allow_cuda_tensor_sync: bool = False) -> list[int]:
@@ -416,6 +446,10 @@ def _semantic_token_candidates_from_value(
 
 
 def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
+    request_metadata = _request_metadata_summary(locals_dict)
+    if not _semantic_tokens_enabled():
+        return request_metadata
+
     direct_names = (
         "token_ids",
         "input_ids",
@@ -441,11 +475,13 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
             )
 
     if not candidates:
-        return {
+        summary = {
             "semantic_token_count": 0,
             "semantic_token_ids_preview": [],
             "semantic_token_source": None,
         }
+        summary.update(request_metadata)
+        return summary
 
     source, values = max(candidates, key=lambda item: len(item[1]))
     preview = values[:_TOKEN_PREVIEW]
@@ -459,7 +495,6 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
     }
     if os.environ.get("SGLANG_TRANSFER_LOG_FULL_TOKENS") == "1":
         summary["semantic_token_ids"] = values
-    request_metadata = _request_metadata_summary(locals_dict)
     if request_metadata:
         summary.update(request_metadata)
     return summary
@@ -477,6 +512,10 @@ def _looks_like_token_name(name: str) -> bool:
 
 @contextlib.contextmanager
 def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
+    if not _enabled():
+        yield
+        return
+
     context = _merge_transfer_context_pair(
         current_transfer_context(),
         _semantic_token_summary(function, locals_dict),
@@ -490,6 +529,10 @@ def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
 
 @contextlib.contextmanager
 def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
+    if not _enabled():
+        yield
+        return
+
     context = current_transfer_context() or {}
     request_metadata = _request_metadata_summary(locals_dict)
     self_obj = locals_dict.get("self")
@@ -584,6 +627,13 @@ def transfer_existing_context(context: dict[str, Any] | None):
 
 
 def _local_token_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
+    if not _semantic_tokens_enabled() or _TOKEN_PREVIEW <= 0:
+        return {
+            "local_token_ids_preview": [],
+            "local_token_preview_count": 0,
+            "local_token_source": None,
+        }
+
     token_values: list[int] = []
     source = None
     for name, value in locals_dict.items():
@@ -790,6 +840,7 @@ def log_transfer_event(
 
     payload: dict[str, Any] = {
         "event": "sglang.transfer",
+        "transfer_log_profile": _profile(),
         "function": function,
         "direction": direction,
         "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),

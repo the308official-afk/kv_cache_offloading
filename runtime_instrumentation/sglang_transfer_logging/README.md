@@ -156,10 +156,10 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=light \
 DYN_RUNTIME_JSON_LOGS=1 \
 FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
 WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
 ./run_dynamo_single_host.sh start
 ```
 
@@ -175,7 +175,7 @@ cd ~/kv_cache_offloading
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$PWD/upstream/sglang/python/sglang" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
+SGLANG_TRANSFER_LOG_PROFILE=light \
 ./run_dynamo_worker.sh start
 ```
 
@@ -269,31 +269,56 @@ inside the patched worker, it also includes attribution fields such as
 
 ## Useful Knobs
 
+Use profiles first:
+
 ```bash
 SGLANG_TRANSFER_LOG=1
+SGLANG_TRANSFER_LOG_PROFILE=light
+```
+
+Profiles:
+
+```text
+off     disables patched transfer logging
+light   fast default; request attribution, direction, byte counts, wall timing
+timing  light plus synchronized CUDA transfer timing
+full    timing plus semantic token previews, token counts, and token hashes
+```
+
+`light` is the effective default when `SGLANG_TRANSFER_LOG=1` and no profile is
+set. Use `full` only for small runs where token-prefix inspection matters.
+
+Low-level overrides remain available:
+
+```bash
 SGLANG_TRANSFER_LOG_DIR="$PWD/experiments/raw/sglang_transfer_logs"
 SGLANG_TRANSFER_LOG_BASENAME=sglang_transfer_events_$(date +%Y%m%d_%H%M%S)_$$
 SGLANG_TRANSFER_LOG_PATH=/transfer-logs/${SGLANG_TRANSFER_LOG_BASENAME}.jsonl
-SGLANG_TRANSFER_LOG_TOKEN_PREVIEW=32
-SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS=16
+SGLANG_TRANSFER_LOG_TOKEN_PREVIEW=8
+SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS=4
 SGLANG_TRANSFER_LOG_FULL_TOKENS=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW=0
 SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT=32
 SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC=0
-SGLANG_TRANSFER_LOG_SYNC_TIMING=1
+SGLANG_TRANSFER_LOG_SYNC_TIMING=0
+SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS=0
 SGLANG_TRANSFER_LOG_VERBOSE=0
 ```
 
-`SGLANG_TRANSFER_LOG_SYNC_TIMING=1` is preferred for transfer timing because it
-synchronizes CUDA devices before the event is written. The transfer logger also
-emits a UTC `timestamp`; the run report can use that as a weaker time-window
-fallback when direct request-id attribution is not visible.
+`SGLANG_TRANSFER_LOG_PROFILE=timing` or `SGLANG_TRANSFER_LOG_SYNC_TIMING=1` is
+preferred for precise transfer timing because it synchronizes CUDA devices
+before the event is written. It is heavier than `light`. The transfer logger
+also emits a UTC `timestamp`; the run report can use that as a weaker
+time-window fallback when direct request-id attribution is not visible.
 
 Use full semantic-token logging only for small requests:
 
 ```bash
-SGLANG_TRANSFER_LOG_FULL_TOKENS=1
+SGLANG_TRANSFER_LOG_PROFILE=full
 ```
+
+`SGLANG_TRANSFER_LOG_FULL_TOKENS=1` additionally writes the full token list
+instead of only previews and hashes.
 
 Use index preview only when you are comfortable with a small extra GPU-to-CPU
 sync for index tensors:
@@ -321,6 +346,7 @@ SGLANG_TRANSFER_LOG_VERBOSE=1
 ```json
 {
   "event": "sglang.transfer",
+  "transfer_log_profile": "light",
   "function": "backup_from_device_all_layer",
   "direction": "device_to_host",
   "elapsed_ms": 0.42,
@@ -335,17 +361,15 @@ SGLANG_TRANSFER_LOG_VERBOSE=1
   "kv_num_bytes_estimated_page_granular": 234881024,
   "kv_num_mb_estimated_page_granular": 224.0,
   "kv_estimate_formula": "2*head_num*head_dim*dtype.itemsize",
-  "semantic_context_function": "write_backup",
-  "semantic_token_source": "write_backup.node.key.token_ids",
-  "semantic_token_count": 64,
-  "semantic_token_ids_preview": [151644, 872, 198],
-  "semantic_token_ids_sha256": "...",
-  "token_ids_preview": [151644, 872, 198],
-  "token_preview_source": "semantic_context",
   "sglang_request_id": "abc123",
   "request_context_function": "cache_finished_req"
 }
 ```
+
+With `SGLANG_TRANSFER_LOG_PROFILE=full`, events can also include
+`semantic_context_function`, `semantic_token_source`, `semantic_token_count`,
+`semantic_token_ids_preview`, `semantic_token_ids_sha256`, `token_ids_preview`,
+and `token_preview_source`.
 
 ## Notes
 
