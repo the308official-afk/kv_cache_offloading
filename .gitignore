@@ -4,4 +4,5 @@ upstream/
 ~$*
 experiments/raw/
 experiments/parsed/
+experiments/reports/
 agentbench/results/
