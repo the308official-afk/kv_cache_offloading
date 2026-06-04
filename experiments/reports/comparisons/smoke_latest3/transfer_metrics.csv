@@ -1,4 +1,0 @@
-run_id,hint_profile,model,app_variant,function,direction,direction_label,count,num_mb_observed,kv_num_mb_estimated,kv_num_mb_estimated_page_granular,elapsed_ms_wall,elapsed_ms_cuda_sync,cuda_sync_wait_ms,semantic_token_count,error_count
-agentbench-nodebb_20260601_200503,baseline,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,backup_from_device_all_layer,device_to_host,device->host,20,0.3212890625,1151.5,73696.0,31.368482,1005.0131309999999,973.6064389999999,21056,0
-agentbench-nodebb_20260601_192108,baseline,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,backup_from_device_all_layer,device_to_host,device->host,20,0.3212890625,1151.5,73696.0,31.350158999999994,1005.089126,973.7024849999998,21056,0
-agentbench-nodebb_20260601_184042,baseline,Qwen/Qwen2.5-Coder-7B-Instruct,upstream_deploy_coding_agent,backup_from_device_all_layer,device_to_host,device->host,20,0.3212890625,1151.5,73696.0,31.334312,1004.318676,972.9478339999998,21056,0

@@ -280,7 +280,7 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_PROFILE=light \
+SGLANG_TRANSFER_LOG_PROFILE=full \
 DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
@@ -331,12 +331,14 @@ Expected:
 
 ```text
 SGLANG_TRANSFER_LOG=1
-SGLANG_TRANSFER_LOG_PROFILE=light
+SGLANG_TRANSFER_LOG_PROFILE=full
 _sgl_log_transfer_event: True
 ```
 
+Use `SGLANG_TRANSFER_LOG_PROFILE=off` to disable transfer logging.
+Use `SGLANG_TRANSFER_LOG_PROFILE=light` for fast/light transfer logging.
 Use `SGLANG_TRANSFER_LOG_PROFILE=timing` for synchronized CUDA transfer timing.
-Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token ID
+Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token IDs.
 previews and token hashes.
 
 ### Step 4: Run One Phased Task

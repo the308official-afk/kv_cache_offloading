@@ -1,2 +1,0 @@
-gpu_candidates,cpu_candidates,nvme_candidates,drop_candidates
-[],"['execution', 'patch_generation', 'review']","['planning', 'execution', 'execution']",[]
