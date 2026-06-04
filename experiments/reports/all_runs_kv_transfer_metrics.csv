@@ -36,3 +36,4 @@ agentbench-20260603_151214,unknown,,unknown,backup_from_device_all_layer,device_
 agentbench-20260603_151318,flipt-io/flipt,3b2c25ee,high-reuse,backup_from_device_all_layer,device_to_host,12,763.0,475.812856,13952,0
 agentbench-20260603_151402,NodeBB/NodeBB,a5afad27,high-reuse,backup_from_device_all_layer,device_to_host,12,763.0,475.812856,13952,0
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,backup_from_device_all_layer,device_to_host,12,763.0,475.812856,13952,0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,backup_from_device_all_layer,device_to_host,24,1218.0,0.0,0,0

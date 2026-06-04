@@ -154,7 +154,7 @@
         "api_cached_prompt_tokens"
       ],
       "note": "These are client/API accounting fields. For SGLang-only comparisons, prefer sglang_* cache and timing fields plus transfer_totals.",
-      "path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/measurements.json"
+      "path": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/measurements.json"
     },
     "agentbench_result_metadata": {
       "fields": [
@@ -170,7 +170,7 @@
         "app_variant"
       ],
       "note": "When worker [RUNTIME_JSON] or transfer events include request metadata, the report uses those direct request ids. Otherwise phase names, hint metadata, task metadata, and patch outcome still come from the AgentBench result directory.",
-      "path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614"
+      "path": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614"
     },
     "runtime_events_reported_fields": {
       "fields": [
@@ -187,7 +187,7 @@
         "worker_max_gen_throughput_tps"
       ],
       "note": "These reported fields are preserved for debugging, but they are not the preferred source for cache hit or TTFT conclusions.",
-      "path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/runtime_events.json"
+      "path": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/runtime_events.json"
     },
     "sglang_transfer_log": {
       "fields": [
@@ -204,7 +204,7 @@
         "transfer_host_to_device_kv_mb_for_time_window",
         "subrequest_metrics.transfer_*"
       ],
-      "path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+      "path": "/home/ec2-user/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
     },
     "sglang_worker_log": {
       "fields": [
@@ -221,7 +221,7 @@
         "worker_request_to_first_decode_ms",
         "worker_first_prefill_to_first_decode_ms"
       ],
-      "path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/worker_runtime.log"
+      "path": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/worker_runtime.log"
     }
   },
   "phase_metrics": [
@@ -2117,7 +2117,7 @@
     ],
     "runtime_json_by_request": {},
     "runtime_json_events": [],
-    "source": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/worker_runtime.log",
+    "source": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614/others/worker_runtime.log",
     "summary": {
       "decode_event_count": 117,
       "decode_gen_throughput_tps_max": 29.85,

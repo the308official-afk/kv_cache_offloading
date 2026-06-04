@@ -1,0 +1,40 @@
+{
+  "app_variant": "upstream_deploy_coding_agent",
+  "environment_snapshot": {},
+  "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
+  "generated_at": "2026-06-04T20:24:29.879394+00:00",
+  "hint_profile": "high-reuse",
+  "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+  "paths": {
+    "agentbench_result_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260604_151332",
+    "report_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-20260604_151332",
+    "sglang_transfer_log": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260604_195847_17361.jsonl"
+  },
+  "prompt_evolution_value_char_limit": 1000,
+  "repo_commit": "f252e5126737c5d2dd23e0f95c47d9fd790f8879",
+  "resolved_hints": {
+    "agent_phase": "execution",
+    "context_type": "software_engineering_long_horizon",
+    "expected_output_tokens": 512,
+    "hint_probe_id": "agentbench-20260604_151332::hint_probe",
+    "hint_profile": "high-reuse",
+    "latency_sensitivity": 0.5,
+    "priority": 5,
+    "program_id": "agentbench.deepagents_app",
+    "reuse_likelihood": 1.0
+  },
+  "run_id": "agentbench-20260604_151332",
+  "run_started_at": "2026-06-04T15:13:32.074574-05:00",
+  "task": {
+    "base_commit": "1e137b07052bc3ea0da44ed201702c94055b8ad2",
+    "expected_agent_action": "fix validation logic",
+    "instance_id": "instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan",
+    "patch_expected": true,
+    "problem_statement_preview": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic The Admin Control Panel (ACP) does not accurately reflect the email validation status of users. Also, validation and confirmation processes r...",
+    "problem_statement_summary": "Email Validation Status Not Handled Correctly in ACP and Confirmation Logic",
+    "repo": "NodeBB/NodeBB",
+    "selected_tests_preview": "",
+    "task_source": null,
+    "validation_expectation": "no explicit validation command provided"
+  }
+}

@@ -2,12 +2,6 @@
 
 | Run | Task | Case | Hint | Phase | Phase req | TTFT ms | Cache reuse | Cached tokens | Direct transfer | H2D MB | D2H MB |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | planning | 0 | 916.114 | 0.817 | 8640 | False | n/a | n/a |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 0 | 1257.117 | 0.796 | 8640 | False | n/a | n/a |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 1 | n/a | 0.776 | 8640 | False | n/a | n/a |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 2 | 1803.072 | 0.791 | 8896 | False | n/a | n/a |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | patch_generation | 0 | n/a | 0.985 | 9344 | False | n/a | n/a |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | review | 0 | 167.782 | 0.987 | 9472 | False | n/a | n/a |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | planning | 0 | 1485.413 | 0.871 | 8640 | False | n/a | n/a |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 0 | 798.276 | 0.981 | 11776 | False | n/a | n/a |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 1 | 1461.296 | 0.927 | 10624 | False | n/a | n/a |
@@ -44,3 +38,9 @@
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | execution | 2 | n/a | 0.935 | 12032 | False | n/a | n/a |
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | patch_generation | 0 | 916.236 | 1.000 | 11392 | False | n/a | n/a |
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | review | 0 | n/a | 1.000 | 12032 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | planning | 0 | 17191.821 | 0.000 | 0 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 0 | 762.544 | 0.776 | 8512 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 1 | 785.064 | 0.766 | 8512 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 2 | 768.982 | 0.779 | 8768 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | patch_generation | 0 | 292.972 | 0.985 | 9472 | False | n/a | n/a |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | review | 0 | 293.279 | 0.893 | 9600 | False | n/a | n/a |

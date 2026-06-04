@@ -266,3 +266,12 @@ agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,execution,
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,patch_generation,0,,916.2360000000001,True,11392,0,1.0,11102,10,False,,,,,False,True,phase_fallback
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,planning,0,,565.365,True,8640,1469,0.8546839449995054,10109,1154,False,,,,,False,True,phase_fallback
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,review,0,,,True,12032,0,1.0,10526,6,False,,,,,False,True,phase_fallback
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,0,0,762.544,True,8512,2460,0.7757929274516953,10972,122,True,,0.0,140.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,1,0,785.064,True,8512,2606,0.7656053246986868,11118,122,True,,0.0,147.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,2,0,768.9820000000001,True,8768,2484,0.7792392463562033,11252,92,True,,0.0,140.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,patch_generation,0,0,292.97200000000004,True,8512,1004,0.8944934846574191,9516,54,True,,0.0,56.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,patch_generation,0,1,71.634,True,9472,145,0.9849225330144535,9617,8,True,,0.0,7.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,planning,0,0,17191.821,False,0,10449,0.0,10449,506,True,,0.0,598.5,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,0,293.279,True,8512,1008,0.8941176470588236,9520,54,True,,0.0,56.0,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,1,72.13,True,9472,149,0.9845130443820809,9621,54,True,,0.0,10.5,0.0,True,False,model_request
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,2,373.31199999999995,True,9600,1152,0.8928571428571429,10752,6,True,,0.0,63.0,0.0,True,False,model_request

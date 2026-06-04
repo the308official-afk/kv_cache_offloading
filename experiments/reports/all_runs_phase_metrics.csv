@@ -266,3 +266,9 @@ agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,execution,
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,execution,2,,22436.282,12874,10,True,12032,842,0.9345968618921858,False,False,,,475.812856,True
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,patch_generation,0,916.2360000000001,36272.603,11102,10,True,11392,0,1.0,False,False,,,475.812856,True
 agentbench-20260603_151614,gravitational/teleport,eefac60a,high-reuse,review,0,,17841.074,10526,6,True,12032,0,1.0,False,False,,,475.812856,True
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,planning,0,17191.821,34516.748,10449,506,False,0,10449,0.0,True,False,,,0.0,False
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,0,762.544,5028.091,10972,122,True,8512,2460,0.7757929274516953,True,False,,,0.0,False
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,1,785.064,5071.949,11118,122,True,8512,2606,0.7656053246986868,True,False,,,0.0,False
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,2,768.9820000000001,4031.444,11252,92,True,8768,2484,0.7792392463562033,True,False,,,0.0,False
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,patch_generation,0,292.97200000000004,2673.166,9617,8,True,9472,145,0.9849225330144535,True,False,,,0.0,False
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,293.279,4916.244,10752,6,True,9600,1152,0.8928571428571429,True,False,,,0.0,False

@@ -1,1 +1,10 @@
 run_id,task_label,instance_id_short,hint_profile,phase,phase_request_index,subrequest_index,ttft_ms,prompt_tokens,completion_tokens,cache_hit,cached_token_count,recomputed_prefix_tokens,cache_reuse_ratio,transfer_request_id_matched,transfer_time_window_matched,host_to_device_kv_mb,device_to_host_kv_mb,transfer_cuda_sync_ms
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,planning,0,0,17191.821,10449,506,False,0,10449,0.0,True,,0.0,598.5,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,0,0,762.544,10972,122,True,8512,2460,0.7757929274516953,True,,0.0,140.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,1,0,785.064,11118,122,True,8512,2606,0.7656053246986868,True,,0.0,147.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,execution,2,0,768.9820000000001,11252,92,True,8768,2484,0.7792392463562033,True,,0.0,140.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,patch_generation,0,0,292.97200000000004,9516,54,True,8512,1004,0.8944934846574191,True,,0.0,56.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,patch_generation,0,1,71.634,9617,8,True,9472,145,0.9849225330144535,True,,0.0,7.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,0,293.279,9520,54,True,8512,1008,0.8941176470588236,True,,0.0,56.0,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,1,72.13,9621,54,True,9472,149,0.9845130443820809,True,,0.0,10.5,0.0
+agentbench-20260604_151332,NodeBB/NodeBB,04998908,high-reuse,review,0,2,373.31199999999995,10752,6,True,9600,1152,0.8928571428571429,True,,0.0,63.0,0.0

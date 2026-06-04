@@ -2,9 +2,6 @@
 
 | Run | Repo | Step | Prompt preview | Tools called | Patch |
 | --- | --- | ---: | --- | --- | ---: |
-| 150236 | openlibrary | 0 | Phase: execution Use the plan to implement the SWE-bench fix in the workspace. Make focused code changes only. If the planning output only proposes more inspection, continue with the task prompt and inspect the necess... | 0 (none) | 0 |
-| 150236 | openlibrary | 1 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section. Use r... | 0 (none) | 0 |
-| 150236 | openlibrary | 2 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section. Use r... | 0 (none) | 0 |
 | 150315 | navidrome | 0 | Phase: execution Use the plan to implement the SWE-bench fix in the workspace. Make focused code changes only. If the planning output only proposes more inspection, continue with the task prompt and inspect the necess... | 6 (read_file) | 0 |
 | 150315 | navidrome | 1 | Phase: execution_retry The previous execution attempt stalled with guard reason: read_only_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section... | 1 (read_file) | 0 |
 | 150315 | navidrome | 2 | Phase: execution_retry The previous execution attempt stalled with guard reason: read_only_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section... | 1 (read_file) | 0 |
@@ -23,3 +20,6 @@
 | 151614 | teleport | 0 | Phase: execution Use the plan to implement the SWE-bench fix in the workspace. Make focused code changes only. If the planning output only proposes more inspection, continue with the task prompt and inspect the necess... | 1 (ls) | 3516 |
 | 151614 | teleport | 1 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_edit_or_write_tool_call. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps s... | 2 (write_file) | 3516 |
 | 151614 | teleport | 2 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_validation_execute_tool_call. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-st... | 2 (read_file, write_file) | 3516 |
+| 151332 | NodeBB | 0 | Phase: execution Use the plan to implement the SWE-bench fix in the workspace. Make focused code changes only. If the planning output only proposes more inspection, continue with the task prompt and inspect the necess... | 0 (none) | 0 |
+| 151332 | NodeBB | 1 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section. Use r... | 0 (none) | 0 |
+| 151332 | NodeBB | 2 | Phase: execution_retry The previous execution attempt stalled with guard reason: no_tool_calls. Continue the same SWE-bench task. Do not write another plan, todo list, markdown code fence, or next-steps section. Use r... | 0 (none) | 0 |

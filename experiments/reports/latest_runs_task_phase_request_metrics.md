@@ -2,12 +2,6 @@
 
 | Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Reuse | Cached | Recomputed | H2D MB | D2H MB | Direct | Worker JSON | Source | Patch |
 | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 0 | - | 1257.117 | 0.796 | 8640 | 2221 | n/a | n/a | False | False | phase_fallback | False |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 1 | - | n/a | 0.776 | 8640 | 2499 | n/a | n/a | False | False | phase_fallback | False |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | execution | 2 | - | 1803.072 | 0.791 | 8896 | 2348 | n/a | n/a | False | False | phase_fallback | False |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | patch_generation | 0 | - | n/a | 0.985 | 9344 | 146 | n/a | n/a | False | False | phase_fallback | False |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | planning | 0 | - | 916.114 | 0.817 | 8640 | 1932 | n/a | n/a | False | False | phase_fallback | False |
-| agentbench-20260603_150236 | internetarchive/openlibrary | 8a5a63af | high-reuse | review | 0 | - | 167.782 | 0.987 | 9472 | 129 | n/a | n/a | False | False | phase_fallback | False |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 0 | - | 798.276 | 0.981 | 11776 | 226 | n/a | n/a | False | False | phase_fallback | False |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 1 | - | 1461.296 | 0.927 | 10624 | 836 | n/a | n/a | False | False | phase_fallback | False |
 | agentbench-20260603_150315 | navidrome/navidrome | b65e7629 | high-reuse | execution | 2 | - | 256.170 | 0.992 | 11392 | 89 | n/a | n/a | False | False | phase_fallback | False |
@@ -44,3 +38,12 @@
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | patch_generation | 0 | - | 916.236 | 1.000 | 11392 | 0 | n/a | n/a | False | False | phase_fallback | True |
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | planning | 0 | - | 565.365 | 0.855 | 8640 | 1469 | n/a | n/a | False | False | phase_fallback | True |
 | agentbench-20260603_151614 | gravitational/teleport | eefac60a | high-reuse | review | 0 | - | n/a | 1.000 | 12032 | 0 | n/a | n/a | False | False | phase_fallback | True |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 0 | 0 | 762.544 | 0.776 | 8512 | 2460 | 0.000 | 140.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 1 | 0 | 785.064 | 0.766 | 8512 | 2606 | 0.000 | 147.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | execution | 2 | 0 | 768.982 | 0.779 | 8768 | 2484 | 0.000 | 140.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | patch_generation | 0 | 0 | 292.972 | 0.894 | 8512 | 1004 | 0.000 | 56.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | patch_generation | 0 | 1 | 71.634 | 0.985 | 9472 | 145 | 0.000 | 7.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | planning | 0 | 0 | 17191.821 | 0.000 | 0 | 10449 | 0.000 | 598.500 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | review | 0 | 0 | 293.279 | 0.894 | 8512 | 1008 | 0.000 | 56.000 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | review | 0 | 1 | 72.130 | 0.985 | 9472 | 149 | 0.000 | 10.500 | True | True | model_request | False |
+| agentbench-20260604_151332 | NodeBB/NodeBB | 04998908 | high-reuse | review | 0 | 2 | 373.312 | 0.893 | 9600 | 1152 | 0.000 | 63.000 | True | True | model_request | False |

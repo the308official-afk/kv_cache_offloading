@@ -628,6 +628,25 @@ python3 experiments/scripts/agentbench_report/build_run_report.py \
   --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
 ```
 
+### Clean Fresh Start
+
+Dry run:
+
+```bash
+./experiments/scripts/clean_experiment_data.sh
+```
+
+Delete generated experiment data and reports:
+
+```bash
+./run_dynamo_single_host.sh stop
+./experiments/scripts/clean_experiment_data.sh --yes
+```
+
+This clears `experiments/raw`, `experiments/parsed`, generated files under
+`experiments/reports`, and legacy `agentbench/results` data if present. It
+preserves experiment scripts, READMEs, upstream repos, and instrumentation code.
+
 ### Stop Dynamo
 
 ```bash

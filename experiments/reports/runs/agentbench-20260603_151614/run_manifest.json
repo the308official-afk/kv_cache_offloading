@@ -1,17 +1,19 @@
 {
   "app_variant": "upstream_deploy_coding_agent",
-  "environment_snapshot": {},
+  "environment_snapshot": {
+    "MODEL_NAME": "Qwen/Qwen2.5-Coder-7B-Instruct"
+  },
   "frontend_url": "http://127.0.0.1:8000/v1/chat/completions",
-  "generated_at": "2026-06-03T20:21:00.282504+00:00",
+  "generated_at": "2026-06-03T20:19:03.630351+00:00",
   "hint_profile": "high-reuse",
   "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
   "paths": {
-    "agentbench_result_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614",
-    "report_dir": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_151614",
-    "sglang_transfer_log": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
+    "agentbench_result_dir": "/home/ec2-user/kv_cache_offloading/experiments/raw/agentbench/results/agentbench-20260603_151614",
+    "report_dir": "/home/ec2-user/kv_cache_offloading/experiments/reports/runs/agentbench-20260603_151614",
+    "sglang_transfer_log": "/home/ec2-user/kv_cache_offloading/experiments/raw/sglang_transfer_logs/sglang_transfer_events_20260602_223503_45079.jsonl"
   },
   "prompt_evolution_value_char_limit": 1000,
-  "repo_commit": "2ac881eca510bd605696df11b3adfa1ef32f1934",
+  "repo_commit": null,
   "resolved_hints": {
     "agent_phase": "execution",
     "context_type": "software_engineering_long_horizon",
