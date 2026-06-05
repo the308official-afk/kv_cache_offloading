@@ -677,6 +677,7 @@ INSTRUMENTATION_OVERHEAD_FIELDS = [
     "run_id",
     "task",
     "hint_profile",
+    "hint_provider",
     "phase",
     "request",
     "profile",
@@ -749,6 +750,7 @@ def instrumentation_overhead_rows(
     task = dict_or_empty(manifest.get("task"))
     task_label = str(task.get("repo") or manifest.get("repo") or "")
     hint_profile = str(manifest.get("hint_profile") or "")
+    hint_provider = str(manifest.get("hint_provider") or "")
     grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for event in overhead_events:
         grouped[
@@ -800,6 +802,7 @@ def instrumentation_overhead_rows(
                 "run_id": run_id,
                 "task": task_label,
                 "hint_profile": hint_profile,
+                "hint_provider": hint_provider,
                 "phase": phase,
                 "request": request,
                 "profile": profile,
@@ -1046,7 +1049,18 @@ def phase_metrics(
             phase_start=phase_start,
             worker_runtime=worker_runtime,
         )
-        per_request_transfer = transfer_phase_evidence(transfer_events, request_id)
+        worker_request_context = dict_or_empty(worker_evidence.get("worker_runtime_json_request_context"))
+        worker_agent_hints = dict_or_empty(worker_evidence.get("worker_runtime_json_agent_hints"))
+        transfer_match_ids = {
+            str(request_id or ""),
+            str(worker_evidence.get("worker_runtime_json_external_request_id") or ""),
+            str(worker_evidence.get("worker_runtime_json_runtime_context_id") or ""),
+            str(worker_evidence.get("worker_runtime_json_sglang_request_id") or ""),
+            str(worker_evidence.get("worker_runtime_json_hint_probe_id") or ""),
+            str(worker_request_context.get("request_id") or ""),
+            str(worker_agent_hints.get("hint_probe_id") or ""),
+        }
+        per_request_transfer = transfer_evidence_for_ids(transfer_events, transfer_match_ids)
         runtime_cache_hit = as_bool(cache.get("cache_hit"))
         runtime_cached_tokens = as_int(cache.get("cached_token_count"))
         runtime_recomputed_tokens = as_int(cache.get("recomputed_prefix_tokens"))
@@ -1092,6 +1106,7 @@ def phase_metrics(
                 "step_index": event.get("step_index"),
                 "step_title": event.get("step_title"),
                 "hint_source": "agentbench.runtime_events.request_hints",
+                "hint_provider": first_nonempty(hints.get("hint_provider"), worker_agent_hints.get("hint_provider")),
                 "hint_probe_id": hints.get("hint_probe_id"),
                 "hint_priority": hints.get("priority"),
                 "hint_reuse_likelihood": hints.get("reuse_likelihood"),
@@ -1293,6 +1308,7 @@ def subrequest_metrics(
                     "hint_expected_output_tokens": hints.get("expected_output_tokens"),
                     "hint_agent_phase": hints.get("agent_phase"),
                     "hint_profile": hints.get("hint_profile"),
+                    "hint_provider": hints.get("hint_provider"),
                     "hint_probe_id": hints.get("hint_probe_id"),
                     **transfer_evidence,
                 }
@@ -1306,6 +1322,7 @@ def write_subrequest_csv(path: Path, rows: list[dict[str, Any]], run_level: dict
         "model",
         "app_variant",
         "run_hint_profile",
+        "run_hint_provider",
         "phase",
         "phase_request_id",
         "subrequest_index",
@@ -1329,6 +1346,7 @@ def write_subrequest_csv(path: Path, rows: list[dict[str, Any]], run_level: dict
         "hint_expected_output_tokens",
         "hint_agent_phase",
         "hint_profile",
+        "hint_provider",
         "hint_probe_id",
         "transfer_request_id_matched",
         "transfer_event_count_for_request",
@@ -1356,6 +1374,7 @@ def write_subrequest_csv(path: Path, rows: list[dict[str, Any]], run_level: dict
                 "model": run_level.get("model"),
                 "app_variant": run_level.get("app_variant"),
                 "run_hint_profile": run_level.get("hint_profile"),
+                "run_hint_provider": run_level.get("hint_provider"),
             }
             out.update({field: row.get(field) for field in fields if field not in out})
             writer.writerow(out)
@@ -1367,6 +1386,7 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
         "model",
         "app_variant",
         "hint_profile",
+        "hint_provider",
         "phase",
         "request_id",
         "phase_source",
@@ -1457,6 +1477,7 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
                 "model": run_level.get("model"),
                 "app_variant": run_level.get("app_variant"),
                 "hint_profile": run_level.get("hint_profile"),
+                "hint_provider": run_level.get("hint_provider"),
                 "transfer_device_to_host_kv_mb": run_level.get("transfer_device_to_host_kv_mb"),
                 "transfer_host_to_device_kv_mb": run_level.get("transfer_host_to_device_kv_mb"),
                 "transfer_cuda_sync_ms": run_level.get("transfer_cuda_sync_ms"),
@@ -1783,6 +1804,7 @@ def build_agent_behavior_summary(
         "model": manifest.get("model"),
         "app_variant": manifest.get("app_variant"),
         "hint_profile": manifest.get("hint_profile"),
+        "hint_provider": manifest.get("hint_provider"),
         "execution_subrequests": step_summary["phase_request_counts"].get("execution", 0),
         "worker_subrequests_total": len(subrequest_rows),
         "tool_call_count": total_tools,
@@ -1818,6 +1840,7 @@ def write_agent_behavior_csv(path: Path, summary: dict[str, Any]) -> None:
         "model",
         "app_variant",
         "hint_profile",
+        "hint_provider",
         "phase",
         "phase_request_count",
         "execution_subrequests",
@@ -1860,6 +1883,7 @@ def write_agent_behavior_csv(path: Path, summary: dict[str, Any]) -> None:
                 "model": run.get("model"),
                 "app_variant": run.get("app_variant"),
                 "hint_profile": run.get("hint_profile"),
+                "hint_provider": run.get("hint_provider"),
                 "execution_subrequests": (
                     run.get("execution_subrequests") if phase.get("phase") == "execution" else ""
                 ),
@@ -2474,6 +2498,7 @@ def run_metadata_for_aggregate(report_dir: Path) -> dict[str, Any]:
         "model": manifest.get("model") or run.get("model"),
         "app_variant": manifest.get("app_variant") or run.get("app_variant"),
         "hint_profile": manifest.get("hint_profile") or run.get("hint_profile"),
+        "hint_provider": manifest.get("hint_provider") or run.get("hint_provider") or "agentbench",
         "source_report_dir": str(report_dir),
     }
 
@@ -2508,11 +2533,13 @@ def aggregate_report_csv_rows(
             merged = dict(metadata)
             merged["source_file"] = source_file
             for key, value in row.items():
-                if key in {"run_id", "model", "app_variant", "hint_profile"} and value in ("", None):
+                if key in {"run_id", "model", "app_variant", "hint_profile", "hint_provider"} and value in ("", None):
                     continue
                 merged[key] = value
             if not merged.get("hint_profile") and merged.get("run_hint_profile"):
                 merged["hint_profile"] = merged.get("run_hint_profile")
+            if not merged.get("hint_provider") and merged.get("run_hint_provider"):
+                merged["hint_provider"] = merged.get("run_hint_provider")
             merged["phase_request_index"] = phase_request_index(
                 merged.get("phase_request_id") or merged.get("request_id")
             )
@@ -2525,8 +2552,8 @@ def aggregate_report_csv_rows(
                 merged.get("transfer_device_to_host_kv_mb_for_request"),
             )
             merged["transfer_cuda_sync_ms"] = first_nonempty(
-                merged.get("transfer_cuda_sync_ms"),
                 merged.get("transfer_cuda_sync_ms_for_request"),
+                merged.get("transfer_cuda_sync_ms"),
             )
             merged["ttft_ms"] = nonnegative_metric(merged.get("ttft_ms"))
             rows.append(merged)
@@ -2546,6 +2573,7 @@ AGG_PHASE_FIELDS = [
     "task_label",
     "instance_id_short",
     "hint_profile",
+    "hint_provider",
     "phase",
     "phase_request_index",
     "ttft_ms",
@@ -2570,6 +2598,7 @@ AGG_SUBREQUEST_FIELDS = [
     "task_label",
     "instance_id_short",
     "hint_profile",
+    "hint_provider",
     "phase",
     "phase_request_index",
     "subrequest_index",
@@ -2593,6 +2622,7 @@ REQUEST_PHASE_FIELDS = [
     "task_label",
     "instance_id_short",
     "hint_profile",
+    "hint_provider",
     "phase",
     "phase_request_index",
     "subrequest_index",
@@ -2619,6 +2649,7 @@ AGG_TRANSFER_FIELDS = [
     "task_label",
     "instance_id_short",
     "hint_profile",
+    "hint_provider",
     "function",
     "direction",
     "count",
@@ -2631,6 +2662,7 @@ AGG_TRANSFER_FIELDS = [
 
 HINT_IMPACT_FIELDS = [
     "hint_profile",
+    "hint_provider",
     "phase",
     "run_count",
     "request_count",
@@ -2657,12 +2689,18 @@ def bool_rate(rows: list[dict[str, Any]], field: str) -> float:
 
 
 def aggregate_hint_impact_rows(phase_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
     for row in phase_rows:
-        grouped[(str(row.get("hint_profile") or "unknown"), str(row.get("phase") or "unknown"))].append(row)
+        grouped[
+            (
+                str(row.get("hint_provider") or "unknown"),
+                str(row.get("hint_profile") or "unknown"),
+                str(row.get("phase") or "unknown"),
+            )
+        ].append(row)
 
     rows: list[dict[str, Any]] = []
-    for (hint_profile, phase), items in sorted(grouped.items()):
+    for (hint_provider, hint_profile, phase), items in sorted(grouped.items()):
         ttft_values = [
             as_float(row.get("ttft_ms"))
             for row in items
@@ -2689,6 +2727,7 @@ def aggregate_hint_impact_rows(phase_rows: list[dict[str, Any]]) -> list[dict[st
         rows.append(
             {
                 "hint_profile": hint_profile,
+                "hint_provider": hint_provider,
                 "phase": phase,
                 "run_count": len(run_ids),
                 "request_count": len(items),
@@ -2777,6 +2816,11 @@ def aggregate_request_phase_rows(
                     sub.get("run_hint_profile"),
                     phase.get("hint_profile"),
                 ),
+                "hint_provider": first_nonempty(
+                    sub.get("hint_provider"),
+                    sub.get("run_hint_provider"),
+                    phase.get("hint_provider"),
+                ),
                 "phase": first_nonempty(sub.get("phase"), phase.get("phase")),
                 "phase_request_id": first_nonempty(sub.get("phase_request_id"), phase.get("request_id")),
                 "phase_request_index": phase_request_index(
@@ -2833,6 +2877,7 @@ def aggregate_request_phase_rows(
                 "model": phase.get("model"),
                 "app_variant": phase.get("app_variant"),
                 "hint_profile": phase.get("hint_profile"),
+                "hint_provider": phase.get("hint_provider"),
                 "phase": phase.get("phase"),
                 "phase_request_id": phase.get("request_id"),
                 "phase_request_index": phase_request_index(phase.get("request_id")),
@@ -2875,15 +2920,16 @@ def write_latest_request_phase_md(path: Path, rows: list[dict[str, Any]], *, tit
     lines = [
         f"# {title}",
         "",
-        "| Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Reuse | Cached | Recomputed | H2D MB | D2H MB | Direct | Worker JSON | Source | Patch |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
+        "| Run | Task | Case | Provider | Hint | Phase | Phase req | Model req | TTFT ms | Reuse | Cached | Recomputed | H2D MB | D2H MB | Direct | Worker JSON | Source | Patch |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- | --- |",
     ]
     for row in rows:
         lines.append(
-            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {request} | {ttft} | {reuse} | {cached} | {recomputed} | {h2d} | {d2h} | {direct} | {worker} | {source} | {patch} |".format(
+            "| {run} | {task} | {case} | {provider} | {hint} | {phase} | {phase_request} | {request} | {ttft} | {reuse} | {cached} | {recomputed} | {h2d} | {d2h} | {direct} | {worker} | {source} | {patch} |".format(
                 run=row.get("run_id"),
                 task=row.get("task_label"),
                 case=row.get("instance_id_short"),
+                provider=row.get("hint_provider"),
                 hint=row.get("hint_profile"),
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
@@ -2907,12 +2953,13 @@ def write_hint_impact_md(path: Path, rows: list[dict[str, Any]], *, title: str) 
     lines = [
         f"# {title}",
         "",
-        "| Hint profile | Phase | Runs | Requests | Direct attribution | Worker JSON | TTFT p50 ms | TTFT p95 ms | Reuse avg | H2D MB | D2H MB |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| Provider | Hint profile | Phase | Runs | Requests | Direct attribution | Worker JSON | TTFT p50 ms | TTFT p95 ms | Reuse avg | H2D MB | D2H MB |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {hint} | {phase} | {runs} | {requests} | {direct} | {worker} | {p50} | {p95} | {reuse} | {h2d} | {d2h} |".format(
+            "| {provider} | {hint} | {phase} | {runs} | {requests} | {direct} | {worker} | {p50} | {p95} | {reuse} | {h2d} | {d2h} |".format(
+                provider=row.get("hint_provider"),
                 hint=row.get("hint_profile"),
                 phase=row.get("phase"),
                 runs=row.get("run_count"),
@@ -2947,15 +2994,16 @@ def write_latest_phase_md(path: Path, rows: list[dict[str, Any]], *, title: str)
     lines = [
         f"# {title}",
         "",
-        "| Run | Task | Case | Hint | Phase | Phase req | TTFT ms | Cache reuse | Cached tokens | Direct transfer | H2D MB | D2H MB |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
+        "| Run | Task | Case | Provider | Hint | Phase | Phase req | TTFT ms | Cache reuse | Cached tokens | Direct transfer | H2D MB | D2H MB |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {ttft} | {reuse} | {cached} | {direct} | {h2d} | {d2h} |".format(
+            "| {run} | {task} | {case} | {provider} | {hint} | {phase} | {phase_request} | {ttft} | {reuse} | {cached} | {direct} | {h2d} | {d2h} |".format(
                 run=row.get("run_id"),
                 task=row.get("task_label"),
                 case=row.get("instance_id_short"),
+                provider=row.get("hint_provider"),
                 hint=row.get("hint_profile"),
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
@@ -2974,15 +3022,16 @@ def write_latest_subrequest_md(path: Path, rows: list[dict[str, Any]], *, title:
     lines = [
         f"# {title}",
         "",
-        "| Run | Task | Case | Hint | Phase | Phase req | Model req | TTFT ms | Cache reuse | Direct transfer | Time-window transfer | H2D MB | D2H MB |",
-        "| --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: |",
+        "| Run | Task | Case | Provider | Hint | Phase | Phase req | Model req | TTFT ms | Cache reuse | Direct transfer | Time-window transfer | H2D MB | D2H MB |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | ---: | ---: |",
     ]
     for row in rows:
         lines.append(
-            "| {run} | {task} | {case} | {hint} | {phase} | {phase_request} | {index} | {ttft} | {reuse} | {direct} | {window} | {h2d} | {d2h} |".format(
+            "| {run} | {task} | {case} | {provider} | {hint} | {phase} | {phase_request} | {index} | {ttft} | {reuse} | {direct} | {window} | {h2d} | {d2h} |".format(
                 run=row.get("run_id"),
                 task=row.get("task_label"),
                 case=row.get("instance_id_short"),
+                provider=row.get("hint_provider") or row.get("run_hint_provider"),
                 hint=row.get("hint_profile") or row.get("run_hint_profile"),
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
@@ -3364,6 +3413,7 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
         f"- Model: `{manifest.get('model')}`",
         f"- App variant: `{manifest.get('app_variant')}`",
         f"- Hint profile: `{manifest.get('hint_profile')}`",
+        f"- Hint provider: `{manifest.get('hint_provider')}`",
         f"- AgentBench result: `{manifest['paths']['agentbench_result_dir']}`",
         f"- SGLang transfer log: `{manifest['paths'].get('sglang_transfer_log')}`",
         "",
@@ -3485,6 +3535,12 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         or run_summary.get("hint_profile")
         or infer_hint_profile(resolved_hints)
     )
+    hint_provider = (
+        result.get("hint_provider")
+        or resolved_hints.get("hint_provider")
+        or run_summary.get("hint_provider")
+        or "agentbench"
+    )
 
     task_payload = dict_or_empty(result.get("task"))
     problem_statement = str(task_payload.get("problem_statement") or "")
@@ -3499,6 +3555,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "model": result.get("model") or run_summary.get("model"),
         "app_variant": result.get("app_variant"),
         "hint_profile": hint_profile,
+        "hint_provider": hint_provider,
         "resolved_hints": resolved_hints,
         "frontend_url": result.get("frontend_url"),
         "run_started_at": result.get("run_started_at"),
@@ -3551,6 +3608,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "model": manifest.get("model"),
         "app_variant": manifest.get("app_variant"),
         "hint_profile": manifest.get("hint_profile"),
+        "hint_provider": manifest.get("hint_provider"),
         "transfer_device_to_host_kv_mb": device_to_host.get("kv_num_mb_estimated", 0.0),
         "transfer_host_to_device_kv_mb": host_to_device.get("kv_num_mb_estimated", 0.0),
         "transfer_cuda_sync_ms": transfer_totals.get("elapsed_ms_cuda_sync", 0.0),

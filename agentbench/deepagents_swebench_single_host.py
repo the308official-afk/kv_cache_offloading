@@ -49,6 +49,11 @@ try:
         load_agent_instructions,
         run_task_workflow,
     )
+    from agentbench.deepagents_app.src.hint_providers import (
+        HINT_PROVIDER_AGENTBENCH,
+        HINT_PROVIDERS,
+        normalize_hint_provider,
+    )
     from agentbench.log_utils import (
         load_logged_events,
         log_checkpoint,
@@ -4265,6 +4270,16 @@ def main() -> None:
         help="Named AgentBench hint profile for repeatable cache/scheduling experiments.",
     )
     parser.add_argument(
+        "--hint-provider",
+        default=os.environ.get("AGENTBENCH_HINT_PROVIDER", HINT_PROVIDER_AGENTBENCH),
+        choices=HINT_PROVIDERS,
+        help=(
+            "Choose who produces nvext.agent_hints: agentbench uses the selected "
+            "profile, deepagents derives deterministic hints from runtime phase "
+            "state, none sends request context without agent hints."
+        ),
+    )
+    parser.add_argument(
         "--hint-json",
         default="{}",
         help="JSON object merged on top of the selected --hint-profile before sending nvext.agent_hints.",
@@ -4305,6 +4320,7 @@ def main() -> None:
         help="Specific SGLang transfer JSONL to use in the automatic curated report.",
     )
     args = parser.parse_args()
+    args.hint_provider = normalize_hint_provider(args.hint_provider)
     if args.quiet_checkpoints:
         os.environ["AGENTBENCH_PRINT_CHECKPOINTS"] = "0"
 
@@ -4351,6 +4367,7 @@ def main() -> None:
             "split": args.split,
             "instance_id": task.get("instance_id"),
             "hint_profile": args.hint_profile,
+            "hint_provider": args.hint_provider,
             "results_timezone": args.results_timezone,
             "step_limit": args.step_limit,
             "run_started_at": run_started_at.isoformat(),
@@ -4470,6 +4487,7 @@ def main() -> None:
             "parent_run_id": parent_run_id,
             "task_source": task_source,
             "hint_profile": args.hint_profile,
+            "hint_provider": args.hint_provider,
             "base_hints": base_hints,
             "app_variant": args.app_variant,
         },
@@ -4487,6 +4505,7 @@ def main() -> None:
         task_index=args.index,
         task_source=task_source,
         parent_run_id=parent_run_id,
+        hint_provider=args.hint_provider,
     )
     log_lifecycle_event(
         stage="workflow_invocation_completed",
@@ -4877,6 +4896,7 @@ def main() -> None:
         "frontend_url": args.frontend_url,
         "model": args.model,
         "hint_profile": args.hint_profile,
+        "hint_provider": args.hint_provider,
         "hint_json": workflow["resolved_hints"],
         "task": task,
         "active_harness": "agentbench.deepagents_app",

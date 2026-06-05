@@ -61,6 +61,11 @@ from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend, StateBackend
 from langchain_openai import ChatOpenAI
 
+from .hint_providers import (
+    HINT_PROVIDER_AGENTBENCH,
+    build_hint_payload,
+    normalize_hint_provider,
+)
 from .prompts import (
     DYNAMO_HINT_NOTES,
     PLANNING_NOTES,
@@ -689,6 +694,7 @@ def run_execution_loop(
     task_source: str | None,
     task_metadata: dict[str, Any],
     parent_run_id: str | None,
+    hint_provider: str,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     max_steps = execution_loop_max_steps()
     require_test = execution_loop_require_test()
@@ -720,6 +726,7 @@ def run_execution_loop(
             parent_run_id=parent_run_id,
             step_title=f"Execution loop {step_index}: {next_step}",
             expected_output_tokens=2048,
+            hint_provider=hint_provider,
         )
         mark_execution_loop_result(
             result,
@@ -966,14 +973,26 @@ def frontend_base_url(frontend_url: str) -> str:
 
 
 # Merges default Dynamo hints with caller overrides and stamps the current phase on them.
-def build_phase_hints(base_hints: dict[str, Any] | None = None, *, phase: str = "execution") -> dict[str, Any]:
+def build_phase_hints(
+    base_hints: dict[str, Any] | None = None,
+    *,
+    phase: str = "execution",
+    hint_provider: str = HINT_PROVIDER_AGENTBENCH,
+    request_context: dict[str, Any] | None = None,
+    expected_output_tokens: int | None = None,
+    sequence_index: int | None = None,
+) -> dict[str, Any]:
     # Debugging note: this is the hint adaptation hook for Dynamo.
     # Every planning/step/synthesis request gets its own phase-tagged hint payload.
-    hints = dict(DEFAULT_DYNAMO_HINTS)
-    if base_hints:
-        hints.update(base_hints)
-    hints["agent_phase"] = phase
-    return hints
+    return build_hint_payload(
+        provider=hint_provider,
+        default_hints=DEFAULT_DYNAMO_HINTS,
+        base_hints=base_hints,
+        phase=phase,
+        request_context=request_context,
+        expected_output_tokens=expected_output_tokens,
+        sequence_index=sequence_index,
+    )
 
 
 def ensure_hint_probe_id(hints: dict[str, Any], *, parent_run_id: str | None) -> dict[str, Any]:
@@ -999,30 +1018,32 @@ def build_dynamo_chat_model(
 ) -> ChatOpenAI:
     # Debugging note: this is the Deep Agents -> Dynamo adaptation hook.
     # Instead of sending requests to a cloud model endpoint, the app points ChatOpenAI at local Dynamo.
-    payload = hint_payload or dict(DEFAULT_DYNAMO_HINTS)
+    payload = hint_payload or {}
     context = request_context or {}
     extra_body = {
         "nvext": {
-            "agent_hints": payload,
             "request_context": context,
         },
     }
+    if payload:
+        extra_body["nvext"]["agent_hints"] = payload
     if os.environ.get("AGENTBENCH_SEND_TOP_LEVEL_EXTRA_ARGS", "").lower() in {
         "1",
         "true",
         "yes",
     }:
         runtime_observability = {
-            "agent_hints": payload,
-            "agent_hints_source": "agentbench.request_wrapper",
+            "agent_hints": payload or None,
+            "agent_hints_source": payload.get("hint_source") if payload else "none",
             "agent_hints_keys": sorted(str(key) for key in payload),
             "hint_probe_id": payload.get("hint_probe_id"),
             "request_context": context,
             "nvext": {
-                "agent_hints": payload,
                 "request_context": context,
             },
         }
+        if payload:
+            runtime_observability["nvext"]["agent_hints"] = payload
         extra_body["extra_args"] = {
             "runtime_observability": runtime_observability,
         }
@@ -1090,7 +1111,7 @@ def build_coding_agent(
     llm = build_dynamo_chat_model(
         frontend_url=frontend_url,
         model=model,
-        hint_payload=build_phase_hints(base_hints, phase=phase),
+        hint_payload=base_hints if base_hints is not None else build_phase_hints(base_hints, phase=phase),
         request_context=request_context,
     )
     backend = build_agent_backend(workspace_dir)
@@ -1139,14 +1160,20 @@ def execute_baseline_agent(
     task_source: str | None = None,
     task_metadata: dict[str, Any] | None = None,
     parent_run_id: str | None = None,
+    hint_provider: str = HINT_PROVIDER_AGENTBENCH,
 ) -> dict:
-    baseline_hints = build_phase_hints(base_hints, phase="baseline_execution")
-    baseline_hints["expected_output_tokens"] = 2048
     request_context = build_request_context(
         parent_run_id=parent_run_id,
         task_instance_id=(task_metadata or {}).get("instance_id"),
         phase="baseline_execution",
         app_variant=app_variant,
+    )
+    baseline_hints = build_phase_hints(
+        base_hints,
+        phase="baseline_execution",
+        hint_provider=hint_provider,
+        request_context=request_context,
+        expected_output_tokens=2048,
     )
     log_lifecycle_event(
         stage="baseline_agent_request_prepared",
@@ -1322,15 +1349,8 @@ def execute_phase_agent(
     parent_run_id: str | None = None,
     step_title: str | None = None,
     expected_output_tokens: int = 1024,
+    hint_provider: str = HINT_PROVIDER_AGENTBENCH,
 ) -> dict:
-    phase_hints = build_phase_hints(base_hints, phase=phase)
-    phase_hints["hint_probe_id"] = build_phase_probe_id(
-        parent_run_id=parent_run_id,
-        phase=phase,
-        sequence_index=sequence_index,
-    )
-    phase_hints["expected_output_tokens"] = expected_output_tokens
-    phase_hints["phase_sequence_index"] = sequence_index
     request_context = build_request_context(
         parent_run_id=parent_run_id,
         task_instance_id=(task_metadata or {}).get("instance_id"),
@@ -1339,6 +1359,20 @@ def execute_phase_agent(
         step_index=sequence_index,
         step_title=step_title or phase.replace("_", " ").title(),
     )
+    phase_hints = build_phase_hints(
+        base_hints,
+        phase=phase,
+        hint_provider=hint_provider,
+        request_context=request_context,
+        expected_output_tokens=expected_output_tokens,
+        sequence_index=sequence_index,
+    )
+    if phase_hints:
+        phase_hints["hint_probe_id"] = build_phase_probe_id(
+            parent_run_id=parent_run_id,
+            phase=phase,
+            sequence_index=sequence_index,
+        )
     log_lifecycle_event(
         stage=f"{phase}_request_prepared",
         payload={
@@ -1463,6 +1497,7 @@ def run_task_workflow(
     task_index: int | None = None,
     task_source: str | None = None,
     parent_run_id: str | None = None,
+    hint_provider: str = HINT_PROVIDER_AGENTBENCH,
 ) -> dict:
     """Run the active phased Deep Agents workflow for one task."""
     # Debugging note: this is the app-layer orchestration entry point.
@@ -1472,6 +1507,7 @@ def run_task_workflow(
     validation_command = build_validation_command(task)
     task_overrides = load_task_overrides()
     prompt = apply_task_overrides(format_swebench_task_prompt(task), task_overrides)
+    hint_provider = normalize_hint_provider(hint_provider)
     resolved_hints = dict(DEFAULT_DYNAMO_HINTS)
     if base_hints:
         resolved_hints.update(base_hints)
@@ -1517,6 +1553,7 @@ def run_task_workflow(
             "task_source": task_source,
             "task_metadata": task_metadata,
             "resolved_hints": resolved_hints,
+            "hint_provider": hint_provider,
             "step_limit": step_limit,
         },
     )
@@ -1532,6 +1569,7 @@ def run_task_workflow(
             task_source=task_source,
             task_metadata=task_metadata,
             parent_run_id=parent_run_id,
+            hint_provider=hint_provider,
         )
         measurements = [result["measurement"]]
         decomposition_plan = {
@@ -1570,6 +1608,7 @@ def run_task_workflow(
             parent_run_id=parent_run_id,
             step_title="Plan SWE-bench fix",
             expected_output_tokens=768,
+            hint_provider=hint_provider,
         )
         phase_results.append(planning_result)
 
@@ -1588,6 +1627,7 @@ def run_task_workflow(
                 task_source=task_source,
                 task_metadata=task_metadata,
                 parent_run_id=parent_run_id,
+                hint_provider=hint_provider,
             )
             phase_results.extend(execution_results)
             retry_limit = 0
@@ -1612,6 +1652,7 @@ def run_task_workflow(
                 parent_run_id=parent_run_id,
                 step_title="Implement SWE-bench fix",
                 expected_output_tokens=2048,
+                hint_provider=hint_provider,
             )
             execution_result["execution_guard"] = {
                 "attempt_index": 0,
@@ -1663,6 +1704,7 @@ def run_task_workflow(
                     parent_run_id=parent_run_id,
                     step_title=f"Implement SWE-bench fix retry {retry_index}",
                     expected_output_tokens=2048,
+                    hint_provider=hint_provider,
                 )
                 retry_result["execution_guard"] = {
                     "attempt_index": retry_index,
@@ -1707,6 +1749,7 @@ def run_task_workflow(
             parent_run_id=parent_run_id,
             step_title="Consolidate patch",
             expected_output_tokens=1024,
+            hint_provider=hint_provider,
         )
         phase_results.append(patch_result)
 
@@ -1732,6 +1775,7 @@ def run_task_workflow(
             parent_run_id=parent_run_id,
             step_title="Review patch",
             expected_output_tokens=1024,
+            hint_provider=hint_provider,
         )
         phase_results.append(review_result)
 
@@ -1857,6 +1901,7 @@ def run_task_workflow(
         "validation_command": validation_command,
         "task_overrides": task_overrides,
         "resolved_hints": resolved_hints,
+        "hint_provider": hint_provider,
         "app_variant": app_variant,
         "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
         "decomposition_plan": decomposition_plan,

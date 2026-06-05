@@ -14,8 +14,9 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **Basic AgentBench run**: use Experiment 1.
 - **Model/tool-call debugging**: use Experiment 2.
 - **Precise KV-transfer attribution**: use Experiment 3.
-- **Hint-profile comparisons**: use Experiment 4.
-- **Many SWE-bench tasks**: use Experiment 5.
+- **SGLang logging speed comparison**: use Experiment 4.
+- **Hint-profile comparisons**: use Experiment 5.
+- **Many SWE-bench tasks**: use Experiment 6.
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -365,6 +366,7 @@ python3.11 agentbench/deepagents_swebench_single_host.py \
   --dataset ScaleAI/SWE-bench_Pro \
   --split test \
   --index 0 \
+  --hint-provider agentbench \
   --hint-profile high-reuse \
   --prompt-evolution-value-char-limit 1000 \
   --quiet-checkpoints
@@ -435,7 +437,46 @@ elapsed_ms_cuda_sync
 `semantic_token_ids_preview` and `semantic_token_count` appear only with
 `SGLANG_TRANSFER_LOG_PROFILE=full`.
 
-## Experiment 4: Hint Profile Comparison
+## Experiment 4: SGLang Logging Profile Wall-Time Comparison
+
+Use this to answer one simple question: which transfer-logging profile makes
+the whole AgentBench task run faster or slower?
+
+This measures only the AgentBench command wall-clock time. Dynamo startup and
+model load time are not included.
+
+```bash
+cd ~/kv_cache_offloading
+
+PROFILES="off light timing full" \
+INDEX=0 \
+HINT_PROVIDER=agentbench \
+HINT_PROFILE=high-reuse \
+experiments/scripts/compare_sglang_logging_profiles_walltime.sh
+```
+
+Output:
+
+```bash
+cat experiments/reports/sglang_logging_profile_walltime.csv
+```
+
+The CSV is intentionally small:
+
+```text
+profile,run_seconds,run_id
+```
+
+For this experiment the script forces:
+
+```text
+SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=0
+```
+
+That keeps the comparison focused on end-to-end run speed for `off`, `light`,
+`timing`, and `full`.
+
+## Experiment 5: Hint Profile Comparison
 
 Use this after Experiment 3 is running successfully. It compares hint profiles
 on the same SWE-bench task.
@@ -456,11 +497,47 @@ for HINT_PROFILE in baseline high-reuse low-reuse high-priority low-priority lon
     --dataset ScaleAI/SWE-bench_Pro \
     --split test \
     --index 0 \
+    --hint-provider agentbench \
     --hint-profile "$HINT_PROFILE" \
     --prompt-evolution-value-char-limit 1000 \
     --quiet-checkpoints
 done
 ```
+
+Hint provider options:
+
+```text
+agentbench   Use the selected --hint-profile values. This is the default.
+deepagents   Derive deterministic hints from Deep Agents runtime phase state.
+none         Send request context only, without nvext.agent_hints.
+```
+
+To compare providers on the same task:
+
+```bash
+cd ~/kv_cache_offloading
+
+for HINT_PROVIDER in agentbench deepagents none; do
+  echo "===== provider=$HINT_PROVIDER ====="
+
+  AGENTBENCH_WORKFLOW_MODE=phased \
+  python3.11 agentbench/deepagents_swebench_single_host.py \
+    --app-variant upstream_deploy_coding_agent \
+    --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+    --model "$MODEL_NAME" \
+    --dataset ScaleAI/SWE-bench_Pro \
+    --split test \
+    --index 0 \
+    --hint-provider "$HINT_PROVIDER" \
+    --hint-profile high-reuse \
+    --prompt-evolution-value-char-limit 1000 \
+    --quiet-checkpoints
+done
+```
+
+`deepagents` is an adapter mode: Deep Agents supplies the phase/runtime state,
+and `agentbench/deepagents_app/src/hint_providers.py` converts that state into
+the Dynamo/SGLang hint fields.
 
 ### Step 2: Build Comparison Report
 
@@ -484,6 +561,7 @@ Use these fields to compare hint impact:
 
 ```text
 hint_profile
+hint_provider
 phase
 ttft_ms
 cached_token_count
@@ -511,7 +589,7 @@ semantic token count
 unique semantic token hashes
 ```
 
-## Experiment 5: Multi-Task Batch
+## Experiment 6: Multi-Task Batch
 
 Use this to scan many SWE-bench tasks and find runs where the model actually
 edits files and creates patches.
@@ -614,6 +692,8 @@ logger overhead, token extraction, CUDA sync timing, and JSON serialization.
 
 These all-runs files keep compact identity columns only: `run_id`,
 `task_label`, `instance_id_short`, `hint_profile`, `phase`, and request indexes.
+They also include `hint_provider` so AgentBench-derived, Deep Agents-derived,
+and no-hint control runs can be compared separately.
 Use the per-run report folders when you need full raw IDs or debug provenance.
 
 ### Prompt Evolution
