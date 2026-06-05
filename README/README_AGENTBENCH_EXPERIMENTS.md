@@ -280,7 +280,7 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_PROFILE=light \
+SGLANG_TRANSFER_LOG_PROFILE=full \
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1 \
 DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
@@ -332,15 +332,15 @@ Expected:
 
 ```text
 SGLANG_TRANSFER_LOG=1
-SGLANG_TRANSFER_LOG_PROFILE=light
+SGLANG_TRANSFER_LOG_PROFILE=full
 _sgl_log_transfer_event: True
 ```
 
 Use `SGLANG_TRANSFER_LOG_PROFILE=off` to disable transfer logging.
 Use `SGLANG_TRANSFER_LOG_PROFILE=light` for fast/light transfer logging.
 Use `SGLANG_TRANSFER_LOG_PROFILE=timing` for synchronized CUDA transfer timing.
-Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token IDs,
-previews, and token hashes.
+Use `SGLANG_TRANSFER_LOG_PROFILE=full` as the default when you need semantic
+token IDs, previews, and token hashes.
 Add `SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1` only for short calibration runs
 where you want to measure how expensive the logging itself is.
 
