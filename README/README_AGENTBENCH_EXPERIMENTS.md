@@ -280,7 +280,8 @@ WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-ev
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
+SGLANG_TRANSFER_LOG_PROFILE=light \
+SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1 \
 DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
@@ -331,15 +332,25 @@ Expected:
 
 ```text
 SGLANG_TRANSFER_LOG=1
-SGLANG_TRANSFER_LOG_PROFILE=full
+SGLANG_TRANSFER_LOG_PROFILE=light
 _sgl_log_transfer_event: True
 ```
 
 Use `SGLANG_TRANSFER_LOG_PROFILE=off` to disable transfer logging.
 Use `SGLANG_TRANSFER_LOG_PROFILE=light` for fast/light transfer logging.
 Use `SGLANG_TRANSFER_LOG_PROFILE=timing` for synchronized CUDA transfer timing.
-Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token IDs.
-previews and token hashes.
+Use `SGLANG_TRANSFER_LOG_PROFILE=full` only when you need semantic token IDs,
+previews, and token hashes.
+Add `SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1` only for short calibration runs
+where you want to measure how expensive the logging itself is.
+
+Overhead calibration examples:
+
+```bash
+SGLANG_TRANSFER_LOG_PROFILE=light SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1
+SGLANG_TRANSFER_LOG_PROFILE=timing SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1
+SGLANG_TRANSFER_LOG_PROFILE=full SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1
+```
 
 ### Step 4: Run One Phased Task
 
@@ -579,12 +590,14 @@ cat experiments/reports/all_runs_hint_profile_impact.csv
 cat experiments/reports/all_runs_phase_metrics.csv
 cat experiments/reports/all_runs_phase_request_metrics.csv
 cat experiments/reports/all_runs_kv_transfer_metrics.csv
+cat experiments/reports/all_runs_instrumentation_overhead.csv
 
 cat experiments/reports/latest_runs_task_phase_request_metrics.md
 cat experiments/reports/latest_runs_hint_profile_impact.md
 cat experiments/reports/latest_runs_phase_metrics.md
 cat experiments/reports/latest_runs_phase_request_metrics.md
 cat experiments/reports/latest_runs_kv_transfer_metrics.md
+cat experiments/reports/latest_runs_instrumentation_overhead.md
 ```
 
 Use `all_runs_task_phase_request_metrics.csv` first when you want the broad
@@ -595,6 +608,9 @@ across phases.
 `all_runs_phase_metrics.csv` has one row per AgentBench phase.
 `all_runs_phase_request_metrics.csv` has one row per model/API request inside a
 phase.
+`all_runs_instrumentation_overhead.csv` is for calibration runs with
+`SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1`; it shows compact timing buckets for
+logger overhead, token extraction, CUDA sync timing, and JSON serialization.
 
 These all-runs files keep compact identity columns only: `run_id`,
 `task_label`, `instance_id_short`, `hint_profile`, `phase`, and request indexes.

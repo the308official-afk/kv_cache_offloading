@@ -147,6 +147,80 @@ def _semantic_tokens_enabled() -> bool:
     return _env_bool("SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS", _profile() == "full")
 
 
+def _overhead_timing_enabled() -> bool:
+    return _env_bool("SGLANG_TRANSFER_LOG_OVERHEAD_TIMING", False)
+
+
+def _overhead_start(overhead: dict[str, float] | None) -> int | None:
+    return time.perf_counter_ns() if overhead is not None else None
+
+
+def _overhead_add(overhead: dict[str, float] | None, name: str, started_ns: int | None) -> None:
+    if overhead is None or started_ns is None:
+        return
+    overhead[name] = overhead.get(name, 0.0) + (time.perf_counter_ns() - started_ns) / 1_000_000.0
+
+
+def _overhead_call(overhead: dict[str, float] | None, name: str, fn: Any, *args: Any, **kwargs: Any) -> Any:
+    started_ns = _overhead_start(overhead)
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        _overhead_add(overhead, name, started_ns)
+
+
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    try:
+        if value in ("", None):
+            return default
+        return float(value)
+    except Exception:
+        return default
+
+
+def _attach_overhead(target: dict[str, Any], overhead: dict[str, float] | None) -> None:
+    if not overhead:
+        return
+    target["instrumentation_overhead_enabled"] = True
+    for name, value in overhead.items():
+        field = f"overhead_{name}_ms"
+        target[field] = _safe_float(target.get(field)) + float(value)
+
+
+def _finalize_overhead(target: dict[str, Any]) -> None:
+    overhead_fields = [
+        key
+        for key in target
+        if key.startswith("overhead_")
+        and key.endswith("_ms")
+        and key not in {
+            "overhead_total_logger_ms",
+            "overhead_token_ms",
+            "overhead_json_write_ms",
+        }
+    ]
+    if not overhead_fields:
+        return
+    target["instrumentation_overhead_enabled"] = True
+    target["overhead_token_ms"] = sum(
+        _safe_float(target.get(key))
+        for key in (
+            "overhead_semantic_token_extract_ms",
+            "overhead_semantic_token_hash_ms",
+            "overhead_local_token_preview_ms",
+        )
+    )
+    target["overhead_json_write_ms"] = sum(
+        _safe_float(target.get(key))
+        for key in (
+            "overhead_json_serialize_ms",
+            "overhead_stderr_print_ms",
+            "overhead_file_write_ms",
+        )
+    )
+    target["overhead_total_logger_ms"] = sum(_safe_float(target.get(key)) for key in overhead_fields)
+
+
 def _is_tensor(value: Any) -> bool:
     return torch is not None and isinstance(value, torch.Tensor)
 
@@ -445,8 +519,17 @@ def _semantic_token_candidates_from_value(
     return candidates
 
 
-def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
-    request_metadata = _request_metadata_summary(locals_dict)
+def _semantic_token_summary(
+    function: str,
+    locals_dict: dict[str, Any],
+    overhead: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    request_metadata = _overhead_call(
+        overhead,
+        "request_metadata_extract",
+        _request_metadata_summary,
+        locals_dict,
+    )
     if not _semantic_tokens_enabled():
         return request_metadata
 
@@ -460,19 +543,23 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
     )
     object_name_hints = ("node", "nodes", "leaf", "root", "req", "request", "operation", "cache", "entry", "key")
 
-    candidates: list[tuple[str, list[int]]] = []
-    for name, value in locals_dict.items():
-        if name == "self" or name.startswith("__sgl_transfer"):
-            continue
-        lowered = name.lower()
-        if (
-            any(candidate == lowered or candidate in lowered for candidate in direct_names)
-            or any(hint in lowered for hint in object_name_hints)
-            or isinstance(value, (list, tuple, dict))
-        ):
-            candidates.extend(
-                _semantic_token_candidates_from_value(f"{function}.{name}", value)
-            )
+    token_extract_started_ns = _overhead_start(overhead)
+    try:
+        candidates: list[tuple[str, list[int]]] = []
+        for name, value in locals_dict.items():
+            if name == "self" or name.startswith("__sgl_transfer"):
+                continue
+            lowered = name.lower()
+            if (
+                any(candidate == lowered or candidate in lowered for candidate in direct_names)
+                or any(hint in lowered for hint in object_name_hints)
+                or isinstance(value, (list, tuple, dict))
+            ):
+                candidates.extend(
+                    _semantic_token_candidates_from_value(f"{function}.{name}", value)
+                )
+    finally:
+        _overhead_add(overhead, "semantic_token_extract", token_extract_started_ns)
 
     if not candidates:
         summary = {
@@ -491,7 +578,12 @@ def _semantic_token_summary(function: str, locals_dict: dict[str, Any]) -> dict[
         "semantic_token_count": len(values),
         "semantic_token_ids_preview": preview,
         "semantic_token_preview_count": len(preview),
-        "semantic_token_ids_sha256": _hash_ints(values),
+        "semantic_token_ids_sha256": _overhead_call(
+            overhead,
+            "semantic_token_hash",
+            _hash_ints,
+            values,
+        ),
     }
     if os.environ.get("SGLANG_TRANSFER_LOG_FULL_TOKENS") == "1":
         summary["semantic_token_ids"] = values
@@ -516,9 +608,12 @@ def transfer_token_context(*, function: str, locals_dict: dict[str, Any]):
         yield
         return
 
+    overhead = {} if _overhead_timing_enabled() else None
+    summary = _semantic_token_summary(function, locals_dict, overhead=overhead)
+    _attach_overhead(summary, overhead)
     context = _merge_transfer_context_pair(
         current_transfer_context(),
-        _semantic_token_summary(function, locals_dict),
+        summary,
     )
     token = _SEMANTIC_CONTEXT.set(context)
     try:
@@ -533,8 +628,14 @@ def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
         yield
         return
 
+    overhead = {} if _overhead_timing_enabled() else None
     context = current_transfer_context() or {}
-    request_metadata = _request_metadata_summary(locals_dict)
+    request_metadata = _overhead_call(
+        overhead,
+        "request_metadata_extract",
+        _request_metadata_summary,
+        locals_dict,
+    )
     self_obj = locals_dict.get("self")
     if self_obj is not None:
         _merge_request_metadata(
@@ -544,6 +645,7 @@ def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
         )
     if request_metadata:
         request_metadata["request_context_function"] = function
+    _attach_overhead(request_metadata, overhead)
     context = _merge_transfer_context_pair(context, request_metadata)
     token = _SEMANTIC_CONTEXT.set(context)
     try:
@@ -581,6 +683,7 @@ def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, 
     token_ids: list[int] = []
     token_hashes: list[str] = []
     token_sources: list[str] = []
+    overhead_values: dict[str, float] = {}
     for context in valid:
         for key, value in context.items():
             if key in {
@@ -591,6 +694,9 @@ def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, 
                 "semantic_token_count",
                 "semantic_token_preview_count",
             }:
+                continue
+            if key.startswith("overhead_") and key.endswith("_ms"):
+                overhead_values[key] = overhead_values.get(key, 0.0) + _safe_float(value)
                 continue
             merged.setdefault(key, copy.deepcopy(value))
         if isinstance(context.get("semantic_token_ids"), list):
@@ -611,6 +717,9 @@ def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, 
     elif token_hashes:
         merged["semantic_token_ids_sha256_parts"] = sorted(set(token_hashes))
         merged["semantic_token_source"] = ",".join(sorted(set(token_sources))) or "merged_cache_operations"
+    if overhead_values:
+        merged.update(overhead_values)
+        merged["instrumentation_overhead_enabled"] = True
     return merged
 
 
@@ -818,6 +927,7 @@ def log_transfer_event(
     if not _enabled():
         return
 
+    overhead = {} if _overhead_timing_enabled() else None
     wall_ended_ns = time.perf_counter_ns()
     wall_ms = (wall_ended_ns - started_ns) / 1_000_000.0
     cuda_sync_device_count = 0
@@ -827,16 +937,21 @@ def log_transfer_event(
         sync_started_ns = time.perf_counter_ns()
         cuda_sync_device_count = _synchronize_cuda_tensors(locals_dict)
         sync_ended_ns = time.perf_counter_ns()
+        _overhead_add(overhead, "cuda_sync_timing", sync_started_ns)
         if cuda_sync_device_count:
             cuda_sync_wait_ms = (sync_ended_ns - sync_started_ns) / 1_000_000.0
             elapsed_ms_cuda_sync = (sync_ended_ns - started_ns) / 1_000_000.0
 
     tensor_details: list[dict[str, Any]] = []
     total_bytes = 0
-    for name, value in locals_dict.items():
-        if name == "self" or name.startswith("__sgl_transfer"):
-            continue
-        total_bytes += _walk_tensors(name, value, tensor_details)
+    tensor_scan_started_ns = _overhead_start(overhead)
+    try:
+        for name, value in locals_dict.items():
+            if name == "self" or name.startswith("__sgl_transfer"):
+                continue
+            total_bytes += _walk_tensors(name, value, tensor_details)
+    finally:
+        _overhead_add(overhead, "tensor_scan", tensor_scan_started_ns)
 
     payload: dict[str, Any] = {
         "event": "sglang.transfer",
@@ -860,7 +975,7 @@ def log_transfer_event(
         payload["cuda_sync_wait_ms"] = cuda_sync_wait_ms
         payload["cuda_sync_device_count"] = cuda_sync_device_count
 
-    local_summary = _local_token_summary(locals_dict)
+    local_summary = _overhead_call(overhead, "local_token_preview", _local_token_summary, locals_dict)
     semantic_context = _SEMANTIC_CONTEXT.get()
     has_semantic_context = isinstance(semantic_context, dict)
     if has_semantic_context:
@@ -884,19 +999,50 @@ def log_transfer_event(
         payload["token_preview_count"] = 0
         payload["token_preview_source"] = "none"
 
-    payload.update(_request_metadata_summary(locals_dict))
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_metadata_extract",
+            _request_metadata_summary,
+            locals_dict,
+        )
+    )
 
-    payload.update(_index_summary(locals_dict))
-    payload.update(_kv_payload_summary(function, locals_dict))
+    payload.update(_overhead_call(overhead, "index_summary", _index_summary, locals_dict))
+    payload.update(
+        _overhead_call(
+            overhead,
+            "kv_payload_estimate",
+            _kv_payload_summary,
+            function,
+            locals_dict,
+        )
+    )
 
-    line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+    _attach_overhead(payload, overhead)
+    if overhead is not None or payload.get("instrumentation_overhead_enabled"):
+        payload.setdefault("instrumentation_overhead_note", "Timing fields are approximate and add measurement overhead.")
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms"))
+        _finalize_overhead(payload)
+        json_started_ns = time.perf_counter_ns()
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+        json_ms = (time.perf_counter_ns() - json_started_ns) / 1_000_000.0
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms")) + json_ms
+        _finalize_overhead(payload)
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+    else:
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
     with _LOCK:
+        stderr_started_ns = _overhead_start(overhead)
         print(line, file=sys.stderr, flush=True)
+        _overhead_add(overhead, "stderr_print", stderr_started_ns)
         path = os.environ.get("SGLANG_TRANSFER_LOG_PATH")
         if path:
             try:
+                file_started_ns = _overhead_start(overhead)
                 with open(path, "a", encoding="utf-8") as handle:
                     handle.write(line + "\n")
+                _overhead_add(overhead, "file_write", file_started_ns)
             except Exception as exc:
                 print(
                     _PREFIX

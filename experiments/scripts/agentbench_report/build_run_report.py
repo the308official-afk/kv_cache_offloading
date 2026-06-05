@@ -673,6 +673,184 @@ def write_transfer_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+INSTRUMENTATION_OVERHEAD_FIELDS = [
+    "run_id",
+    "task",
+    "hint_profile",
+    "phase",
+    "request",
+    "profile",
+    "events",
+    "data_mb",
+    "transfer_time_ms",
+    "logger_overhead_ms",
+    "overhead_pct",
+    "token_overhead_ms",
+    "sync_overhead_ms",
+    "json_write_overhead_ms",
+    "slowest_overhead_component",
+]
+
+
+def transfer_event_phase(event: dict[str, Any]) -> str:
+    request_context = dict_or_empty(event.get("request_context"))
+    value = first_nonempty(
+        event.get("phase"),
+        event.get("agent_phase"),
+        request_context.get("phase"),
+        "unknown",
+    )
+    return str(value or "unknown")
+
+
+def transfer_event_request(event: dict[str, Any]) -> str:
+    value = first_nonempty(
+        event.get("request_id"),
+        event.get("external_request_id"),
+        event.get("runtime_context_id"),
+        event.get("sglang_request_id"),
+        event.get("hint_probe_id"),
+        "",
+    )
+    return compact_text(value, limit=64)
+
+
+def transfer_event_has_overhead(event: dict[str, Any]) -> bool:
+    if as_bool(event.get("instrumentation_overhead_enabled")) is True:
+        return True
+    return any(key.startswith("overhead_") and key.endswith("_ms") for key in event)
+
+
+def transfer_event_data_mb(event: dict[str, Any]) -> float:
+    kv_mb = as_float(event.get("kv_num_mb_estimated"))
+    return kv_mb if kv_mb > 0 else as_float(event.get("num_mb_observed"))
+
+
+def transfer_event_time_ms(event: dict[str, Any]) -> float:
+    if event.get("elapsed_ms_cuda_sync") not in (None, ""):
+        return as_float(event.get("elapsed_ms_cuda_sync"))
+    return as_float(event.get("elapsed_ms_wall", event.get("elapsed_ms")))
+
+
+def overhead_component_ms(event: dict[str, Any], component: str) -> float:
+    return as_float(event.get(f"overhead_{component}_ms"))
+
+
+def instrumentation_overhead_rows(
+    events: list[dict[str, Any]],
+    *,
+    manifest: dict[str, Any],
+    run_id: str,
+) -> list[dict[str, Any]]:
+    overhead_events = [event for event in events if transfer_event_has_overhead(event)]
+    if not overhead_events:
+        return []
+
+    task = dict_or_empty(manifest.get("task"))
+    task_label = str(task.get("repo") or manifest.get("repo") or "")
+    hint_profile = str(manifest.get("hint_profile") or "")
+    grouped: dict[tuple[str, str, str], list[dict[str, Any]]] = defaultdict(list)
+    for event in overhead_events:
+        grouped[
+            (
+                transfer_event_phase(event),
+                transfer_event_request(event),
+                str(event.get("transfer_log_profile") or "unknown"),
+            )
+        ].append(event)
+
+    rows: list[dict[str, Any]] = []
+    for (phase, request, profile), items in sorted(grouped.items()):
+        data_mb = sum(transfer_event_data_mb(event) for event in items)
+        transfer_time_ms = sum(transfer_event_time_ms(event) for event in items)
+        token_overhead_ms = sum(overhead_component_ms(event, "token") for event in items)
+        if token_overhead_ms == 0:
+            token_overhead_ms = sum(
+                overhead_component_ms(event, "semantic_token_extract")
+                + overhead_component_ms(event, "semantic_token_hash")
+                + overhead_component_ms(event, "local_token_preview")
+                for event in items
+            )
+        sync_overhead_ms = sum(overhead_component_ms(event, "cuda_sync_timing") for event in items)
+        json_write_overhead_ms = sum(overhead_component_ms(event, "json_write") for event in items)
+        if json_write_overhead_ms == 0:
+            json_write_overhead_ms = sum(
+                overhead_component_ms(event, "json_serialize")
+                + overhead_component_ms(event, "stderr_print")
+                + overhead_component_ms(event, "file_write")
+                for event in items
+            )
+        component_totals = {
+            "tokens": token_overhead_ms,
+            "sync": sync_overhead_ms,
+            "json_write": json_write_overhead_ms,
+            "tensor_scan": sum(overhead_component_ms(event, "tensor_scan") for event in items),
+            "request_metadata": sum(overhead_component_ms(event, "request_metadata_extract") for event in items),
+            "index_summary": sum(overhead_component_ms(event, "index_summary") for event in items),
+            "kv_payload": sum(overhead_component_ms(event, "kv_payload_estimate") for event in items),
+        }
+        logger_overhead_ms = sum(
+            as_float(event.get("overhead_total_logger_ms")) for event in items
+        )
+        if logger_overhead_ms == 0:
+            logger_overhead_ms = sum(component_totals.values())
+        slowest_component, slowest_value = max(component_totals.items(), key=lambda item: item[1])
+        rows.append(
+            {
+                "run_id": run_id,
+                "task": task_label,
+                "hint_profile": hint_profile,
+                "phase": phase,
+                "request": request,
+                "profile": profile,
+                "events": len(items),
+                "data_mb": data_mb,
+                "transfer_time_ms": transfer_time_ms,
+                "logger_overhead_ms": logger_overhead_ms,
+                "overhead_pct": (logger_overhead_ms / transfer_time_ms * 100.0)
+                if transfer_time_ms > 0
+                else "",
+                "token_overhead_ms": token_overhead_ms,
+                "sync_overhead_ms": sync_overhead_ms,
+                "json_write_overhead_ms": json_write_overhead_ms,
+                "slowest_overhead_component": slowest_component if slowest_value > 0 else "",
+            }
+        )
+    return rows
+
+
+def write_instrumentation_overhead_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
+    lines = [
+        f"# {title}",
+        "",
+        "| Run | Task | Hint | Phase | Request | Profile | Events | Data MB | Transfer ms | Logger ms | Overhead % | Token ms | Sync ms | JSON/write ms | Slowest |",
+        "| --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            "| {run} | {task} | {hint} | {phase} | {request} | {profile} | {events} | {data} | {transfer} | {logger} | {pct} | {token} | {sync} | {json_write} | {slowest} |".format(
+                run=row.get("run_id"),
+                task=row.get("task"),
+                hint=row.get("hint_profile"),
+                phase=row.get("phase"),
+                request=row.get("request") or "-",
+                profile=row.get("profile"),
+                events=row.get("events"),
+                data=format_metric(row.get("data_mb")),
+                transfer=format_metric(row.get("transfer_time_ms")),
+                logger=format_metric(row.get("logger_overhead_ms")),
+                pct=format_metric(row.get("overhead_pct")),
+                token=format_metric(row.get("token_overhead_ms")),
+                sync=format_metric(row.get("sync_overhead_ms")),
+                json_write=format_metric(row.get("json_write_overhead_ms")),
+                slowest=row.get("slowest_overhead_component") or "-",
+            )
+        )
+    if not rows:
+        lines.extend(["", "No instrumentation overhead timing fields were found. Set `SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1` for calibration runs."])
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def event_timestamp(event: dict[str, Any]) -> datetime | None:
     return parse_timestamp(event.get("timestamp"))
 
@@ -2865,6 +3043,11 @@ def refresh_runtime_metric_summaries(root: Path, runs_root: Path, *, latest_limi
         file_name="transfer_events_by_function.csv",
         source_file="transfer_events_by_function.csv",
     )
+    overhead_rows = aggregate_report_csv_rows(
+        run_dirs,
+        file_name="instrumentation_overhead_metrics.csv",
+        source_file="instrumentation_overhead_metrics.csv",
+    )
     request_phase_rows = aggregate_request_phase_rows(phase_rows, subrequest_rows)
     hint_rows = aggregate_hint_impact_rows(phase_rows)
 
@@ -2873,6 +3056,11 @@ def refresh_runtime_metric_summaries(root: Path, runs_root: Path, *, latest_limi
     write_rows_csv(reports_root / "all_runs_task_phase_request_metrics.csv", request_phase_rows, REQUEST_PHASE_FIELDS)
     write_rows_csv(reports_root / "all_runs_kv_transfer_metrics.csv", transfer_rows, AGG_TRANSFER_FIELDS)
     write_rows_csv(reports_root / "all_runs_hint_profile_impact.csv", hint_rows, HINT_IMPACT_FIELDS)
+    write_rows_csv(
+        reports_root / "all_runs_instrumentation_overhead.csv",
+        overhead_rows,
+        INSTRUMENTATION_OVERHEAD_FIELDS,
+    )
     write_hint_impact_md(
         reports_root / "all_runs_hint_profile_impact.md",
         hint_rows,
@@ -2884,6 +3072,7 @@ def refresh_runtime_metric_summaries(root: Path, runs_root: Path, *, latest_limi
     latest_subrequest_rows = [row for row in subrequest_rows if row.get("run_id") in latest_run_ids]
     latest_request_phase_rows = [row for row in request_phase_rows if row.get("run_id") in latest_run_ids]
     latest_transfer_rows = [row for row in transfer_rows if row.get("run_id") in latest_run_ids]
+    latest_overhead_rows = [row for row in overhead_rows if row.get("run_id") in latest_run_ids]
     latest_hint_rows = aggregate_hint_impact_rows(latest_phase_rows)
 
     write_latest_phase_md(
@@ -2910,6 +3099,11 @@ def refresh_runtime_metric_summaries(root: Path, runs_root: Path, *, latest_limi
         reports_root / "latest_runs_hint_profile_impact.md",
         latest_hint_rows,
         title=f"Latest {len(latest_run_ids)} Runs Hint Impact Summary",
+    )
+    write_instrumentation_overhead_md(
+        reports_root / "latest_runs_instrumentation_overhead.md",
+        latest_overhead_rows,
+        title=f"Latest {len(latest_run_ids)} Runs Instrumentation Overhead",
     )
 
 
@@ -3350,6 +3544,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
             if os.environ.get(key) is not None
         },
     }
+    overhead_rows = instrumentation_overhead_rows(events, manifest=manifest, run_id=run_id)
 
     run_level = {
         "run_id": run_id,
@@ -3384,17 +3579,18 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
             "sglang_transfer_log": {
                 "path": str(transfer_log.resolve()) if transfer_log else None,
                 "fields": [
-                "transfer_totals",
-                "transfer_by_function_direction",
-                "transfer_device_to_host_kv_mb",
-                "transfer_host_to_device_kv_mb",
-                "transfer_cuda_sync_ms",
+                    "transfer_totals",
+                    "transfer_by_function_direction",
+                    "transfer_device_to_host_kv_mb",
+                    "transfer_host_to_device_kv_mb",
+                    "transfer_cuda_sync_ms",
                     "transfer_request_id_matched",
                     "transfer_device_to_host_kv_mb_for_request",
                     "transfer_host_to_device_kv_mb_for_request",
                     "transfer_time_window_matched",
                     "transfer_device_to_host_kv_mb_for_time_window",
                     "transfer_host_to_device_kv_mb_for_time_window",
+                    "instrumentation_overhead_metrics",
                     "subrequest_metrics.transfer_*",
                 ],
             },
@@ -3494,6 +3690,11 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
         "worker_runtime_log": worker_runtime,
         "transfer_totals": transfer_totals,
         "transfer_by_function_direction": transfer_rows,
+        "instrumentation_overhead": {
+            "enabled_event_count": sum(1 for event in events if transfer_event_has_overhead(event)),
+            "rows": overhead_rows,
+            "note": "Overhead fields are present only when SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1.",
+        },
     }
     behavior_summary = build_agent_behavior_summary(
         result_dir=result_dir,
@@ -3519,6 +3720,12 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     write_phase_csv(out_dir / "phase_runtime_metrics.csv", phase_rows, run_level)
     write_subrequest_csv(out_dir / "model_request_metrics.csv", subrequest_rows, run_level)
     write_transfer_csv(out_dir / "transfer_events_by_function.csv", transfer_rows)
+    write_rows_csv(out_dir / "instrumentation_overhead_metrics.csv", overhead_rows, INSTRUMENTATION_OVERHEAD_FIELDS)
+    write_instrumentation_overhead_md(
+        out_dir / "instrumentation_overhead_summary.md",
+        overhead_rows,
+        title="Instrumentation Overhead",
+    )
     write_json(out_dir / "phase_summary.json", behavior_summary)
     write_agent_behavior_csv(out_dir / "phase_summary.csv", behavior_summary)
     write_agent_behavior_md(out_dir / "phase_summary.md", behavior_summary)

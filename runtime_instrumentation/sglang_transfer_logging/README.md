@@ -302,6 +302,7 @@ SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT=32
 SGLANG_TRANSFER_LOG_TOKEN_TENSOR_SYNC=0
 SGLANG_TRANSFER_LOG_SYNC_TIMING=0
 SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS=0
+SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=0
 SGLANG_TRANSFER_LOG_VERBOSE=0
 ```
 
@@ -334,6 +335,14 @@ sync while logging, so it is more honest but heavier:
 SGLANG_TRANSFER_LOG_SYNC_TIMING=1
 ```
 
+Use overhead timing only for short calibration runs. It records how much time
+the logger spends collecting metadata, semantic tokens, CUDA sync timing, and
+JSON serialization:
+
+```bash
+SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1
+```
+
 Use verbose mode when you want tensor details, empty fallback fields, and other
 diagnostics in every event:
 
@@ -362,7 +371,8 @@ SGLANG_TRANSFER_LOG_VERBOSE=1
   "kv_num_mb_estimated_page_granular": 224.0,
   "kv_estimate_formula": "2*head_num*head_dim*dtype.itemsize",
   "sglang_request_id": "abc123",
-  "request_context_function": "cache_finished_req"
+  "request_context_function": "cache_finished_req",
+  "overhead_total_logger_ms": 0.12
 }
 ```
 
@@ -397,6 +407,8 @@ fallback as debugging metadata, not tokenizer IDs.
 
 Default events are compact. Tensor details, empty local-token fallback fields,
 and null errors are emitted only when `SGLANG_TRANSFER_LOG_VERBOSE=1`.
+Overhead timing fields are emitted only when
+`SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=1`.
 
 `request_context_function` tells you where the request metadata was captured.
 The most useful values are `cache_finished_req` / `cache_unfinished_req` for
