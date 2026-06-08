@@ -645,6 +645,9 @@ Pass models directly to the script:
 ```bash
 cd ~/kv_cache_offloading
 
+./run_dynamo_single_host.sh stop
+./experiments/scripts/clean_experiment_data.sh --yes
+
 export AGENTBENCH_EXECUTION_LOOP=0
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
@@ -657,7 +660,12 @@ HINT_PROVIDER=agentbench \
 ./agentbench/run_swebench_multi_model_batch_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct \
   Qwen/Qwen2.5-7B-Instruct \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct
+  Qwen/Qwen3-Coder-30B-A3B-Instruct \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  Qwen/Qwen3.6-35B-A3B-FP8 \
+  Qwen/Qwen3.6-27B-FP8 \
+  Qwen/Qwen3.5-9B \
+  Qwen/Qwen3-Coder-Next-FP8
 ```
 
 Or edit the model list:
@@ -686,7 +694,7 @@ Readiness behavior:
 1. stop Dynamo
 2. start Dynamo with the next model
 3. wait for /v1/models registration
-4. run ./run_dynamo_single_host.sh test until it succeeds
+4. run a real /v1/chat/completions smoke test until HTTP success
 5. run Experiment 6 for START_INDEX..END_INDEX
 6. move to the next model
 ```
@@ -697,7 +705,7 @@ Outputs:
 experiments/reports/batches/<multi_model_batch_id>/
   multi_model_progress.log
   multi_model_overview.csv
-  <model_safe_name>_smoke_test.log
+  <model_safe_name>_smoke_test.log   # check this first if Dynamo returns 404
 
 experiments/reports/batches/<multi_model_batch_id>_<model_safe_name>/
   progress.log
@@ -712,9 +720,9 @@ Useful knobs:
 positional model args              Highest-priority model source.
 MODELS='model-a,model-b'          Override the model-list file.
 MODEL_LIST_FILE=...               Read one model per line.
-MODEL_SMOKE_RETRIES=10           Smoke-test retry count.
+MODEL_SMOKE_RETRIES=60           Smoke-test retry count.
 MODEL_SMOKE_DELAY_SECS=10        Seconds between smoke-test retries.
-MODEL_COOLDOWN_SECS=10           Extra wait after smoke-test success.
+MODEL_COOLDOWN_SECS=30           Extra wait after smoke-test success.
 STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
 ```
 

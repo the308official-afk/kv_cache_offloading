@@ -200,7 +200,7 @@ stop_all() {
 }
 
 test_basic() {
-  curl "http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/chat/completions" \
+  curl -fsS "http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{
       \"model\": \"${DYNAMO_MODEL_PATH}\",
@@ -210,7 +210,7 @@ test_basic() {
 }
 
 test_priority() {
-  curl "http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/chat/completions" \
+  curl -fsS "http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/chat/completions" \
     -H "Content-Type: application/json" \
     -d "{
       \"model\": \"${DYNAMO_MODEL_PATH}\",

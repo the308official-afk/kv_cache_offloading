@@ -57,6 +57,10 @@ PY
 }
 
 echo "Batch ID: ${BATCH_ID}" | tee -a "${PROGRESS_LOG}"
+echo "Model: ${MODEL}" | tee -a "${PROGRESS_LOG}"
+echo "Frontend URL: ${FRONTEND_URL}" | tee -a "${PROGRESS_LOG}"
+echo "Hint profile: ${HINT_PROFILE}" | tee -a "${PROGRESS_LOG}"
+echo "Hint provider: ${HINT_PROVIDER}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo | tee -a "${PROGRESS_LOG}"

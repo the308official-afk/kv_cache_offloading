@@ -11,9 +11,9 @@ END_INDEX="${END_INDEX:-4}"
 HINT_PROFILE="${HINT_PROFILE:-high-reuse}"
 HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 MULTI_MODEL_BATCH_ID="${MULTI_MODEL_BATCH_ID:-multi_model_batch_$(date +%Y%m%d_%H%M%S)}"
-MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-10}"
+MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-60}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-10}"
-MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-10}"
+MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-30}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
 CLI_MODELS=("$@")
 
@@ -153,15 +153,43 @@ PY
 smoke_test_model() {
   local model="$1"
   local smoke_log="$2"
+  local frontend_port="${DYNAMO_FRONTEND_PORT:-8000}"
+  local chat_url="http://127.0.0.1:${frontend_port}/v1/chat/completions"
+  local models_url="http://127.0.0.1:${frontend_port}/v1/models"
+  local registered_models
+  local payload
 
   for ((attempt=1; attempt<=MODEL_SMOKE_RETRIES; attempt++)); do
     echo "Smoke test ${attempt}/${MODEL_SMOKE_RETRIES} for ${model}" | tee -a "${MULTI_MODEL_LOG}"
-    if DYNAMO_MODEL_PATH="${model}" \
-      DYNAMO_SERVED_MODEL_NAME="${model}" \
-      ./run_dynamo_single_host.sh test >> "${smoke_log}" 2>&1; then
+    registered_models="$(curl -fsS "${models_url}" 2>/dev/null || true)"
+    {
+      echo
+      echo "Smoke test attempt ${attempt} for ${model}"
+      echo "Registered models before chat:"
+      echo "${registered_models:-<unavailable>}"
+    } >> "${smoke_log}" 2>&1
+
+    if [[ -z "${registered_models}" || "${registered_models}" != *"\"id\":\"${model}\""* ]]; then
+      echo "Model is not listed yet; waiting ${MODEL_SMOKE_DELAY_SECS}s." >> "${smoke_log}"
+      sleep "${MODEL_SMOKE_DELAY_SECS}"
+      continue
+    fi
+
+    payload="$(python3 -c 'import json, sys; print(json.dumps({"model": sys.argv[1], "messages": [{"role": "user", "content": "Reply with exactly: OK"}], "max_tokens": 10}))' "${model}")"
+    if curl -fsS "${chat_url}" \
+      -H "Content-Type: application/json" \
+      -d "${payload}" >> "${smoke_log}" 2>&1; then
       echo "Smoke test passed for ${model}" | tee -a "${MULTI_MODEL_LOG}"
       return 0
     fi
+    {
+      echo
+      echo "Smoke test attempt ${attempt} failed for ${model}"
+      echo "URL: ${chat_url}"
+      echo "Expected model: ${model}"
+      echo "Waiting ${MODEL_SMOKE_DELAY_SECS}s before retry."
+      echo
+    } >> "${smoke_log}" 2>&1
     sleep "${MODEL_SMOKE_DELAY_SECS}"
   done
 

@@ -77,11 +77,18 @@ wait_for_model_registration() {
   local models_url="http://127.0.0.1:${DYNAMO_FRONTEND_PORT}/v1/models"
   local expected_model="${DYNAMO_SERVED_MODEL_NAME:-${DYNAMO_MODEL_PATH}}"
   local response=""
+  local stable_hits=0
+  local required_stable_hits="${MODEL_READY_STABLE_HITS:-2}"
 
   for ((i=1; i<=retries; i++)); do
     response="$(curl -fsS "${models_url}" 2>/dev/null || true)"
     if [[ -n "${response}" ]] && echo "${response}" | grep -Fq "\"id\":\"${expected_model}\""; then
-      return 0
+      stable_hits=$((stable_hits + 1))
+      if [[ "${stable_hits}" -ge "${required_stable_hits}" ]]; then
+        return 0
+      fi
+    else
+      stable_hits=0
     fi
 
     if ! ./run_dynamo_worker.sh status >/dev/null 2>&1; then
