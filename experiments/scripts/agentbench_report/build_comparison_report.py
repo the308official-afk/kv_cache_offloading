@@ -8,6 +8,7 @@ import csv
 import json
 from collections import defaultdict
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +41,39 @@ def as_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def csv_value(value: Any) -> Any:
+def is_ms_field(field: str) -> bool:
+    if field.endswith("_source") or field.endswith("_evidence"):
+        return False
+    return field.endswith("_ms") or "_ms_" in field
+
+
+def rounded_ms_value(value: Any) -> Any:
+    if value in (None, ""):
+        return value
+    try:
+        return str(int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+
+def is_cache_reuse_ratio_field(field: str) -> bool:
+    return "cache_reuse_ratio" in field
+
+
+def rounded_cache_reuse_ratio_value(value: Any) -> Any:
+    if value in (None, ""):
+        return value
+    try:
+        return str(Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+
+def csv_value(field: str, value: Any) -> Any:
+    if is_ms_field(field):
+        return rounded_ms_value(value)
+    if is_cache_reuse_ratio_field(field):
+        return rounded_cache_reuse_ratio_value(value)
     if isinstance(value, (dict, list)):
         return json.dumps(value, sort_keys=True)
     return value
@@ -51,11 +84,21 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) -> None
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: csv_value(row.get(field)) for field in fields})
+            writer.writerow({field: csv_value(field, row.get(field)) for field in fields})
 
 
 def write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, sort_keys=True, default=str) + "\n", encoding="utf-8")
+
+
+def format_ms(value: Any) -> str:
+    rounded = rounded_ms_value(value)
+    return str(rounded) if rounded not in (None, "") else "n/a"
+
+
+def format_cache_reuse_ratio(value: Any) -> str:
+    rounded = rounded_cache_reuse_ratio_value(value)
+    return str(rounded) if rounded not in (None, "") else "n/a"
 
 
 def discover_run_dirs(root: Path, *, latest: int | None, explicit: list[Path]) -> list[Path]:
@@ -259,14 +302,14 @@ def write_summary_md(path: Path, comparison_id: str, run_rows: list[dict[str, An
     ]
     for row in run_rows:
         lines.append(
-            "| {run_id} | {profile} | {patch} | {d2h:.3f} | {h2d:.3f} | {ttft:.3f} | {reuse:.4f} |".format(
+            "| {run_id} | {profile} | {patch} | {d2h:.3f} | {h2d:.3f} | {ttft} | {reuse} |".format(
                 run_id=row.get("run_id"),
                 profile=row.get("hint_profile"),
                 patch=row.get("patch_nonempty"),
                 d2h=as_float(row.get("transfer_device_to_host_kv_mb")),
                 h2d=as_float(row.get("transfer_host_to_device_kv_mb")),
-                ttft=as_float(row.get("avg_ttft_ms")),
-                reuse=as_float(row.get("avg_cache_reuse_ratio")),
+                ttft=format_ms(row.get("avg_ttft_ms")),
+                reuse=format_cache_reuse_ratio(row.get("avg_cache_reuse_ratio")),
             )
         )
 
@@ -281,13 +324,13 @@ def write_summary_md(path: Path, comparison_id: str, run_rows: list[dict[str, An
     )
     for row in group_rows:
         lines.append(
-            "| {profile} | {phase} | {runs} | {ttft:.3f} | {sgttft:.3f} | {reuse:.4f} | {cached:.1f} | {h2d} |".format(
+            "| {profile} | {phase} | {runs} | {ttft} | {sgttft} | {reuse} | {cached:.1f} | {h2d} |".format(
                 profile=row.get("hint_profile"),
                 phase=row.get("phase"),
                 runs=row.get("run_count"),
-                ttft=as_float(row.get("avg_ttft_ms")),
-                sgttft=as_float(row.get("avg_sglang_ttft_ms_prefill_to_first_decode")),
-                reuse=as_float(row.get("avg_cache_reuse_ratio")),
+                ttft=format_ms(row.get("avg_ttft_ms")),
+                sgttft=format_ms(row.get("avg_sglang_ttft_ms_prefill_to_first_decode")),
+                reuse=format_cache_reuse_ratio(row.get("avg_cache_reuse_ratio")),
                 cached=as_float(row.get("avg_cached_token_count")),
                 h2d=row.get("host_to_device_seen"),
             )

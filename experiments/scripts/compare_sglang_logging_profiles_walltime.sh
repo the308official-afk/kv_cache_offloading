@@ -20,6 +20,8 @@ HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 HINT_PROFILE="${HINT_PROFILE:-high-reuse}"
 PROFILES="${PROFILES:-off light timing full}"
 OUT_CSV="${OUT_CSV:-experiments/reports/sglang_logging_profile_walltime.csv}"
+GEN_READY_RETRIES="${GEN_READY_RETRIES:-180}"
+GEN_READY_DELAY_SECS="${GEN_READY_DELAY_SECS:-2}"
 WORKER_EXTRA_ARGS_DEFAULT="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1"
 WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS:-${WORKER_EXTRA_ARGS_DEFAULT}}"
 
@@ -46,8 +48,43 @@ print(f"{end - start:.3f}")
 PY
 }
 
-for PROFILE in ${PROFILES}; do
-  echo "===== SGLang logging profile: ${PROFILE} ====="
+wait_for_generation_ready() {
+  local model_name="${DYNAMO_SERVED_MODEL_NAME:-${MODEL}}"
+  local url="${FRONTEND_URL}"
+  local response=""
+
+  for ((attempt=1; attempt<=GEN_READY_RETRIES; attempt++)); do
+    response="$(
+      curl -fsS "${url}" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"model\": \"${model_name}\",
+          \"messages\": [{\"role\": \"user\", \"content\": \"Reply with exactly: OK\"}],
+          \"max_tokens\": 4
+        }" 2>&1 || true
+    )"
+    if [[ "${response}" == *'"choices"'* ]]; then
+      return 0
+    fi
+    echo "Waiting for generation readiness (${attempt}/${GEN_READY_RETRIES})..."
+    sleep "${GEN_READY_DELAY_SECS}"
+  done
+
+  echo "Dynamo did not become generation-ready." >&2
+  echo "Last response:" >&2
+  echo "${response}" >&2
+  echo >&2
+  ./run_dynamo_single_host.sh logs-worker || true
+  return 1
+}
+
+read -r -a PROFILE_LIST <<< "${PROFILES}"
+TOTAL_PROFILES="${#PROFILE_LIST[@]}"
+
+for INDEX_IN_PROFILES in "${!PROFILE_LIST[@]}"; do
+  PROFILE="${PROFILE_LIST[$INDEX_IN_PROFILES]}"
+  PROFILE_NUMBER="$((INDEX_IN_PROFILES + 1))"
+  echo "===== SGLang logging profile ${PROFILE_NUMBER}/${TOTAL_PROFILES}: ${PROFILE} ====="
   ./run_dynamo_single_host.sh stop
 
   WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS}" \
@@ -63,6 +100,8 @@ for PROFILE in ${PROFILES}; do
   FRONTEND_IMAGE="${FRONTEND_IMAGE:-}" \
   WORKER_IMAGE="${WORKER_IMAGE:-}" \
   ./run_dynamo_single_host.sh start
+
+  wait_for_generation_ready
 
   before_result="$(latest_result_dir)"
   start_time="$(timestamp_seconds)"
@@ -89,8 +128,9 @@ for PROFILE in ${PROFILES}; do
   fi
 
   printf '%s,%s,%s\n' "${PROFILE}" "${run_seconds}" "${run_id}" >> "${OUT_CSV}"
-  echo "profile=${PROFILE} run_seconds=${run_seconds} run_id=${run_id:-unknown}"
+  echo "Completed profile ${PROFILE_NUMBER}/${TOTAL_PROFILES}: profile=${PROFILE} run_seconds=${run_seconds} run_id=${run_id:-unknown}"
   echo
 done
 
+echo "All ${TOTAL_PROFILES} logging-profile timing runs completed."
 echo "Wall-clock comparison written to: ${OUT_CSV}"

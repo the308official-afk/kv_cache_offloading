@@ -39,6 +39,9 @@ REMOTE_TRANSFER_REPORT_LEGACY="${REMOTE_PROJECT_DIR}/experiments/sglang_transfer
 LOCAL_TRANSFER_LOG_DIR="${REPO_ROOT}/experiments/raw/sglang_transfer_logs"
 REMOTE_RUN_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports/runs"
 LOCAL_RUN_REPORTS_DIR="${REPO_ROOT}/experiments/reports/runs"
+REMOTE_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports"
+LOCAL_REPORTS_DIR="${REPO_ROOT}/experiments/reports"
+LOGGING_PROFILE_WALLTIME_REPORT="sglang_logging_profile_walltime.csv"
 INDEX="0"
 
 if [[ $# -gt 1 ]]; then
@@ -66,6 +69,7 @@ chmod 400 "$PEM"
 mkdir -p "$LOCAL_RESULTS_DIR"
 mkdir -p "$LOCAL_TRANSFER_LOG_DIR"
 mkdir -p "$LOCAL_RUN_REPORTS_DIR"
+mkdir -p "$LOCAL_REPORTS_DIR"
 
 SSH_OPTS=(
   -i "$PEM"
@@ -154,6 +158,20 @@ if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_RUN_REPORTS_DIR}'"; th
     "${LOCAL_RUN_REPORTS_DIR}/"
 else
   echo "Remote run-level reports directory not found; local report builder can regenerate it." >&2
+fi
+
+echo "==== Downloading logging-profile wall-time report from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}" \
+    "${LOCAL_REPORTS_DIR}/"
+else
+  echo "Remote logging-profile wall-time report not found; skipping." >&2
 fi
 
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then

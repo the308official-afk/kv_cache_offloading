@@ -439,11 +439,11 @@ elapsed_ms_cuda_sync
 
 ## Experiment 4: SGLang Logging Profile Wall-Time Comparison
 
-Use this to answer one simple question: which transfer-logging profile makes
+Use this to answer one simple question: which transfer-logging profile makes.
 the whole AgentBench task run faster or slower?
 
-This measures only the AgentBench command wall-clock time. Dynamo startup and
-model load time are not included.
+This measures only the AgentBench command wall-clock time. Dynamo startup,
+model load time, and one small warmup generation are not included.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -459,6 +459,13 @@ Output:
 
 ```bash
 cat experiments/reports/sglang_logging_profile_walltime.csv
+```
+
+The script is finished when it prints:
+
+```text
+All 4 logging-profile timing runs completed.
+Wall-clock comparison written to: experiments/reports/sglang_logging_profile_walltime.csv
 ```
 
 The CSV is intentionally small:

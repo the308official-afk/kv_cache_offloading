@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any
 
@@ -203,6 +204,68 @@ def as_int(value: Any, default: int = 0) -> int:
         return int(float(value))
     except (TypeError, ValueError):
         return default
+
+
+def is_ms_field(field: str) -> bool:
+    if field.endswith("_source") or field.endswith("_evidence"):
+        return False
+    return field.endswith("_ms") or "_ms_" in field
+
+
+def rounded_ms_value(value: Any) -> Any:
+    if value in (None, ""):
+        return value
+    try:
+        return str(int(Decimal(str(value)).quantize(Decimal("1"), rounding=ROUND_HALF_UP)))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+
+def is_cache_reuse_ratio_field(field: str) -> bool:
+    return "cache_reuse_ratio" in field
+
+
+def rounded_cache_reuse_ratio_value(value: Any) -> Any:
+    if value in (None, ""):
+        return value
+    try:
+        return str(Decimal(str(value)).quantize(Decimal("0.001"), rounding=ROUND_HALF_UP))
+    except (InvalidOperation, TypeError, ValueError):
+        return value
+
+
+def report_csv_value(field: str, value: Any) -> Any:
+    if is_ms_field(field):
+        return rounded_ms_value(value)
+    if is_cache_reuse_ratio_field(field):
+        return rounded_cache_reuse_ratio_value(value)
+    return value
+
+
+def report_csv_row(fields: list[str], row: dict[str, Any]) -> dict[str, Any]:
+    return {field: report_csv_value(field, row.get(field)) for field in fields}
+
+
+def copy_report_csv(source: Path, destination: Path) -> None:
+    try:
+        with source.open(newline="") as infile:
+            reader = csv.DictReader(infile)
+            fields = reader.fieldnames or []
+            rows = list(reader)
+    except csv.Error:
+        shutil.copy2(source, destination)
+        return
+
+    if not fields:
+        shutil.copy2(source, destination)
+        return
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with destination.open("w", newline="") as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=fields)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(report_csv_row(fields, row))
 
 
 def as_bool(value: Any) -> bool | None:
@@ -670,7 +733,8 @@ def write_transfer_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
-        writer.writerows(rows)
+        for row in rows:
+            writer.writerow(report_csv_row(fields, row))
 
 
 INSTRUMENTATION_OVERHEAD_FIELDS = [
@@ -840,12 +904,12 @@ def write_instrumentation_overhead_md(path: Path, rows: list[dict[str, Any]], *,
                 profile=row.get("profile"),
                 events=row.get("events"),
                 data=format_metric(row.get("data_mb")),
-                transfer=format_metric(row.get("transfer_time_ms")),
-                logger=format_metric(row.get("logger_overhead_ms")),
+                transfer=format_metric(row.get("transfer_time_ms"), field="transfer_time_ms"),
+                logger=format_metric(row.get("logger_overhead_ms"), field="logger_overhead_ms"),
                 pct=format_metric(row.get("overhead_pct")),
-                token=format_metric(row.get("token_overhead_ms")),
-                sync=format_metric(row.get("sync_overhead_ms")),
-                json_write=format_metric(row.get("json_write_overhead_ms")),
+                token=format_metric(row.get("token_overhead_ms"), field="token_overhead_ms"),
+                sync=format_metric(row.get("sync_overhead_ms"), field="sync_overhead_ms"),
+                json_write=format_metric(row.get("json_write_overhead_ms"), field="json_write_overhead_ms"),
                 slowest=row.get("slowest_overhead_component") or "-",
             )
         )
@@ -1377,7 +1441,7 @@ def write_subrequest_csv(path: Path, rows: list[dict[str, Any]], run_level: dict
                 "run_hint_provider": run_level.get("hint_provider"),
             }
             out.update({field: row.get(field) for field in fields if field not in out})
-            writer.writerow(out)
+            writer.writerow(report_csv_row(fields, out))
 
 
 def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str, Any]) -> None:
@@ -1485,7 +1549,7 @@ def write_phase_csv(path: Path, rows: list[dict[str, Any]], run_level: dict[str,
                 "git_diff_nonempty": run_level.get("git_diff_nonempty"),
             }
             out.update({field: row.get(field) for field in fields if field not in out})
-            writer.writerow(out)
+            writer.writerow(report_csv_row(fields, out))
 
 
 def normalize_step_results(value: Any) -> list[dict[str, Any]]:
@@ -1893,7 +1957,7 @@ def write_agent_behavior_csv(path: Path, summary: dict[str, Any]) -> None:
                 "git_diff_nonempty": run.get("git_diff_nonempty"),
             }
             out.update({field: phase.get(field) for field in fields if field not in out})
-            writer.writerow(out)
+            writer.writerow(report_csv_row(fields, out))
 
 
 def write_agent_behavior_md(path: Path, summary: dict[str, Any]) -> None:
@@ -1929,7 +1993,7 @@ def write_agent_behavior_md(path: Path, summary: dict[str, Any]) -> None:
                 worker_subrequests=phase.get("worker_subrequest_count", 0),
                 tool_calls=phase.get("tool_call_count", 0),
                 tools=phase.get("tools_used", "none"),
-                ttft="n/a" if phase.get("ttft_ms_avg") is None else f"{as_float(phase.get('ttft_ms_avg')):.3f}",
+                ttft=format_metric(phase.get("ttft_ms_avg"), field="ttft_ms_avg"),
                 cache_hit=phase.get("cache_hit", False),
                 cached=phase.get("cached_token_count_max", 0),
                 h2d=as_float(phase.get("transfer_host_to_device_kv_mb")),
@@ -2103,7 +2167,7 @@ def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> 
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field) for field in fields})
+            writer.writerow(report_csv_row(fields, row))
 
 
 def write_aggregate_tool_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
@@ -2346,7 +2410,7 @@ def write_execution_prompt_summary_csv(path: Path, rows: list[dict[str, Any]]) -
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field) for field in fields})
+            writer.writerow(report_csv_row(fields, row))
 
 
 def write_execution_prompt_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
@@ -2446,7 +2510,7 @@ def write_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field) for field in fields})
+            writer.writerow(report_csv_row(fields, row))
 
 
 def write_task_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
@@ -2565,7 +2629,7 @@ def write_rows_csv(path: Path, rows: list[dict[str, Any]], fields: list[str]) ->
         writer = csv.DictWriter(handle, fieldnames=fields, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field) for field in fields})
+            writer.writerow(report_csv_row(fields, row))
 
 
 AGG_PHASE_FIELDS = [
@@ -2761,9 +2825,15 @@ def aggregate_hint_impact_rows(phase_rows: list[dict[str, Any]]) -> list[dict[st
     return rows
 
 
-def format_metric(value: Any, digits: int = 3) -> str:
+def format_metric(value: Any, digits: int = 3, *, field: str | None = None) -> str:
     if value in (None, ""):
         return "n/a"
+    if field and is_ms_field(field):
+        rounded = rounded_ms_value(value)
+        return str(rounded) if rounded not in (None, "") else "n/a"
+    if field and is_cache_reuse_ratio_field(field):
+        rounded = rounded_cache_reuse_ratio_value(value)
+        return str(rounded) if rounded not in (None, "") else "n/a"
     try:
         return f"{float(value):.{digits}f}"
     except (TypeError, ValueError):
@@ -2934,7 +3004,7 @@ def write_latest_request_phase_md(path: Path, rows: list[dict[str, Any]], *, tit
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
                 request=row.get("subrequest_index") if row.get("subrequest_index") not in (None, "") else "-",
-                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms")), field="ttft_ms"),
                 reuse=format_metric(row.get("cache_reuse_ratio")),
                 cached=format_metric(row.get("cached_token_count"), digits=0),
                 recomputed=format_metric(row.get("recomputed_prefix_tokens"), digits=0),
@@ -2966,8 +3036,8 @@ def write_hint_impact_md(path: Path, rows: list[dict[str, Any]], *, title: str) 
                 requests=row.get("request_count"),
                 direct=format_metric(row.get("direct_transfer_attribution_rate")),
                 worker=format_metric(row.get("worker_runtime_json_match_rate")),
-                p50=format_metric(row.get("ttft_ms_p50")),
-                p95=format_metric(row.get("ttft_ms_p95")),
+                p50=format_metric(row.get("ttft_ms_p50"), field="ttft_ms_p50"),
+                p95=format_metric(row.get("ttft_ms_p95"), field="ttft_ms_p95"),
                 reuse=format_metric(row.get("cache_reuse_ratio_avg")),
                 h2d=format_metric(row.get("host_to_device_kv_mb_total")),
                 d2h=format_metric(row.get("device_to_host_kv_mb_total")),
@@ -3007,7 +3077,7 @@ def write_latest_phase_md(path: Path, rows: list[dict[str, Any]], *, title: str)
                 hint=row.get("hint_profile"),
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
-                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms")), field="ttft_ms"),
                 reuse=format_metric(row.get("cache_reuse_ratio")),
                 cached=format_metric(row.get("cached_token_count"), digits=0),
                 direct=row.get("transfer_request_id_matched"),
@@ -3036,7 +3106,7 @@ def write_latest_subrequest_md(path: Path, rows: list[dict[str, Any]], *, title:
                 phase=row.get("phase"),
                 phase_request=row.get("phase_request_index") if row.get("phase_request_index") not in (None, "") else "-",
                 index=row.get("subrequest_index"),
-                ttft=format_metric(nonnegative_metric(row.get("ttft_ms"))),
+                ttft=format_metric(nonnegative_metric(row.get("ttft_ms")), field="ttft_ms"),
                 reuse=format_metric(row.get("cache_reuse_ratio")),
                 direct=row.get("transfer_request_id_matched"),
                 window=row.get("transfer_time_window_matched"),
@@ -3065,7 +3135,7 @@ def write_latest_transfer_md(path: Path, rows: list[dict[str, Any]], *, title: s
                 direction=row.get("direction"),
                 count=row.get("count"),
                 kv_mb=format_metric(row.get("kv_num_mb_estimated")),
-                cuda_ms=format_metric(row.get("elapsed_ms_cuda_sync")),
+                cuda_ms=format_metric(row.get("elapsed_ms_cuda_sync"), field="elapsed_ms_cuda_sync"),
                 tokens=format_metric(row.get("semantic_token_count"), digits=0),
             )
         )
@@ -3369,7 +3439,7 @@ def write_agent_tool_calls_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         for row in rows:
-            writer.writerow({field: row.get(field) for field in fields})
+            writer.writerow(report_csv_row(fields, row))
 
 
 def write_agent_tool_calls_md(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -3402,6 +3472,15 @@ def write_agent_tool_calls_md(path: Path, rows: list[dict[str, Any]]) -> None:
 def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, Any]) -> None:
     def display(value: Any) -> Any:
         return "n/a" if value in (None, "") else value
+
+    def display_field(field: str, value: Any) -> Any:
+        if value in (None, ""):
+            return "n/a"
+        if is_ms_field(field):
+            return rounded_ms_value(value)
+        if is_cache_reuse_ratio_field(field):
+            return rounded_cache_reuse_ratio_value(value)
+        return value
 
     transfer = metrics["transfer_totals"]
     outcome = metrics["agent_outcome"]
@@ -3447,17 +3526,17 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
         )
         for row in phase_rows:
             lines.append(
-                "| {phase} | {latency} | {ttft} | {ttft_source} | {prompt} | {output} | {hit} | {cached} | {recomputed} | {ratio:.4f} |".format(
+                "| {phase} | {latency} | {ttft} | {ttft_source} | {prompt} | {output} | {hit} | {cached} | {recomputed} | {ratio} |".format(
                     phase=row.get("phase", ""),
-                    latency=display(row.get("latency_ms")),
-                    ttft=display(row.get("ttft_ms")),
+                    latency=display_field("latency_ms", row.get("latency_ms")),
+                    ttft=display_field("ttft_ms", row.get("ttft_ms")),
                     ttft_source=display(row.get("ttft_source")),
                     prompt=display(row.get("prompt_tokens")),
                     output=display(row.get("output_tokens")),
                     hit=display(row.get("cache_hit")),
                     cached=display(row.get("cached_token_count")),
                     recomputed=display(row.get("recomputed_prefix_tokens")),
-                    ratio=as_float(row.get("cache_reuse_ratio")),
+                    ratio=display_field("cache_reuse_ratio", row.get("cache_reuse_ratio")),
                 )
             )
     lines.extend(
@@ -3469,7 +3548,7 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
             f"- Device to host present: `{transfer['has_device_to_host']}`",
             f"- Host to device present: `{transfer['has_host_to_device']}`",
             f"- Estimated KV MB: `{transfer['kv_num_mb_estimated']:.3f}`",
-            f"- CUDA sync timing ms: `{transfer['elapsed_ms_cuda_sync']:.3f}`",
+            f"- CUDA sync timing ms: `{format_metric(transfer['elapsed_ms_cuda_sync'], field='elapsed_ms_cuda_sync')}`",
             f"- Unique semantic token hashes: `{transfer['unique_semantic_token_hashes']}`",
             "",
         ]
@@ -3491,13 +3570,13 @@ def write_summary_md(path: Path, manifest: dict[str, Any], metrics: dict[str, An
         )
         for row in subrequest_rows:
             lines.append(
-                "| {phase} | {index} | {ttft} | {prompt} | {cached} | {ratio:.4f} | {sglang_request_id} | {transfer_matched} | {time_matched} |".format(
+                "| {phase} | {index} | {ttft} | {prompt} | {cached} | {ratio} | {sglang_request_id} | {transfer_matched} | {time_matched} |".format(
                     phase=row.get("phase", ""),
                     index=row.get("subrequest_index", ""),
-                    ttft=display(row.get("ttft_ms")),
+                    ttft=display_field("ttft_ms", row.get("ttft_ms")),
                     prompt=display(row.get("prompt_tokens")),
                     cached=display(row.get("cached_token_count")),
-                    ratio=as_float(row.get("cache_reuse_ratio")),
+                    ratio=display_field("cache_reuse_ratio", row.get("cache_reuse_ratio")),
                     sglang_request_id=display(row.get("sglang_request_id")),
                     transfer_matched=display(row.get("transfer_request_id_matched")),
                     time_matched=display(row.get("transfer_time_window_matched")),
@@ -3829,7 +3908,7 @@ def build_report(root: Path, result_dir: Path, transfer_log: Path | None, out_ro
     ]:
         source = result_dir / rel
         if source.exists():
-            shutil.copy2(source, out_dir / source.name)
+            copy_report_csv(source, out_dir / source.name)
 
     return out_dir
 
