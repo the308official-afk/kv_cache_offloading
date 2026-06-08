@@ -91,6 +91,7 @@ empty_dirs=(
   "experiments/raw/lpx_decode_split/profiles"
   "experiments/parsed"
   "experiments/reports/runs"
+  "experiments/reports/batches"
   "experiments/reports/comparisons"
   "experiments/reports/deepagents_swebench_profile"
   "experiments/reports/lpx_decode_split"
@@ -105,6 +106,9 @@ top_level_report_patterns=(
   "experiments/reports/all_runs_*"
   "experiments/reports/latest_runs_*"
   "experiments/reports/latest_run_*"
+  "experiments/reports/multi_model_batch_overview.csv"
+  "experiments/reports/prompt_evolution_*.csv"
+  "experiments/reports/sglang_logging_profile_walltime.csv"
 )
 
 targets=()

@@ -84,3 +84,25 @@ Core idea: Real serving workloads have many attention shapes, KV-cache layouts,
 and batching patterns. FlashInfer provides fast, customizable GPU kernels for
 these cases, so serving systems like SGLang and vLLM can run attention and
 related inference steps efficiently instead of relying on one generic kernel.
+
+## FlashAttention-3: Fast and Accurate Attention with Asynchrony and Low-precision
+
+Core idea: Modern Hopper GPUs can move data and do matrix math at the same
+time, but older attention kernels do not fully use that ability. FlashAttention-3
+overlaps data movement with computation, interleaves attention math more
+carefully, and uses FP8 support to make attention faster while keeping accuracy
+under control.
+
+## RetroInfer: A Vector-Storage Approach for Scalable Long-Context LLM Inference
+
+Core idea: Very long contexts create huge KV caches, but each new token often
+needs only a small important part of that old context. RetroInfer stores KV
+cache like a vector index, keeps much of it in CPU memory, and retrieves the
+most useful KV entries for the current token instead of scanning everything.
+
+## TurboQuant: Redefining AI Efficiency with Extreme Compression
+
+Core idea: KV cache vectors can be stored with far fewer bits if they are
+rotated and quantized carefully. TurboQuant compresses KV cache online with
+methods like PolarQuant and QJL, reducing memory and bandwidth needs while
+trying to preserve the attention scores that decide which old tokens matter.

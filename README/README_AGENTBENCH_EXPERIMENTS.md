@@ -840,9 +840,10 @@ Delete generated experiment data and reports:
 ./experiments/scripts/clean_experiment_data.sh --yes
 ```
 
-This clears `experiments/raw`, `experiments/parsed`, generated files under
-`experiments/reports`, and legacy `agentbench/results` data if present. It
-preserves experiment scripts, READMEs, upstream repos, and instrumentation code.
+This clears `experiments/raw`, `experiments/parsed`, run reports, batch reports,
+top-level generated summary CSV/Markdown files under `experiments/reports`, and
+legacy `agentbench/results` data if present. It preserves experiment scripts,
+READMEs, upstream repos, and instrumentation code.
 
 ### Stop Dynamo
 
