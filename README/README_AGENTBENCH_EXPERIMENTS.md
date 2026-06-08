@@ -634,6 +634,90 @@ cat experiments/reports/all_runs_task_summary.csv
 cat experiments/reports/all_runs_execution_prompts.csv
 ```
 
+## Experiment 7: Multi-Model Multi-Task Batch
+
+Use this to run Experiment 6 across multiple LLMs. Dynamo is restarted once per
+model, waits for the model to register, then runs a real smoke-test request
+before sending AgentBench requests.
+
+Pass models directly to the script:
+
+```bash
+cd ~/kv_cache_offloading
+
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=1
+
+START_INDEX=0 \
+END_INDEX=5 \
+HINT_PROFILE=high-reuse \
+HINT_PROVIDER=agentbench \
+./agentbench/run_swebench_multi_model_batch_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct \
+  Qwen/Qwen2.5-7B-Instruct \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct
+```
+
+Or edit the model list:
+
+```bash
+cat agentbench/model_lists/multi_model_batch.txt
+```
+
+Default file format:
+
+```text
+# One model per line. Lines starting with # are ignored.
+Qwen/Qwen2.5-Coder-7B-Instruct
+Qwen/Qwen2.5-7B-Instruct
+```
+
+To watch the worker while each model starts:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Readiness behavior:
+
+```text
+1. stop Dynamo
+2. start Dynamo with the next model
+3. wait for /v1/models registration
+4. run ./run_dynamo_single_host.sh test until it succeeds
+5. run Experiment 6 for START_INDEX..END_INDEX
+6. move to the next model
+```
+
+Outputs:
+
+```text
+experiments/reports/batches/<multi_model_batch_id>/
+  multi_model_progress.log
+  multi_model_overview.csv
+  <model_safe_name>_smoke_test.log
+
+experiments/reports/batches/<multi_model_batch_id>_<model_safe_name>/
+  progress.log
+  progress_overview.csv
+
+experiments/reports/multi_model_batch_overview.csv
+```
+
+Useful knobs:
+
+```text
+positional model args              Highest-priority model source.
+MODELS='model-a,model-b'          Override the model-list file.
+MODEL_LIST_FILE=...               Read one model per line.
+MODEL_SMOKE_RETRIES=10           Smoke-test retry count.
+MODEL_SMOKE_DELAY_SECS=10        Seconds between smoke-test retries.
+MODEL_COOLDOWN_SECS=10           Extra wait after smoke-test success.
+STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
+```
+
 ## Utilities
 
 ### Latest Result And Report

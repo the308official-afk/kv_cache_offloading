@@ -12,6 +12,7 @@ APP_VARIANT="${APP_VARIANT:-upstream_deploy_coding_agent}"
 DATASET="${DATASET:-ScaleAI/SWE-bench_Pro}"
 SPLIT="${SPLIT:-test}"
 HINT_PROFILE="${HINT_PROFILE:-high-reuse}"
+HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 START_INDEX="${START_INDEX:-0}"
 END_INDEX="${END_INDEX:-4}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
@@ -73,6 +74,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
     --dataset "${DATASET}" \
     --split "${SPLIT}" \
     --index "${INDEX}" \
+    --hint-provider "${HINT_PROVIDER}" \
     --hint-profile "${HINT_PROFILE}" \
     --prompt-evolution-value-char-limit "${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}" \
     --quiet-checkpoints \
