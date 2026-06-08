@@ -1751,8 +1751,8 @@ def prompt_evolution_phase_cell(tool_count: Any, tools_used: Any) -> str:
     count = as_int(tool_count)
     tools = str(tools_used or "none").strip()
     if not tools or tools == "none":
-        tools = "-"
-    return f"{count} \u00b7 {tools}"
+        tools = "none"
+    return f"{count} - {tools}"
 
 
 def average(values: list[float]) -> float | None:
@@ -2198,7 +2198,75 @@ def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> 
             writer.writerow(report_csv_row(fields, row))
 
 
-def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+def prompt_evolution_stage_after(report_dir: Path, run: dict[str, Any], file_name: str) -> dict[str, Any]:
+    result_dir = resolve_agentbench_result_dir(report_dir, run)
+    if not result_dir:
+        return {}
+    payload = load_json(result_dir / "prompt_evolution_values" / file_name, {})
+    return dict_or_empty(payload.get("after"))
+
+
+def prompt_evolution_phase_column(phase: Any) -> str:
+    text = str(phase or "").strip().lower()
+    if text.startswith("planning"):
+        return "Planning"
+    if text.startswith("execution"):
+        return "Execution"
+    if text.startswith("patch_generation") or text.startswith("patch"):
+        return "Patch Gen"
+    if text.startswith("review"):
+        return "Review"
+    return "Other"
+
+
+def aggregate_prompt_evolution_run_overview_row(
+    report_dir: Path,
+    fallback: dict[str, Any],
+) -> dict[str, Any] | None:
+    summary = load_phase_summary(report_dir)
+    run = dict_or_empty(summary.get("run"))
+    if not run:
+        return fallback or None
+
+    final_request = prompt_evolution_stage_after(report_dir, run, "03_final_model_request.json")
+    model_behavior = prompt_evolution_stage_after(report_dir, run, "07_model_behavior.json")
+    request_context = dict_or_empty(final_request.get("request_context"))
+
+    if not final_request and not model_behavior:
+        return fallback
+
+    phase = request_context.get("phase")
+    phase_column = prompt_evolution_phase_column(phase)
+    tool_names = list_from_any(model_behavior.get("observed_tool_call_names"))
+    tool_count = as_int(model_behavior.get("observed_tool_call_count"), len(tool_names))
+    phase_cells = {
+        "Planning": prompt_evolution_phase_cell(0, "none"),
+        "Execution": prompt_evolution_phase_cell(0, "none"),
+        "Patch Gen": prompt_evolution_phase_cell(0, "none"),
+        "Review": prompt_evolution_phase_cell(0, "none"),
+        "Other": prompt_evolution_phase_cell(0, "none"),
+    }
+    phase_cells[phase_column] = prompt_evolution_phase_cell(tool_count, display_tools(tool_names))
+
+    step_index = request_context.get("step_index")
+    steps = as_int(step_index) + 1 if step_index not in (None, "") else fallback.get("execution_steps", "")
+
+    return {
+        "run_short": run.get("run_short") or fallback.get("run_short"),
+        "repo": run.get("repo") or fallback.get("repo"),
+        "model": final_request.get("model") or run.get("model") or fallback.get("model"),
+        "execution_steps": steps,
+        "planning_cell": phase_cells["Planning"],
+        "execution_cell": phase_cells["Execution"],
+        "patch_generation_cell": phase_cells["Patch Gen"],
+        "review_cell": phase_cells["Review"],
+        "other_cell": phase_cells["Other"],
+        "total_tool_calls": tool_count,
+        "patch_bytes": run.get("patch_bytes", fallback.get("patch_bytes")),
+    }
+
+
+def write_prompt_evolution_run_overview_from_prompt_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "Run",
         "Repo",
@@ -2223,26 +2291,11 @@ def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any
                     "Repo": repo_display_name(row.get("repo")),
                     "Model": row.get("model", ""),
                     "Steps": row.get("execution_steps", ""),
-                    "Planning": prompt_evolution_phase_cell(
-                        row.get("planning_tool_calls"),
-                        row.get("planning_tools"),
-                    ),
-                    "Execution": prompt_evolution_phase_cell(
-                        row.get("execution_phase_tool_calls"),
-                        row.get("execution_phase_tools"),
-                    ),
-                    "Patch Gen": prompt_evolution_phase_cell(
-                        row.get("patch_generation_tool_calls"),
-                        row.get("patch_generation_tools"),
-                    ),
-                    "Review": prompt_evolution_phase_cell(
-                        row.get("review_tool_calls"),
-                        row.get("review_tools"),
-                    ),
-                    "Other": prompt_evolution_phase_cell(
-                        row.get("other_phase_tool_calls"),
-                        row.get("other_phase_tools"),
-                    ),
+                    "Planning": row.get("planning_cell", prompt_evolution_phase_cell(0, "none")),
+                    "Execution": row.get("execution_cell", prompt_evolution_phase_cell(0, "none")),
+                    "Patch Gen": row.get("patch_generation_cell", prompt_evolution_phase_cell(0, "none")),
+                    "Review": row.get("review_cell", prompt_evolution_phase_cell(0, "none")),
+                    "Other": row.get("other_cell", prompt_evolution_phase_cell(0, "none")),
                     "Total": row.get("total_tool_calls", ""),
                     "Patch": display_bytes_short(row.get("patch_bytes")),
                 }
@@ -2276,13 +2329,24 @@ def write_aggregate_tool_summary_md(path: Path, rows: list[dict[str, Any]], *, t
 
 def refresh_aggregate_tool_summaries(root: Path, runs_root: Path, *, latest_limit: int = 10) -> None:
     run_dirs = iter_run_report_dirs(runs_root)
-    rows = [aggregate_run_tool_summary(run_dir) for run_dir in run_dirs]
-    rows = [row for row in rows if row]
+    rows: list[dict[str, Any]] = []
+    prompt_rows: list[dict[str, Any]] = []
+    for run_dir in run_dirs:
+        row = aggregate_run_tool_summary(run_dir)
+        if not row:
+            continue
+        rows.append(row)
+        prompt_row = aggregate_prompt_evolution_run_overview_row(run_dir, row)
+        if prompt_row:
+            prompt_rows.append(prompt_row)
     reports_root = root / "experiments/reports"
     reports_root.mkdir(parents=True, exist_ok=True)
 
     write_aggregate_tool_summary_csv(reports_root / "all_runs_overview.csv", rows)
-    write_prompt_evolution_run_overview_csv(reports_root / "prompt_evolution_run_overview.csv", rows)
+    write_prompt_evolution_run_overview_from_prompt_csv(
+        reports_root / "prompt_evolution_run_overview.csv",
+        prompt_rows,
+    )
     write_aggregate_tool_summary_md(
         reports_root / "all_runs_overview.md",
         rows,
