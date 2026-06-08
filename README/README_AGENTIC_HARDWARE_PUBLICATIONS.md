@@ -26,3 +26,47 @@ long runs, saving and reloading the cache is often better than throwing it away.
 The prediction is updated during generation using a small model that reads LLM
 hidden states, so the scheduler can start moving KV cache before memory is
 fully exhausted.
+
+## Efficient Multi-round LLM Inference over Disaggregated Serving
+
+Core idea: Agent and retrieval workloads do not have just one prefill followed
+by one decode. After each tool or retrieval result, the system gets a new small
+prefill step before decoding continues. AMPD decides in real time whether each
+of these prefill steps should run on a prefill worker or on the decode worker,
+so the system avoids both slow first-token latency and decode slowdowns.
+
+## Mooncake: A KVCache-centric Disaggregated Architecture for LLM Serving
+
+Core idea: Make KV cache the center of the serving system. Mooncake separates
+prefill and decode workers, but also uses CPU memory and SSD as extra places to
+store KV cache. Its scheduler tries to keep useful KV cache available while
+meeting latency goals, instead of treating KV cache as a temporary byproduct of
+model execution.
+
+## DistServe: Disaggregating Prefill and Decoding for Goodput-optimized LLM Serving
+
+Core idea: Reading the prompt and generating tokens stress the system in
+different ways. DistServe puts prefill and decode on different GPU groups so a
+long prompt does not slow down token generation for other requests, and busy
+decoding does not delay the first token for new requests.
+
+## P/D-Serve: Serving Disaggregated Large Language Model at Scale
+
+Core idea: Split prompt reading and token generation at cluster scale, then keep
+adjusting how much hardware is assigned to each side. P/D-Serve models the
+whole prefill/decode pipeline, routes work to avoid idle or overloaded workers,
+and optimizes KV-cache transfer between the two sides.
+
+## Revisiting Disaggregated Large Language Model Serving for Performance and Energy Implications
+
+Core idea: Splitting prefill and decode is not automatically better. The gain
+depends on request load, how fast KV cache can move between workers, and the
+energy cost of using separate hardware. The paper is a warning to measure the
+full system before assuming disaggregation saves time or power.
+
+## SGLang: Efficient Execution of Structured Language Model Programs
+
+Core idea: Many LLM applications are programs with repeated prompts, branches,
+tool calls, and structured outputs. SGLang gives those programs a runtime that
+can reuse shared KV cache with RadixAttention and speed up constrained outputs,
+instead of treating every model call as a separate plain chat request.

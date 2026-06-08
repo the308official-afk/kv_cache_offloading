@@ -610,7 +610,7 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 
 START_INDEX=0 \
-END_INDEX=30 \
+END_INDEX=5 \
 HINT_PROFILE=high-reuse \
 ./agentbench/run_swebench_batch_single_host.sh
 ```
