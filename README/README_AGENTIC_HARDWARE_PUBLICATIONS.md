@@ -70,3 +70,17 @@ Core idea: Many LLM applications are programs with repeated prompts, branches,
 tool calls, and structured outputs. SGLang gives those programs a runtime that
 can reuse shared KV cache with RadixAttention and speed up constrained outputs,
 instead of treating every model call as a separate plain chat request.
+
+## Hydragen: High-Throughput LLM Inference with Shared Prefixes
+
+Core idea: When many requests start with the same long prompt, do not make each
+request read the shared KV cache separately. Hydragen splits attention into the
+shared prefix part and the per-request suffix part, so the shared work can be
+batched into faster hardware-friendly operations.
+
+## FlashInfer: Efficient and Customizable Attention Engine for LLM Inference Serving
+
+Core idea: Real serving workloads have many attention shapes, KV-cache layouts,
+and batching patterns. FlashInfer provides fast, customizable GPU kernels for
+these cases, so serving systems like SGLang and vLLM can run attention and
+related inference steps efficiently instead of relying on one generic kernel.
