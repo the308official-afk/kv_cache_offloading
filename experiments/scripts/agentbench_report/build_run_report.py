@@ -1727,6 +1727,34 @@ def display_bytes(num_bytes: Any) -> str:
     return f"{value / (1024 * 1024):.2f} MB"
 
 
+def display_bytes_short(num_bytes: Any) -> str:
+    value = as_float(num_bytes)
+    if value < 1024:
+        return f"{int(value)} B"
+    if value < 1024 * 1024:
+        return f"{value / 1024:.1f} KB"
+    return f"{value / (1024 * 1024):.2f} MB"
+
+
+def compact_model_label(model: Any) -> str:
+    text = str(model or "")
+    if "Qwen3" in text:
+        return "Qwen 3"
+    if "Qwen2.5" in text:
+        return "Qwen 2.5"
+    if "/" in text:
+        text = text.rsplit("/", 1)[-1]
+    return compact_text(text, limit=18) if text else "unknown"
+
+
+def prompt_evolution_phase_cell(tool_count: Any, tools_used: Any) -> str:
+    count = as_int(tool_count)
+    tools = str(tools_used or "none").strip()
+    if not tools or tools == "none":
+        tools = "-"
+    return f"{count} \u00b7 {tools}"
+
+
 def average(values: list[float]) -> float | None:
     return sum(values) / len(values) if values else None
 
@@ -2170,6 +2198,57 @@ def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> 
             writer.writerow(report_csv_row(fields, row))
 
 
+def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "Run",
+        "Repo",
+        "Model",
+        "Steps",
+        "Planning",
+        "Execution",
+        "Patch Gen",
+        "Review",
+        "Other",
+        "Total",
+        "Patch",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "Run": row.get("run_short", ""),
+                    "Repo": repo_display_name(row.get("repo")),
+                    "Model": row.get("model", ""),
+                    "Steps": row.get("execution_steps", ""),
+                    "Planning": prompt_evolution_phase_cell(
+                        row.get("planning_tool_calls"),
+                        row.get("planning_tools"),
+                    ),
+                    "Execution": prompt_evolution_phase_cell(
+                        row.get("execution_phase_tool_calls"),
+                        row.get("execution_phase_tools"),
+                    ),
+                    "Patch Gen": prompt_evolution_phase_cell(
+                        row.get("patch_generation_tool_calls"),
+                        row.get("patch_generation_tools"),
+                    ),
+                    "Review": prompt_evolution_phase_cell(
+                        row.get("review_tool_calls"),
+                        row.get("review_tools"),
+                    ),
+                    "Other": prompt_evolution_phase_cell(
+                        row.get("other_phase_tool_calls"),
+                        row.get("other_phase_tools"),
+                    ),
+                    "Total": row.get("total_tool_calls", ""),
+                    "Patch": display_bytes_short(row.get("patch_bytes")),
+                }
+            )
+
+
 def write_aggregate_tool_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
     lines = [
         f"# {title}",
@@ -2203,6 +2282,7 @@ def refresh_aggregate_tool_summaries(root: Path, runs_root: Path, *, latest_limi
     reports_root.mkdir(parents=True, exist_ok=True)
 
     write_aggregate_tool_summary_csv(reports_root / "all_runs_overview.csv", rows)
+    write_prompt_evolution_run_overview_csv(reports_root / "prompt_evolution_run_overview.csv", rows)
     write_aggregate_tool_summary_md(
         reports_root / "all_runs_overview.md",
         rows,
@@ -2483,6 +2563,9 @@ def aggregate_task_summary_row(report_dir: Path) -> dict[str, Any] | None:
         "runtime": run.get("runtime"),
         "model": run.get("model"),
         "hint_profile": run.get("hint_profile"),
+        "patch": "Yes" if as_bool(run.get("patch_nonempty")) is True else "No",
+        "patch_bytes": run.get("patch_bytes"),
+        "base_commit_short": str(task.get("base_commit") or "")[:8],
     }
 
 
@@ -2513,6 +2596,32 @@ def write_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
             writer.writerow(report_csv_row(fields, row))
 
 
+def write_prompt_evolution_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    fields = [
+        "Run",
+        "Repo",
+        "Task Summary",
+        "Expected Action",
+        "Patch",
+        "Base Commit",
+    ]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "Run": row.get("run_short", ""),
+                    "Repo": repo_display_name(row.get("repo")),
+                    "Task Summary": row.get("problem_statement_summary", ""),
+                    "Expected Action": row.get("expected_agent_action", ""),
+                    "Patch": row.get("patch", "No"),
+                    "Base Commit": first_nonempty(row.get("base_commit_short"), str(row.get("base_commit") or "")[:8]),
+                }
+            )
+
+
 def write_task_summary_md(path: Path, rows: list[dict[str, Any]], *, title: str) -> None:
     lines = [
         f"# {title}",
@@ -2540,6 +2649,7 @@ def refresh_task_summaries(root: Path, runs_root: Path, *, latest_limit: int = 1
     reports_root = root / "experiments/reports"
     reports_root.mkdir(parents=True, exist_ok=True)
     write_task_summary_csv(reports_root / "all_runs_task_summary.csv", rows)
+    write_prompt_evolution_task_summary_csv(reports_root / "prompt_evolution_task_summary.csv", rows)
     latest_rows = rows[-latest_limit:]
     write_task_summary_md(
         reports_root / "latest_runs_task_summary.md",
