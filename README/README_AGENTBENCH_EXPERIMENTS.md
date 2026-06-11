@@ -951,7 +951,7 @@ if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 fi
 
-SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
+SGLANG_IMAGE="$WORKER_IMAGE" \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
 if [ -d upstream/sglang/python/sglang ]; then
@@ -980,6 +980,10 @@ done
 
 If you skip this step, the retention probe still runs, but the
 `sglang_cache_*` columns will stay empty/zero.
+
+Use the same image for `SGLANG_IMAGE` and `WORKER_IMAGE`. If you extract
+SGLang from a different image, the source overlay can mismatch the worker's
+installed `sgl_kernel` package and the worker can fail during import.
 
 ### Automated Run
 

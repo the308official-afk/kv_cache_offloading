@@ -889,7 +889,7 @@ def _cache_scalar_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
-def log_cache_event(
+def _log_cache_event_impl(
     *,
     function: str,
     action: str,
@@ -969,6 +969,41 @@ def log_cache_event(
                     file=sys.stderr,
                     flush=True,
                 )
+
+
+def log_cache_event(
+    *,
+    function: str,
+    action: str,
+    locals_dict: dict[str, Any],
+    error: str | None = None,
+) -> None:
+    try:
+        _log_cache_event_impl(
+            function=function,
+            action=action,
+            locals_dict=locals_dict,
+            error=error,
+        )
+    except Exception as exc:  # pragma: no cover - instrumentation must not break serving.
+        if _verbose():
+            try:
+                print(
+                    _PREFIX
+                    + json.dumps(
+                        {
+                            "event": "sglang.cache_log_error",
+                            "function": function,
+                            "action": action,
+                            "error": repr(exc),
+                        },
+                        sort_keys=True,
+                    ),
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except Exception:
+                pass
 
 
 def _index_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:

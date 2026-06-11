@@ -228,6 +228,37 @@ worker_args_for_kv_tier_mode() {
   echo "${args}"
 }
 
+append_worker_debug_to_log() {
+  local smoke_log="$1"
+
+  if ! command -v docker >/dev/null 2>&1; then
+    return
+  fi
+
+  {
+    echo
+    echo "==== dynamo-sglang-worker docker state ===="
+    docker ps -a --filter "name=dynamo-sglang-worker" || true
+    echo
+    echo "==== dynamo-sglang-worker inspect state ===="
+    docker inspect dynamo-sglang-worker \
+      --format 'running={{.State.Running}} status={{.State.Status}} exit_code={{.State.ExitCode}} error={{.State.Error}} oom_killed={{.State.OOMKilled}}' \
+      2>/dev/null || true
+    echo
+    echo "==== dynamo-sglang-worker logs tail ===="
+    docker logs --tail 240 dynamo-sglang-worker 2>&1 || true
+  } >> "${smoke_log}" 2>&1
+}
+
+worker_stopped() {
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  local running
+  running="$(docker inspect dynamo-sglang-worker --format '{{.State.Running}}' 2>/dev/null || true)"
+  [[ "${running}" = "false" ]]
+}
+
 smoke_test_model() {
   local model="$1"
   local smoke_log="$2"
@@ -237,6 +268,8 @@ smoke_test_model() {
   local registered_models
   local model_listed
   local payload
+  local response_file
+  local http_code
 
   for ((attempt=1; attempt<=MODEL_SMOKE_RETRIES; attempt++)); do
     echo "Smoke test ${attempt}/${MODEL_SMOKE_RETRIES} for ${model}" | tee -a "${BATCH_LOG}"
@@ -273,14 +306,27 @@ PY
 
     if [[ "${model_listed}" != "1" ]]; then
       echo "Model is not listed yet; waiting ${MODEL_SMOKE_DELAY_SECS}s." >> "${smoke_log}"
+      if worker_stopped; then
+        echo "dynamo-sglang-worker is no longer running." >> "${smoke_log}"
+        append_worker_debug_to_log "${smoke_log}"
+        return 1
+      fi
       sleep "${MODEL_SMOKE_DELAY_SECS}"
       continue
     fi
 
     payload="$("${PYTHON_BIN}" -c 'import json, sys; print(json.dumps({"model": sys.argv[1], "messages": [{"role": "user", "content": "Reply with exactly: OK"}], "max_tokens": 10}))' "${model}")"
-    if curl -fsS "${chat_url}" \
+    response_file="$(mktemp)"
+    http_code="$(curl -sS -o "${response_file}" -w "%{http_code}" "${chat_url}" \
       -H "Content-Type: application/json" \
-      -d "${payload}" >> "${smoke_log}" 2>&1; then
+      -d "${payload}" 2>> "${smoke_log}" || true)"
+    {
+      echo "Smoke chat HTTP status: ${http_code:-<none>}"
+      echo "Smoke chat response body:"
+      cat "${response_file}" 2>/dev/null || true
+    } >> "${smoke_log}" 2>&1
+    rm -f "${response_file}"
+    if [[ "${http_code}" =~ ^2[0-9][0-9]$ ]]; then
       echo "Smoke test passed for ${model}" | tee -a "${BATCH_LOG}"
       return 0
     fi
@@ -292,9 +338,15 @@ PY
       echo "Waiting ${MODEL_SMOKE_DELAY_SECS}s before retry."
       echo
     } >> "${smoke_log}" 2>&1
+    if worker_stopped; then
+      echo "dynamo-sglang-worker stopped after smoke-test failure." >> "${smoke_log}"
+      append_worker_debug_to_log "${smoke_log}"
+      return 1
+    fi
     sleep "${MODEL_SMOKE_DELAY_SECS}"
   done
 
+  append_worker_debug_to_log "${smoke_log}"
   echo "Smoke test failed for ${model}. See ${smoke_log}" | tee -a "${BATCH_LOG}" >&2
   return 1
 }
