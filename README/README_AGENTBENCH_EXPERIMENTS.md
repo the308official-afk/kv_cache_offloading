@@ -924,10 +924,6 @@ gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
 Use this to test whether a protected prompt stays useful in cache after many
 unrelated prompts.
 
-For direct SGLang cache-event evidence, re-run the SGLang patch step after
-pulling these repo changes, then restart Dynamo. The retention reports still run
-without it, but the `sglang_cache_*` columns will stay empty/zero.
-
 The synthetic sequence is:
 
 ```text
@@ -937,6 +933,53 @@ A first request -> many unique distractor requests -> same A request again
 Run this first with `KV_TIER_MODE=gpu_only`. That answers the simplest
 retention question: did prompt A appear to stay in GPU KV cache after pressure
 from distractor prompts?
+
+### Step 0: Prepare Instrumented SGLang
+
+Run this before the automated retention run. It makes sure the Dynamo images
+exist, extracts the SGLang source into the repo, and patches it so SGLang emits
+direct cache events such as `event: "sglang.cache"`.
+
+```bash
+cd ~/kv_cache_offloading
+
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+   ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
+  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+fi
+
+SGLANG_IMAGE=nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2 \
+./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+if [ -d upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+elif [ -d runtime_upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/runtime_upstream/sglang/python/sglang"
+else
+  echo "Could not find extracted SGLang source" >&2
+  exit 1
+fi
+
+python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+  --sglang-root "$SGLANG_ROOT"
+```
+
+Quick patch check:
+
+```bash
+for file in \
+  "$SGLANG_ROOT/srt/mem_cache/memory_pool_host.py" \
+  "$SGLANG_ROOT/srt/mem_cache/radix_cache.py" \
+  "$SGLANG_ROOT/srt/mem_cache/hiradix_cache.py"; do
+  [ -f "$file" ] && grep -n "_sgl_log_cache_event\|_sgl_log_transfer_event" "$file"
+done
+```
+
+If you skip this step, the retention probe still runs, but the
+`sglang_cache_*` columns will stay empty/zero.
 
 ### Automated Run
 
