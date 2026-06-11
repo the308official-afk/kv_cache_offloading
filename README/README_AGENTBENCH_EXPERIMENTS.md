@@ -938,7 +938,8 @@ from distractor prompts?
 
 Run this before the automated retention run. It makes sure the Dynamo images
 exist, extracts the SGLang source into the repo, and patches it so SGLang emits
-direct cache events such as `event: "sglang.cache"`.
+direct cache events such as `event: "sglang.cache"` with your external retention
+probe request IDs attached when the patch is active.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -987,9 +988,10 @@ installed `sgl_kernel` package and the worker can fail during import.
 
 ### Automated Run
 
-This is the default path. It stops Dynamo, starts Dynamo for the selected model,
-waits for readiness, runs the no-hint control, runs each protected-hint probe,
-and writes the reports.
+This is the default path. It gives every hint profile its own fresh Dynamo
+restart and cold cache start, then writes the reports. That prevents the
+`high-priority` or `high-reuse` runs from inheriting warm KV cache from the
+earlier `none` control run.
 
 Pilot:
 
@@ -1053,6 +1055,16 @@ To watch the worker after the wrapper starts Dynamo:
 
 ```bash
 docker logs -f dynamo-sglang-worker
+```
+
+Automated-run behavior:
+
+```text
+1. stop Dynamo
+2. start Dynamo for one model + one KV tier + one hint profile
+3. wait for readiness and pass a smoke test
+4. run that one retention probe
+5. repeat from a fresh start for the next hint profile
 ```
 
 Automated-run outputs:

@@ -99,7 +99,7 @@ _REQUEST_METADATA_ALIASES = {
     "agent_phase": "agent_phase",
     "phase": "phase",
 }
-_REQUEST_CONTEXT_KEYS = ("request_context", "runtime_observability", "nvext")
+_REQUEST_CONTEXT_KEYS = ("request_context", "runtime_observability", "nvext", "sglang_transfer_context")
 _AGENT_HINT_KEYS = ("agent_hints", "hints", "request_hints")
 _REQUEST_LOOKUP_HINTS = (
     "request",
@@ -647,6 +647,11 @@ def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
         request_metadata["request_context_function"] = function
     _attach_overhead(request_metadata, overhead)
     context = _merge_transfer_context_pair(context, request_metadata)
+    _attach_transfer_context_to_locals(
+        function=function,
+        locals_dict=locals_dict,
+        context=context,
+    )
     token = _SEMANTIC_CONTEXT.set(context)
     try:
         yield
@@ -673,6 +678,31 @@ def _merge_transfer_context_pair(
             continue
         merged[key] = copy.deepcopy(value)
     return merged
+
+
+def _attach_transfer_context_to_object(obj: Any, context: dict[str, Any] | None) -> None:
+    if obj is None or not isinstance(context, dict):
+        return
+    try:
+        setattr(obj, "sglang_transfer_context", copy.deepcopy(context))
+    except Exception:
+        return
+
+
+def _attach_transfer_context_to_locals(
+    *,
+    function: str,
+    locals_dict: dict[str, Any],
+    context: dict[str, Any] | None,
+) -> None:
+    if not isinstance(context, dict):
+        return
+
+    for name in ("req", "request", "operation", "op"):
+        _attach_transfer_context_to_object(locals_dict.get(name), context)
+
+    if function.startswith("Req."):
+        _attach_transfer_context_to_object(locals_dict.get("self"), context)
 
 
 def merge_transfer_contexts(contexts: list[dict[str, Any] | None]) -> dict[str, Any] | None:

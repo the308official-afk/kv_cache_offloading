@@ -189,7 +189,8 @@ EOF
 storage_host_path_for_mode() {
   local model_safe="$1"
   local kv_tier_mode="$2"
-  echo "${HOST_FILE_STORAGE_PATH%/}/${RETENTION_PROBE_ID}/${model_safe}/${kv_tier_mode}"
+  local profile_safe="${3:-shared}"
+  echo "${HOST_FILE_STORAGE_PATH%/}/${RETENTION_PROBE_ID}/${model_safe}/${kv_tier_mode}/${profile_safe}"
 }
 
 worker_args_for_kv_tier_mode() {
@@ -450,6 +451,55 @@ run_probe() {
   return 0
 }
 
+iter_hint_profiles() {
+  printf '%s\n' "${CONTROL_HINT_PROFILE}"
+  for hint_profile in ${PROTECTED_HINT_PROFILES}; do
+    if [[ "${hint_profile}" = "${CONTROL_HINT_PROFILE}" ]]; then
+      continue
+    fi
+    printf '%s\n' "${hint_profile}"
+  done
+}
+
+start_dynamo_for_profile() {
+  local model="$1"
+  local kv_tier_mode="$2"
+  local worker_extra_args="$3"
+  local sglang_root="$4"
+  local host_file_storage_path="$5"
+  local file_storage_path="$6"
+  local smoke_log="$7"
+
+  {
+    echo "Stopping Dynamo..."
+  } | tee -a "${BATCH_LOG}"
+  ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
+
+  echo "Starting Dynamo for ${model} with KV tier ${kv_tier_mode}..." | tee -a "${BATCH_LOG}"
+  DYNAMO_MODEL_PATH="${model}" \
+  DYNAMO_SERVED_MODEL_NAME="${model}" \
+  WORKER_EXTRA_ARGS="${worker_extra_args}" \
+  WORKER_SGLANG_DEV_MODE=1 \
+  WORKER_SGLANG_SOURCE_ROOT="${sglang_root}" \
+  HICACHE_STORAGE_HOST_PATH="${host_file_storage_path}" \
+  HICACHE_STORAGE_CONTAINER_PATH="${file_storage_path}" \
+  SGLANG_TRANSFER_LOG=1 \
+  SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE}" \
+  SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING}" \
+  DYN_RUNTIME_JSON_LOGS=1 \
+  DYN_TOOL_CALL_PARSER=hermes \
+  FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
+  WORKER_IMAGE="${WORKER_IMAGE}" \
+  ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
+
+  smoke_test_model "${model}" "${smoke_log}"
+
+  if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
+    echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${BATCH_LOG}"
+    sleep "${MODEL_COOLDOWN_SECS}"
+  fi
+}
+
 write_batch_summary() {
   if [[ -f "${BATCH_MATRIX}" ]]; then
     mkdir -p "$(dirname "${GLOBAL_MATRIX}")"
@@ -546,66 +596,51 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
   for KV_TIER_MODE in ${KV_TIER_MODES}; do
     KV_TIER_SAFE_NAME="$(safe_name "${KV_TIER_MODE}")"
     CURRENT_WORKER_EXTRA_ARGS="$(worker_args_for_kv_tier_mode "${KV_TIER_MODE}")"
-    CURRENT_FILE_STORAGE_PATH=""
-    CURRENT_HOST_FILE_STORAGE_PATH=""
-    SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_smoke_test.log"
-
-    if [[ "${KV_TIER_MODE}" = "gpu_cpu_storage" ]]; then
-      CURRENT_FILE_STORAGE_PATH="${FILE_STORAGE_PATH}"
-      CURRENT_HOST_FILE_STORAGE_PATH="$(storage_host_path_for_mode "${MODEL_SAFE_NAME}" "${KV_TIER_MODE}")"
-      mkdir -p "${CURRENT_HOST_FILE_STORAGE_PATH}" 2>/dev/null || true
-    fi
 
     {
       echo "===== Model: ${MODEL_NAME} | KV tier: ${KV_TIER_MODE} ====="
       echo "Worker args: ${CURRENT_WORKER_EXTRA_ARGS}"
-      echo "Stopping Dynamo..."
+      echo "Each hint profile below gets a fresh Dynamo restart so cache state stays isolated."
     } | tee -a "${BATCH_LOG}"
 
-    ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
-
-    echo "Starting Dynamo for ${MODEL_NAME} with KV tier ${KV_TIER_MODE}..." | tee -a "${BATCH_LOG}"
-    DYNAMO_MODEL_PATH="${MODEL_NAME}" \
-    DYNAMO_SERVED_MODEL_NAME="${MODEL_NAME}" \
-    WORKER_EXTRA_ARGS="${CURRENT_WORKER_EXTRA_ARGS}" \
-    WORKER_SGLANG_DEV_MODE=1 \
-    WORKER_SGLANG_SOURCE_ROOT="${RESOLVED_SGLANG_ROOT}" \
-    HICACHE_STORAGE_HOST_PATH="${CURRENT_HOST_FILE_STORAGE_PATH}" \
-    HICACHE_STORAGE_CONTAINER_PATH="${CURRENT_FILE_STORAGE_PATH}" \
-    SGLANG_TRANSFER_LOG=1 \
-    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE}" \
-    SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING}" \
-    DYN_RUNTIME_JSON_LOGS=1 \
-    DYN_TOOL_CALL_PARSER=hermes \
-    FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
-    WORKER_IMAGE="${WORKER_IMAGE}" \
-    ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
-
-    smoke_test_model "${MODEL_NAME}" "${SMOKE_LOG}"
-
-    if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
-      echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${BATCH_LOG}"
-      sleep "${MODEL_COOLDOWN_SECS}"
-    fi
-
-    CONTROL_SAFE_NAME="$(safe_name "${CONTROL_HINT_PROFILE}")"
-    run_probe \
-      "${MODEL_NAME}" \
-      "${KV_TIER_MODE}" \
-      "${CONTROL_HINT_PROFILE}" \
-      "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${CONTROL_SAFE_NAME}_control"
-
-    for HINT_PROFILE in ${PROTECTED_HINT_PROFILES}; do
-      if [[ "${HINT_PROFILE}" = "${CONTROL_HINT_PROFILE}" ]]; then
-        continue
-      fi
+    while IFS= read -r HINT_PROFILE; do
+      [[ -n "${HINT_PROFILE}" ]] || continue
       HINT_SAFE_NAME="$(safe_name "${HINT_PROFILE}")"
+      CURRENT_FILE_STORAGE_PATH=""
+      CURRENT_HOST_FILE_STORAGE_PATH=""
+      SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_smoke_test.log"
+
+      if [[ "${KV_TIER_MODE}" = "gpu_cpu_storage" ]]; then
+        CURRENT_FILE_STORAGE_PATH="${FILE_STORAGE_PATH}"
+        CURRENT_HOST_FILE_STORAGE_PATH="$(storage_host_path_for_mode "${MODEL_SAFE_NAME}" "${KV_TIER_MODE}" "${HINT_SAFE_NAME}")"
+        rm -rf "${CURRENT_HOST_FILE_STORAGE_PATH}" 2>/dev/null || true
+        mkdir -p "${CURRENT_HOST_FILE_STORAGE_PATH}" 2>/dev/null || true
+      fi
+
+      {
+        echo "--- Hint profile: ${HINT_PROFILE} (fresh start) ---"
+      } | tee -a "${BATCH_LOG}"
+
+      start_dynamo_for_profile \
+        "${MODEL_NAME}" \
+        "${KV_TIER_MODE}" \
+        "${CURRENT_WORKER_EXTRA_ARGS}" \
+        "${RESOLVED_SGLANG_ROOT}" \
+        "${CURRENT_HOST_FILE_STORAGE_PATH}" \
+        "${CURRENT_FILE_STORAGE_PATH}" \
+        "${SMOKE_LOG}"
+
+      RUN_ID_SUFFIX="${HINT_SAFE_NAME}"
+      if [[ "${HINT_PROFILE}" = "${CONTROL_HINT_PROFILE}" ]]; then
+        RUN_ID_SUFFIX="${HINT_SAFE_NAME}_control"
+      fi
+
       run_probe \
         "${MODEL_NAME}" \
         "${KV_TIER_MODE}" \
         "${HINT_PROFILE}" \
-        "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}"
-    done
+        "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}"
+    done < <(iter_hint_profiles)
   done
 done
 
