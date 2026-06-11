@@ -11,7 +11,7 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 SERVERS=(
   ""
-  "18.205.114.152"
+  "35.175.234.230"
   ""
 )
 LABELS=("S0" "S1" "S2")
@@ -42,6 +42,8 @@ LOCAL_RUN_REPORTS_DIR="${REPO_ROOT}/experiments/reports/runs"
 REMOTE_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports"
 LOCAL_REPORTS_DIR="${REPO_ROOT}/experiments/reports"
 LOGGING_PROFILE_WALLTIME_REPORT="sglang_logging_profile_walltime.csv"
+DESIGN_SPACE_MATRIX_REPORT="design_space_matrix.csv"
+DESIGN_SPACE_RETENTION_MATRIX_REPORT="design_space_retention_matrix.csv"
 INDEX="0"
 
 if [[ $# -gt 1 ]]; then
@@ -172,6 +174,76 @@ if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${LOGGING
     "${LOCAL_REPORTS_DIR}/"
 else
   echo "Remote logging-profile wall-time report not found; skipping." >&2
+fi
+
+echo "==== Downloading design-space reports from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_REPORTS_DIR}/design_space/"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/design_space/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/design_space'"; then
+  mkdir -p "${LOCAL_REPORTS_DIR}/design_space"
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/design_space/" \
+    "${LOCAL_REPORTS_DIR}/design_space/"
+else
+  echo "Remote design-space report directory not found; skipping." >&2
+fi
+
+echo "Remote source: ${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}" \
+    "${LOCAL_REPORTS_DIR}/"
+else
+  echo "Remote design-space matrix report not found; skipping." >&2
+fi
+
+echo "==== Downloading KV retention probe reports from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_probe/"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_probe/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_probe'"; then
+  mkdir -p "${LOCAL_REPORTS_DIR}/retention_probe"
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_probe/" \
+    "${LOCAL_REPORTS_DIR}/retention_probe/"
+else
+  echo "Remote KV retention probe report directory not found; skipping." >&2
+fi
+
+echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_probe_batches/"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_probe_batches/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_probe_batches'"; then
+  mkdir -p "${LOCAL_REPORTS_DIR}/retention_probe_batches"
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_probe_batches/" \
+    "${LOCAL_REPORTS_DIR}/retention_probe_batches/"
+else
+  echo "Remote KV retention probe batch directory not found; skipping." >&2
+fi
+
+echo "Remote source: ${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}" \
+    "${LOCAL_REPORTS_DIR}/"
+else
+  echo "Remote design-space retention matrix report not found; skipping." >&2
 fi
 
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then

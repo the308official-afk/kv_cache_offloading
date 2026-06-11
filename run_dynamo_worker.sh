@@ -24,6 +24,8 @@ WORKER_DEV_SOURCE_ROOT="${WORKER_DEV_SOURCE_ROOT:-${SCRIPT_DIR}/upstream/dynamo/
 WORKER_DEV_BINDINGS_ROOT="${WORKER_DEV_BINDINGS_ROOT:-${SCRIPT_DIR}/upstream/dynamo/lib/bindings/python/src/dynamo}"
 WORKER_SGLANG_DEV_MODE="${WORKER_SGLANG_DEV_MODE:-0}"
 WORKER_SGLANG_SOURCE_ROOT="${WORKER_SGLANG_SOURCE_ROOT:-${SCRIPT_DIR}/upstream/sglang/python/sglang}"
+HICACHE_STORAGE_HOST_PATH="${HICACHE_STORAGE_HOST_PATH:-${HOST_FILE_STORAGE_PATH:-}}"
+HICACHE_STORAGE_CONTAINER_PATH="${HICACHE_STORAGE_CONTAINER_PATH:-${FILE_STORAGE_PATH:-/hicache-storage}}"
 SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-}"
 SGLANG_TRANSFER_LOG_DIR="${SGLANG_TRANSFER_LOG_DIR:-${SCRIPT_DIR}/experiments/raw/sglang_transfer_logs}"
@@ -88,6 +90,8 @@ Environment overrides:
   WORKER_DEV_BINDINGS_ROOT Default: ${WORKER_DEV_BINDINGS_ROOT}
   WORKER_SGLANG_DEV_MODE Default: ${WORKER_SGLANG_DEV_MODE}
   WORKER_SGLANG_SOURCE_ROOT Default: ${WORKER_SGLANG_SOURCE_ROOT}
+  HICACHE_STORAGE_HOST_PATH Default: ${HICACHE_STORAGE_HOST_PATH:-<unset>} (host dir for file-backed HiCache storage)
+  HICACHE_STORAGE_CONTAINER_PATH Default: ${HICACHE_STORAGE_CONTAINER_PATH}
   SGLANG_TRANSFER_LOG   Default: ${SGLANG_TRANSFER_LOG:-<unset>} (set to 1 to enable patched transfer logs)
   SGLANG_TRANSFER_LOG_PROFILE Default: ${SGLANG_TRANSFER_LOG_PROFILE:-<unset>} (off, light, timing, full)
   SGLANG_TRANSFER_LOG_DIR Default: ${SGLANG_TRANSFER_LOG_DIR}
@@ -154,6 +158,10 @@ ensure_dirs() {
   sudo chmod 777 "${DYNAMO_CACHE_DIR}"
   if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
     mkdir -p "${WORKER_PROFILE_DIR}"
+  fi
+  if [[ -n "${HICACHE_STORAGE_HOST_PATH}" ]]; then
+    sudo mkdir -p "${HICACHE_STORAGE_HOST_PATH}"
+    sudo chmod 777 "${HICACHE_STORAGE_HOST_PATH}" || true
   fi
   if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
     mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
@@ -299,6 +307,12 @@ start_worker() {
     )
   fi
 
+  if [[ -n "${HICACHE_STORAGE_HOST_PATH}" ]]; then
+    docker_args+=(
+      -v "${HICACHE_STORAGE_HOST_PATH}:${HICACHE_STORAGE_CONTAINER_PATH}"
+    )
+  fi
+
   if [[ -n "${worker_pythonpath_prefix}" ]]; then
     docker_args+=(
       -e PYTHONPATH="${worker_pythonpath_prefix}"
@@ -393,6 +407,8 @@ sync timing: ${SGLANG_TRANSFER_LOG_SYNC_TIMING:-auto}
 semantic tokens: ${SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS:-auto}
 overhead timing: ${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-off}
 verbose log: ${SGLANG_TRANSFER_LOG_VERBOSE:-auto}
+hicache storage host path: ${HICACHE_STORAGE_HOST_PATH:-off}
+hicache storage container path: ${HICACHE_STORAGE_CONTAINER_PATH}
 profile:   ${WORKER_PROFILE_MODE:-off}
 nsys dir:  ${WORKER_PROFILE_NSYS_DIR:-image default}
 ncu dir:   ${WORKER_PROFILE_NCU_DIR:-image default}

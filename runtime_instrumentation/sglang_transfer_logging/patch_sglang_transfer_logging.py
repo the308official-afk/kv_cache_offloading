@@ -852,6 +852,125 @@ def _kv_payload_summary(function: str, locals_dict: dict[str, Any]) -> dict[str,
     }
 
 
+def _cache_scalar_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
+    scalar_names = {
+        "prefix_len",
+        "new_prefix_len",
+        "cached_tokens",
+        "matched_tokens",
+        "match_len",
+        "evicted_tokens",
+        "evicted_num_tokens",
+        "num_tokens",
+        "num_cached_tokens",
+        "token_count",
+        "cache_hit",
+        "hit",
+        "is_hit",
+        "evictable_size",
+        "total_size",
+    }
+    summary: dict[str, Any] = {}
+    for name, value in locals_dict.items():
+        if name == "self" or name.startswith("__sgl_"):
+            continue
+        lowered = name.lower()
+        if lowered in scalar_names and isinstance(value, (bool, int, float, str)):
+            summary[f"cache_{lowered}"] = value
+    self_obj = locals_dict.get("self")
+    if self_obj is not None:
+        for attr in ("evictable_size", "total_size", "max_cache_size", "page_size"):
+            try:
+                value = getattr(self_obj, attr)
+            except Exception:
+                continue
+            if isinstance(value, (bool, int, float, str)):
+                summary[f"cache_{attr}"] = value
+    return summary
+
+
+def log_cache_event(
+    *,
+    function: str,
+    action: str,
+    locals_dict: dict[str, Any],
+    error: str | None = None,
+) -> None:
+    if not _enabled():
+        return
+
+    overhead = {} if _overhead_timing_enabled() else None
+    payload: dict[str, Any] = {
+        "event": "sglang.cache",
+        "transfer_log_profile": _profile(),
+        "function": function,
+        "action": action,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp_ns": time.time_ns(),
+    }
+    if error or _verbose():
+        payload["error"] = error
+
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_metadata_extract",
+            _request_metadata_summary,
+            locals_dict,
+        )
+    )
+    payload.update(
+        _overhead_call(
+            overhead,
+            "semantic_token_extract",
+            _semantic_token_summary,
+            function,
+            locals_dict,
+            overhead,
+        )
+    )
+    payload.update(_cache_scalar_summary(locals_dict))
+    context = current_transfer_context()
+    if context:
+        payload.update(context)
+
+    _attach_overhead(payload, overhead)
+    if overhead is not None or payload.get("instrumentation_overhead_enabled"):
+        payload.setdefault("instrumentation_overhead_note", "Timing fields are approximate and add measurement overhead.")
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms"))
+        _finalize_overhead(payload)
+        json_started_ns = time.perf_counter_ns()
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+        json_ms = (time.perf_counter_ns() - json_started_ns) / 1_000_000.0
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms")) + json_ms
+        _finalize_overhead(payload)
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+    else:
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+
+    with _LOCK:
+        print(line, file=sys.stderr, flush=True)
+        path = os.environ.get("SGLANG_TRANSFER_LOG_PATH")
+        if path:
+            try:
+                with open(path, "a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+            except Exception as exc:
+                print(
+                    _PREFIX
+                    + json.dumps(
+                        {
+                            "event": "sglang.cache_log_error",
+                            "path": path,
+                            "error": repr(exc),
+                        },
+                        sort_keys=True,
+                    ),
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+
 def _index_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     summary: dict[str, Any] = {}
     for name, value in locals_dict.items():
@@ -1066,6 +1185,13 @@ TARGET_FUNCTIONS = {
 }
 
 SEMANTIC_CONTEXT_FUNCTIONS = ("write_backup", "load_back")
+CACHE_EVENT_FUNCTIONS = (
+    "match_prefix",
+    "insert",
+    "cache_finished_req",
+    "cache_unfinished_req",
+    "evict",
+)
 
 
 def find_first(sglang_root: Path, filename: str) -> Path:
@@ -1137,12 +1263,19 @@ def insert_memory_imports(text: str) -> str:
 
 
 def insert_hiradix_imports(text: str) -> str:
-    return insert_after_future(
+    text = insert_after_future(
         text,
         [
             "from .transfer_logging import transfer_token_context as _sgl_transfer_token_context\n",
         ],
         "from .transfer_logging import transfer_token_context as _sgl_transfer_token_context",
+    )
+    return insert_after_future(
+        text,
+        [
+            "from .transfer_logging import log_cache_event as _sgl_log_cache_event\n",
+        ],
+        "from .transfer_logging import log_cache_event as _sgl_log_cache_event",
     )
 
 
@@ -1167,6 +1300,16 @@ def insert_request_context_imports(text: str) -> str:
             "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context\n",
         ],
         "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context",
+    )
+
+
+def insert_absolute_cache_event_imports(text: str) -> str:
+    return insert_after_future(
+        text,
+        [
+            "from sglang.srt.mem_cache.transfer_logging import log_cache_event as _sgl_log_cache_event\n",
+        ],
+        "from sglang.srt.mem_cache.transfer_logging import log_cache_event as _sgl_log_cache_event",
     )
 
 
@@ -1283,6 +1426,47 @@ def wrap_context_occurrence(
     return True
 
 
+def wrap_cache_event_occurrence(
+    lines: list[str],
+    function_name: str,
+    bounds: tuple[int, int, int],
+) -> bool:
+    start, signature_end, end = bounds
+    body_text = "".join(lines[signature_end + 1 : end])
+    if f'function="{function_name}"' in body_text and "_sgl_log_cache_event" in body_text:
+        return False
+
+    def_indent = len(lines[start]) - len(lines[start].lstrip(" "))
+    body_indent = " " * (def_indent + 4)
+    nested_indent = " " * (def_indent + 8)
+    original_body = lines[signature_end + 1 : end]
+    wrapped_body = [
+        f"{body_indent}__sgl_cache_event_error = None\n",
+        f"{body_indent}try:\n",
+    ]
+    for line in original_body:
+        if line.strip():
+            wrapped_body.append("    " + line)
+        else:
+            wrapped_body.append(line)
+    wrapped_body.extend(
+        [
+            f"{body_indent}except BaseException as __sgl_cache_event_exc:\n",
+            f"{nested_indent}__sgl_cache_event_error = repr(__sgl_cache_event_exc)\n",
+            f"{nested_indent}raise\n",
+            f"{body_indent}finally:\n",
+            f"{nested_indent}_sgl_log_cache_event(\n",
+            f'{nested_indent}    function="{function_name}",\n',
+            f'{nested_indent}    action="{function_name}",\n',
+            f"{nested_indent}    locals_dict=locals(),\n",
+            f"{nested_indent}    error=__sgl_cache_event_error,\n",
+            f"{nested_indent})\n",
+        ]
+    )
+    lines[signature_end + 1 : end] = wrapped_body
+    return True
+
+
 def wrap_transfer_function(text: str, function_name: str, direction: str) -> tuple[str, int]:
     lines = text.splitlines(keepends=True)
     bounds = find_all_function_bounds(lines, function_name)
@@ -1299,6 +1483,16 @@ def wrap_context_function(text: str, function_name: str) -> tuple[str, int]:
     changed = 0
     for occurrence in reversed(bounds):
         if wrap_context_occurrence(lines, function_name, occurrence):
+            changed += 1
+    return "".join(lines), changed
+
+
+def wrap_cache_event_function(text: str, function_name: str) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    bounds = find_all_function_bounds(lines, function_name)
+    changed = 0
+    for occurrence in reversed(bounds):
+        if wrap_cache_event_occurrence(lines, function_name, occurrence):
             changed += 1
     return "".join(lines), changed
 
@@ -1454,6 +1648,10 @@ def patch_hiradix_cache(path: Path) -> list[str]:
         text, changed = wrap_context_function(text, function_name)
         if changed:
             patched.append(f"{function_name} ({changed} occurrence{'s' if changed != 1 else ''})")
+    for function_name in CACHE_EVENT_FUNCTIONS:
+        text, changed = wrap_cache_event_function(text, function_name)
+        if changed:
+            patched.append(f"{function_name} cache event ({changed} occurrence{'s' if changed != 1 else ''})")
     if patched:
         path.write_text(text, encoding="utf-8")
     return patched
@@ -1488,12 +1686,17 @@ def patch_cache_controller(path: Path) -> list[str]:
 def patch_radix_cache(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
     text = insert_request_context_imports(text)
+    text = insert_absolute_cache_event_imports(text)
     patched: list[str] = []
 
     for function_name in ("cache_finished_req", "cache_unfinished_req"):
         text, changed = wrap_request_context_function(text, function_name)
         if changed:
             patched.append(f"{function_name} request context ({changed} occurrence{'s' if changed != 1 else ''})")
+    for function_name in CACHE_EVENT_FUNCTIONS:
+        text, changed = wrap_cache_event_function(text, function_name)
+        if changed:
+            patched.append(f"{function_name} cache event ({changed} occurrence{'s' if changed != 1 else ''})")
 
     if patched:
         path.write_text(text, encoding="utf-8")
@@ -1587,13 +1790,13 @@ def main() -> int:
     if hiradix_cache:
         print(f"hiradix_cache: {hiradix_cache}")
         if hiradix_patched:
-            print("patched semantic context functions:")
+            print("patched HiRadix semantic context/cache event functions:")
             for function_name in hiradix_patched:
                 print(f"  - {function_name}")
         else:
-            print("no semantic context functions patched; they may already be instrumented or absent")
+            print("no HiRadix semantic/cache functions patched; they may already be instrumented or absent")
     else:
-        print("hiradix_cache: not found; semantic token context was not patched")
+        print("hiradix_cache: not found; semantic/cache event context was not patched")
 
     if cache_controller:
         print(f"cache_controller: {cache_controller}")

@@ -17,6 +17,9 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **SGLang logging speed comparison**: use Experiment 4.
 - **Hint-profile comparisons**: use Experiment 5.
 - **Many SWE-bench tasks**: use Experiment 6.
+- **Many models**: use Experiment 7.
+- **Full design-space sweep**: use Experiment 8.
+- **KV retention/eviction probe**: use Experiment 9.
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -726,6 +729,458 @@ MODEL_COOLDOWN_SECS=30           Extra wait after smoke-test success.
 STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
 ```
 
+## Experiment 8: Full Design-Space Sweep
+
+Use this when you want one automated sweep across:
+
+- multiple SWE-bench rows
+- multiple LLM models
+- multiple hint profiles
+- prefill/decode labels
+- attention/MLP operation labels
+- precise KV-transfer attribution
+- one selected SGLang transfer logging profile
+- KV tier modes: GPU-only, GPU+CPU, and GPU+CPU+storage
+- hardware/cache metadata
+
+This experiment restarts Dynamo once per model and KV tier mode, waits for
+model readiness, runs Experiment 6 for each hint profile, and writes a compact
+design-space matrix. The normal run reports still get generated, including
+`prompt_evolution_run_overview.csv`.
+
+Before running this, complete Experiment 3 Step 1 once so the instrumented
+images and patched SGLang source exist.
+
+### Pilot Sweep
+
+Use this first. It is small enough to catch setup issues before a long run.
+
+```bash
+cd ~/kv_cache_offloading
+
+export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=1
+
+DESIGN_SPACE_ID="pilot_design_space_$(date +%Y%m%d_%H%M%S)" \
+START_INDEX=0 \
+END_INDEX=1 \
+HINT_PROFILES="baseline high-reuse" \
+HINT_PROVIDER=agentbench \
+LLM_STAGES="prefill decode" \
+LLM_OPERATIONS="attention_kv ffn_mlp" \
+KV_TIER_MODES="gpu_only gpu_cpu gpu_cpu_storage" \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+MEM_FRACTION_STATIC=0.7 \
+HICACHE_RATIO=1 \
+HICACHE_STORAGE_BACKEND=file \
+HICACHE_STORAGE_PREFETCH_POLICY=wait_complete \
+FILE_STORAGE_PATH=/hicache-storage \
+HOST_FILE_STORAGE_PATH=/mnt/docker-data/hicache_storage \
+STORAGE_MEDIA=local_nvme_or_ebs \
+CPU_GPU_INTERCONNECT="PCIe" \
+./agentbench/run_swebench_design_space_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct \
+  Qwen/Qwen2.5-7B-Instruct
+```
+
+To watch the SGLang worker while each model starts:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+### Larger Sweep
+
+```bash
+cd ~/kv_cache_offloading
+
+DESIGN_SPACE_ID="design_space_$(date +%Y%m%d_%H%M%S)" \
+START_INDEX=0 \
+END_INDEX=30 \
+HINT_PROFILES="baseline high-reuse low-reuse high-priority low-priority" \
+HINT_PROVIDER=agentbench \
+LLM_STAGES="prefill decode" \
+LLM_OPERATIONS="attention_kv ffn_mlp" \
+KV_TIER_MODES="gpu_only gpu_cpu gpu_cpu_storage" \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+MEM_FRACTION_STATIC=0.7 \
+HICACHE_RATIO=1 \
+HICACHE_STORAGE_BACKEND=file \
+HICACHE_STORAGE_PREFETCH_POLICY=wait_complete \
+FILE_STORAGE_PATH=/hicache-storage \
+HOST_FILE_STORAGE_PATH=/mnt/docker-data/hicache_storage \
+STORAGE_MEDIA=local_nvme_or_ebs \
+CPU_GPU_INTERCONNECT="PCIe" \
+./agentbench/run_swebench_design_space_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct \
+  Qwen/Qwen2.5-7B-Instruct \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct
+```
+
+### Outputs
+
+```bash
+LATEST_DESIGN_SPACE="$(ls -td experiments/reports/design_space/* | head -1)"
+echo "$LATEST_DESIGN_SPACE"
+
+cat "$LATEST_DESIGN_SPACE/design_space_summary.md"
+cat "$LATEST_DESIGN_SPACE/design_space_matrix.csv"
+cat experiments/reports/design_space_matrix.csv
+cat experiments/reports/design_space_retention_matrix.csv
+
+cat experiments/reports/prompt_evolution_task_summary.csv
+cat experiments/reports/prompt_evolution_run_overview.csv
+```
+
+Important matrix columns:
+
+```text
+model
+hint_profile
+hint_provider
+llm_stage
+llm_operation
+kv_tier_mode
+sglang_transfer_log_profile
+gpu_hbm_gb
+host_ram_gb
+cpu_gpu_interconnect
+mem_fraction_static
+hicache_ratio
+storage_backend
+storage_prefetch_policy
+file_storage_path
+host_file_storage_path
+storage_media
+storage_capacity_gb
+avg_ttft_ms
+avg_latency_ms
+avg_cache_reuse_ratio
+host_to_device_transfer_count
+host_to_device_mb
+device_to_host_transfer_count
+device_to_host_mb
+direct_attribution_rate
+patch_rate
+```
+
+Notes:
+
+```text
+llm_stage and llm_operation are design-space labels in this script.
+kv_tier_mode changes actual SGLang worker startup args.
+Precise KV attribution still comes from SGLang transfer logs and Dynamo runtime JSON logs.
+gpu_cpu_storage enables SGLang's storage backend flags, but storage-specific
+read/write timing needs direct `hicache_storage.py` instrumentation.
+For kernel-level attention/MLP measurements, run a separate profiler experiment and join by run/model/profile.
+```
+
+Useful knobs:
+
+```text
+START_INDEX / END_INDEX          SWE-bench row range.
+HINT_PROFILES                   Space-separated hint profiles.
+HINT_PROVIDER                   agentbench, deepagents, or none.
+LLM_STAGES                      Reporting labels, usually "prefill decode".
+LLM_OPERATIONS                  Reporting labels, usually "attention_kv ffn_mlp".
+KV_TIER_MODES                   gpu_only, gpu_cpu, gpu_cpu_storage.
+SGLANG_TRANSFER_LOG_PROFILE     off, light, timing, or full.
+GPU_HBM_GB                      Optional override; auto-detected when possible.
+HOST_RAM_GB                     Optional override; auto-detected when possible.
+CPU_GPU_INTERCONNECT            Example: PCIe, NVLink, SXM, unknown.
+MEM_FRACTION_STATIC             SGLang static memory fraction.
+HICACHE_RATIO                   Host KV pool ratio.
+HICACHE_STORAGE_BACKEND         Storage backend for gpu_cpu_storage; default file.
+HICACHE_STORAGE_PREFETCH_POLICY best_effort, wait_complete, or timeout.
+FILE_STORAGE_PATH               Container path passed to --file-storage-path.
+HOST_FILE_STORAGE_PATH          Host storage base directory mounted into the worker.
+STORAGE_MEDIA                   Label such as local_nvme, ebs_gp3, or fsx_lustre.
+HICACHE_WRITE_POLICY            Optional; adds --hicache-write-policy when set.
+HICACHE_EXTRA_ARGS              Optional extra HiCache flags appended to worker args.
+WORKER_EXTRA_ARGS_SUFFIX        Optional extra SGLang worker flags appended to all modes.
+MODEL_SMOKE_RETRIES             Default 60.
+MODEL_SMOKE_DELAY_SECS          Default 10.
+MODEL_COOLDOWN_SECS             Default 30.
+STOP_DYNAMO_WHEN_DONE=1         Stop Dynamo after the final model.
+```
+
+KV tier mode mapping:
+
+```text
+gpu_only          HBM-only KV cache. No --enable-hierarchical-cache.
+gpu_cpu           HBM + CPU RAM. Adds --enable-hierarchical-cache and --hicache-ratio.
+gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
+                  --hicache-storage-prefetch-policy, and --file-storage-path.
+```
+
+## Experiment 9: KV Retention Probe
+
+Use this to test whether a protected prompt stays useful in cache after many
+unrelated prompts.
+
+For direct SGLang cache-event evidence, re-run the SGLang patch step after
+pulling these repo changes, then restart Dynamo. The retention reports still run
+without it, but the `sglang_cache_*` columns will stay empty/zero.
+
+The synthetic sequence is:
+
+```text
+A first request -> many unique distractor requests -> same A request again
+```
+
+Run this first with `KV_TIER_MODE=gpu_only`. That answers the simplest
+retention question: did prompt A appear to stay in GPU KV cache after pressure
+from distractor prompts?
+
+### Automated Run
+
+This is the default path. It stops Dynamo, starts Dynamo for the selected model,
+waits for readiness, runs the no-hint control, runs each protected-hint probe,
+and writes the reports.
+
+Pilot:
+
+```bash
+cd ~/kv_cache_offloading
+
+export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority high-reuse" \
+DISTRACTOR_COUNT=10 \
+PROTECTED_INPUT_LEN=24000 \
+DISTRACTOR_INPUT_LEN=24000 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=32768 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Pressure run:
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority high-reuse" \
+DISTRACTOR_COUNT=100 \
+PROTECTED_INPUT_LEN=24000 \
+DISTRACTOR_INPUT_LEN=24000 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=32768 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Multiple models:
+
+```bash
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+KV_TIER_MODES="gpu_only" \
+PROTECTED_HINT_PROFILES="high-priority high-reuse" \
+DISTRACTOR_COUNT=100 \
+PROTECTED_INPUT_LEN=24000 \
+DISTRACTOR_INPUT_LEN=24000 \
+MAX_CONTEXT_TOKENS=32768 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct \
+  Qwen/Qwen2.5-7B-Instruct
+```
+
+To watch the worker after the wrapper starts Dynamo:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Automated-run outputs:
+
+```bash
+LATEST_RETENTION_BATCH="$(ls -td experiments/reports/retention_probe_batches/* | head -1)"
+echo "$LATEST_RETENTION_BATCH"
+
+cat "$LATEST_RETENTION_BATCH/retention_probe_batch_summary.md"
+cat "$LATEST_RETENTION_BATCH/retention_probe_progress.csv"
+cat "$LATEST_RETENTION_BATCH/design_space_retention_matrix.csv"
+cat experiments/reports/design_space_retention_matrix.csv
+```
+
+`experiments/reports/design_space_retention_matrix.csv` is a latest-batch view.
+Each automated retention run refreshes it from that batch only, so it should not
+mix old retention runs with the current run. The durable per-batch copy is:
+
+```text
+experiments/reports/retention_probe_batches/<RETENTION_PROBE_ID>/design_space_retention_matrix.csv
+```
+
+Useful knobs:
+
+```text
+KV_TIER_MODES                  gpu_only, gpu_cpu, gpu_cpu_storage.
+CONTROL_HINT_PROFILE           Usually none.
+PROTECTED_HINT_PROFILES        high-priority high-reuse baseline, etc.
+DISTRACTOR_COUNT               10 for pilot, 100 for pressure.
+PROTECTED_INPUT_LEN            Prompt A approximate input length.
+DISTRACTOR_INPUT_LEN           Each distractor prompt approximate input length.
+RANDOM_OUTPUT_LEN              Keep at 1 for retention latency probes.
+MAX_CONTEXT_TOKENS             Model context window; Qwen 2.5 defaults to 32768.
+CONTEXT_RESERVE_TOKENS         Safety reserve for chat template and output tokens.
+RETENTION_PROBE_SEED           Reproducible prompt generation seed.
+SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full.
+MEM_FRACTION_STATIC            SGLang static memory fraction.
+HICACHE_RATIO                  Host KV pool ratio for gpu_cpu/gpu_cpu_storage.
+STOP_DYNAMO_WHEN_DONE=1        Stop Dynamo after the final probe.
+```
+
+Do not use `PROTECTED_INPUT_LEN=60000` with Qwen 2.5 7B unless you also use a
+longer-context model and set `MAX_CONTEXT_TOKENS` accordingly. The probe uses
+approximate repeated-word lengths, and the script rejects impossible context
+settings before sending requests.
+
+### Manual Debugging Path
+
+Use this only when you want to start Dynamo and run each probe by hand.
+
+#### Step 1: Start Dynamo For GPU-Only Retention
+
+This uses precise runtime logging, but disables hierarchical cache so the first
+probe focuses on GPU-only retention.
+
+```bash
+cd ~/kv_cache_offloading
+
+export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+./run_dynamo_single_host.sh stop
+
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --mem-fraction-static 0.7' \
+WORKER_SGLANG_DEV_MODE=1 \
+WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
+SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
+DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+WORKER_IMAGE="$WORKER_IMAGE" \
+./run_dynamo_single_host.sh start
+```
+
+Watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+#### Step 2: Run No-Hint Control
+
+Use a small distractor count first.
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --kv-tier-mode gpu_only \
+  --protected-hint-profile none \
+  --distractor-hint-profile none \
+  --protected-input-len 24000 \
+  --distractor-input-len 24000 \
+  --distractor-count 10 \
+  --random-output-len 1 \
+  --ignore-eos
+```
+
+#### Step 3: Run Protected-Hint Probe
+
+This marks prompt A as high priority. Distractors still carry no hints.
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --kv-tier-mode gpu_only \
+  --protected-hint-profile high-priority \
+  --distractor-hint-profile none \
+  --protected-input-len 24000 \
+  --distractor-input-len 24000 \
+  --distractor-count 10 \
+  --random-output-len 1 \
+  --ignore-eos
+```
+
+If the pilot works, increase pressure:
+
+```bash
+--distractor-count 100
+```
+
+#### Step 4: Read The Retention Reports
+
+```bash
+LATEST_RETENTION="$(ls -td experiments/reports/retention_probe/* | head -1)"
+echo "$LATEST_RETENTION"
+
+cat "$LATEST_RETENTION/retention_probe_summary.md"
+cat "$LATEST_RETENTION/retention_probe_summary.csv"
+cat "$LATEST_RETENTION/retention_probe_requests.csv"
+cat experiments/reports/design_space_retention_matrix.csv
+```
+
+Key columns:
+
+```text
+protected_hint_profile       none, high-priority, high-reuse, etc.
+kv_tier_mode                 gpu_only, gpu_cpu, or gpu_cpu_storage label.
+a_first_latency_ms           First A request wall-clock latency.
+a_replay_latency_ms          Second A request wall-clock latency.
+a_replay_latency_delta_ms    replay - first. Negative means replay was faster.
+a_replay_speedup_ratio       first / replay. Above 1.000 means replay was faster.
+a_replay_cached_tokens       Cached prompt tokens reported for replay, if exposed.
+a_replay_cache_reuse_ratio   cached / prompt tokens for replay, if exposed.
+a_survived_cache_threshold   Inferred from cached-token ratio when available.
+a_replay_sglang_cache_events Direct SGLang cache events matched to replay request.
+a_replay_sglang_cache_match_events
+                             Direct SGLang match-prefix/cache-lookup events for replay.
+a_replay_sglang_cache_direct True means SGLang evidence matched this request ID.
+```
+
+Interpretation:
+
+```text
+If high-priority A replays faster than no-hint A, the hint may be improving retention.
+If cached-token evidence is higher for high-priority A, the hint may be preserving more prefix KV.
+If the cache columns are empty, the endpoint did not expose cached-token usage for this request.
+If SGLang cache direct attribution is true, the cache evidence came from instrumented SGLang events, not timestamp guessing.
+For CPU or storage reload behavior, rerun this idea with gpu_cpu or gpu_cpu_storage.
+```
+
+This probe is synthetic on purpose. After it shows a clear effect, use
+Experiment 8 to test the same idea across real SWE-bench tasks, hint profiles,
+and KV tier modes.
+
 ## Utilities
 
 ### Latest Result And Report
@@ -841,9 +1296,9 @@ Delete generated experiment data and reports:
 ```
 
 This clears `experiments/raw`, `experiments/parsed`, run reports, batch reports,
-top-level generated summary CSV/Markdown files under `experiments/reports`, and
-legacy `agentbench/results` data if present. It preserves experiment scripts,
-READMEs, upstream repos, and instrumentation code.
+design-space reports, top-level generated summary CSV/Markdown files under
+`experiments/reports`, and legacy `agentbench/results` data if present. It
+preserves experiment scripts, READMEs, upstream repos, and instrumentation code.
 
 ### Stop Dynamo
 

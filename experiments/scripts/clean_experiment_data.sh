@@ -93,6 +93,9 @@ empty_dirs=(
   "experiments/reports/runs"
   "experiments/reports/batches"
   "experiments/reports/comparisons"
+  "experiments/reports/design_space"
+  "experiments/reports/retention_probe"
+  "experiments/reports/retention_probe_batches"
   "experiments/reports/deepagents_swebench_profile"
   "experiments/reports/lpx_decode_split"
   "experiments/reports/misc"
@@ -109,6 +112,8 @@ top_level_report_patterns=(
   "experiments/reports/multi_model_batch_overview.csv"
   "experiments/reports/prompt_evolution_*.csv"
   "experiments/reports/sglang_logging_profile_walltime.csv"
+  "experiments/reports/design_space_matrix.csv"
+  "experiments/reports/design_space_retention_matrix.csv"
 )
 
 targets=()
