@@ -1005,10 +1005,10 @@ KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=10 \
-PROTECTED_INPUT_LEN=24000 \
-DISTRACTOR_INPUT_LEN=24000 \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
 RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=32768 \
+MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1024,10 +1024,10 @@ KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=100 \
-PROTECTED_INPUT_LEN=24000 \
-DISTRACTOR_INPUT_LEN=24000 \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
 RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=32768 \
+MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1040,9 +1040,9 @@ RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 KV_TIER_MODES="gpu_only" \
 PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=100 \
-PROTECTED_INPUT_LEN=24000 \
-DISTRACTOR_INPUT_LEN=24000 \
-MAX_CONTEXT_TOKENS=32768 \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
+MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct \
@@ -1085,7 +1085,7 @@ DISTRACTOR_COUNT               10 for pilot, 100 for pressure.
 PROTECTED_INPUT_LEN            Prompt A approximate input length.
 DISTRACTOR_INPUT_LEN           Each distractor prompt approximate input length.
 RANDOM_OUTPUT_LEN              Keep at 1 for retention latency probes.
-MAX_CONTEXT_TOKENS             Model context window; Qwen 2.5 defaults to 32768.
+MAX_CONTEXT_TOKENS             Effective worker context limit. Use the worker log value if SGLang reports one.
 CONTEXT_RESERVE_TOKENS         Safety reserve for chat template and output tokens.
 RETENTION_PROBE_SEED           Reproducible prompt generation seed.
 SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full.
@@ -1094,10 +1094,12 @@ HICACHE_RATIO                  Host KV pool ratio for gpu_cpu/gpu_cpu_storage.
 STOP_DYNAMO_WHEN_DONE=1        Stop Dynamo after the final probe.
 ```
 
-Do not use `PROTECTED_INPUT_LEN=60000` with Qwen 2.5 7B unless you also use a
-longer-context model and set `MAX_CONTEXT_TOKENS` accordingly. The probe uses
-approximate repeated-word lengths, and the script rejects impossible context
-settings before sending requests.
+Do not set `PROTECTED_INPUT_LEN` or `DISTRACTOR_INPUT_LEN` above the effective
+worker limit. If the worker logs `Input length (...) exceeds the maximum allowed
+length (...)`, set `MAX_CONTEXT_TOKENS` to that allowed length and reduce both
+input lengths. The defaults use 14k repeated words against a 17,146-token worker
+limit because the chat template and tokenizer add extra tokens beyond the
+requested word count.
 
 ### Manual Debugging Path
 
@@ -1151,8 +1153,8 @@ python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --kv-tier-mode gpu_only \
   --protected-hint-profile none \
   --distractor-hint-profile none \
-  --protected-input-len 24000 \
-  --distractor-input-len 24000 \
+  --protected-input-len 14000 \
+  --distractor-input-len 14000 \
   --distractor-count 10 \
   --random-output-len 1 \
   --ignore-eos
@@ -1171,8 +1173,8 @@ python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --kv-tier-mode gpu_only \
   --protected-hint-profile high-priority \
   --distractor-hint-profile none \
-  --protected-input-len 24000 \
-  --distractor-input-len 24000 \
+  --protected-input-len 14000 \
+  --distractor-input-len 14000 \
   --distractor-count 10 \
   --random-output-len 1 \
   --ignore-eos
@@ -1203,6 +1205,8 @@ protected_hint_profile       none, high-priority, high-reuse, etc.
 kv_tier_mode                 gpu_only, gpu_cpu, or gpu_cpu_storage label.
 a_first_latency_ms           First A request wall-clock latency.
 a_replay_latency_ms          Second A request wall-clock latency.
+a_first_status               HTTP status for the first A request.
+a_replay_status              HTTP status for the replay A request.
 a_replay_latency_delta_ms    replay - first. Negative means replay was faster.
 a_replay_speedup_ratio       first / replay. Above 1.000 means replay was faster.
 a_replay_cached_tokens       Cached prompt tokens reported for replay, if exposed.

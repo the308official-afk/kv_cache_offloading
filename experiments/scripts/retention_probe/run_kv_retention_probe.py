@@ -30,6 +30,8 @@ DEFAULT_CACHE_EVENT_LOG = (
 )
 PROMPT_GENERATOR_VERSION = "cache-word-v2"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
+DEFAULT_PROBE_INPUT_LEN = 14000
+DEFAULT_MAX_CONTEXT_TOKENS = 17146
 
 DEFAULT_HINTS: dict[str, Any] = {
     "priority": 5,
@@ -122,6 +124,8 @@ SUMMARY_COLUMNS = [
     "distractor_count",
     "output_len",
     "seed",
+    "a_first_status",
+    "a_replay_status",
     "a_first_latency_ms",
     "a_replay_latency_ms",
     "a_replay_latency_delta_ms",
@@ -165,8 +169,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--matrix-path", default=str(DEFAULT_MATRIX))
     parser.add_argument("--append-matrix", action="store_true")
     parser.add_argument("--cache-event-log", default=str(DEFAULT_CACHE_EVENT_LOG))
-    parser.add_argument("--protected-input-len", type=int, default=24000)
-    parser.add_argument("--distractor-input-len", type=int, default=24000)
+    parser.add_argument("--protected-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
+    parser.add_argument("--distractor-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
     parser.add_argument("--distractor-count", type=int, default=10)
     parser.add_argument("--random-output-len", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
@@ -174,7 +178,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distractor-hint-profile", default="none")
     parser.add_argument("--kv-tier-mode", default=os.environ.get("KV_TIER_MODE", os.environ.get("KV_TIER_MODES", "")))
     parser.add_argument("--request-timeout", type=float, default=600.0)
-    parser.add_argument("--max-context-tokens", type=int, default=int(os.environ.get("MAX_CONTEXT_TOKENS", "32768")))
+    parser.add_argument(
+        "--max-context-tokens",
+        type=int,
+        default=int(os.environ.get("MAX_CONTEXT_TOKENS", str(DEFAULT_MAX_CONTEXT_TOKENS))),
+    )
     parser.add_argument("--context-reserve-tokens", type=int, default=int(os.environ.get("CONTEXT_RESERVE_TOKENS", "2048")))
     parser.add_argument("--ignore-eos", action="store_true")
     parser.add_argument("--survival-cache-reuse-threshold", type=float, default=0.8)
@@ -560,6 +568,18 @@ def int_or_empty(value: Any) -> int | str:
     return "" if parsed is None else parsed
 
 
+def request_succeeded(row: dict[str, Any]) -> bool:
+    return str(row.get("status")) in {"200", "201"}
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
 def build_summary(
     *,
     args: argparse.Namespace,
@@ -570,21 +590,23 @@ def build_summary(
 ) -> dict[str, Any]:
     first = next((row for row in rows if row["request_role"] == "a_first"), {})
     replay = next((row for row in rows if row["request_role"] == "a_replay"), {})
-    first_latency = maybe_float(first.get("latency_ms"))
-    replay_latency = maybe_float(replay.get("latency_ms"))
+    first_ok = request_succeeded(first)
+    replay_ok = request_succeeded(replay)
+    first_latency = maybe_float(first.get("latency_ms")) if first_ok else None
+    replay_latency = maybe_float(replay.get("latency_ms")) if replay_ok else None
     latency_delta = None
     speedup = None
-    if first_latency is not None and replay_latency is not None and replay_latency > 0:
+    if first_ok and replay_ok and first_latency is not None and replay_latency is not None and replay_latency > 0:
         latency_delta = replay_latency - first_latency
         speedup = first_latency / replay_latency
 
-    replay_ratio = maybe_float(replay.get("cache_reuse_ratio"))
+    replay_ratio = maybe_float(replay.get("cache_reuse_ratio")) if replay_ok else None
     survived: str | bool = ""
     source = "not_available"
     if replay_ratio is not None:
         survived = replay_ratio >= args.survival_cache_reuse_threshold
         source = "response_usage_cached_tokens"
-    elif replay.get("sglang_cache_direct"):
+    elif replay_ok and truthy(replay.get("sglang_cache_direct")):
         source = "sglang_cache_events"
 
     failed = [row for row in rows if str(row.get("status")) not in {"200", "201"}]
@@ -599,6 +621,8 @@ def build_summary(
         "distractor_count": args.distractor_count,
         "output_len": args.random_output_len,
         "seed": args.seed,
+        "a_first_status": first.get("status", ""),
+        "a_replay_status": replay.get("status", ""),
         "a_first_latency_ms": round_ms(first_latency),
         "a_replay_latency_ms": round_ms(replay_latency),
         "a_replay_latency_delta_ms": round_ms(latency_delta),
@@ -611,7 +635,7 @@ def build_summary(
         "a_replay_sglang_cache_events": int_or_empty(replay.get("sglang_cache_events")),
         "a_replay_sglang_cache_match_events": int_or_empty(replay.get("sglang_cache_match_events")),
         "a_replay_sglang_cache_semantic_tokens": int_or_empty(replay.get("sglang_cache_semantic_tokens")),
-        "a_replay_sglang_cache_direct": bool(replay.get("sglang_cache_direct")),
+        "a_replay_sglang_cache_direct": truthy(replay.get("sglang_cache_direct")),
         "a_survived_cache_threshold": survived,
         "cache_survival_source": source,
         "successful_requests": len(rows) - len(failed),
@@ -636,6 +660,8 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         "",
         "## A Prompt Replay",
         "",
+        f"- first status: `{summary['a_first_status']}`",
+        f"- replay status: `{summary['a_replay_status']}`",
         f"- first latency ms: `{summary['a_first_latency_ms']}`",
         f"- replay latency ms: `{summary['a_replay_latency_ms']}`",
         f"- replay delta ms: `{summary['a_replay_latency_delta_ms']}`",
@@ -648,6 +674,7 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- survived cache threshold: `{summary['a_survived_cache_threshold']}`",
         "",
         "A positive speedup ratio above 1.000 means the second A request was faster than the first A request.",
+        "Replay latency, delta, speedup, and cached-token survival stay blank unless both A requests succeeded.",
         "Cache survival is inferred from response usage cached-token evidence when available.",
         "SGLang cache events are direct runtime evidence when request IDs match.",
         "",
