@@ -1079,6 +1079,11 @@ cat "$LATEST_RETENTION_BATCH/design_space_retention_matrix.csv"
 cat experiments/reports/design_space_retention_matrix.csv
 ```
 
+Each hint-profile run also saves a worker runtime log in the batch directory.
+The retention report now uses that worker log to map SGLang internal request ids
+back to your external retention probe request ids, then re-attaches
+`sglang.cache` events during postprocessing.
+
 `experiments/reports/design_space_retention_matrix.csv` is a latest-batch view.
 Each automated retention run refreshes it from that batch only, so it should not
 mix old retention runs with the current run. The durable per-batch copy is:

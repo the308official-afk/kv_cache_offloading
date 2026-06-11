@@ -410,6 +410,7 @@ run_probe() {
   local kv_tier_mode="$2"
   local hint_profile="$3"
   local run_id="$4"
+  local worker_runtime_log="$5"
   local -a command
 
   command=(
@@ -430,8 +431,9 @@ run_probe() {
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
     --matrix-path "${BATCH_MATRIX}"
-    --append-matrix
+    --skip-matrix-write
     --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
+    --worker-runtime-log "${worker_runtime_log}"
   )
   if [[ "${IGNORE_EOS}" = "1" ]]; then
     command+=(--ignore-eos)
@@ -449,6 +451,94 @@ run_probe() {
     exit 1
   fi
   return 0
+}
+
+postprocess_probe() {
+  local model="$1"
+  local kv_tier_mode="$2"
+  local hint_profile="$3"
+  local run_id="$4"
+  local worker_runtime_log="$5"
+  local -a command
+
+  command=(
+    "${PYTHON_BIN}"
+    experiments/scripts/retention_probe/run_kv_retention_probe.py
+    --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions"
+    --model "${model}"
+    --run-id "${run_id}"
+    --kv-tier-mode "${kv_tier_mode}"
+    --protected-hint-profile "${hint_profile}"
+    --distractor-hint-profile none
+    --protected-input-len "${PROTECTED_INPUT_LEN}"
+    --distractor-input-len "${DISTRACTOR_INPUT_LEN}"
+    --distractor-count "${DISTRACTOR_COUNT}"
+    --random-output-len "${RANDOM_OUTPUT_LEN}"
+    --seed "${RETENTION_PROBE_SEED}"
+    --request-timeout "${REQUEST_TIMEOUT}"
+    --max-context-tokens "${MAX_CONTEXT_TOKENS}"
+    --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
+    --matrix-path "${BATCH_MATRIX}"
+    --skip-matrix-write
+    --postprocess-only
+    --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
+    --worker-runtime-log "${worker_runtime_log}"
+  )
+  if [[ "${IGNORE_EOS}" = "1" ]]; then
+    command+=(--ignore-eos)
+  fi
+
+  echo "Postprocessing retention probe with worker runtime log: ${worker_runtime_log}" | tee -a "${BATCH_LOG}"
+  "${command[@]}" 2>&1 | tee -a "${BATCH_LOG}"
+}
+
+capture_worker_runtime_log() {
+  local out_path="$1"
+  mkdir -p "$(dirname "${out_path}")"
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  docker logs dynamo-sglang-worker > "${out_path}" 2>&1
+}
+
+rebuild_batch_matrix() {
+  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_MATRIX}"
+import csv
+import sys
+from pathlib import Path
+
+progress_path = Path(sys.argv[1])
+matrix_path = Path(sys.argv[2])
+if not progress_path.exists():
+    raise SystemExit(0)
+
+rows = []
+fieldnames = None
+with progress_path.open(encoding="utf-8", newline="") as handle:
+    progress_rows = list(csv.DictReader(handle))
+
+for progress_row in progress_rows:
+    summary_path = Path(progress_row.get("summary_csv", ""))
+    if not summary_path.exists():
+        continue
+    with summary_path.open(encoding="utf-8", newline="") as handle:
+        summary_rows = list(csv.DictReader(handle))
+    if not summary_rows:
+        continue
+    if fieldnames is None:
+        fieldnames = list(summary_rows[0].keys())
+    rows.extend(summary_rows)
+
+if fieldnames is None:
+    matrix_path.unlink(missing_ok=True)
+    raise SystemExit(0)
+
+matrix_path.parent.mkdir(parents=True, exist_ok=True)
+with matrix_path.open("w", encoding="utf-8", newline="") as handle:
+    writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+    writer.writeheader()
+    writer.writerows(rows)
+PY
 }
 
 iter_hint_profiles() {
@@ -501,6 +591,7 @@ start_dynamo_for_profile() {
 }
 
 write_batch_summary() {
+  rebuild_batch_matrix
   if [[ -f "${BATCH_MATRIX}" ]]; then
     mkdir -p "$(dirname "${GLOBAL_MATRIX}")"
     cp "${BATCH_MATRIX}" "${GLOBAL_MATRIX}"
@@ -609,6 +700,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
       CURRENT_FILE_STORAGE_PATH=""
       CURRENT_HOST_FILE_STORAGE_PATH=""
       SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_smoke_test.log"
+      WORKER_RUNTIME_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_worker_runtime.log"
 
       if [[ "${KV_TIER_MODE}" = "gpu_cpu_storage" ]]; then
         CURRENT_FILE_STORAGE_PATH="${FILE_STORAGE_PATH}"
@@ -639,7 +731,21 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         "${MODEL_NAME}" \
         "${KV_TIER_MODE}" \
         "${HINT_PROFILE}" \
-        "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}"
+        "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
+        "${WORKER_RUNTIME_LOG}"
+
+      sleep 2
+
+      if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
+        postprocess_probe \
+          "${MODEL_NAME}" \
+          "${KV_TIER_MODE}" \
+          "${HINT_PROFILE}" \
+          "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
+          "${WORKER_RUNTIME_LOG}"
+      else
+        echo "Warning: could not capture worker runtime log for ${HINT_PROFILE}" | tee -a "${BATCH_LOG}"
+      fi
     done < <(iter_hint_profiles)
   done
 done

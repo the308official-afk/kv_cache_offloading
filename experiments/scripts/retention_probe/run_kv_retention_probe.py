@@ -9,11 +9,12 @@ import hashlib
 import json
 import os
 import random
+import re
 import sys
 import time
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,8 @@ DEFAULT_CACHE_EVENT_LOG = (
 )
 PROMPT_GENERATOR_VERSION = "cache-word-v2"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
+RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 DEFAULT_PROBE_INPUT_LEN = 14000
 DEFAULT_MAX_CONTEXT_TOKENS = 17146
 
@@ -109,6 +112,7 @@ REQUEST_COLUMNS = [
     "sglang_cache_semantic_tokens",
     "sglang_cache_token_sha256",
     "sglang_cache_direct",
+    "sglang_cache_request_id_source",
     "status",
     "error",
 ]
@@ -144,6 +148,7 @@ SUMMARY_COLUMNS = [
     "successful_requests",
     "failed_requests",
     "sglang_cache_event_log",
+    "worker_runtime_log",
     "requests_csv",
 ]
 
@@ -168,7 +173,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", default=str(DEFAULT_OUT_ROOT))
     parser.add_argument("--matrix-path", default=str(DEFAULT_MATRIX))
     parser.add_argument("--append-matrix", action="store_true")
+    parser.add_argument("--skip-matrix-write", action="store_true")
     parser.add_argument("--cache-event-log", default=str(DEFAULT_CACHE_EVENT_LOG))
+    parser.add_argument("--worker-runtime-log", default="")
+    parser.add_argument("--postprocess-only", action="store_true")
     parser.add_argument("--protected-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
     parser.add_argument("--distractor-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
     parser.add_argument("--distractor-count", type=int, default=10)
@@ -445,6 +453,13 @@ def write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Non
         writer.writerows(rows)
 
 
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
 def append_matrix(path: Path, row: dict[str, Any], columns: list[str]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     needs_header = not path.exists() or path.stat().st_size == 0
@@ -470,6 +485,89 @@ def parse_sglang_event_line(line: str) -> dict[str, Any] | None:
     return event if isinstance(event, dict) else None
 
 
+def clean_log_line(line: str) -> str:
+    return ANSI_RE.sub("", line)
+
+
+def parse_runtime_json_payload(line: str) -> dict[str, Any] | None:
+    if RUNTIME_JSON_PREFIX not in line:
+        return None
+    payload = line.split(RUNTIME_JSON_PREFIX, 1)[1].strip()
+    json_start = payload.find("{")
+    if json_start >= 0:
+        payload = payload[json_start:]
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    request_context = record.get("request_context")
+    if isinstance(request_context, dict):
+        return request_context
+
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        request_context = runtime_observability.get("request_context")
+        if isinstance(request_context, dict):
+            return request_context
+        nvext = runtime_observability.get("nvext")
+        if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+            return nvext["request_context"]
+
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+        return nvext["request_context"]
+    return {}
+
+
+def record_request_ids(record: dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    for key in (
+        "request_id",
+        "external_request_id",
+        "runtime_request_id",
+        "runtime_context_id",
+        "frontend_request_id",
+        "sglang_request_id",
+        "hint_probe_id",
+    ):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+
+    request_context = request_context_from_record(record)
+    for key in ("request_id", "parent_run_id", "task_instance_id"):
+        value = request_context.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    return values
+
+
+def build_worker_runtime_alias_map(worker_runtime_log: Path) -> dict[str, set[str]]:
+    alias_map: dict[str, set[str]] = {}
+    if not worker_runtime_log.exists():
+        return alias_map
+
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        record = parse_runtime_json_payload(clean_log_line(raw_line))
+        if not isinstance(record, dict):
+            continue
+        request_context = request_context_from_record(record)
+        canonical_request_id = request_context.get("request_id")
+        if not isinstance(canonical_request_id, str) or not canonical_request_id:
+            canonical_request_id = record.get("external_request_id")
+        if not isinstance(canonical_request_id, str) or not canonical_request_id:
+            continue
+
+        for alias in record_request_ids(record):
+            alias_map.setdefault(alias, set()).add(canonical_request_id)
+        alias_map.setdefault(canonical_request_id, set()).add(canonical_request_id)
+    return alias_map
+
+
 def event_request_id(event: dict[str, Any]) -> str:
     for key in ("request_id", "external_request_id", "runtime_request_id", "hint_probe_id"):
         value = event.get(key)
@@ -487,8 +585,17 @@ def event_request_id(event: dict[str, Any]) -> str:
     return ""
 
 
-def attach_cache_events(rows: list[dict[str, Any]], cache_event_log: Path) -> None:
+def attach_cache_events(
+    rows: list[dict[str, Any]],
+    cache_event_log: Path,
+    worker_runtime_log: Path | None = None,
+) -> None:
     by_request_id = {str(row.get("request_id")): row for row in rows if row.get("request_id")}
+    worker_alias_map = (
+        build_worker_runtime_alias_map(worker_runtime_log)
+        if isinstance(worker_runtime_log, Path)
+        else {}
+    )
     for row in rows:
         row["sglang_cache_events"] = 0
         row["sglang_cache_match_events"] = 0
@@ -497,6 +604,7 @@ def attach_cache_events(rows: list[dict[str, Any]], cache_event_log: Path) -> No
         row["sglang_cache_semantic_tokens"] = ""
         row["sglang_cache_token_sha256"] = ""
         row["sglang_cache_direct"] = False
+        row["sglang_cache_request_id_source"] = ""
 
     if not cache_event_log.exists():
         return
@@ -509,14 +617,42 @@ def attach_cache_events(rows: list[dict[str, Any]], cache_event_log: Path) -> No
             event = parse_sglang_event_line(line)
             if not event or event.get("event") != "sglang.cache":
                 continue
-            request_id = event_request_id(event)
-            row = by_request_id.get(request_id)
-            if row is None:
+            request_ids_with_source: list[tuple[str, str]] = []
+            direct_request_id = event_request_id(event)
+            if direct_request_id:
+                request_ids_with_source.append((direct_request_id, "event_request_id"))
+
+            for alias_key in (
+                "request_id",
+                "external_request_id",
+                "runtime_request_id",
+                "runtime_context_id",
+                "hint_probe_id",
+                "sglang_request_id",
+            ):
+                alias_value = event.get(alias_key)
+                if not isinstance(alias_value, str) or not alias_value:
+                    continue
+                for mapped_request_id in sorted(worker_alias_map.get(alias_value, set())):
+                    request_ids_with_source.append(
+                        (mapped_request_id, f"worker_runtime.{alias_key}")
+                    )
+
+            matched_request_ids: dict[str, str] = {}
+            for request_id, source in request_ids_with_source:
+                if request_id in by_request_id:
+                    matched_request_ids.setdefault(request_id, source)
+
+            if len(matched_request_ids) != 1:
                 continue
+            request_id, request_id_source = next(iter(matched_request_ids.items()))
+            row = by_request_id[request_id]
 
             action = str(event.get("action") or event.get("function") or "").lower()
             row["sglang_cache_events"] = int(row["sglang_cache_events"]) + 1
             row["sglang_cache_direct"] = True
+            if not row.get("sglang_cache_request_id_source"):
+                row["sglang_cache_request_id_source"] = request_id_source
             if "match" in action:
                 row["sglang_cache_match_events"] = int(row["sglang_cache_match_events"]) + 1
             if "insert" in action or "cache_finished" in action or "cache_unfinished" in action:
@@ -539,6 +675,8 @@ def attach_cache_events(rows: list[dict[str, Any]], cache_event_log: Path) -> No
 
 
 def display_path(path: Path) -> str:
+    if str(path) in {"", "."}:
+        return ""
     try:
         return str(path.relative_to(REPO_ROOT))
     except ValueError:
@@ -587,6 +725,7 @@ def build_summary(
     rows: list[dict[str, Any]],
     requests_csv: Path,
     cache_event_log: Path,
+    worker_runtime_log: Path | None,
 ) -> dict[str, Any]:
     first = next((row for row in rows if row["request_role"] == "a_first"), {})
     replay = next((row for row in rows if row["request_role"] == "a_replay"), {})
@@ -641,6 +780,7 @@ def build_summary(
         "successful_requests": len(rows) - len(failed),
         "failed_requests": len(failed),
         "sglang_cache_event_log": display_path(cache_event_log),
+        "worker_runtime_log": display_path(worker_runtime_log or Path("")),
         "requests_csv": display_path(requests_csv),
     }
     return summary
@@ -698,50 +838,58 @@ def main() -> int:
     cache_event_log = Path(args.cache_event_log).expanduser()
     if not cache_event_log.is_absolute():
         cache_event_log = REPO_ROOT / cache_event_log
+    worker_runtime_log = Path(args.worker_runtime_log).expanduser() if args.worker_runtime_log else None
+    if isinstance(worker_runtime_log, Path) and not worker_runtime_log.is_absolute():
+        worker_runtime_log = REPO_ROOT / worker_runtime_log
 
-    protected_prompt = make_prompt(role="protected_A", target_len=args.protected_input_len, seed=args.seed)
-    rows: list[dict[str, Any]] = []
+    if args.postprocess_only:
+        rows = read_csv_rows(requests_csv)
+        if not rows:
+            raise SystemExit(f"No existing request rows found for postprocess-only mode: {requests_csv}")
+    else:
+        protected_prompt = make_prompt(role="protected_A", target_len=args.protected_input_len, seed=args.seed)
+        rows: list[dict[str, Any]] = []
 
-    sequence: list[tuple[str, str, str]] = [
-        ("a_first", protected_prompt, args.protected_hint_profile),
-    ]
-    for idx in range(args.distractor_count):
-        distractor = make_prompt(
-            role=f"distractor_{idx:04d}",
-            target_len=args.distractor_input_len,
-            seed=args.seed,
-        )
-        sequence.append((f"distractor_{idx:04d}", distractor, args.distractor_hint_profile))
-    sequence.append(("a_replay", protected_prompt, args.protected_hint_profile))
-
-    print(f"KV retention probe run_id={run_id}")
-    print(f"model={args.model}")
-    print(f"prompt_generator_version={PROMPT_GENERATOR_VERSION}")
-    print(f"requests={len(sequence)} protected_hint_profile={args.protected_hint_profile}")
-
-    for sequence_index, (request_role, prompt, hint_profile) in enumerate(sequence):
-        print(f"[{sequence_index + 1}/{len(sequence)}] {request_role} hint_profile={hint_profile}", flush=True)
-        row = send_probe_request(
-            args=args,
-            run_id=run_id,
-            sequence_index=sequence_index,
-            request_role=request_role,
-            prompt=prompt,
-            hint_profile=hint_profile,
-        )
-        rows.append(row)
-        if row["error"]:
-            print(f"  error status={row['status']} {row['error'][:200]}", file=sys.stderr, flush=True)
-            if args.stop_on_error:
-                break
-        else:
-            print(
-                f"  status={row['status']} latency_ms={row['latency_ms']} "
-                f"cached={row['cached_prompt_tokens']} reuse={row['cache_reuse_ratio']}",
-                flush=True,
+        sequence: list[tuple[str, str, str]] = [
+            ("a_first", protected_prompt, args.protected_hint_profile),
+        ]
+        for idx in range(args.distractor_count):
+            distractor = make_prompt(
+                role=f"distractor_{idx:04d}",
+                target_len=args.distractor_input_len,
+                seed=args.seed,
             )
+            sequence.append((f"distractor_{idx:04d}", distractor, args.distractor_hint_profile))
+        sequence.append(("a_replay", protected_prompt, args.protected_hint_profile))
 
-    attach_cache_events(rows, cache_event_log)
+        print(f"KV retention probe run_id={run_id}")
+        print(f"model={args.model}")
+        print(f"prompt_generator_version={PROMPT_GENERATOR_VERSION}")
+        print(f"requests={len(sequence)} protected_hint_profile={args.protected_hint_profile}")
+
+        for sequence_index, (request_role, prompt, hint_profile) in enumerate(sequence):
+            print(f"[{sequence_index + 1}/{len(sequence)}] {request_role} hint_profile={hint_profile}", flush=True)
+            row = send_probe_request(
+                args=args,
+                run_id=run_id,
+                sequence_index=sequence_index,
+                request_role=request_role,
+                prompt=prompt,
+                hint_profile=hint_profile,
+            )
+            rows.append(row)
+            if row["error"]:
+                print(f"  error status={row['status']} {row['error'][:200]}", file=sys.stderr, flush=True)
+                if args.stop_on_error:
+                    break
+            else:
+                print(
+                    f"  status={row['status']} latency_ms={row['latency_ms']} "
+                    f"cached={row['cached_prompt_tokens']} reuse={row['cache_reuse_ratio']}",
+                    flush=True,
+                )
+
+    attach_cache_events(rows, cache_event_log, worker_runtime_log)
     write_csv(requests_csv, rows, REQUEST_COLUMNS)
     summary = build_summary(
         args=args,
@@ -749,12 +897,14 @@ def main() -> int:
         rows=rows,
         requests_csv=requests_csv,
         cache_event_log=cache_event_log,
+        worker_runtime_log=worker_runtime_log,
     )
     write_csv(summary_csv, [summary], SUMMARY_COLUMNS)
-    if args.append_matrix:
-        append_matrix(matrix_path, summary, SUMMARY_COLUMNS)
-    else:
-        write_csv(matrix_path, [summary], SUMMARY_COLUMNS)
+    if not args.skip_matrix_write:
+        if args.append_matrix:
+            append_matrix(matrix_path, summary, SUMMARY_COLUMNS)
+        else:
+            write_csv(matrix_path, [summary], SUMMARY_COLUMNS)
     write_summary_md(summary_md, summary)
 
     print(f"Request rows: {requests_csv}")
