@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 from pathlib import Path
 from typing import Any
 
@@ -72,6 +73,39 @@ def round_ratio(value: float | None) -> str:
     return f"{value:.3f}"
 
 
+def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:
+    if not path.exists():
+        return {}
+    rows = read_csv(path)
+    return {
+        row.get("request_role", ""): row
+        for row in rows
+        if row.get("request_role")
+    }
+
+
+def parse_worker_capacity(path: Path) -> dict[str, int | None]:
+    if not path.exists():
+        return {
+            "worker_kv_capacity_tokens": None,
+            "worker_context_len": None,
+        }
+    kv_capacity = None
+    context_len = None
+    scheduler_re = re.compile(
+        r"max_total_num_tokens=(?P<kv>\d+).*context_len=(?P<context>\d+)"
+    )
+    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = scheduler_re.search(raw_line)
+        if match:
+            kv_capacity = as_int(match.group("kv"))
+            context_len = as_int(match.group("context"))
+    return {
+        "worker_kv_capacity_tokens": kv_capacity,
+        "worker_context_len": context_len,
+    }
+
+
 def derived_row(
     *,
     sweep_id: str,
@@ -86,20 +120,85 @@ def derived_row(
     min_latency_gain_ms: float,
     sweep_status: str,
 ) -> dict[str, Any]:
+    requests_csv_path = Path(summary.get("requests_csv", ""))
+    if not requests_csv_path.is_absolute():
+        requests_csv_path = Path.cwd() / requests_csv_path
+    request_rows = request_rows_by_role(requests_csv_path)
+
+    worker_log_path = Path(summary.get("worker_runtime_log", ""))
+    if not worker_log_path.is_absolute():
+        worker_log_path = Path.cwd() / worker_log_path
+    worker_capacity = parse_worker_capacity(worker_log_path)
+
     hint_profile = summary.get("protected_hint_profile", "")
     replay_status = summary.get("a_replay_status", "")
     replay_ok = request_succeeded(replay_status)
     speedup_ratio = as_float(summary.get("a_replay_speedup_ratio"))
     latency_delta_ms = as_float(summary.get("a_replay_latency_delta_ms"))
+    a_first_prompt_tokens = as_int(summary.get("a_first_prompt_tokens"))
+    if a_first_prompt_tokens is None:
+        a_first_prompt_tokens = as_int(request_rows.get("a_first", {}).get("prompt_tokens"))
+    first_distractor_prompt_tokens = as_int(summary.get("first_distractor_prompt_tokens"))
+    if first_distractor_prompt_tokens is None:
+        first_distractor_prompt_tokens = next(
+            (
+                as_int(row.get("prompt_tokens"))
+                for role, row in request_rows.items()
+                if role.startswith("distractor_")
+            ),
+            None,
+        )
+    worker_kv_capacity_tokens = as_int(summary.get("worker_kv_capacity_tokens"))
+    if worker_kv_capacity_tokens is None:
+        worker_kv_capacity_tokens = worker_capacity["worker_kv_capacity_tokens"]
+    worker_context_len = as_int(summary.get("worker_context_len"))
+    if worker_context_len is None:
+        worker_context_len = worker_capacity["worker_context_len"]
+    replay_cached_tokens = as_int(summary.get("a_replay_cached_tokens"))
+    replay_prompt_tokens = as_int(summary.get("a_replay_prompt_tokens"))
+    if replay_prompt_tokens is None:
+        replay_prompt_tokens = as_int(request_rows.get("a_replay", {}).get("prompt_tokens"))
+    replay_cache_reuse_ratio = as_float(summary.get("a_replay_cache_reuse_ratio"))
     cache_match_events = as_int(summary.get("a_replay_sglang_cache_match_events")) or 0
     cache_events = as_int(summary.get("a_replay_sglang_cache_events")) or 0
     cache_direct = truthy(summary.get("a_replay_sglang_cache_direct"))
     survived_by_events = replay_ok and cache_direct and cache_match_events >= match_event_min
+    survived_by_usage = replay_ok and replay_cached_tokens is not None and replay_cached_tokens > 0
     survived_by_latency = replay_ok and (
         (speedup_ratio is not None and speedup_ratio >= min_speedup_ratio)
         or (latency_delta_ms is not None and latency_delta_ms <= -abs(min_latency_gain_ms))
     )
-    survived_effective = survived_by_events and survived_by_latency
+    if replay_cached_tokens is not None:
+        survived_effective = survived_by_usage and survived_by_latency
+        effective_survival_source = "response_usage_cached_tokens"
+    else:
+        survived_effective = survived_by_events and survived_by_latency
+        effective_survival_source = "sglang_cache_events_fallback"
+
+    kv_tokens_left_after_a = (
+        worker_kv_capacity_tokens - a_first_prompt_tokens
+        if worker_kv_capacity_tokens is not None and a_first_prompt_tokens is not None
+        else None
+    )
+    kv_tokens_left_after_a_after_first_distractor = (
+        worker_kv_capacity_tokens - a_first_prompt_tokens - first_distractor_prompt_tokens
+        if worker_kv_capacity_tokens is not None
+        and a_first_prompt_tokens is not None
+        and first_distractor_prompt_tokens is not None
+        else None
+    )
+
+    if survived_by_usage and survived_by_latency:
+        reuse_signal = "true_reuse_hit"
+    elif survived_by_usage:
+        reuse_signal = "usage_hit_without_speedup"
+    elif survived_by_events and survived_by_latency:
+        reuse_signal = "event_match_with_speedup"
+    elif survived_by_events:
+        reuse_signal = "semantic_match_only"
+    else:
+        reuse_signal = "no_reuse_evidence"
+
     return {
         "sweep_status": sweep_status,
         "retention_sweep_id": sweep_id,
@@ -115,13 +214,29 @@ def derived_row(
         "a_replay_latency_ms": summary.get("a_replay_latency_ms", ""),
         "a_replay_latency_delta_ms": summary.get("a_replay_latency_delta_ms", ""),
         "a_replay_speedup_ratio": summary.get("a_replay_speedup_ratio", ""),
+        "worker_kv_capacity_tokens": worker_kv_capacity_tokens if worker_kv_capacity_tokens is not None else "",
+        "worker_context_len": worker_context_len if worker_context_len is not None else "",
+        "a_first_prompt_tokens": a_first_prompt_tokens if a_first_prompt_tokens is not None else "",
+        "first_distractor_prompt_tokens": first_distractor_prompt_tokens if first_distractor_prompt_tokens is not None else "",
+        "kv_tokens_left_after_a": kv_tokens_left_after_a if kv_tokens_left_after_a is not None else "",
+        "kv_tokens_left_after_a_after_first_distractor": (
+            kv_tokens_left_after_a_after_first_distractor
+            if kv_tokens_left_after_a_after_first_distractor is not None
+            else ""
+        ),
+        "a_replay_cached_tokens": replay_cached_tokens if replay_cached_tokens is not None else "",
+        "a_replay_prompt_tokens": replay_prompt_tokens if replay_prompt_tokens is not None else "",
+        "a_replay_cache_reuse_ratio": round_ratio(replay_cache_reuse_ratio),
         "a_replay_sglang_cache_events": cache_events,
         "a_replay_sglang_cache_match_events": cache_match_events,
         "a_replay_sglang_cache_semantic_tokens": summary.get("a_replay_sglang_cache_semantic_tokens", ""),
         "a_replay_sglang_cache_direct": str(cache_direct).lower(),
+        "survived_by_usage": str(survived_by_usage).lower(),
         "survived_by_events": str(survived_by_events).lower(),
         "survived_by_latency": str(survived_by_latency).lower(),
         "survived_effective": str(survived_effective).lower(),
+        "effective_survival_source": effective_survival_source,
+        "reuse_signal": reuse_signal,
         "requests_csv": summary.get("requests_csv", ""),
         "worker_runtime_log": summary.get("worker_runtime_log", ""),
     }
@@ -225,7 +340,8 @@ def write_summary_md(
         "## Effective survival rule",
         "",
         f"- replay must succeed (`200`/`201`)",
-        f"- replay must have direct cache attribution and at least `{match_event_min}` match event(s)",
+        f"- if replay exposes cached prompt tokens, we treat that as the primary reuse signal",
+        f"- otherwise we fall back to direct cache attribution plus at least `{match_event_min}` match event(s)",
         f"- replay must also show meaningful benefit: speedup ratio >= `{min_speedup_ratio}` or latency gain >= `{int(min_latency_gain_ms)}` ms",
         "",
         "## Comparison",
@@ -287,13 +403,25 @@ def main() -> int:
         "a_replay_latency_ms",
         "a_replay_latency_delta_ms",
         "a_replay_speedup_ratio",
+        "worker_kv_capacity_tokens",
+        "worker_context_len",
+        "a_first_prompt_tokens",
+        "first_distractor_prompt_tokens",
+        "kv_tokens_left_after_a",
+        "kv_tokens_left_after_a_after_first_distractor",
+        "a_replay_cached_tokens",
+        "a_replay_prompt_tokens",
+        "a_replay_cache_reuse_ratio",
         "a_replay_sglang_cache_events",
         "a_replay_sglang_cache_match_events",
         "a_replay_sglang_cache_semantic_tokens",
         "a_replay_sglang_cache_direct",
+        "survived_by_usage",
         "survived_by_events",
         "survived_by_latency",
         "survived_effective",
+        "effective_survival_source",
+        "reuse_signal",
         "requests_csv",
         "worker_runtime_log",
     ]

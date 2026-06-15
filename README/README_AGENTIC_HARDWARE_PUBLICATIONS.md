@@ -120,3 +120,10 @@ Core idea: Most attention heads mainly look nearby, while only a few heads need
 the full old context. RazorAttention keeps full KV cache for those retrieval
 heads, drops far-away tokens for the other heads, and adds one compensation
 token to summarize the dropped information.
+
+## CacheGen: KV Cache Compression and Streaming for Fast Large Language Model Serving
+
+Core idea: Reusing KV cache can avoid rereading a long context, but fetching a
+huge KV cache over the network can also be slow. CacheGen compresses KV cache
+into compact bitstreams and streams/decompresses it efficiently, so loading a
+saved context cache can be faster than recomputing the prompt.

@@ -993,7 +993,11 @@ restart and cold cache start, then writes the reports. That prevents the
 `high-priority` or `high-reuse` runs from inheriting warm KV cache from the
 earlier `none` control run.
 
-Pilot:
+Positive-control pilot:
+
+Use this first to prove replay speedup exists at all under gentle pressure.
+With `500/500`, replay `A` should usually be faster than the first `A`
+because everything still fits comfortably in GPU KV cache.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1005,10 +1009,10 @@ export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority high-reuse" \
-DISTRACTOR_COUNT=10 \
-PROTECTED_INPUT_LEN=14000 \
-DISTRACTOR_INPUT_LEN=14000 \
+PROTECTED_HINT_PROFILES="high-priority" \
+DISTRACTOR_COUNT=2 \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=500 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
@@ -1017,27 +1021,10 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-Pressure run:
+Hint-sensitive pressure run:
 
-```bash
-cd ~/kv_cache_offloading
-
-RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority high-reuse" \
-DISTRACTOR_COUNT=100 \
-PROTECTED_INPUT_LEN=14000 \
-DISTRACTOR_INPUT_LEN=14000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-./agentbench/run_kv_retention_probe_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-Aggressive pressure run:
+Use this next when you want the runtime to have a real eviction choice, but
+not such extreme pressure that one distractor immediately wipes out prompt A.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1046,10 +1033,10 @@ RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
-DISTRACTOR_COUNT=150 \
-PROTECTED_INPUT_LEN=14000 \
-DISTRACTOR_INPUT_LEN=14000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.55 \
+DISTRACTOR_COUNT=10 \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1057,18 +1044,47 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-That makes it much more likely that the `none` control run loses prompt A while
-the protected run still keeps it.
+Stronger pressure run:
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+DISTRACTOR_COUNT=25 \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+If you still do not see separation, then increase pressure gradually:
+
+```bash
+DISTRACTOR_COUNT=50
+```
+
+or:
+
+```bash
+GPU_ONLY_MEM_FRACTION_STATIC=0.60
+```
 
 Multiple models:
 
 ```bash
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 KV_TIER_MODES="gpu_only" \
-PROTECTED_HINT_PROFILES="high-priority high-reuse" \
-DISTRACTOR_COUNT=100 \
-PROTECTED_INPUT_LEN=14000 \
-DISTRACTOR_INPUT_LEN=14000 \
+PROTECTED_HINT_PROFILES="high-priority" \
+DISTRACTOR_COUNT=10 \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1141,9 +1157,10 @@ STOP_DYNAMO_WHEN_DONE=1        Stop Dynamo after the final probe.
 Do not set `PROTECTED_INPUT_LEN` or `DISTRACTOR_INPUT_LEN` above the effective
 worker limit. If the worker logs `Input length (...) exceeds the maximum allowed
 length (...)`, set `MAX_CONTEXT_TOKENS` to that allowed length and reduce both
-input lengths. The defaults use 14k repeated words against a 17,146-token worker
-limit because the chat template and tokenizer add extra tokens beyond the
-requested word count.
+input lengths. Also do not make them so large that one distractor immediately
+consumes all leftover GPU KV room after prompt A. Start with `500/500` to prove
+warm replay speedup exists, then move to something like `8000/2000` when you
+want a hint-sensitive retention test.
 
 ### Manual Debugging Path
 
@@ -1186,7 +1203,7 @@ docker logs -f dynamo-sglang-worker
 
 #### Step 2: Run No-Hint Control
 
-Use a small distractor count first.
+Use a small positive-control setup first.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1197,9 +1214,9 @@ python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --kv-tier-mode gpu_only \
   --protected-hint-profile none \
   --distractor-hint-profile none \
-  --protected-input-len 14000 \
-  --distractor-input-len 14000 \
-  --distractor-count 10 \
+  --protected-input-len 500 \
+  --distractor-input-len 500 \
+  --distractor-count 2 \
   --random-output-len 1 \
   --ignore-eos
 ```
@@ -1217,17 +1234,19 @@ python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --kv-tier-mode gpu_only \
   --protected-hint-profile high-priority \
   --distractor-hint-profile none \
-  --protected-input-len 14000 \
-  --distractor-input-len 14000 \
-  --distractor-count 10 \
+  --protected-input-len 500 \
+  --distractor-input-len 500 \
+  --distractor-count 2 \
   --random-output-len 1 \
   --ignore-eos
 ```
 
-If the pilot works, increase pressure:
+If the positive control works, increase pressure gradually:
 
 ```bash
---distractor-count 100
+--protected-input-len 8000
+--distractor-input-len 2000
+--distractor-count 10
 ```
 
 #### Step 4: Read The Retention Reports
@@ -1252,6 +1271,9 @@ Use this when you want to answer:
 
 Recommended first run:
 
+Start with a moderate setup that can still show hint differences without
+immediately overflowing the leftover GPU KV room after prompt A.
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1274,13 +1296,13 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-DISTRACTOR_COUNTS="25 50 75 100" \
+DISTRACTOR_COUNTS="2 10 20" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=14000 \
-DISTRACTOR_INPUT_LEN=14000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=1 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1322,6 +1344,11 @@ retention_threshold_summary.md
   Short interpretation of whether the protected run survived longer.
 ```
 
+Each new call to `./agentbench/run_kv_retention_threshold_sweep_single_host.sh`
+automatically clears the top-level live `retention_threshold_*` files in
+`experiments/reports/` before writing fresh progress. Older archived sweep
+folders under `experiments/reports/retention_threshold_sweeps/` are kept.
+
 How to read the result:
 
 - if `high-priority` first evicts later than `none`, that is evidence the hint helped retention
@@ -1331,8 +1358,9 @@ How to read the result:
 The threshold report uses an intentionally strict survival rule:
 
 - replay A must succeed
-- replay A must have direct cache attribution
-- replay A must have at least one cache match event
+- if replay exposes `a_replay_cached_tokens`, that is the primary reuse signal
+- otherwise replay A must have direct cache attribution
+- and at least one cache match event
 - replay A must also show meaningful benefit:
   - speedup ratio >= `1.05`, or
   - latency gain >= `100` ms
@@ -1348,19 +1376,37 @@ a_first_status               HTTP status for the first A request.
 a_replay_status              HTTP status for the replay A request.
 a_replay_latency_delta_ms    replay - first. Negative means replay was faster.
 a_replay_speedup_ratio       first / replay. Above 1.000 means replay was faster.
+worker_kv_capacity_tokens    Effective GPU KV capacity seen by the worker.
+worker_context_len           Model context length reported by the worker.
+a_first_prompt_tokens        Prompt-token size of the first A request.
+first_distractor_prompt_tokens
+                             Prompt-token size of the first distractor request.
+kv_tokens_left_after_a       Remaining GPU KV room after A is stored.
+kv_tokens_left_after_a_after_first_distractor
+                             Remaining GPU KV room after A and one distractor.
 a_replay_cached_tokens       Cached prompt tokens reported for replay, if exposed.
+a_replay_prompt_tokens       Replay prompt-token count, if exposed.
 a_replay_cache_reuse_ratio   cached / prompt tokens for replay, if exposed.
-a_survived_cache_threshold   Inferred from cached-token ratio when available.
 a_replay_sglang_cache_events Direct SGLang cache events matched to replay request.
 a_replay_sglang_cache_match_events
                              Direct SGLang match-prefix/cache-lookup events for replay.
 a_replay_sglang_cache_direct True means SGLang evidence matched this request ID.
+survived_by_usage            True means replay reported real cached prompt tokens.
+survived_by_events           True means replay had direct SGLang cache-match evidence.
+survived_by_latency          True means replay showed meaningful speedup.
+survived_effective           True means replay both reused cache and got faster.
+effective_survival_source    Which signal was used for the final survival decision.
+reuse_signal                 Quick label: true_reuse_hit, usage_hit_without_speedup,
+                             semantic_match_only, event_match_with_speedup, or no_reuse_evidence.
 ```
 
 Interpretation:
 
 ```text
 If high-priority A replays faster than no-hint A, the hint may be improving retention.
+If `survived_by_usage=true`, replay reported real cached prompt-token reuse.
+If `reuse_signal=semantic_match_only`, SGLang noticed related cache state but replay did not show strong practical reuse.
+If `kv_tokens_left_after_a` is small and `first_distractor_prompt_tokens` is larger than that leftover room, A is likely to be displaced quickly on `gpu_only`.
 If cached-token evidence is higher for high-priority A, the hint may be preserving more prefix KV.
 If the cache columns are empty, the endpoint did not expose cached-token usage for this request.
 If SGLang cache direct attribution is true, the cache evidence came from instrumented SGLang events, not timestamp guessing.

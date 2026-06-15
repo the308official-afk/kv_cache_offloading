@@ -134,6 +134,12 @@ SUMMARY_COLUMNS = [
     "a_replay_latency_ms",
     "a_replay_latency_delta_ms",
     "a_replay_speedup_ratio",
+    "worker_kv_capacity_tokens",
+    "worker_context_len",
+    "a_first_prompt_tokens",
+    "first_distractor_prompt_tokens",
+    "kv_tokens_left_after_a",
+    "kv_tokens_left_after_a_after_first_distractor",
     "a_first_cached_tokens",
     "a_replay_cached_tokens",
     "a_replay_cache_reuse_ratio",
@@ -568,6 +574,32 @@ def build_worker_runtime_alias_map(worker_runtime_log: Path) -> dict[str, set[st
     return alias_map
 
 
+def parse_worker_capacity(worker_runtime_log: Path | None) -> dict[str, int | None]:
+    if not isinstance(worker_runtime_log, Path) or not worker_runtime_log.exists():
+        return {
+            "worker_kv_capacity_tokens": None,
+            "worker_context_len": None,
+        }
+
+    kv_capacity = None
+    context_len = None
+    scheduler_re = re.compile(
+        r"max_total_num_tokens=(?P<kv>\d+).*context_len=(?P<context>\d+)"
+    )
+
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = clean_log_line(raw_line)
+        match = scheduler_re.search(line)
+        if match:
+            kv_capacity = maybe_int(match.group("kv"))
+            context_len = maybe_int(match.group("context"))
+
+    return {
+        "worker_kv_capacity_tokens": kv_capacity,
+        "worker_context_len": context_len,
+    }
+
+
 def event_request_id(event: dict[str, Any]) -> str:
     for key in ("request_id", "external_request_id", "runtime_request_id", "hint_probe_id"):
         value = event.get(key)
@@ -729,6 +761,7 @@ def build_summary(
 ) -> dict[str, Any]:
     first = next((row for row in rows if row["request_role"] == "a_first"), {})
     replay = next((row for row in rows if row["request_role"] == "a_replay"), {})
+    first_distractor = next((row for row in rows if str(row.get("request_role", "")).startswith("distractor_")), {})
     first_ok = request_succeeded(first)
     replay_ok = request_succeeded(replay)
     first_latency = maybe_float(first.get("latency_ms")) if first_ok else None
@@ -748,6 +781,23 @@ def build_summary(
     elif replay_ok and truthy(replay.get("sglang_cache_direct")):
         source = "sglang_cache_events"
 
+    worker_capacity = parse_worker_capacity(worker_runtime_log)
+    a_first_prompt_tokens = maybe_int(first.get("prompt_tokens"))
+    first_distractor_prompt_tokens = maybe_int(first_distractor.get("prompt_tokens"))
+    worker_kv_capacity_tokens = worker_capacity["worker_kv_capacity_tokens"]
+    kv_tokens_left_after_a = (
+        worker_kv_capacity_tokens - a_first_prompt_tokens
+        if worker_kv_capacity_tokens is not None and a_first_prompt_tokens is not None
+        else None
+    )
+    kv_tokens_left_after_a_after_first_distractor = (
+        worker_kv_capacity_tokens - a_first_prompt_tokens - first_distractor_prompt_tokens
+        if worker_kv_capacity_tokens is not None
+        and a_first_prompt_tokens is not None
+        and first_distractor_prompt_tokens is not None
+        else None
+    )
+
     failed = [row for row in rows if str(row.get("status")) not in {"200", "201"}]
     summary = {
         "run_id": run_id,
@@ -766,6 +816,12 @@ def build_summary(
         "a_replay_latency_ms": round_ms(replay_latency),
         "a_replay_latency_delta_ms": round_ms(latency_delta),
         "a_replay_speedup_ratio": round_ratio(speedup),
+        "worker_kv_capacity_tokens": int_or_empty(worker_kv_capacity_tokens),
+        "worker_context_len": int_or_empty(worker_capacity["worker_context_len"]),
+        "a_first_prompt_tokens": int_or_empty(a_first_prompt_tokens),
+        "first_distractor_prompt_tokens": int_or_empty(first_distractor_prompt_tokens),
+        "kv_tokens_left_after_a": int_or_empty(kv_tokens_left_after_a),
+        "kv_tokens_left_after_a_after_first_distractor": int_or_empty(kv_tokens_left_after_a_after_first_distractor),
         "a_first_cached_tokens": int_or_empty(first.get("cached_prompt_tokens")),
         "a_replay_cached_tokens": int_or_empty(replay.get("cached_prompt_tokens")),
         "a_replay_cache_reuse_ratio": round_ratio(replay_ratio),
@@ -806,6 +862,12 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- replay latency ms: `{summary['a_replay_latency_ms']}`",
         f"- replay delta ms: `{summary['a_replay_latency_delta_ms']}`",
         f"- speedup ratio: `{summary['a_replay_speedup_ratio']}`",
+        f"- worker kv capacity tokens: `{summary['worker_kv_capacity_tokens']}`",
+        f"- worker context length: `{summary['worker_context_len']}`",
+        f"- A prompt tokens: `{summary['a_first_prompt_tokens']}`",
+        f"- first distractor prompt tokens: `{summary['first_distractor_prompt_tokens']}`",
+        f"- kv tokens left after A: `{summary['kv_tokens_left_after_a']}`",
+        f"- kv tokens left after A and first distractor: `{summary['kv_tokens_left_after_a_after_first_distractor']}`",
         f"- replay cached tokens: `{summary['a_replay_cached_tokens']}`",
         f"- replay cache reuse ratio: `{summary['a_replay_cache_reuse_ratio']}`",
         f"- replay SGLang cache events: `{summary['a_replay_sglang_cache_events']}`",

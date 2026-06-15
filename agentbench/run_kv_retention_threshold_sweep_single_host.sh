@@ -112,6 +112,14 @@ init_progress_file() {
   printf '%s\n' "retention_sweep_id,model,kv_tier_mode,distractor_count,retention_probe_id,batch_matrix,status" > "${SWEEP_PROGRESS}"
 }
 
+reset_latest_threshold_reports() {
+  rm -f \
+    "${LATEST_PROGRESS}" \
+    "${LATEST_MATRIX}" \
+    "${LATEST_COMPARISON}" \
+    "${LATEST_SUMMARY}"
+}
+
 append_progress_row() {
   "${PYTHON_BIN}" - <<'PY' \
     "${SWEEP_PROGRESS}" \
@@ -142,6 +150,25 @@ with path.open("a", encoding="utf-8", newline="") as handle:
 PY
 }
 
+rebuild_threshold_reports() {
+  local sweep_status="$1"
+  "${PYTHON_BIN}" experiments/scripts/retention_probe/build_retention_threshold_report.py \
+    --progress-csv "${SWEEP_PROGRESS}" \
+    --out-matrix "${SWEEP_MATRIX}" \
+    --out-comparison "${SWEEP_COMPARISON}" \
+    --out-summary-md "${SWEEP_SUMMARY}" \
+    --control-hint-profile "${CONTROL_HINT_PROFILE}" \
+    --match-event-min "${RETENTION_MATCH_EVENT_MIN}" \
+    --min-speedup-ratio "${RETENTION_MIN_SPEEDUP_RATIO}" \
+    --min-latency-gain-ms "${RETENTION_MIN_LATENCY_GAIN_MS}" \
+    --sweep-status "${sweep_status}"
+
+  cp "${SWEEP_PROGRESS}" "${LATEST_PROGRESS}"
+  cp "${SWEEP_MATRIX}" "${LATEST_MATRIX}"
+  cp "${SWEEP_COMPARISON}" "${LATEST_COMPARISON}"
+  cp "${SWEEP_SUMMARY}" "${LATEST_SUMMARY}"
+}
+
 MODELS_TO_RUN=()
 while IFS= read -r MODEL_LINE; do
   MODELS_TO_RUN+=("${MODEL_LINE}")
@@ -151,6 +178,7 @@ if [[ "${#MODELS_TO_RUN[@]}" -eq 0 ]]; then
   exit 1
 fi
 
+reset_latest_threshold_reports
 init_progress_file
 
 {
@@ -208,8 +236,10 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         ./agentbench/run_kv_retention_probe_single_host.sh "${MODEL_NAME}" \
         2>&1 | tee -a "${SWEEP_LOG}"; then
         append_progress_row "${MODEL_NAME}" "${KV_TIER_MODE}" "${DISTRACTOR_COUNT}" "${PROBE_ID}" "${BATCH_MATRIX}" "ok"
+        rebuild_threshold_reports "partial"
       else
         append_progress_row "${MODEL_NAME}" "${KV_TIER_MODE}" "${DISTRACTOR_COUNT}" "${PROBE_ID}" "${BATCH_MATRIX}" "failed"
+        rebuild_threshold_reports "partial"
         if [[ "${STOP_ON_PROBE_FAILURE}" = "1" ]]; then
           echo "Stopping threshold sweep because STOP_ON_PROBE_FAILURE=1" | tee -a "${SWEEP_LOG}" >&2
           exit 1
@@ -219,20 +249,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
   done
 done
 
-"${PYTHON_BIN}" experiments/scripts/retention_probe/build_retention_threshold_report.py \
-  --progress-csv "${SWEEP_PROGRESS}" \
-  --out-matrix "${SWEEP_MATRIX}" \
-  --out-comparison "${SWEEP_COMPARISON}" \
-  --out-summary-md "${SWEEP_SUMMARY}" \
-  --control-hint-profile "${CONTROL_HINT_PROFILE}" \
-  --match-event-min "${RETENTION_MATCH_EVENT_MIN}" \
-  --min-speedup-ratio "${RETENTION_MIN_SPEEDUP_RATIO}" \
-  --min-latency-gain-ms "${RETENTION_MIN_LATENCY_GAIN_MS}"
-
-cp "${SWEEP_PROGRESS}" "${LATEST_PROGRESS}"
-cp "${SWEEP_MATRIX}" "${LATEST_MATRIX}"
-cp "${SWEEP_COMPARISON}" "${LATEST_COMPARISON}"
-cp "${SWEEP_SUMMARY}" "${LATEST_SUMMARY}"
+rebuild_threshold_reports "complete"
 
 echo
 echo "Retention threshold sweep complete."
