@@ -84,7 +84,17 @@ python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
 If this is a fresh machine and you plan to run instrumented Dynamo/SGLang
-experiments, build the local runtime-logging images once:
+experiments, prepare the local Dynamo source clone first:
+
+```bash
+cd ~/kv_cache_offloading
+
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+
+ls -ld ~/kv_cache_offloading/upstream/dynamo
+```
+
+Then build the local runtime-logging images once:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -102,6 +112,10 @@ each new machine before experiments that use:
 
 - `local/dynamo-frontend:runtime-json-logs`
 - `local/dynamo-sglang:runtime-json-logs`
+
+If you see an error like `Dynamo source directory not found`, it usually means
+`~/kv_cache_offloading/upstream/dynamo` has not been created yet. Run the
+prepare step above, then rerun the image build.
 
 Before NodeBB SWE-bench tasks, complete
 [README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md). Do not run
