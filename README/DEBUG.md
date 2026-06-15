@@ -1,5 +1,29 @@
 # Debug Guide
 
+
+
+I'm seeing this error:
+ => [frontend 14/23] COPY --chown=dynamo: --from=dynamo_base /bin/uv /bin/uvx /bin/                                                                                               0.8s
+ => [wheel_builder_base  4/17] COPY --from=dynamo_base /etc/ld.so.conf.d/hpcx.conf /etc/ld.so.conf.d/hpcx.conf                                                                    0.0s
+ => [wheel_builder_base  5/17] COPY --from=dynamo_base /usr/local/rustup /usr/local/rustup                                                                                        0.3s
+ => [wheel_builder_base  6/17] COPY --from=dynamo_base /usr/local/cargo /usr/local/cargo                                                                                          0.0s
+ => ERROR [wheel_builder_base  7/17] RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked     dnf install -y --setopt=tsflags=nocontexts almalinux-release-synergy &&      0.1s
+------
+ > [wheel_builder_base  7/17] RUN --mount=type=cache,target=/var/cache/dnf,sharing=locked     dnf install -y --setopt=tsflags=nocontexts almalinux-release-synergy &&     dnf config-manager --set-enabled powertools &&     dnf install -y --setopt=tsflags=nocontexts         autoconf         automake         libtool         make         rpm-build         rpm-sign         cmake         ninja-build         clang-devel         gcc-toolset-14-gcc         gcc-toolset-14-gcc-c++         gcc-toolset-14-binutils         flex         wget         dkms         protobuf-compiler         libibverbs         libibverbs-devel         rdma-core         rdma-core-devel         libibumad         libibumad-devel         librdmacm-devel         numactl-devel         libcurl-devel         openssl-devel         libuuid-devel         zlib-devel:
+0.109 exec /bin/sh: exec format error
+------
+ERROR: failed to solve: process "/bin/sh -c dnf install -y --setopt=tsflags=nocontexts almalinux-release-synergy &&     dnf config-manager --set-enabled powertools &&     dnf install -y --setopt=tsflags=nocontexts         autoconf         automake         libtool         make         rpm-build         rpm-sign         cmake         ninja-build         clang-devel         gcc-toolset-14-gcc         gcc-toolset-14-gcc-c++         gcc-toolset-14-binutils         flex         wget         dkms         protobuf-compiler         libibverbs         libibverbs-devel         rdma-core         rdma-core-devel         libibumad         libibumad-devel         librdmacm-devel         numactl-devel         libcurl-devel         openssl-devel         libuuid-devel         zlib-devel" did not complete successfully: exit code: 255
+Error response from daemon: No such image: local/dynamo-frontend:runtime-json-logs
+Error response from daemon: No such image: local/dynamo-sglang:runtime-json-logs
+instrumented images ok
+ojaiyeob@gracehopper:~/kv_cache_offloading-v5$
+
+
+
+
+
+
+
 ## AgentBench Environment Setup Runbook
 
 Use [README_AGENTBENCH_ENVIRONMENT.md](README/README_AGENTBENCH_ENVIRONMENT.md) as the
