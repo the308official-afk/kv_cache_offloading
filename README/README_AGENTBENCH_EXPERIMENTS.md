@@ -59,12 +59,24 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+export MODEL_SMOKE_RETRIES=60
+export MODEL_SMOKE_DELAY_SECS=10
+export MODEL_COOLDOWN_SECS=30
 
 echo "Using model: $MODEL_NAME"
 ```
 
 All experiments below inherit this execution policy unless you explicitly
 override it in the shell.
+
+For larger models such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`, raise the
+readiness window before starting long experiments:
+
+```bash
+export MODEL_SMOKE_RETRIES=180
+export MODEL_SMOKE_DELAY_SECS=15
+export MODEL_COOLDOWN_SECS=60
+```
 
 If this is a fresh machine, install the upstream Deep Agents dependency first:
 
@@ -777,6 +789,15 @@ MODEL_COOLDOWN_SECS=30           Extra wait after smoke-test success.
 STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
 ```
 
+For larger models, especially 30B/31B-class models, use a wider readiness
+window:
+
+```bash
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+```
+
 ## Experiment 8: Full Design-Space Sweep
 
 Use this when you want one automated sweep across:
@@ -956,6 +977,14 @@ MODEL_SMOKE_RETRIES             Default 60.
 MODEL_SMOKE_DELAY_SECS          Default 10.
 MODEL_COOLDOWN_SECS             Default 30.
 STOP_DYNAMO_WHEN_DONE=1         Stop Dynamo after the final model.
+```
+
+For larger models, increase those to something like:
+
+```text
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
 ```
 
 KV tier mode mapping:
@@ -1379,6 +1408,15 @@ Recommended first run:
 
 Start with a moderate setup that can still show hint differences without
 immediately overflowing the leftover GPU KV room after prompt A.
+
+If you are using a larger model such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`,
+set a larger readiness window first:
+
+```bash
+export MODEL_SMOKE_RETRIES=180
+export MODEL_SMOKE_DELAY_SECS=15
+export MODEL_COOLDOWN_SECS=60
+```
 
 ```bash
 cd ~/kv_cache_offloading

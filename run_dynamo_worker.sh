@@ -164,7 +164,8 @@ ensure_dirs() {
     sudo chmod 777 "${HICACHE_STORAGE_HOST_PATH}" || true
   fi
   if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
-    mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
+    sudo mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
+    sudo chmod 777 "${SGLANG_TRANSFER_LOG_DIR}" || true
     if [[ "${SGLANG_TRANSFER_LOG_PATH}" == /transfer-logs/* ]]; then
       local transfer_log_name
       transfer_log_name="$(basename "${SGLANG_TRANSFER_LOG_PATH}")"
