@@ -10,6 +10,8 @@ WORKER_IMAGE_TAG="${WORKER_IMAGE_TAG:-local/dynamo-sglang:runtime-json-logs}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
 SKIP_WORKER="${SKIP_WORKER:-0}"
 LEAN_FRONTEND="${LEAN_FRONTEND:-0}"
+DOCKER_BUILD_PLATFORM="${DOCKER_BUILD_PLATFORM:-${TARGET_PLATFORM:-}}"
+DOCKER_BUILD_LOAD="${DOCKER_BUILD_LOAD:-1}"
 
 require_valid_source_repo() {
   if [[ ! -d "${SOURCE_DIR}" ]]; then
@@ -66,6 +68,31 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
+build_image() {
+  local tag="$1"
+  local dockerfile="$2"
+
+  if [[ -n "${DOCKER_BUILD_PLATFORM}" ]]; then
+    if docker buildx version >/dev/null 2>&1; then
+      local cmd=(docker buildx build)
+      if [[ "${DOCKER_BUILD_LOAD}" == "1" ]]; then
+        cmd+=(--load)
+      fi
+      cmd+=(--platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .)
+      echo "Building ${tag} for platform ${DOCKER_BUILD_PLATFORM} via docker buildx"
+      "${cmd[@]}"
+      return
+    fi
+
+    echo "Building ${tag} for platform ${DOCKER_BUILD_PLATFORM} via docker build"
+    docker build --platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .
+    return
+  fi
+
+  echo "Building ${tag}"
+  docker build -f "${dockerfile}" -t "${tag}" .
+}
+
 cd "${SOURCE_DIR}"
 
 if [[ "${SKIP_FRONTEND}" != "1" ]]; then
@@ -104,15 +131,13 @@ if old not in text:
 path.write_text(text.replace(old, new))
 PY
   fi
-  echo "Building ${FRONTEND_IMAGE_TAG}"
-  docker build -f container/rendered.Dockerfile -t "${FRONTEND_IMAGE_TAG}" .
+  build_image "${FRONTEND_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 
 if [[ "${SKIP_WORKER}" != "1" ]]; then
   echo "Rendering Dynamo SGLang runtime Dockerfile"
   python3 container/render.py --framework=sglang --output-short-filename
-  echo "Building ${WORKER_IMAGE_TAG}"
-  docker build -f container/rendered.Dockerfile -t "${WORKER_IMAGE_TAG}" .
+  build_image "${WORKER_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 
 cat <<EOF
@@ -121,6 +146,7 @@ Instrumented images are ready.
 
 Frontend image: ${FRONTEND_IMAGE_TAG}
 Worker image:   ${WORKER_IMAGE_TAG}
+Build platform: ${DOCKER_BUILD_PLATFORM:-host default}
 
 Example single-host run:
   cd ${ROOT_DIR}

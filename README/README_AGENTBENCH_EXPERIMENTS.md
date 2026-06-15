@@ -117,6 +117,20 @@ If you see an error like `Dynamo source directory not found`, it usually means
 `~/kv_cache_offloading/upstream/dynamo` has not been created yet. Run the
 prepare step above, then rerun the image build.
 
+If you are on a Grace Hopper / ARM64 machine and need ARM images, set the
+build platform explicitly before the image build:
+
+```bash
+cd ~/kv_cache_offloading
+
+DOCKER_BUILD_PLATFORM=linux/arm64 \
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+If you are on a standard x86_64 machine, you usually do not need to set
+`DOCKER_BUILD_PLATFORM`.
+
 Before NodeBB SWE-bench tasks, complete
 [README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md). Do not run
 AgentBench while that preflight still fails with missing `node`, missing npm
