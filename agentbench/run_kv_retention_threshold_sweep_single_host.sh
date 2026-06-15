@@ -33,6 +33,10 @@ SWEEP_PROGRESS="${SWEEP_DIR}/retention_threshold_sweep_progress.csv"
 SWEEP_MATRIX="${SWEEP_DIR}/retention_threshold_matrix.csv"
 SWEEP_COMPARISON="${SWEEP_DIR}/retention_threshold_comparison.csv"
 SWEEP_SUMMARY="${SWEEP_DIR}/retention_threshold_summary.md"
+LATEST_PROGRESS="experiments/reports/retention_threshold_sweep_progress.csv"
+LATEST_MATRIX="experiments/reports/retention_threshold_matrix.csv"
+LATEST_COMPARISON="experiments/reports/retention_threshold_comparison.csv"
+LATEST_SUMMARY="experiments/reports/retention_threshold_summary.md"
 mkdir -p "${SWEEP_DIR}"
 
 usage() {
@@ -225,9 +229,18 @@ done
   --min-speedup-ratio "${RETENTION_MIN_SPEEDUP_RATIO}" \
   --min-latency-gain-ms "${RETENTION_MIN_LATENCY_GAIN_MS}"
 
+cp "${SWEEP_PROGRESS}" "${LATEST_PROGRESS}"
+cp "${SWEEP_MATRIX}" "${LATEST_MATRIX}"
+cp "${SWEEP_COMPARISON}" "${LATEST_COMPARISON}"
+cp "${SWEEP_SUMMARY}" "${LATEST_SUMMARY}"
+
 echo
 echo "Retention threshold sweep complete."
 echo "Progress CSV:    ${SWEEP_PROGRESS}"
 echo "Sweep matrix:    ${SWEEP_MATRIX}"
 echo "Comparison CSV:  ${SWEEP_COMPARISON}"
 echo "Summary Markdown:${SWEEP_SUMMARY}"
+echo "Latest progress: ${LATEST_PROGRESS}"
+echo "Latest matrix:   ${LATEST_MATRIX}"
+echo "Latest compare:  ${LATEST_COMPARISON}"
+echo "Latest summary:  ${LATEST_SUMMARY}"

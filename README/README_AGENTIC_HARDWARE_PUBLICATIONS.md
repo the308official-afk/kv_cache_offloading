@@ -106,3 +106,17 @@ Core idea: KV cache vectors can be stored with far fewer bits if they are
 rotated and quantized carefully. TurboQuant compresses KV cache online with
 methods like PolarQuant and QJL, reducing memory and bandwidth needs while
 trying to preserve the attention scores that decide which old tokens matter.
+
+## DuoAttention: Efficient Long-Context LLM Inference with Retrieval and Streaming Heads
+
+Core idea: Not every attention head needs the full long history. DuoAttention
+keeps a full KV cache only for heads that retrieve information from far back in
+the context, while other heads keep only recent tokens and attention sinks. This
+cuts KV memory and latency while preserving long-context ability.
+
+## RazorAttention: Efficient KV Cache Compression Through Retrieval Heads
+
+Core idea: Most attention heads mainly look nearby, while only a few heads need
+the full old context. RazorAttention keeps full KV cache for those retrieval
+heads, drops far-away tokens for the other heads, and adds one compensation
+token to summarize the dropped information.

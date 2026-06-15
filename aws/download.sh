@@ -44,6 +44,10 @@ LOCAL_REPORTS_DIR="${REPO_ROOT}/experiments/reports"
 LOGGING_PROFILE_WALLTIME_REPORT="sglang_logging_profile_walltime.csv"
 DESIGN_SPACE_MATRIX_REPORT="design_space_matrix.csv"
 DESIGN_SPACE_RETENTION_MATRIX_REPORT="design_space_retention_matrix.csv"
+RETENTION_THRESHOLD_PROGRESS_REPORT="retention_threshold_sweep_progress.csv"
+RETENTION_THRESHOLD_MATRIX_REPORT="retention_threshold_matrix.csv"
+RETENTION_THRESHOLD_COMPARISON_REPORT="retention_threshold_comparison.csv"
+RETENTION_THRESHOLD_SUMMARY_REPORT="retention_threshold_summary.md"
 INDEX="0"
 
 if [[ $# -gt 1 ]]; then
@@ -245,6 +249,39 @@ if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${DESIGN_
 else
   echo "Remote design-space retention matrix report not found; skipping." >&2
 fi
+
+echo "==== Downloading retention-threshold sweep reports from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_threshold_sweeps/"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_threshold_sweeps/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_threshold_sweeps'"; then
+  mkdir -p "${LOCAL_REPORTS_DIR}/retention_threshold_sweeps"
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_threshold_sweeps/" \
+    "${LOCAL_REPORTS_DIR}/retention_threshold_sweeps/"
+else
+  echo "Remote retention-threshold sweep directory not found; skipping." >&2
+fi
+
+for report in \
+  "${RETENTION_THRESHOLD_PROGRESS_REPORT}" \
+  "${RETENTION_THRESHOLD_MATRIX_REPORT}" \
+  "${RETENTION_THRESHOLD_COMPARISON_REPORT}" \
+  "${RETENTION_THRESHOLD_SUMMARY_REPORT}"; do
+  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
+  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
+  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
+    rsync \
+      "${RSYNC_COMMON_OPTS[@]}" \
+      -e "$SSH_CMD" \
+      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
+      "${LOCAL_REPORTS_DIR}/"
+  else
+    echo "Remote retention-threshold report not found (${report}); skipping." >&2
+  fi
+done
 
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then
   echo "==== Building local latest run report ===="

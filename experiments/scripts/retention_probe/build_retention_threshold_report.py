@@ -19,6 +19,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--match-event-min", type=int, default=1)
     parser.add_argument("--min-speedup-ratio", type=float, default=1.05)
     parser.add_argument("--min-latency-gain-ms", type=float, default=100.0)
+    parser.add_argument("--sweep-status", choices=("partial", "complete"), default="partial")
     return parser.parse_args()
 
 
@@ -83,6 +84,7 @@ def derived_row(
     match_event_min: int,
     min_speedup_ratio: float,
     min_latency_gain_ms: float,
+    sweep_status: str,
 ) -> dict[str, Any]:
     hint_profile = summary.get("protected_hint_profile", "")
     replay_status = summary.get("a_replay_status", "")
@@ -99,6 +101,7 @@ def derived_row(
     )
     survived_effective = survived_by_events and survived_by_latency
     return {
+        "sweep_status": sweep_status,
         "retention_sweep_id": sweep_id,
         "model": model,
         "kv_tier_mode": kv_tier_mode,
@@ -128,6 +131,7 @@ def build_comparison_rows(
     rows: list[dict[str, Any]],
     *,
     control_hint_profile: str,
+    sweep_status: str,
 ) -> list[dict[str, Any]]:
     grouped: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
@@ -176,6 +180,7 @@ def build_comparison_rows(
                 interpretation = "protected_hint_evicts_earlier"
             out.append(
                 {
+                    "sweep_status": sweep_status,
                     "model": model,
                     "kv_tier_mode": kv_tier_mode,
                     "control_hint_profile": control_hint_profile,
@@ -200,6 +205,7 @@ def write_summary_md(
     match_event_min: int,
     min_speedup_ratio: float,
     min_latency_gain_ms: float,
+    sweep_status: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     models = sorted({row["model"] for row in matrix_rows})
@@ -214,6 +220,7 @@ def write_summary_md(
         f"- KV tier modes: {', '.join(tiers) if tiers else 'none'}",
         f"- Hint profiles: {', '.join(profiles) if profiles else 'none'}",
         f"- Control hint profile: {control_hint_profile}",
+        f"- Sweep status: {sweep_status}",
         "",
         "## Effective survival rule",
         "",
@@ -261,10 +268,12 @@ def main() -> int:
                     match_event_min=args.match_event_min,
                     min_speedup_ratio=args.min_speedup_ratio,
                     min_latency_gain_ms=args.min_latency_gain_ms,
+                    sweep_status=args.sweep_status,
                 )
             )
 
     matrix_fields = [
+        "sweep_status",
         "retention_sweep_id",
         "model",
         "kv_tier_mode",
@@ -293,8 +302,10 @@ def main() -> int:
     comparison_rows = build_comparison_rows(
         matrix_rows,
         control_hint_profile=args.control_hint_profile,
+        sweep_status=args.sweep_status,
     )
     comparison_fields = [
+        "sweep_status",
         "model",
         "kv_tier_mode",
         "control_hint_profile",
@@ -315,6 +326,7 @@ def main() -> int:
         match_event_min=args.match_event_min,
         min_speedup_ratio=args.min_speedup_ratio,
         min_latency_gain_ms=args.min_latency_gain_ms,
+        sweep_status=args.sweep_status,
     )
     return 0
 

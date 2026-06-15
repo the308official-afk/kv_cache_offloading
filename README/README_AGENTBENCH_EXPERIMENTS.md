@@ -1274,7 +1274,7 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+DISTRACTOR_COUNTS="25 50 75 100" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
