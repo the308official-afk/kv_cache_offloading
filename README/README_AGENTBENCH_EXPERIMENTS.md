@@ -59,6 +59,9 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
+export MODEL_READY_RETRIES=120
+export MODEL_READY_DELAY_SECS=2
+export MODEL_READY_STABLE_HITS=2
 export MODEL_SMOKE_RETRIES=60
 export MODEL_SMOKE_DELAY_SECS=10
 export MODEL_COOLDOWN_SECS=30
@@ -73,9 +76,19 @@ For larger models such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`, raise the
 readiness window before starting long experiments:
 
 ```bash
+export MODEL_READY_RETRIES=900
+export MODEL_READY_DELAY_SECS=3
+export MODEL_READY_STABLE_HITS=2
 export MODEL_SMOKE_RETRIES=180
 export MODEL_SMOKE_DELAY_SECS=15
 export MODEL_COOLDOWN_SECS=60
+```
+
+What these two groups mean:
+
+```text
+MODEL_READY_*   controls how long ./run_dynamo_single_host.sh start waits for model registration
+MODEL_SMOKE_*   controls how long experiment wrappers wait after Dynamo has started
 ```
 
 If this is a fresh machine, install the upstream Deep Agents dependency first:
@@ -168,6 +181,14 @@ DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="$MODEL_NAME" \
 DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 ./run_dynamo_single_host.sh start
+```
+
+For larger models, increase the Dynamo startup-registration wait first:
+
+```bash
+export MODEL_READY_RETRIES=900
+export MODEL_READY_DELAY_SECS=3
+export MODEL_READY_STABLE_HITS=2
 ```
 
 Watch the SGLang worker logs after restart:
@@ -783,6 +804,9 @@ Useful knobs:
 positional model args              Highest-priority model source.
 MODELS='model-a,model-b'          Override the model-list file.
 MODEL_LIST_FILE=...               Read one model per line.
+MODEL_READY_RETRIES=120          Dynamo start wait for model registration.
+MODEL_READY_DELAY_SECS=2         Seconds between registration checks.
+MODEL_READY_STABLE_HITS=2        Required consecutive successful registration checks.
 MODEL_SMOKE_RETRIES=60           Smoke-test retry count.
 MODEL_SMOKE_DELAY_SECS=10        Seconds between smoke-test retries.
 MODEL_COOLDOWN_SECS=30           Extra wait after smoke-test success.
@@ -793,6 +817,9 @@ For larger models, especially 30B/31B-class models, use a wider readiness
 window:
 
 ```bash
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
 MODEL_SMOKE_RETRIES=180
 MODEL_SMOKE_DELAY_SECS=15
 MODEL_COOLDOWN_SECS=60
@@ -982,6 +1009,9 @@ STOP_DYNAMO_WHEN_DONE=1         Stop Dynamo after the final model.
 For larger models, increase those to something like:
 
 ```text
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
 MODEL_SMOKE_RETRIES=180
 MODEL_SMOKE_DELAY_SECS=15
 MODEL_COOLDOWN_SECS=60
@@ -1413,6 +1443,9 @@ If you are using a larger model such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`,
 set a larger readiness window first:
 
 ```bash
+export MODEL_READY_RETRIES=900
+export MODEL_READY_DELAY_SECS=3
+export MODEL_READY_STABLE_HITS=2
 export MODEL_SMOKE_RETRIES=180
 export MODEL_SMOKE_DELAY_SECS=15
 export MODEL_COOLDOWN_SECS=60
