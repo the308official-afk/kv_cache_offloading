@@ -93,11 +93,18 @@ build_image() {
   docker build -f "${dockerfile}" -t "${tag}" .
 }
 
+render_platform_args() {
+  if [[ -n "${DOCKER_BUILD_PLATFORM}" ]]; then
+    printf '%s\n' "--platform" "${DOCKER_BUILD_PLATFORM}"
+  fi
+}
+
 cd "${SOURCE_DIR}"
 
 if [[ "${SKIP_FRONTEND}" != "1" ]]; then
   echo "Rendering Dynamo frontend Dockerfile"
-  python3 container/render.py --framework=dynamo --target=frontend --output-short-filename
+  mapfile -t _render_platform_args < <(render_platform_args)
+  python3 container/render.py "${_render_platform_args[@]}" --framework=dynamo --target=frontend --output-short-filename
   if [[ "${LEAN_FRONTEND}" == "1" ]]; then
     echo "Applying lean frontend Dockerfile adjustment: skip benchmark package install"
     python3 - <<'PY'
@@ -136,7 +143,8 @@ fi
 
 if [[ "${SKIP_WORKER}" != "1" ]]; then
   echo "Rendering Dynamo SGLang runtime Dockerfile"
-  python3 container/render.py --framework=sglang --output-short-filename
+  mapfile -t _render_platform_args < <(render_platform_args)
+  python3 container/render.py "${_render_platform_args[@]}" --framework=sglang --output-short-filename
   build_image "${WORKER_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 
