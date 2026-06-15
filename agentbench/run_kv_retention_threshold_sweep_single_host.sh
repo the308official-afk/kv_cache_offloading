@@ -7,6 +7,7 @@ source agentbench/model_config.sh
 
 MODEL_LIST_FILE="${MODEL_LIST_FILE:-agentbench/model_lists/multi_model_batch.txt}"
 RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID:-retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)}"
+RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE:-precise}"
 DISTRACTOR_COUNTS="${DISTRACTOR_COUNTS:-25 50 75 100 125 150}"
 KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
@@ -45,7 +46,14 @@ Usage:
   $0 [model ...]
 
 Examples:
+  RETENTION_ATTRIBUTION_MODE=light \\
+  DISTRACTOR_COUNTS="2 10 20" \\
+  PROTECTED_INPUT_LEN=8000 \\
+  DISTRACTOR_INPUT_LEN=2000 \\
+  $0 Qwen/Qwen2.5-Coder-7B-Instruct
+
   RETENTION_SWEEP_ID="retention_threshold_sweep_\$(date +%Y%m%d_%H%M%S)" \\
+  RETENTION_ATTRIBUTION_MODE=precise \\
   DISTRACTOR_COUNTS="25 50 75 100 125 150" \\
   KV_TIER_MODES="gpu_only" \\
   CONTROL_HINT_PROFILE=none \\
@@ -64,6 +72,16 @@ if [[ "${1:-}" = "-h" || "${1:-}" = "--help" ]]; then
   usage
   exit 0
 fi
+
+case "${RETENTION_ATTRIBUTION_MODE}" in
+  light|precise)
+    ;;
+  *)
+    echo "Unknown RETENTION_ATTRIBUTION_MODE: ${RETENTION_ATTRIBUTION_MODE}" >&2
+    echo "Valid values: light precise" >&2
+    exit 2
+    ;;
+esac
 
 choose_python() {
   if [[ -n "${PYTHON_BIN}" ]]; then
@@ -109,7 +127,7 @@ EOF
 }
 
 init_progress_file() {
-  printf '%s\n' "retention_sweep_id,model,kv_tier_mode,distractor_count,retention_probe_id,batch_matrix,status" > "${SWEEP_PROGRESS}"
+  printf '%s\n' "retention_sweep_id,retention_attribution_mode,model,kv_tier_mode,distractor_count,retention_probe_id,batch_matrix,status" > "${SWEEP_PROGRESS}"
 }
 
 reset_latest_threshold_reports() {
@@ -124,6 +142,7 @@ append_progress_row() {
   "${PYTHON_BIN}" - <<'PY' \
     "${SWEEP_PROGRESS}" \
     "${RETENTION_SWEEP_ID}" \
+    "${RETENTION_ATTRIBUTION_MODE}" \
     "$1" \
     "$2" \
     "$3" \
@@ -137,12 +156,13 @@ from pathlib import Path
 path = Path(sys.argv[1])
 row = {
     "retention_sweep_id": sys.argv[2],
-    "model": sys.argv[3],
-    "kv_tier_mode": sys.argv[4],
-    "distractor_count": sys.argv[5],
-    "retention_probe_id": sys.argv[6],
-    "batch_matrix": sys.argv[7],
-    "status": sys.argv[8],
+    "retention_attribution_mode": sys.argv[3],
+    "model": sys.argv[4],
+    "kv_tier_mode": sys.argv[5],
+    "distractor_count": sys.argv[6],
+    "retention_probe_id": sys.argv[7],
+    "batch_matrix": sys.argv[8],
+    "status": sys.argv[9],
 }
 fields = list(row.keys())
 with path.open("a", encoding="utf-8", newline="") as handle:
@@ -183,6 +203,7 @@ init_progress_file
 
 {
   echo "Retention threshold sweep ID: ${RETENTION_SWEEP_ID}"
+  echo "Attribution mode: ${RETENTION_ATTRIBUTION_MODE}"
   echo "Models: ${#MODELS_TO_RUN[@]}"
   printf '  %s\n' "${MODELS_TO_RUN[@]}"
   echo "KV tier modes: ${KV_TIER_MODES}"
@@ -220,6 +241,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
       if RETENTION_PROBE_ID="${PROBE_ID}" \
         KV_TIER_MODES="${KV_TIER_MODE}" \
+        RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE}" \
         CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE}" \
         PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES}" \
         PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN}" \

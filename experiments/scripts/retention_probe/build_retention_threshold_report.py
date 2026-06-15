@@ -110,6 +110,7 @@ def derived_row(
     *,
     sweep_id: str,
     model: str,
+    retention_attribution_mode: str,
     kv_tier_mode: str,
     distractor_count: int,
     retention_probe_id: str,
@@ -203,6 +204,7 @@ def derived_row(
         "sweep_status": sweep_status,
         "retention_sweep_id": sweep_id,
         "model": model,
+        "retention_attribution_mode": retention_attribution_mode,
         "kv_tier_mode": kv_tier_mode,
         "hint_profile": hint_profile,
         "is_control": str(hint_profile == control_hint_profile).lower(),
@@ -248,13 +250,13 @@ def build_comparison_rows(
     control_hint_profile: str,
     sweep_status: str,
 ) -> list[dict[str, Any]]:
-    grouped: dict[tuple[str, str], dict[str, list[dict[str, Any]]]] = {}
+    grouped: dict[tuple[str, str, str], dict[str, list[dict[str, Any]]]] = {}
     for row in rows:
-        key = (row["model"], row["kv_tier_mode"])
+        key = (row["model"], row["retention_attribution_mode"], row["kv_tier_mode"])
         grouped.setdefault(key, {}).setdefault(row["hint_profile"], []).append(row)
 
     out: list[dict[str, Any]] = []
-    for (model, kv_tier_mode), by_profile in sorted(grouped.items()):
+    for (model, retention_attribution_mode, kv_tier_mode), by_profile in sorted(grouped.items()):
         control_rows = sorted(
             by_profile.get(control_hint_profile, []),
             key=lambda item: int(item["distractor_count"]),
@@ -297,6 +299,7 @@ def build_comparison_rows(
                 {
                     "sweep_status": sweep_status,
                     "model": model,
+                    "retention_attribution_mode": retention_attribution_mode,
                     "kv_tier_mode": kv_tier_mode,
                     "control_hint_profile": control_hint_profile,
                     "protected_hint_profile": hint_profile,
@@ -324,6 +327,7 @@ def write_summary_md(
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     models = sorted({row["model"] for row in matrix_rows})
+    modes = sorted({row["retention_attribution_mode"] for row in matrix_rows})
     tiers = sorted({row["kv_tier_mode"] for row in matrix_rows})
     profiles = sorted({row["hint_profile"] for row in matrix_rows})
     lines = [
@@ -332,6 +336,7 @@ def write_summary_md(
         "## Scope",
         "",
         f"- Models: {', '.join(models) if models else 'none'}",
+        f"- Attribution modes: {', '.join(modes) if modes else 'none'}",
         f"- KV tier modes: {', '.join(tiers) if tiers else 'none'}",
         f"- Hint profiles: {', '.join(profiles) if profiles else 'none'}",
         f"- Control hint profile: {control_hint_profile}",
@@ -353,7 +358,7 @@ def write_summary_md(
         for row in comparison_rows:
             lines.extend(
                 [
-                    f"- `{row['model']}` / `{row['kv_tier_mode']}` / `{row['protected_hint_profile']}`:",
+                    f"- `{row['model']}` / `{row['retention_attribution_mode']}` / `{row['kv_tier_mode']}` / `{row['protected_hint_profile']}`:",
                     f"  control first evicted at `{row['control_first_evicted_distractor_count'] or 'not observed'}`, "
                     f"protected first evicted at `{row['protected_first_evicted_distractor_count'] or 'not observed'}`, "
                     f"interpretation: `{row['interpretation']}`",
@@ -376,6 +381,7 @@ def main() -> int:
                 derived_row(
                     sweep_id=progress["retention_sweep_id"],
                     model=progress["model"],
+                    retention_attribution_mode=progress.get("retention_attribution_mode", "precise"),
                     kv_tier_mode=progress["kv_tier_mode"],
                     distractor_count=int(progress["distractor_count"]),
                     retention_probe_id=progress["retention_probe_id"],
@@ -392,6 +398,7 @@ def main() -> int:
         "sweep_status",
         "retention_sweep_id",
         "model",
+        "retention_attribution_mode",
         "kv_tier_mode",
         "hint_profile",
         "is_control",
@@ -435,6 +442,7 @@ def main() -> int:
     comparison_fields = [
         "sweep_status",
         "model",
+        "retention_attribution_mode",
         "kv_tier_mode",
         "control_hint_profile",
         "protected_hint_profile",

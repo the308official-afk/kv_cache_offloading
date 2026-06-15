@@ -984,6 +984,9 @@ from distractor prompts?
 
 ### Step 0: Prepare Instrumented SGLang
 
+Only do this for **precise** retention runs. You can skip it for **light**
+retention runs.
+
 Run this before the automated retention run. It makes sure the Dynamo images
 exist, extracts the SGLang source into the repo, and patches it so SGLang emits
 direct cache events such as `event: "sglang.cache"` with your external retention
@@ -1036,6 +1039,30 @@ installed `sgl_kernel` package and the worker can fail during import.
 
 ### Automated Run
 
+There are now two automated modes:
+
+- `RETENTION_ATTRIBUTION_MODE=light`
+  - fastest path
+  - no instrumented Dynamo requirement
+  - no patched SGLang requirement
+  - decides retention mainly from replay latency / speedup
+- `RETENTION_ATTRIBUTION_MODE=precise`
+  - slower path
+  - requires Step 0
+  - adds direct cache / transfer attribution when available
+
+Use `light` when you only want to know:
+
+- did replay A stay faster?
+- at what distractor count did that speedup disappear?
+- did `high-priority` survive longer than `none`?
+
+Use `precise` when you also want:
+
+- direct cache-event evidence
+- request-level attribution
+- transfer logging / richer proof
+
 This is the default path. It gives every hint profile its own fresh Dynamo
 restart and cold cache start, then writes the reports. That prevents the
 `high-priority` or `high-reuse` runs from inheriting warm KV cache from the
@@ -1050,11 +1077,32 @@ because everything still fits comfortably in GPU KV cache.
 ```bash
 cd ~/kv_cache_offloading
 
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+DISTRACTOR_COUNT=2 \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=500 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Precise version of the same run:
+
+```bash
+cd ~/kv_cache_offloading
+
 export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
 export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
 export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1078,6 +1126,7 @@ not such extreme pressure that one distractor immediately wipes out prompt A.
 cd ~/kv_cache_offloading
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1087,7 +1136,6 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1098,6 +1146,7 @@ Stronger pressure run:
 cd ~/kv_cache_offloading
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1107,7 +1156,6 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1128,6 +1176,7 @@ Multiple models:
 
 ```bash
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
 KV_TIER_MODES="gpu_only" \
 PROTECTED_HINT_PROFILES="high-priority" \
 DISTRACTOR_COUNT=10 \
@@ -1135,7 +1184,6 @@ PROTECTED_INPUT_LEN=8000 \
 DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct \
   Qwen/Qwen2.5-7B-Instruct
@@ -1170,9 +1218,9 @@ cat experiments/reports/design_space_retention_matrix.csv
 ```
 
 Each hint-profile run also saves a worker runtime log in the batch directory.
-The retention report now uses that worker log to map SGLang internal request ids
-back to your external retention probe request ids, then re-attaches
-`sglang.cache` events during postprocessing.
+In `precise` mode, the retention report uses that worker log to map SGLang
+internal request ids back to your external retention probe request ids, then
+re-attaches `sglang.cache` events during postprocessing.
 
 `experiments/reports/design_space_retention_matrix.csv` is a latest-batch view.
 Each automated retention run refreshes it from that batch only, so it should not
@@ -1185,6 +1233,7 @@ experiments/reports/retention_probe_batches/<RETENTION_PROBE_ID>/design_space_re
 Useful knobs:
 
 ```text
+RETENTION_ATTRIBUTION_MODE       light or precise.
 KV_TIER_MODES                  gpu_only, gpu_cpu, gpu_cpu_storage.
 CONTROL_HINT_PROFILE           Usually none.
 PROTECTED_HINT_PROFILES        high-priority high-reuse baseline, etc.
@@ -1195,7 +1244,7 @@ RANDOM_OUTPUT_LEN              Keep at 1 for retention latency probes.
 MAX_CONTEXT_TOKENS             Effective worker context limit. Use the worker log value if SGLang reports one.
 CONTEXT_RESERVE_TOKENS         Safety reserve for chat template and output tokens.
 RETENTION_PROBE_SEED           Reproducible prompt generation seed.
-SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full.
+SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full. Precise mode only.
 MEM_FRACTION_STATIC            SGLang static memory fraction.
 GPU_ONLY_MEM_FRACTION_STATIC   Override GPU-only cache pressure directly.
 HICACHE_RATIO                  Host KV pool ratio for gpu_cpu/gpu_cpu_storage.
@@ -1317,10 +1366,39 @@ Use this when you want to answer:
 - at what distractor count does prompt A stop surviving for `high-priority`?
 - do those thresholds differ enough to suggest the hint is actually respected?
 
+This sweep is also automated in two modes:
+
+- `RETENTION_ATTRIBUTION_MODE=light`
+  - fastest way to find where `none` and `high-priority` diverge
+  - no Step 0 required
+- `RETENTION_ATTRIBUTION_MODE=precise`
+  - requires Step 0
+  - adds direct cache / transfer attribution where available
+
 Recommended first run:
 
 Start with a moderate setup that can still show hint differences without
 immediately overflowing the leftover GPU KV room after prompt A.
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+DISTRACTOR_COUNTS="2 10 20" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Precise version of the same sweep:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1344,6 +1422,7 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
 DISTRACTOR_COUNTS="2 10 20" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
@@ -1396,6 +1475,10 @@ Each new call to `./agentbench/run_kv_retention_threshold_sweep_single_host.sh`
 automatically clears the top-level live `retention_threshold_*` files in
 `experiments/reports/` before writing fresh progress. Older archived sweep
 folders under `experiments/reports/retention_threshold_sweeps/` are kept.
+
+The reports now also carry `retention_attribution_mode`, so you can tell
+whether a row came from the fast latency-only path or the precise attribution
+path.
 
 How to read the result:
 

@@ -7,6 +7,7 @@ source agentbench/model_config.sh
 
 MODEL_LIST_FILE="${MODEL_LIST_FILE:-agentbench/model_lists/multi_model_batch.txt}"
 RETENTION_PROBE_ID="${RETENTION_PROBE_ID:-retention_probe_$(date +%Y%m%d_%H%M%S)}"
+RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE:-precise}"
 KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
@@ -60,7 +61,14 @@ Usage:
   $0 [model ...]
 
 Examples:
+  RETENTION_ATTRIBUTION_MODE=light \\
+  DISTRACTOR_COUNT=2 \\
+  PROTECTED_INPUT_LEN=500 \\
+  DISTRACTOR_INPUT_LEN=500 \\
+  $0 Qwen/Qwen2.5-Coder-7B-Instruct
+
   RETENTION_PROBE_ID="retention_probe_\$(date +%Y%m%d_%H%M%S)" \\
+  RETENTION_ATTRIBUTION_MODE=precise \\
   KV_TIER_MODES="gpu_only" \\
   PROTECTED_HINT_PROFILES="high-priority high-reuse" \\
   DISTRACTOR_COUNT=100 \\
@@ -80,6 +88,20 @@ if [[ "${1:-}" = "-h" || "${1:-}" = "--help" ]]; then
   usage
   exit 0
 fi
+
+case "${RETENTION_ATTRIBUTION_MODE}" in
+  light)
+    REQUIRE_PRECISE_KV=0
+    ;;
+  precise)
+    REQUIRE_PRECISE_KV=1
+    ;;
+  *)
+    echo "Unknown RETENTION_ATTRIBUTION_MODE: ${RETENTION_ATTRIBUTION_MODE}" >&2
+    echo "Valid values: light precise" >&2
+    exit 2
+    ;;
+esac
 
 choose_python() {
   if [[ -n "${PYTHON_BIN}" ]]; then
@@ -371,7 +393,7 @@ PY
 
 init_progress_file() {
   if [[ ! -f "${BATCH_PROGRESS}" ]]; then
-    printf '%s\n' "retention_probe_id,model,kv_tier_mode,hint_profile,run_id,status,summary_csv,requests_csv" > "${BATCH_PROGRESS}"
+    printf '%s\n' "retention_probe_id,retention_attribution_mode,model,kv_tier_mode,hint_profile,run_id,status,summary_csv,requests_csv" > "${BATCH_PROGRESS}"
   fi
 }
 
@@ -391,7 +413,7 @@ append_progress() {
   local summary_csv="experiments/reports/retention_probe/${run_id}/retention_probe_summary.csv"
   local requests_csv="experiments/reports/retention_probe/${run_id}/retention_probe_requests.csv"
 
-  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${RETENTION_PROBE_ID}" "${model}" "${kv_tier_mode}" "${hint_profile}" "${run_id}" "${status}" "${summary_csv}" "${requests_csv}"
+  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${RETENTION_PROBE_ID}" "${RETENTION_ATTRIBUTION_MODE}" "${model}" "${kv_tier_mode}" "${hint_profile}" "${run_id}" "${status}" "${summary_csv}" "${requests_csv}"
 import csv
 import sys
 from pathlib import Path
@@ -399,16 +421,18 @@ from pathlib import Path
 path = Path(sys.argv[1])
 row = {
     "retention_probe_id": sys.argv[2],
-    "model": sys.argv[3],
-    "kv_tier_mode": sys.argv[4],
-    "hint_profile": sys.argv[5],
-    "run_id": sys.argv[6],
-    "status": sys.argv[7],
-    "summary_csv": sys.argv[8],
-    "requests_csv": sys.argv[9],
+    "retention_attribution_mode": sys.argv[3],
+    "model": sys.argv[4],
+    "kv_tier_mode": sys.argv[5],
+    "hint_profile": sys.argv[6],
+    "run_id": sys.argv[7],
+    "status": sys.argv[8],
+    "summary_csv": sys.argv[9],
+    "requests_csv": sys.argv[10],
 }
 fields = [
     "retention_probe_id",
+    "retention_attribution_mode",
     "model",
     "kv_tier_mode",
     "hint_profile",
@@ -583,21 +607,49 @@ start_dynamo_for_profile() {
   ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
 
   echo "Starting Dynamo for ${model} with KV tier ${kv_tier_mode}..." | tee -a "${BATCH_LOG}"
-  DYNAMO_MODEL_PATH="${model}" \
-  DYNAMO_SERVED_MODEL_NAME="${model}" \
-  WORKER_EXTRA_ARGS="${worker_extra_args}" \
-  WORKER_SGLANG_DEV_MODE=1 \
-  WORKER_SGLANG_SOURCE_ROOT="${sglang_root}" \
-  HICACHE_STORAGE_HOST_PATH="${host_file_storage_path}" \
-  HICACHE_STORAGE_CONTAINER_PATH="${file_storage_path}" \
-  SGLANG_TRANSFER_LOG=1 \
-  SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE}" \
-  SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING}" \
-  DYN_RUNTIME_JSON_LOGS=1 \
-  DYN_TOOL_CALL_PARSER=hermes \
-  FRONTEND_IMAGE="${FRONTEND_IMAGE}" \
-  WORKER_IMAGE="${WORKER_IMAGE}" \
-  ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
+  local -a env_vars
+  local -a env_cmd
+  env_vars=(
+    "DYNAMO_MODEL_PATH=${model}"
+    "DYNAMO_SERVED_MODEL_NAME=${model}"
+    "WORKER_EXTRA_ARGS=${worker_extra_args}"
+    "DYN_TOOL_CALL_PARSER=hermes"
+  )
+  env_cmd=(
+    env
+    -u FRONTEND_IMAGE
+    -u WORKER_IMAGE
+    -u WORKER_SGLANG_DEV_MODE
+    -u WORKER_SGLANG_SOURCE_ROOT
+    -u SGLANG_TRANSFER_LOG
+    -u SGLANG_TRANSFER_LOG_PROFILE
+    -u SGLANG_TRANSFER_LOG_OVERHEAD_TIMING
+    -u DYN_RUNTIME_JSON_LOGS
+    -u HICACHE_STORAGE_HOST_PATH
+    -u HICACHE_STORAGE_CONTAINER_PATH
+  )
+
+  if [[ -n "${host_file_storage_path}" ]]; then
+    env_vars+=("HICACHE_STORAGE_HOST_PATH=${host_file_storage_path}")
+  fi
+  if [[ -n "${file_storage_path}" ]]; then
+    env_vars+=("HICACHE_STORAGE_CONTAINER_PATH=${file_storage_path}")
+  fi
+
+  if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+    env_vars+=(
+      "WORKER_SGLANG_DEV_MODE=1"
+      "WORKER_SGLANG_SOURCE_ROOT=${sglang_root}"
+      "SGLANG_TRANSFER_LOG=1"
+      "SGLANG_TRANSFER_LOG_PROFILE=${SGLANG_TRANSFER_LOG_PROFILE}"
+      "SGLANG_TRANSFER_LOG_OVERHEAD_TIMING=${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING}"
+      "DYN_RUNTIME_JSON_LOGS=1"
+      "FRONTEND_IMAGE=${FRONTEND_IMAGE}"
+      "WORKER_IMAGE=${WORKER_IMAGE}"
+    )
+  fi
+
+  "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
 
   smoke_test_model "${model}" "${smoke_log}"
 
@@ -642,6 +694,7 @@ lines = [
     "",
     "## Scope",
     "",
+    f"- Attribution mode: {progress_rows[0].get('retention_attribution_mode', 'unknown') if progress_rows else 'unknown'}",
     f"- Models: {', '.join(models) if models else 'none'}",
     f"- KV tier modes: {', '.join(tiers) if tiers else 'none'}",
     f"- Hint profiles: {', '.join(profiles) if profiles else 'none'}",
@@ -681,6 +734,7 @@ init_matrices
 
 {
   echo "Retention probe ID: ${RETENTION_PROBE_ID}"
+  echo "Attribution mode: ${RETENTION_ATTRIBUTION_MODE}"
   echo "Models: ${#MODELS_TO_RUN[@]}"
   printf '  %s\n' "${MODELS_TO_RUN[@]}"
   echo "KV tier modes: ${KV_TIER_MODES}"
@@ -694,8 +748,13 @@ init_matrices
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
   echo "Mem fraction static: ${MEM_FRACTION_STATIC}"
   echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
-  echo "SGLang transfer log profile: ${SGLANG_TRANSFER_LOG_PROFILE}"
-  echo "SGLang root: ${RESOLVED_SGLANG_ROOT:-<unset>}"
+  if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+    echo "SGLang transfer log profile: ${SGLANG_TRANSFER_LOG_PROFILE}"
+    echo "SGLang root: ${RESOLVED_SGLANG_ROOT:-<unset>}"
+  else
+    echo "SGLang transfer log profile: disabled in light mode"
+    echo "SGLang root: not required in light mode"
+  fi
   echo "Output dir: ${BATCH_DIR}"
   echo
 } | tee -a "${BATCH_LOG}"
