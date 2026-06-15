@@ -293,6 +293,87 @@ Open question:
 Can relative semantic deltas be made reliable enough to reduce prompt/KV/storage cost without
 causing the system to miss small but important differences?
 
+## New Current Idea: Hint-Aware Resource Policy
+
+DeepAgents or an agent runtime may mark a request, prompt, phase, or memory item as important.
+For example, it may say:
+
+```text
+priority = high
+reuse_likelihood = high
+agent_phase = execution
+latency_sensitivity = medium
+```
+
+The HSMA question is whether Dynamo or a similar serving runtime can combine those hints with
+live hardware pressure to choose the right memory action.
+
+Possible actions:
+
+```text
+keep full KV in GPU cache
+keep compressed KV in GPU/CPU tier
+summarize and keep summary hot
+move raw KV to secondary tier
+archive raw evidence only
+evict if the value is too low
+```
+
+The important design principle:
+
+Hints should be treated as weighted signals, not absolute commands.
+
+A high-priority prompt should be harder to evict, but it should not be impossible to demote.
+Otherwise the system can become inefficient or unfair under pressure.
+
+Possible scoring frame:
+
+```text
+retention_value
+= agent_priority
++ reuse_likelihood
++ active_task_relevance
++ recovery_cost
++ latency_sensitivity
++ semantic_importance
+- memory_cost
+- current_resource_pressure
+- fairness_penalty
+```
+
+This gives the runtime a way to preserve important agent context while still making practical
+hardware-aware choices.
+
+Example:
+
+```text
+High priority + high reuse + low pressure
+=> keep full KV hot
+
+High priority + high reuse + high pressure
+=> keep summary hot, move raw/compressed KV to secondary tier
+
+High priority + low reuse + high pressure
+=> keep concept/summary hot, archive raw evidence
+
+Low priority + low reuse + high pressure
+=> demote or evict aggressively
+```
+
+This fits the HSMA idea because the runtime is not just asking:
+
+> Is this prompt important?
+
+It is asking:
+
+> Given importance, resource pressure, recovery cost, and future utility, what is the cheapest
+> safe memory form for this prompt right now?
+
+Open question:
+
+Can runtime hints from DeepAgents be reliable enough to improve KV retention and memory-tier
+placement without over-protecting the wrong prompts?
+
 ## Quality Tradeoff
 
 This idea can lose quality if it abstracts too aggressively.
