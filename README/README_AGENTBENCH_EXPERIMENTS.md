@@ -83,6 +83,26 @@ python3.11 -m pip install ./upstream/deepagents/libs/deepagents
 python3.11 -m pip install -r agentbench/requirements.txt
 ```
 
+If this is a fresh machine and you plan to run instrumented Dynamo/SGLang
+experiments, build the local runtime-logging images once:
+
+```bash
+cd ~/kv_cache_offloading
+
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+
+docker image inspect local/dynamo-frontend:runtime-json-logs >/dev/null
+docker image inspect local/dynamo-sglang:runtime-json-logs >/dev/null
+echo "instrumented images ok"
+```
+
+Those local image tags are not pulled from a registry. They must be built on
+each new machine before experiments that use:
+
+- `local/dynamo-frontend:runtime-json-logs`
+- `local/dynamo-sglang:runtime-json-logs`
+
 Before NodeBB SWE-bench tasks, complete
 [README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md). Do not run
 AgentBench while that preflight still fails with missing `node`, missing npm
