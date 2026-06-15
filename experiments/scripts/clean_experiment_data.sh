@@ -96,6 +96,7 @@ empty_dirs=(
   "experiments/reports/design_space"
   "experiments/reports/retention_probe"
   "experiments/reports/retention_probe_batches"
+  "experiments/reports/retention_threshold_sweeps"
   "experiments/reports/deepagents_swebench_profile"
   "experiments/reports/lpx_decode_split"
   "experiments/reports/misc"

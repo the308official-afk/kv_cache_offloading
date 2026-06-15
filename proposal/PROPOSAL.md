@@ -215,6 +215,84 @@ weakness_score
 
 If the weakness score crosses a threshold, the system escalates to deeper recovery and retries.
 
+## New Current Idea: Relative Semantic Delta Memory
+
+Another possible extension is to store new prompts in relation to earlier prompts instead of
+always storing them as fully independent memory items.
+
+Simple version:
+
+```text
+Prior prompts:
+A, B, C, ... Y
+
+New prompt:
+Z
+
+System finds:
+closest semantic anchor = A
+
+Then stores:
+Z = A + semantic delta
+```
+
+The goal is to avoid repeatedly storing the same semantic structure when the new prompt mostly
+overlaps with earlier context.
+
+Example:
+
+```text
+A:
+"Evaluate KV offloading for long-horizon agent workloads."
+
+Z:
+"Evaluate KV offloading for long-horizon coding agents, especially when summaries lose details."
+
+Relative representation:
+anchor = A
+delta = add coding-agent focus + weak-summary failure concern
+```
+
+This is different from ordinary prompt compression because the compressed object is not just a
+shorter version of `Z`. It is a pointer-preserving relation:
+
+```text
+Z memory record:
+- nearest anchor: A
+- shared semantic structure: KV offloading + long-horizon agents
+- delta: coding agents + detail loss from summaries
+- source pointer: raw prompt Z
+- recovery pointer: anchor A evidence + Z evidence
+```
+
+This may fit HSMA well because it adds another kind of demotion:
+
+```text
+full prompt
+-> semantic parse
+-> nearest anchor
+-> relative delta
+-> graph update
+```
+
+The system could use this for:
+
+- repeated user questions with small changes
+- iterative experiment design
+- multi-turn refinement of the same idea
+- agent plans that evolve gradually
+- prompts that share a stable task structure but differ in constraints
+
+Important caveat:
+
+The delta must not replace the raw prompt. It should be a compact routing and reuse structure.
+The original prompt still needs a pointer so exact wording can be recovered later.
+
+Open question:
+
+Can relative semantic deltas be made reliable enough to reduce prompt/KV/storage cost without
+causing the system to miss small but important differences?
+
 ## Quality Tradeoff
 
 This idea can lose quality if it abstracts too aggressively.

@@ -12,7 +12,7 @@ CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
 PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN:-14000}"
 DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN:-14000}"
-DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-10}"
+DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-100}"
 RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-1}"
 RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
 IGNORE_EOS="${IGNORE_EOS:-1}"
@@ -23,6 +23,9 @@ SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
 RETENTION_MATRIX_APPEND="${RETENTION_MATRIX_APPEND:-0}"
 MEM_FRACTION_STATIC="${MEM_FRACTION_STATIC:-0.7}"
+GPU_ONLY_MEM_FRACTION_STATIC="${GPU_ONLY_MEM_FRACTION_STATIC:-${MEM_FRACTION_STATIC}}"
+GPU_CPU_MEM_FRACTION_STATIC="${GPU_CPU_MEM_FRACTION_STATIC:-${MEM_FRACTION_STATIC}}"
+GPU_CPU_STORAGE_MEM_FRACTION_STATIC="${GPU_CPU_STORAGE_MEM_FRACTION_STATIC:-${MEM_FRACTION_STATIC}}"
 HICACHE_RATIO="${HICACHE_RATIO:-1}"
 HICACHE_STORAGE_BACKEND="${HICACHE_STORAGE_BACKEND:-file}"
 HICACHE_STORAGE_PREFETCH_POLICY="${HICACHE_STORAGE_PREFETCH_POLICY:-wait_complete}"
@@ -195,7 +198,26 @@ storage_host_path_for_mode() {
 
 worker_args_for_kv_tier_mode() {
   local kv_tier_mode="$1"
-  local args="${WORKER_BASE_ARGS} --mem-fraction-static ${MEM_FRACTION_STATIC}"
+  local mem_fraction="${MEM_FRACTION_STATIC}"
+
+  case "${kv_tier_mode}" in
+    gpu_only)
+      mem_fraction="${GPU_ONLY_MEM_FRACTION_STATIC}"
+      ;;
+    gpu_cpu)
+      mem_fraction="${GPU_CPU_MEM_FRACTION_STATIC}"
+      ;;
+    gpu_cpu_storage)
+      mem_fraction="${GPU_CPU_STORAGE_MEM_FRACTION_STATIC}"
+      ;;
+    *)
+      echo "Unknown KV_TIER_MODE: ${kv_tier_mode}" >&2
+      echo "Valid values: gpu_only gpu_cpu gpu_cpu_storage" >&2
+      exit 2
+      ;;
+  esac
+
+  local args="${WORKER_BASE_ARGS} --mem-fraction-static ${mem_fraction}"
 
   case "${kv_tier_mode}" in
     gpu_only)
@@ -211,11 +233,6 @@ worker_args_for_kv_tier_mode() {
       args="${args} --hicache-storage-backend ${HICACHE_STORAGE_BACKEND}"
       args="${args} --hicache-storage-prefetch-policy ${HICACHE_STORAGE_PREFETCH_POLICY}"
       args="${args} --file-storage-path ${FILE_STORAGE_PATH}"
-      ;;
-    *)
-      echo "Unknown KV_TIER_MODE: ${kv_tier_mode}" >&2
-      echo "Valid values: gpu_only gpu_cpu gpu_cpu_storage" >&2
-      exit 2
       ;;
   esac
 
@@ -675,6 +692,8 @@ init_matrices
   echo "Random output len: ${RANDOM_OUTPUT_LEN}"
   echo "Max context tokens: ${MAX_CONTEXT_TOKENS}"
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
+  echo "Mem fraction static: ${MEM_FRACTION_STATIC}"
+  echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
   echo "SGLang transfer log profile: ${SGLANG_TRANSFER_LOG_PROFILE}"
   echo "SGLang root: ${RESOLVED_SGLANG_ROOT:-<unset>}"
   echo "Output dir: ${BATCH_DIR}"

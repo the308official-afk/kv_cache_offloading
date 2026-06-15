@@ -1009,6 +1009,7 @@ PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=10 \
 PROTECTED_INPUT_LEN=14000 \
 DISTRACTOR_INPUT_LEN=14000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1028,12 +1029,36 @@ PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=100 \
 PROTECTED_INPUT_LEN=14000 \
 DISTRACTOR_INPUT_LEN=14000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+Aggressive pressure run:
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+DISTRACTOR_COUNT=150 \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.55 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+That makes it much more likely that the `none` control run loses prompt A while
+the protected run still keeps it.
 
 Multiple models:
 
@@ -1044,6 +1069,7 @@ PROTECTED_HINT_PROFILES="high-priority high-reuse" \
 DISTRACTOR_COUNT=100 \
 PROTECTED_INPUT_LEN=14000 \
 DISTRACTOR_INPUT_LEN=14000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_probe_single_host.sh \
@@ -1098,7 +1124,7 @@ Useful knobs:
 KV_TIER_MODES                  gpu_only, gpu_cpu, gpu_cpu_storage.
 CONTROL_HINT_PROFILE           Usually none.
 PROTECTED_HINT_PROFILES        high-priority high-reuse baseline, etc.
-DISTRACTOR_COUNT               10 for pilot, 100 for pressure.
+DISTRACTOR_COUNT               Number of distractor prompts sent between first A and replay A.
 PROTECTED_INPUT_LEN            Prompt A approximate input length.
 DISTRACTOR_INPUT_LEN           Each distractor prompt approximate input length.
 RANDOM_OUTPUT_LEN              Keep at 1 for retention latency probes.
@@ -1107,6 +1133,7 @@ CONTEXT_RESERVE_TOKENS         Safety reserve for chat template and output token
 RETENTION_PROBE_SEED           Reproducible prompt generation seed.
 SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full.
 MEM_FRACTION_STATIC            SGLang static memory fraction.
+GPU_ONLY_MEM_FRACTION_STATIC   Override GPU-only cache pressure directly.
 HICACHE_RATIO                  Host KV pool ratio for gpu_cpu/gpu_cpu_storage.
 STOP_DYNAMO_WHEN_DONE=1        Stop Dynamo after the final probe.
 ```
@@ -1214,6 +1241,101 @@ cat "$LATEST_RETENTION/retention_probe_summary.csv"
 cat "$LATEST_RETENTION/retention_probe_requests.csv"
 cat experiments/reports/design_space_retention_matrix.csv
 ```
+
+### Retention Threshold Sweep
+
+Use this when you want to answer:
+
+- at what distractor count does prompt A stop surviving for `none`?
+- at what distractor count does prompt A stop surviving for `high-priority`?
+- do those thresholds differ enough to suggest the hint is actually respected?
+
+Recommended first run:
+
+```bash
+cd ~/kv_cache_offloading
+
+export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
+export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+
+SGLANG_IMAGE="$WORKER_IMAGE" \
+./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+if [ -d upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+elif [ -d runtime_upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/runtime_upstream/sglang/python/sglang"
+else
+  echo "Could not find extracted SGLang source" >&2
+  exit 1
+fi
+
+python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+  --sglang-root "$SGLANG_ROOT"
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+To watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Outputs:
+
+```bash
+LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/* | head -1)"
+echo "$LATEST_THRESHOLD_SWEEP"
+
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_sweep_progress.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_comparison.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_summary.md"
+```
+
+What the new files mean:
+
+```text
+retention_threshold_sweep_progress.csv
+  One row per distractor-count run.
+
+retention_threshold_matrix.csv
+  One row per hint profile per distractor count, with replay latency and cache evidence.
+
+retention_threshold_comparison.csv
+  Direct control vs protected threshold comparison.
+
+retention_threshold_summary.md
+  Short interpretation of whether the protected run survived longer.
+```
+
+How to read the result:
+
+- if `high-priority` first evicts later than `none`, that is evidence the hint helped retention
+- if both first evict at the same distractor count, question whether the hint is actually respected by the runtime
+- if neither evicts in the sweep range, increase `DISTRACTOR_COUNTS` or reduce `GPU_ONLY_MEM_FRACTION_STATIC`
+
+The threshold report uses an intentionally strict survival rule:
+
+- replay A must succeed
+- replay A must have direct cache attribution
+- replay A must have at least one cache match event
+- replay A must also show meaningful benefit:
+  - speedup ratio >= `1.05`, or
+  - latency gain >= `100` ms
 
 Key columns:
 
