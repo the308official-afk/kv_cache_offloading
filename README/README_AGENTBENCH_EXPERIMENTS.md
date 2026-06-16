@@ -91,10 +91,15 @@ MODEL_READY_*   controls how long ./run_dynamo_single_host.sh start waits for mo
 MODEL_SMOKE_*   controls how long experiment wrappers wait after Dynamo has started
 ```
 
-If this is a fresh machine, install the upstream Deep Agents dependency first:
+If this is a fresh machine, install Python 3.11 first, then install the
+upstream Deep Agents dependency:
 
 ```bash
 cd ~/kv_cache_offloading
+
+sudo dnf install -y python3.11 python3.11-pip || true
+python3.11 -m ensurepip --upgrade || true
+python3.11 --version
 
 mkdir -p upstream
 
@@ -1506,6 +1511,47 @@ MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Run the same sweep in the background with `nohup`:
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+DISTRACTOR_COUNTS="2 10 20" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+That prints:
+
+- the sweep id
+- the background PID
+- the `nohup` log path
+- the partial report paths you can inspect while the run is still going
+
+Useful commands while it runs:
+
+```bash
+LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/* | head -1)"
+echo "$LATEST_THRESHOLD_SWEEP"
+
+tail -f "$LATEST_THRESHOLD_SWEEP/nohup.log"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_sweep_progress.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_comparison.csv"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_summary.md"
 ```
 
 To watch the worker:

@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID:-retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)}"
+SWEEP_DIR="experiments/reports/retention_threshold_sweeps/${RETENTION_SWEEP_ID}"
+NOHUP_LOG="${SWEEP_DIR}/nohup.log"
+PID_FILE="${SWEEP_DIR}/nohup.pid"
+LAUNCH_ENV_FILE="${SWEEP_DIR}/launch_env.sh"
+
+mkdir -p "${SWEEP_DIR}"
+
+cat > "${LAUNCH_ENV_FILE}" <<EOF
+RETENTION_SWEEP_ID='${RETENTION_SWEEP_ID}'
+RETENTION_ATTRIBUTION_MODE='${RETENTION_ATTRIBUTION_MODE:-}'
+DISTRACTOR_COUNTS='${DISTRACTOR_COUNTS:-}'
+KV_TIER_MODES='${KV_TIER_MODES:-}'
+CONTROL_HINT_PROFILE='${CONTROL_HINT_PROFILE:-}'
+PROTECTED_HINT_PROFILES='${PROTECTED_HINT_PROFILES:-}'
+PROTECTED_INPUT_LEN='${PROTECTED_INPUT_LEN:-}'
+DISTRACTOR_INPUT_LEN='${DISTRACTOR_INPUT_LEN:-}'
+GPU_ONLY_MEM_FRACTION_STATIC='${GPU_ONLY_MEM_FRACTION_STATIC:-}'
+RANDOM_OUTPUT_LEN='${RANDOM_OUTPUT_LEN:-}'
+MAX_CONTEXT_TOKENS='${MAX_CONTEXT_TOKENS:-}'
+SGLANG_TRANSFER_LOG_PROFILE='${SGLANG_TRANSFER_LOG_PROFILE:-}'
+EOF
+
+nohup ./agentbench/run_kv_retention_threshold_sweep_single_host.sh "$@" \
+  > "${NOHUP_LOG}" 2>&1 < /dev/null &
+
+PID=$!
+printf '%s\n' "${PID}" > "${PID_FILE}"
+
+cat <<EOF
+Started retention threshold sweep in the background.
+
+retention_sweep_id: ${RETENTION_SWEEP_ID}
+pid: ${PID}
+nohup_log: ${NOHUP_LOG}
+pid_file: ${PID_FILE}
+launch_env: ${LAUNCH_ENV_FILE}
+
+Watch the run:
+  tail -f ${NOHUP_LOG}
+
+Check progress:
+  cat ${SWEEP_DIR}/retention_threshold_sweep_progress.csv
+  cat ${SWEEP_DIR}/retention_threshold_matrix.csv
+  cat ${SWEEP_DIR}/retention_threshold_comparison.csv
+  cat ${SWEEP_DIR}/retention_threshold_summary.md
+
+Stop it if needed:
+  kill ${PID}
+EOF
