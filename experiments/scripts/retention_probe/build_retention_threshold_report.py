@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -73,6 +74,61 @@ def round_ratio(value: float | None) -> str:
     return f"{value:.3f}"
 
 
+def clean_log_line(line: str) -> str:
+    return re.sub(r"\x1b\[[0-9;]*m", "", line)
+
+
+RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
+EXPECTED_HINT_KEYS = {
+    "agent_phase",
+    "cache_retention_priority",
+    "context_type",
+    "expected_output_tokens",
+    "hint_probe_id",
+    "hint_profile",
+    "latency_sensitivity",
+    "phase_sequence_index",
+    "priority",
+    "program_id",
+    "retention_probe_role",
+    "reuse_likelihood",
+}
+
+
+def parse_runtime_json_payload(line: str) -> dict[str, Any] | None:
+    if RUNTIME_JSON_PREFIX not in line:
+        return None
+    payload = line.split(RUNTIME_JSON_PREFIX, 1)[1].strip()
+    json_start = payload.find("{")
+    if json_start >= 0:
+        payload = payload[json_start:]
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    request_context = record.get("request_context")
+    if isinstance(request_context, dict):
+        return request_context
+
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        request_context = runtime_observability.get("request_context")
+        if isinstance(request_context, dict):
+            return request_context
+        nvext = runtime_observability.get("nvext")
+        if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+            return nvext["request_context"]
+
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+        return nvext["request_context"]
+    return {}
+
+
 def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:
     if not path.exists():
         return {}
@@ -81,6 +137,37 @@ def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:
         row.get("request_role", ""): row
         for row in rows
         if row.get("request_role")
+    }
+
+
+def summarize_request_priority(
+    request_rows: dict[str, dict[str, str]],
+    *,
+    field: str,
+    roles: tuple[str, ...] = ("a_first", "a_replay"),
+) -> dict[str, str]:
+    relevant = []
+    values = []
+    for role in roles:
+        row = request_rows.get(role, {})
+        if not row:
+            continue
+        relevant.append(role)
+        raw = row.get(field, "")
+        if str(raw).strip() == "":
+            continue
+        values.append(f"{role}:{raw}")
+    if not relevant:
+        status = "missing_requests_csv"
+    elif not values:
+        status = "none"
+    elif len(values) == len(relevant):
+        status = "full"
+    else:
+        status = "partial"
+    return {
+        "status": status,
+        "values": "|".join(values),
     }
 
 
@@ -106,6 +193,102 @@ def parse_worker_capacity(path: Path) -> dict[str, int | None]:
     }
 
 
+def parse_worker_hint_evidence(
+    worker_runtime_log: Path,
+    request_rows: dict[str, dict[str, str]],
+) -> dict[str, str]:
+    protected_rows = [
+        row
+        for role, row in request_rows.items()
+        if role in {"a_first", "a_replay"}
+    ]
+    protected_request_ids = {
+        str(row.get("request_id", "")).strip()
+        for row in protected_rows
+        if str(row.get("request_id", "")).strip()
+    }
+    if not protected_request_ids:
+        return {
+            "worker_hint_status": "missing_runtime_json",
+            "worker_hint_keys": "",
+            "worker_hint_profile_seen": "",
+        }
+    if not worker_runtime_log.exists():
+        return {
+            "worker_hint_status": "missing_runtime_json",
+            "worker_hint_keys": "",
+            "worker_hint_profile_seen": "",
+        }
+
+    seen_request_ids: set[str] = set()
+    received_hint_request_ids: set[str] = set()
+    top_level_priority_request_ids: set[str] = set()
+    union_keys: set[str] = set()
+    profiles_seen: set[str] = set()
+    top_level_priority_values: dict[str, str] = {}
+    missing_expected_keys = False
+
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        record = parse_runtime_json_payload(clean_log_line(raw_line))
+        if not isinstance(record, dict):
+            continue
+        request_context = request_context_from_record(record)
+        request_id = request_context.get("request_id")
+        if not isinstance(request_id, str) or request_id not in protected_request_ids:
+            continue
+        seen_request_ids.add(request_id)
+
+        agent_hints = record.get("agent_hints")
+        if not isinstance(agent_hints, dict):
+            agent_hints = None
+        if isinstance(agent_hints, dict):
+            received_hint_request_ids.add(request_id)
+            current_keys = {str(key) for key in agent_hints}
+            union_keys.update(current_keys)
+            if not EXPECTED_HINT_KEYS.issubset(current_keys):
+                missing_expected_keys = True
+            hint_profile = agent_hints.get("hint_profile")
+            if isinstance(hint_profile, str) and hint_profile:
+                profiles_seen.add(hint_profile)
+
+        priority = record.get("priority")
+        parsed_priority = as_int(priority)
+        if parsed_priority is not None:
+            top_level_priority_request_ids.add(request_id)
+            top_level_priority_values.setdefault(request_id, str(parsed_priority))
+
+    if not seen_request_ids:
+        status = "missing_runtime_json"
+        priority_status = "missing_runtime_json"
+    elif not received_hint_request_ids:
+        status = "none"
+    elif received_hint_request_ids == protected_request_ids and not missing_expected_keys:
+        status = "full"
+    else:
+        status = "partial"
+    if not seen_request_ids:
+        priority_status = "missing_runtime_json"
+    elif not top_level_priority_request_ids:
+        priority_status = "none"
+    elif top_level_priority_request_ids == protected_request_ids:
+        priority_status = "full"
+    else:
+        priority_status = "partial"
+
+    return {
+        "worker_hint_status": status,
+        "worker_hint_keys": "|".join(sorted(union_keys)),
+        "worker_hint_profile_seen": "|".join(sorted(profiles_seen)),
+        "worker_top_level_priority_status": priority_status,
+        "worker_top_level_priority_values": "|".join(
+            f"{role}:{top_level_priority_values[request_rows[role]['request_id']]}"
+            for role in ("a_first", "a_replay")
+            if role in request_rows
+            and request_rows[role].get("request_id") in top_level_priority_values
+        ),
+    }
+
+
 def derived_row(
     *,
     sweep_id: str,
@@ -125,11 +308,14 @@ def derived_row(
     if not requests_csv_path.is_absolute():
         requests_csv_path = Path.cwd() / requests_csv_path
     request_rows = request_rows_by_role(requests_csv_path)
+    sent_priority = summarize_request_priority(request_rows, field="top_level_priority_value")
+    hint_priority = summarize_request_priority(request_rows, field="agent_hints_priority")
 
     worker_log_path = Path(summary.get("worker_runtime_log", ""))
     if not worker_log_path.is_absolute():
         worker_log_path = Path.cwd() / worker_log_path
     worker_capacity = parse_worker_capacity(worker_log_path)
+    worker_hint_evidence = parse_worker_hint_evidence(worker_log_path, request_rows)
 
     hint_profile = summary.get("protected_hint_profile", "")
     replay_status = summary.get("a_replay_status", "")
@@ -233,6 +419,15 @@ def derived_row(
         "a_replay_sglang_cache_match_events": cache_match_events,
         "a_replay_sglang_cache_semantic_tokens": summary.get("a_replay_sglang_cache_semantic_tokens", ""),
         "a_replay_sglang_cache_direct": str(cache_direct).lower(),
+        "worker_hint_status": worker_hint_evidence["worker_hint_status"],
+        "worker_hint_keys": worker_hint_evidence["worker_hint_keys"],
+        "worker_hint_profile_seen": worker_hint_evidence["worker_hint_profile_seen"],
+        "request_agent_hints_priority_status": hint_priority["status"],
+        "request_agent_hints_priority_values": hint_priority["values"],
+        "request_top_level_priority_status": sent_priority["status"],
+        "request_top_level_priority_values": sent_priority["values"],
+        "worker_top_level_priority_status": worker_hint_evidence["worker_top_level_priority_status"],
+        "worker_top_level_priority_values": worker_hint_evidence["worker_top_level_priority_values"],
         "survived_by_usage": str(survived_by_usage).lower(),
         "survived_by_events": str(survived_by_events).lower(),
         "survived_by_latency": str(survived_by_latency).lower(),
@@ -423,6 +618,15 @@ def main() -> int:
         "a_replay_sglang_cache_match_events",
         "a_replay_sglang_cache_semantic_tokens",
         "a_replay_sglang_cache_direct",
+        "worker_hint_status",
+        "worker_hint_keys",
+        "worker_hint_profile_seen",
+        "request_agent_hints_priority_status",
+        "request_agent_hints_priority_values",
+        "request_top_level_priority_status",
+        "request_top_level_priority_values",
+        "worker_top_level_priority_status",
+        "worker_top_level_priority_values",
         "survived_by_usage",
         "survived_by_events",
         "survived_by_latency",

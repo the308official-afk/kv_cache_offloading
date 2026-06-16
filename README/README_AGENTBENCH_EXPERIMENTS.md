@@ -1438,6 +1438,9 @@ This sweep is also automated in two modes:
 - `RETENTION_ATTRIBUTION_MODE=precise`
   - requires Step 0
   - adds direct cache / transfer attribution where available
+  - cache events can now carry external request metadata such as `request_id`,
+    `hint_profile`, `priority`, and `reuse_likelihood` when the instrumented
+    worker runtime JSON and patched SGLang logger are both active
 
 Recommended first run:
 
@@ -1539,6 +1542,7 @@ That prints:
 - the sweep id
 - the background PID
 - the `nohup` log path
+- the stable latest-log shortcut
 - the partial report paths you can inspect while the run is still going
 
 Useful commands while it runs:
@@ -1548,6 +1552,7 @@ LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/
 echo "$LATEST_THRESHOLD_SWEEP"
 
 tail -f "$LATEST_THRESHOLD_SWEEP/nohup.log"
+tail -f experiments/reports/latest_retention_threshold_nohup.log
 cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_sweep_progress.csv"
 cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
 cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_comparison.csv"

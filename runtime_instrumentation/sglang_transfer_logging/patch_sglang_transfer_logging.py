@@ -69,6 +69,7 @@ _INDEX_PREVIEW = int(os.environ.get("SGLANG_TRANSFER_LOG_INDEX_PREVIEW_COUNT", "
 _MAX_TOKEN_ID = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_REASONABLE_TOKEN_ID", "10000000") or 10000000)
 _MAX_SEMANTIC_TOKENS = int(os.environ.get("SGLANG_TRANSFER_LOG_MAX_SEMANTIC_TOKENS", "1000000") or 1000000)
 _SEMANTIC_CONTEXT = contextvars.ContextVar("sglang_transfer_semantic_context", default=None)
+_RUNTIME_REQUEST_REGISTRY: dict[str, dict[str, Any]] = {}
 _REQUEST_METADATA_KEYS = (
     "request_id",
     "external_request_id",
@@ -366,6 +367,79 @@ def _merge_request_metadata(target: dict[str, Any], source: dict[str, Any], sour
         if isinstance(nvext.get("request_context"), dict):
             target.setdefault("request_context", _sanitize_metadata(nvext["request_context"]))
         _merge_request_metadata(target, nvext, f"{source_name}.nvext")
+
+
+def _request_metadata_alias_values(metadata: dict[str, Any]) -> list[str]:
+    aliases: list[str] = []
+    for key in (
+        "request_id",
+        "external_request_id",
+        "runtime_request_id",
+        "runtime_context_id",
+        "frontend_request_id",
+        "sglang_request_id",
+        "hint_probe_id",
+    ):
+        value = metadata.get(key)
+        if isinstance(value, str) and value and value not in aliases:
+            aliases.append(value)
+
+    request_context = metadata.get("request_context")
+    if isinstance(request_context, dict):
+        for key in ("request_id", "parent_run_id", "phase", "hint_profile"):
+            value = request_context.get(key)
+            if isinstance(value, str) and value and value not in aliases:
+                aliases.append(value)
+    return aliases
+
+
+def _register_request_metadata_aliases(metadata: dict[str, Any]) -> None:
+    aliases = _request_metadata_alias_values(metadata)
+    if not aliases:
+        return
+    with _LOCK:
+        for alias in aliases:
+            existing = _RUNTIME_REQUEST_REGISTRY.get(alias)
+            if isinstance(existing, dict):
+                _RUNTIME_REQUEST_REGISTRY[alias] = _merge_transfer_context_pair(existing, metadata)
+            else:
+                _RUNTIME_REQUEST_REGISTRY[alias] = copy.deepcopy(metadata)
+
+
+def register_runtime_event_metadata(event: dict[str, Any]) -> None:
+    if not isinstance(event, dict):
+        return
+    metadata: dict[str, Any] = {}
+    _merge_request_metadata(metadata, event, "runtime_event")
+    if "event_type" in event and "runtime_event_type" not in metadata:
+        metadata["runtime_event_type"] = _sanitize_metadata(event.get("event_type"))
+    if "component" in event and "runtime_event_component" not in metadata:
+        metadata["runtime_event_component"] = _sanitize_metadata(event.get("component"))
+    _register_request_metadata_aliases(metadata)
+
+
+def _lookup_registered_request_metadata(*sources: Any) -> dict[str, Any]:
+    merged: dict[str, Any] = {}
+    aliases: list[str] = []
+    for source in sources:
+        if source is None:
+            continue
+        metadata = source if isinstance(source, dict) else _request_metadata_candidates_from_value("lookup", source)
+        if not isinstance(metadata, dict):
+            continue
+        for alias in _request_metadata_alias_values(metadata):
+            if alias not in aliases:
+                aliases.append(alias)
+
+    if not aliases:
+        return merged
+
+    with _LOCK:
+        for alias in aliases:
+            registered = _RUNTIME_REQUEST_REGISTRY.get(alias)
+            if isinstance(registered, dict):
+                merged = _merge_transfer_context_pair(merged, registered)
+    return merged
 
 
 def _request_metadata_candidates_from_value(
@@ -963,6 +1037,16 @@ def _log_cache_event_impl(
     context = current_transfer_context()
     if context:
         payload.update(context)
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_registry_lookup",
+            _lookup_registered_request_metadata,
+            payload,
+            context,
+            locals_dict,
+        )
+    )
 
     _attach_overhead(payload, overhead)
     if overhead is not None or payload.get("instrumentation_overhead_enabled"):
@@ -1188,6 +1272,16 @@ def log_transfer_event(
             overhead,
             "request_metadata_extract",
             _request_metadata_summary,
+            locals_dict,
+        )
+    )
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_registry_lookup",
+            _lookup_registered_request_metadata,
+            payload,
+            semantic_context,
             locals_dict,
         )
     )

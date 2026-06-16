@@ -1007,6 +1007,22 @@ def build_phase_probe_id(*, parent_run_id: str | None, phase: str, sequence_inde
     return f"{parent_run_id or 'run'}::{phase}::{sequence_index}"
 
 
+def top_level_priority_from_hints(hints: dict[str, Any] | None) -> int | None:
+    if not hints:
+        return None
+    value = hints.get("priority")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 # Builds the ChatOpenAI client that sends requests to the local Dynamo frontend.
 def build_dynamo_chat_model(
     *,
@@ -1027,6 +1043,11 @@ def build_dynamo_chat_model(
     }
     if payload:
         extra_body["nvext"]["agent_hints"] = payload
+    priority = top_level_priority_from_hints(payload)
+    if priority is not None:
+        # Upstream SGLang's scheduler/cache path reads top-level request priority,
+        # not just nvext.agent_hints.priority.
+        extra_body["priority"] = priority
     if os.environ.get("AGENTBENCH_SEND_TOP_LEVEL_EXTRA_ARGS", "").lower() in {
         "1",
         "true",

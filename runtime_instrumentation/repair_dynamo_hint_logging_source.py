@@ -29,6 +29,25 @@ def repair_runtime_logging() -> None:
     path = SOURCE_DIR / "components/src/dynamo/common/runtime_logging.py"
     text = path.read_text()
 
+    marker = '_OBSERVABILITY_KEY = "runtime_observability"\n'
+    if "def _maybe_register_transfer_runtime_event" not in text:
+        insertion = '''
+
+def _maybe_register_transfer_runtime_event(event: dict[str, Any]) -> None:
+    try:
+        from sglang.srt.mem_cache.transfer_logging import register_runtime_event_metadata
+    except Exception:
+        return
+
+    try:
+        register_runtime_event_metadata(event)
+    except Exception:
+        return
+'''
+        if marker not in text:
+            raise SystemExit(f"Could not find observability key marker in {path}")
+        text = text.replace(marker, marker + insertion, 1)
+
     if "def extract_agent_hints_with_source" not in text:
         old = '''def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
     nvext = request.get("nvext")
@@ -119,6 +138,23 @@ def agent_hint_log_fields(request: dict[str, Any]) -> dict[str, Any]:
 '''
     if old in text:
         text = text.replace(old, new)
+
+    emit_marker = '''    for key, value in payload.items():
+        event[key] = _sanitize(value)
+
+    logger.info(
+'''
+    emit_replacement = '''    for key, value in payload.items():
+        event[key] = _sanitize(value)
+
+    _maybe_register_transfer_runtime_event(event)
+
+    logger.info(
+'''
+    if "_maybe_register_transfer_runtime_event(event)" not in text:
+        if emit_marker not in text:
+            raise SystemExit(f"Could not patch emit_runtime_event in {path}")
+        text = text.replace(emit_marker, emit_replacement, 1)
 
     write_if_changed(path, text)
 

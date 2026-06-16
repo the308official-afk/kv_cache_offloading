@@ -8,6 +8,7 @@ SWEEP_DIR="experiments/reports/retention_threshold_sweeps/${RETENTION_SWEEP_ID}"
 NOHUP_LOG="${SWEEP_DIR}/nohup.log"
 PID_FILE="${SWEEP_DIR}/nohup.pid"
 LAUNCH_ENV_FILE="${SWEEP_DIR}/launch_env.sh"
+LATEST_NOHUP_LINK="experiments/reports/latest_retention_threshold_nohup.log"
 
 mkdir -p "${SWEEP_DIR}"
 
@@ -31,6 +32,7 @@ nohup ./agentbench/run_kv_retention_threshold_sweep_single_host.sh "$@" \
 
 PID=$!
 printf '%s\n' "${PID}" > "${PID_FILE}"
+ln -sfn "retention_threshold_sweeps/${RETENTION_SWEEP_ID}/nohup.log" "${LATEST_NOHUP_LINK}"
 
 cat <<EOF
 Started retention threshold sweep in the background.
@@ -38,11 +40,13 @@ Started retention threshold sweep in the background.
 retention_sweep_id: ${RETENTION_SWEEP_ID}
 pid: ${PID}
 nohup_log: ${NOHUP_LOG}
+latest_nohup_log: ${LATEST_NOHUP_LINK}
 pid_file: ${PID_FILE}
 launch_env: ${LAUNCH_ENV_FILE}
 
 Watch the run:
   tail -f ${NOHUP_LOG}
+  tail -f ${LATEST_NOHUP_LINK}
 
 Check progress:
   cat ${SWEEP_DIR}/retention_threshold_sweep_progress.csv

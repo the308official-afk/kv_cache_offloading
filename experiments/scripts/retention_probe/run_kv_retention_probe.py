@@ -96,6 +96,9 @@ REQUEST_COLUMNS = [
     "request_id",
     "hint_profile",
     "hints_enabled",
+    "agent_hints_priority",
+    "top_level_priority_sent",
+    "top_level_priority_value",
     "prompt_hash",
     "input_len",
     "output_len",
@@ -140,7 +143,13 @@ SUMMARY_COLUMNS = [
     "first_distractor_prompt_tokens",
     "kv_tokens_left_after_a",
     "kv_tokens_left_after_a_after_first_distractor",
+    "a_first_agent_hints_priority",
+    "a_first_top_level_priority_sent",
+    "a_first_top_level_priority_value",
     "a_first_cached_tokens",
+    "a_replay_agent_hints_priority",
+    "a_replay_top_level_priority_sent",
+    "a_replay_top_level_priority_value",
     "a_replay_cached_tokens",
     "a_replay_cache_reuse_ratio",
     "a_replay_prompt_tokens",
@@ -271,6 +280,22 @@ def build_hints(*, profile: str, run_id: str, request_role: str, sequence_index:
     return hints
 
 
+def top_level_priority_from_hints(hints: dict[str, Any] | None) -> int | None:
+    if not hints:
+        return None
+    value = hints.get("priority")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def request_context(
     *,
     run_id: str,
@@ -380,6 +405,10 @@ def send_probe_request(
     }
     if hints is not None:
         payload["nvext"]["agent_hints"] = hints
+    priority = top_level_priority_from_hints(hints)
+    if priority is not None:
+        # Upstream SGLang reads request priority from the top-level field.
+        payload["priority"] = priority
     if args.ignore_eos:
         payload["ignore_eos"] = True
 
@@ -430,6 +459,9 @@ def send_probe_request(
         "request_id": context["request_id"],
         "hint_profile": hint_profile,
         "hints_enabled": bool(hints),
+        "agent_hints_priority": priority if priority is not None else "",
+        "top_level_priority_sent": bool(priority is not None),
+        "top_level_priority_value": priority if priority is not None else "",
         "prompt_hash": prompt_hash,
         "input_len": len(prompt.split()),
         "output_len": args.random_output_len,
@@ -822,7 +854,13 @@ def build_summary(
         "first_distractor_prompt_tokens": int_or_empty(first_distractor_prompt_tokens),
         "kv_tokens_left_after_a": int_or_empty(kv_tokens_left_after_a),
         "kv_tokens_left_after_a_after_first_distractor": int_or_empty(kv_tokens_left_after_a_after_first_distractor),
+        "a_first_agent_hints_priority": int_or_empty(first.get("agent_hints_priority")),
+        "a_first_top_level_priority_sent": truthy(first.get("top_level_priority_sent")),
+        "a_first_top_level_priority_value": int_or_empty(first.get("top_level_priority_value")),
         "a_first_cached_tokens": int_or_empty(first.get("cached_prompt_tokens")),
+        "a_replay_agent_hints_priority": int_or_empty(replay.get("agent_hints_priority")),
+        "a_replay_top_level_priority_sent": truthy(replay.get("top_level_priority_sent")),
+        "a_replay_top_level_priority_value": int_or_empty(replay.get("top_level_priority_value")),
         "a_replay_cached_tokens": int_or_empty(replay.get("cached_prompt_tokens")),
         "a_replay_cache_reuse_ratio": round_ratio(replay_ratio),
         "a_replay_prompt_tokens": int_or_empty(replay.get("prompt_tokens")),

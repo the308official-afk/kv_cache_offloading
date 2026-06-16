@@ -37,6 +37,7 @@ echo "Verifying required instrumentation markers..."
 
 required_markers=(
   "components/src/dynamo/common/runtime_logging.py:agent_hint_log_fields"
+  "components/src/dynamo/common/runtime_logging.py:_maybe_register_transfer_runtime_event"
   "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:agent_hint_log_fields"
   "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:agent_hint_log_fields"
   "lib/llm/src/preprocessor.rs:runtime_observability_extra_args_from_nvext"

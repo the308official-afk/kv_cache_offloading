@@ -11,7 +11,7 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 SERVERS=(
   ""
-  "3.87.216.209"
+  "34.230.44.66"
   ""
 )
 LABELS=("S0" "S1" "S2")
@@ -109,18 +109,20 @@ if ! ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_RESULTS_DIR}'"; then
     REMOTE_RESULTS_DIR="${REMOTE_RESULTS_DIR_LEGACY}"
     echo "Remote source: ${REMOTE_RESULTS_DIR}/"
   else
-    echo "Remote results directory does not exist:" >&2
+    echo "Remote results directory does not exist; skipping raw AgentBench results:" >&2
     echo "  ${REMOTE_RESULTS_DIR}" >&2
     echo "  ${REMOTE_RESULTS_DIR_LEGACY}" >&2
-    exit 1
+    REMOTE_RESULTS_DIR=""
   fi
 fi
 
-rsync \
-  "${RSYNC_COMMON_OPTS[@]}" \
-  -e "$SSH_CMD" \
-  "${remote_host}:${REMOTE_RESULTS_DIR}/" \
-  "${LOCAL_RESULTS_DIR}/"
+if [[ -n "${REMOTE_RESULTS_DIR}" ]]; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_RESULTS_DIR}/" \
+    "${LOCAL_RESULTS_DIR}/"
+fi
 
 echo "==== Downloading SGLang transfer reports from ${label} (${ip}) ===="
 echo "Remote source: ${REMOTE_TRANSFER_LOG_DIR}/sglang_transfer_events*.jsonl"
