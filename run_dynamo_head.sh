@@ -4,6 +4,12 @@ set -euo pipefail
 
 ACTION="${1:-start}"
 LOG_MODE="${2:-}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILE_SCRIPT="${SCRIPT_DIR}/runtime_instrumentation/dynamo_machine_profile.sh"
+if [[ -f "${PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${PROFILE_SCRIPT}"
+fi
 
 HOST_HOME_DIR="${HOST_HOME_DIR:-$HOME}"
 HEAD_STATE_DIR="${HEAD_STATE_DIR:-${HOST_HOME_DIR}/kv_cache_offloading/dynamo_head_state}"
@@ -65,6 +71,7 @@ Environment overrides:
   ETCD_ENDPOINTS         Default: auto-derived as http://<head-private-ip>:2379
   NATS_SERVER            Default: auto-derived as nats://<head-private-ip>:4222
   ROUTER_EXTRA_ARGS      Default: ${ROUTER_EXTRA_ARGS}
+  DYNAMO_MACHINE_PROFILE Default: ${DYNAMO_MACHINE_PROFILE:-<unset>}
 
 Notes:
   - This head-node flow is intentionally simple and avoids /mnt/docker-data.
@@ -245,6 +252,8 @@ nats endpoint: ${NATS_SERVER}
 frontend:      http://127.0.0.1:${DYNAMO_FRONTEND_PORT}
 model name:    ${DYNAMO_MODEL_PATH}
 kv block size: ${DYNAMO_KV_CACHE_BLOCK_SIZE}
+machine profile: ${DYNAMO_MACHINE_PROFILE:-default}
+frontend image: ${FRONTEND_IMAGE}
 
 Next steps:
   $0 status

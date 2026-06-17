@@ -3,6 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILE_SCRIPT="${SCRIPT_DIR}/runtime_instrumentation/dynamo_machine_profile.sh"
+if [[ -f "${PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${PROFILE_SCRIPT}"
+fi
 
 ACTION="${1:-start}"
 LOG_MODE="${2:-}"
@@ -117,6 +122,7 @@ Environment overrides:
   WORKER_PROFILE_NCU_METRICS Default: ${WORKER_PROFILE_NCU_METRICS}
   WORKER_PROFILE_NCU_KERNEL_NAME Default: ${WORKER_PROFILE_NCU_KERNEL_NAME:-<unset>}
   WORKER_PROFILE_NCU_EXTRA_ARGS Default: ${WORKER_PROFILE_NCU_EXTRA_ARGS}
+  DYNAMO_MACHINE_PROFILE Default: ${DYNAMO_MACHINE_PROFILE:-<unset>}
 EOF
 }
 
@@ -400,6 +406,7 @@ Image:     ${WORKER_IMAGE}
 Model:     ${DYNAMO_MODEL_PATH}
 etcd:      ${ETCD_ENDPOINTS}
 page size: ${DYNAMO_PAGE_SIZE}
+machine profile: ${DYNAMO_MACHINE_PROFILE:-default}
 dev mode:  ${WORKER_DEV_MODE}
 sglang dev: ${WORKER_SGLANG_DEV_MODE}
 transfer log: ${SGLANG_TRANSFER_LOG:-off}

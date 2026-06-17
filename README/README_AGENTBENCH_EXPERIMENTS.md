@@ -51,6 +51,8 @@ case "$MODEL_KIND" in
 esac
 
 export MODEL_NAME
+export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"  # ec2 or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
 export AGENTBENCH_EXECUTION_LOOP=0
@@ -67,6 +69,21 @@ export MODEL_SMOKE_DELAY_SECS=10
 export MODEL_COOLDOWN_SECS=30
 
 echo "Using model: $MODEL_NAME"
+echo "Using machine profile: $DYNAMO_MACHINE_PROFILE"
+echo "Frontend image: $FRONTEND_IMAGE"
+echo "Worker image: $WORKER_IMAGE"
+```
+
+Machine profile quick switch:
+
+```bash
+# known-good EC2 / x86 path
+export DYNAMO_MACHINE_PROFILE=ec2
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+# GH200 / ARM64 path
+export DYNAMO_MACHINE_PROFILE=gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
 ```
 
 All experiments below inherit this execution policy unless you explicitly
@@ -132,34 +149,41 @@ cd ~/kv_cache_offloading
 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 
-docker image inspect local/dynamo-frontend:runtime-json-logs >/dev/null
-docker image inspect local/dynamo-sglang:runtime-json-logs >/dev/null
+docker image inspect "$FRONTEND_IMAGE" >/dev/null
+docker image inspect "$WORKER_IMAGE" >/dev/null
 echo "instrumented images ok"
 ```
 
 Those local image tags are not pulled from a registry. They must be built on
 each new machine before experiments that use:
 
-- `local/dynamo-frontend:runtime-json-logs`
-- `local/dynamo-sglang:runtime-json-logs`
+- `$FRONTEND_IMAGE`
+- `$WORKER_IMAGE`
 
 If you see an error like `Dynamo source directory not found`, it usually means
 `~/kv_cache_offloading/upstream/dynamo` has not been created yet. Run the
 prepare step above, then rerun the image build.
 
-If you are on a Grace Hopper / ARM64 machine and need ARM images, set the
-build platform explicitly before the image build:
+If you are on a Grace Hopper / ARM64 machine, set the machine profile before
+the image build:
 
 ```bash
 cd ~/kv_cache_offloading
 
-DOCKER_BUILD_PLATFORM=linux/arm64 \
+DYNAMO_MACHINE_PROFILE=gh200 \
 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 ```
 
-If you are on a standard x86_64 machine, you usually do not need to set
-`DOCKER_BUILD_PLATFORM`.
+Profile behavior:
+
+```text
+ec2   -> x86/host-default build platform, image tags ending in -ec2
+gh200 -> linux/arm64 build platform, image tags ending in -gh200
+```
+
+Using profile-specific image tags prevents a GH200 rebuild from overwriting the
+known-good EC2 image names.
 
 Before NodeBB SWE-bench tasks, complete
 [README_AGENTBENCH_ENVIRONMENT.md](README_AGENTBENCH_ENVIRONMENT.md). Do not run
@@ -321,8 +345,7 @@ request-id transfer attribution.
 ```bash
 cd ~/kv_cache_offloading
 
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
    ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
@@ -863,8 +886,7 @@ Use this first. It is small enough to catch setup issues before a long run.
 cd ~/kv_cache_offloading
 
 export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 export AGENTBENCH_EXECUTION_LOOP=0
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
@@ -1062,8 +1084,7 @@ probe request IDs attached when the patch is active.
 ```bash
 cd ~/kv_cache_offloading
 
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
    ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
@@ -1165,8 +1186,7 @@ Precise version of the same run:
 cd ~/kv_cache_offloading
 
 export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
@@ -1339,8 +1359,7 @@ probe focuses on GPU-only retention.
 cd ~/kv_cache_offloading
 
 export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 ./run_dynamo_single_host.sh stop
 
@@ -1501,8 +1520,7 @@ Precise version of the same sweep:
 ```bash
 cd ~/kv_cache_offloading
 
-export FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs
-export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
+source runtime_instrumentation/dynamo_machine_profile.sh
 
 SGLANG_IMAGE="$WORKER_IMAGE" \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh

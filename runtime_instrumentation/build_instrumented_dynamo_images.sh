@@ -5,6 +5,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
+PROFILE_SCRIPT="${SCRIPT_DIR}/dynamo_machine_profile.sh"
+if [[ -f "${PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${PROFILE_SCRIPT}"
+fi
 FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE_TAG="${WORKER_IMAGE_TAG:-local/dynamo-sglang:runtime-json-logs}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
@@ -155,6 +160,7 @@ Instrumented images are ready.
 Frontend image: ${FRONTEND_IMAGE_TAG}
 Worker image:   ${WORKER_IMAGE_TAG}
 Build platform: ${DOCKER_BUILD_PLATFORM:-host default}
+Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}
 
 Example single-host run:
   cd ${ROOT_DIR}

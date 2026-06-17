@@ -4,6 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 source agentbench/model_config.sh
+if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
+  # shellcheck disable=SC1091
+  source runtime_instrumentation/dynamo_machine_profile.sh
+fi
 
 MODEL_LIST_FILE="${MODEL_LIST_FILE:-agentbench/model_lists/multi_model_batch.txt}"
 RETENTION_PROBE_ID="${RETENTION_PROBE_ID:-retention_probe_$(date +%Y%m%d_%H%M%S)}"

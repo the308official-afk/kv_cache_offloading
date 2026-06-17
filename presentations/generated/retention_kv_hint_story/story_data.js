@@ -1,5 +1,5 @@
 window.RETENTION_STORY_DATA = {
-  "generated_at": "2026-06-17T13:32:15",
+  "generated_at": "2026-06-17T14:12:15",
   "report_path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/retention_threshold_matrix.csv",
   "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
   "kv_tier_mode": "gpu_only",

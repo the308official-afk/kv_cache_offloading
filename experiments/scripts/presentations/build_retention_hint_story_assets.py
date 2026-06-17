@@ -145,12 +145,12 @@ def build_line_chart_svg(
     series: list[dict[str, object]],
     y_label: str,
 ) -> str:
-    width = 1120
+    width = 1360
     height = 600
     left = 92
-    right = 36
+    right = 248
     top = 82 if not subtitle else 96
-    bottom = 92
+    bottom = 76
     plot_width = width - left - right
     plot_height = height - top - bottom
 
@@ -229,21 +229,21 @@ def build_line_chart_svg(
         f'<text x="{left + plot_width / 2:.2f}" y="{height - 22}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">Distractor Count</text>'
     )
 
-    legend_x = left
-    legend_y = height - 56
+    legend_x = left + plot_width + 20
+    legend_y = top + 92
     for index, item in enumerate(series):
-        x0 = legend_x + index * 240
+        y0 = legend_y + index * 44
         color = str(item["color"])
         dash = str(item.get("dash") or "")
         stroke = f' stroke-dasharray="{dash}"' if dash else ""
         parts.append(
-            f'<line x1="{x0}" y1="{legend_y}" x2="{x0 + 28}" y2="{legend_y}" stroke="{color}" stroke-width="3.2"{stroke}/>'
+            f'<line x1="{legend_x}" y1="{y0}" x2="{legend_x + 28}" y2="{y0}" stroke="{color}" stroke-width="3.2"{stroke}/>'
         )
         parts.append(
-            f'<circle cx="{x0 + 14}" cy="{legend_y}" r="4.8" fill="#ffffff" stroke="{color}" stroke-width="2.6"/>'
+            f'<circle cx="{legend_x + 14}" cy="{y0}" r="4.8" fill="#ffffff" stroke="{color}" stroke-width="2.6"/>'
         )
         parts.append(
-            f'<text x="{x0 + 38}" y="{legend_y + 5}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">{escape(str(item["label"]))}</text>'
+            f'<text x="{legend_x + 38}" y="{y0 + 5}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">{escape(str(item["label"]))}</text>'
         )
 
     parts.append("</svg>")

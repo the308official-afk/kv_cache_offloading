@@ -3,6 +3,11 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROFILE_SCRIPT="${SCRIPT_DIR}/runtime_instrumentation/dynamo_machine_profile.sh"
+if [[ -f "${PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${PROFILE_SCRIPT}"
+fi
 MODEL_CONFIG="${SCRIPT_DIR}/agentbench/model_config.sh"
 if [[ -f "${MODEL_CONFIG}" ]]; then
   # Shared AgentBench defaults; explicit shell env still overrides these below.
@@ -42,6 +47,7 @@ Environment overrides:
   ETCD_ENDPOINTS           Default: ${ETCD_ENDPOINTS}
   NATS_SERVER              Default: ${NATS_SERVER}
   DYN_RUNTIME_JSON_LOGS    Default: ${DYN_RUNTIME_JSON_LOGS:-}
+  DYNAMO_MACHINE_PROFILE   Default: ${DYNAMO_MACHINE_PROFILE:-<unset>}
   DYN_TOOL_CALL_PARSER     Default: ${DYN_TOOL_CALL_PARSER:-<unset>}
   WORKER_DEV_MODE          Default: ${WORKER_DEV_MODE:-0}
   WORKER_DEV_SOURCE_ROOT   Default: ${WORKER_DEV_SOURCE_ROOT:-<unset>}
