@@ -52,7 +52,7 @@ If this fails with `Unsupported parameter(s): priority`, use:
 export RETENTION_TOP_LEVEL_PRIORITY_MODE=auto
 ```
 
-for retention experiments.
+for retention experiments....
 
 ### B. Canonical hint-path test
 
