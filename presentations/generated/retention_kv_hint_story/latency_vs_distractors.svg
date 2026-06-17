@@ -3,33 +3,33 @@
 <text x="92" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">Replay Latency vs. Distractor Pressure</text>
 <rect x="92" y="82" width="1020" height="442" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>
 <line x1="92" y1="524.00" x2="1112" y2="524.00" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="529.00" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">0</text>
+<text x="78" y="529.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">0</text>
 <line x1="92" y1="435.60" x2="1112" y2="435.60" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="440.60" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">33</text>
+<text x="78" y="441.10" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">33</text>
 <line x1="92" y1="347.20" x2="1112" y2="347.20" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="352.20" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">66</text>
+<text x="78" y="352.70" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">66</text>
 <line x1="92" y1="258.80" x2="1112" y2="258.80" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="263.80" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">99</text>
+<text x="78" y="264.30" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">99</text>
 <line x1="92" y1="170.40" x2="1112" y2="170.40" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="175.40" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">132</text>
+<text x="78" y="175.90" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">132</text>
 <line x1="92" y1="82.00" x2="1112" y2="82.00" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="87.00" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">165</text>
+<text x="78" y="87.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">165</text>
 <line x1="92.00" y1="82" x2="92.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="92.00" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">2</text>
+<text x="92.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">2</text>
 <line x1="133.21" y1="82" x2="133.21" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="133.21" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">10</text>
+<text x="133.21" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">10</text>
 <line x1="184.73" y1="82" x2="184.73" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="184.73" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">20</text>
+<text x="184.73" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">20</text>
 <line x1="287.76" y1="82" x2="287.76" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="287.76" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">40</text>
+<text x="287.76" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">40</text>
 <line x1="390.79" y1="82" x2="390.79" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="390.79" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">60</text>
+<text x="390.79" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">60</text>
 <line x1="493.82" y1="82" x2="493.82" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="493.82" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">80</text>
+<text x="493.82" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">80</text>
 <line x1="596.85" y1="82" x2="596.85" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="596.85" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">100</text>
+<text x="596.85" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">100</text>
 <line x1="1112.00" y1="82" x2="1112.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="1112.00" y="552" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">200</text>
+<text x="1112.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">200</text>
 <polyline fill="none" stroke="#94a3b8" stroke-width="3.2" stroke-dasharray="8 6" points="92.00,172.31 133.21,164.26 184.73,172.31 287.76,172.31 390.79,172.31 493.82,169.63 596.85,172.31 1112.00,172.31"/>
 <circle cx="92.00" cy="172.31" r="4.8" fill="#ffffff" stroke="#94a3b8" stroke-width="2.6"/>
 <circle cx="133.21" cy="164.26" r="4.8" fill="#ffffff" stroke="#94a3b8" stroke-width="2.6"/>
@@ -66,18 +66,18 @@
 <circle cx="493.82" cy="330.71" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
 <circle cx="596.85" cy="330.71" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
 <circle cx="1112.00" cy="330.71" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
-<text x="26" y="303.00" transform="rotate(-90 26 303.00)" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">Latency (ms)</text>
-<text x="602.00" y="578" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">Distractor Count</text>
+<text x="28" y="303.00" transform="rotate(-90 28 303.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Latency (ms)</text>
+<text x="602.00" y="580" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Distractor Count</text>
 <line x1="1132" y1="174" x2="1160" y2="174" stroke="#94a3b8" stroke-width="3.2" stroke-dasharray="8 6"/>
 <circle cx="1146" cy="174" r="4.8" fill="#ffffff" stroke="#94a3b8" stroke-width="2.6"/>
-<text x="1170" y="179" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">None • A first</text>
+<text x="1170" y="179.5" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155">None • A first</text>
 <line x1="1132" y1="218" x2="1160" y2="218" stroke="#2563eb" stroke-width="3.2"/>
 <circle cx="1146" cy="218" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
-<text x="1170" y="223" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">None • A replay</text>
+<text x="1170" y="223.5" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155">None • A replay</text>
 <line x1="1132" y1="262" x2="1160" y2="262" stroke="#f59e0b" stroke-width="3.2" stroke-dasharray="8 6"/>
 <circle cx="1146" cy="262" r="4.8" fill="#ffffff" stroke="#f59e0b" stroke-width="2.6"/>
-<text x="1170" y="267" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High Priority • A first</text>
+<text x="1170" y="267.5" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155">High Priority • A first</text>
 <line x1="1132" y1="306" x2="1160" y2="306" stroke="#16a34a" stroke-width="3.2"/>
 <circle cx="1146" cy="306" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
-<text x="1170" y="311" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High Priority • A replay</text>
+<text x="1170" y="311.5" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155">High Priority • A replay</text>
 </svg>

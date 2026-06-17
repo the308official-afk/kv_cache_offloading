@@ -1,6 +1,6 @@
 window.RETENTION_STORY_DATA = {
-  "generated_at": "2026-06-17T14:12:15",
-  "report_path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/retention_threshold_matrix.csv",
+  "generated_at": "2026-06-17T15:22:40",
+  "report_path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/retention_threshold_matrix--worked.csv",
   "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
   "kv_tier_mode": "gpu_only",
   "control_profile": "none",
@@ -133,12 +133,12 @@ window.RETENTION_STORY_DATA = {
   "attribution": {
     "worker_hint_status": "full",
     "worker_hint_profile_seen": "high-priority",
-    "worker_priority_mechanism_ready": true,
-    "worker_priority_scheduling_enabled": true,
-    "worker_radix_eviction_policy": "priority",
+    "worker_priority_mechanism_ready": null,
+    "worker_priority_scheduling_enabled": null,
+    "worker_radix_eviction_policy": null,
     "request_top_level_priority_status": "none",
     "worker_top_level_priority_status": "none",
     "request_agent_hints_priority_status": "full",
-    "hint_runtime_effect_first_observed_at": 80
+    "hint_runtime_effect_first_observed_at": null
   }
 };

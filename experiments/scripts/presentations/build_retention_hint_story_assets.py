@@ -187,7 +187,7 @@ def build_line_chart_svg(
         )
         label = f"{int(round(tick)):,}"
         parts.append(
-            f'<text x="{left - 14}" y="{y + 5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">{label}</text>'
+            f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{label}</text>'
         )
 
     for x in x_values:
@@ -196,7 +196,7 @@ def build_line_chart_svg(
             f'<line x1="{xpos:.2f}" y1="{top}" x2="{xpos:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>'
         )
         parts.append(
-            f'<text x="{xpos:.2f}" y="{top + plot_height + 28}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#475569">{x}</text>'
+            f'<text x="{xpos:.2f}" y="{top + plot_height + 30}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">{x}</text>'
         )
 
     for item in series:
@@ -223,10 +223,10 @@ def build_line_chart_svg(
                 )
 
     parts.append(
-        f'<text x="26" y="{top + plot_height / 2:.2f}" transform="rotate(-90 26 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">{escape(y_label)}</text>'
+        f'<text x="28" y="{top + plot_height / 2:.2f}" transform="rotate(-90 28 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">{escape(y_label)}</text>'
     )
     parts.append(
-        f'<text x="{left + plot_width / 2:.2f}" y="{height - 22}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="600" fill="#334155">Distractor Count</text>'
+        f'<text x="{left + plot_width / 2:.2f}" y="{height - 20}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Distractor Count</text>'
     )
 
     legend_x = left + plot_width + 20
@@ -243,7 +243,7 @@ def build_line_chart_svg(
             f'<circle cx="{legend_x + 14}" cy="{y0}" r="4.8" fill="#ffffff" stroke="{color}" stroke-width="2.6"/>'
         )
         parts.append(
-            f'<text x="{legend_x + 38}" y="{y0 + 5}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">{escape(str(item["label"]))}</text>'
+            f'<text x="{legend_x + 38}" y="{y0 + 5.5}" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="600" fill="#334155">{escape(str(item["label"]))}</text>'
         )
 
     parts.append("</svg>")
@@ -439,9 +439,9 @@ def write_story_assets(story: dict[str, object], output_dir: Path) -> None:
 
     tokens_svg = build_line_chart_svg(
         title="Cached Tokens vs. Distractor Pressure",
-        subtitle="Dashed lines show prompt size for A. Solid lines show cached tokens available on replay A.",
+        subtitle=None,
         x_values=x_values,  # type: ignore[arg-type]
-        y_label="Tokens",
+        y_label="Number of cached tokens",
         series=[
             {
                 "label": f"{titleize_hint(control_profile)} • A prompt",
