@@ -1842,3 +1842,6 @@ preserves experiment scripts, READMEs, upstream repos, and instrumentation code.
   `ttft_source=worker_runtime_json.request_received_to_attached`.
 - `model_request_metrics.csv` is the best file when one phase sends multiple
   SGLang requests.
+
+
+  error status=400 {"message":"Validation: Unsupported parameter(s): `priority`","type":"Bad Request","code":400}
