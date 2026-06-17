@@ -1477,6 +1477,15 @@ Top-level priority compatibility:
   records that fallback in the report.
 - This is useful on machines where the frontend/runtime accepts agent hints but
   does not accept top-level `priority`.
+- If your top-level priority smoke test fails but the canonical
+  `nvext.agent_hints.priority` smoke test succeeds, use:
+
+```bash
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
+```
+
+That keeps the experiment on the canonical hint path only and avoids the
+top-level `priority` bad-request error entirely.
 
 Recommended first run:
 
@@ -1510,6 +1519,29 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Canonical-hint-only variant for machines that reject top-level `priority`:
+
+```bash
+cd ~/kv_cache_offloading
+
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+DISTRACTOR_COUNTS="2 10 20" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct

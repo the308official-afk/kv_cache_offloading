@@ -148,6 +148,44 @@
     .method-slide li + li {
       margin-top: 16px;
     }
+    .slide-two h2.title {
+      font-size: 34px;
+      margin-bottom: 18px;
+    }
+    .slide-two .subtitle {
+      font-size: 20px;
+      line-height: 1.42;
+      max-width: 1080px;
+      margin-bottom: 6px;
+      color: #475569;
+    }
+    .slide-two .content {
+      justify-content: flex-start;
+      gap: 18px;
+    }
+    .slide-two .panel {
+      max-width: 1180px;
+    }
+    .slide-two .eyebrow {
+      font-size: 13px;
+      margin-bottom: 14px;
+      color: #0f766e;
+    }
+    .slide-two ul {
+      padding-left: 30px;
+    }
+    .slide-two li {
+      font-size: 24px;
+      line-height: 1.38;
+      color: #1e293b;
+    }
+    .slide-two li strong {
+      color: #0f172a;
+      font-weight: 800;
+    }
+    .slide-two li + li {
+      margin-top: 14px;
+    }
     .metric-card {
       background: transparent;
       border: none;
@@ -598,7 +636,7 @@
     </div>
   </section>
 
-  <section class="slide method-slide">
+  <section class="slide slide-two">
     <div class="slide-number">02</div>
     <h2 class="title">Experiment Procedure</h2>
     <p class="subtitle">
@@ -608,12 +646,12 @@
       <div class="panel blue">
         <div class="eyebrow">Method Summary</div>
         <ul>
-          <li>Built a synthetic A → distractors → A replay retention workload.</li>
-          <li>Instrumented Dynamo and SGLang for direct worker attribution.</li>
-          <li>Swept distractor count upward to increase cache pressure.</li>
-          <li>Compared a no-hint control against a protected-hint run.</li>
-          <li>Injected hints from the frontend agent into the protected run.</li>
-          <li>Recorded first-request, replay, latency, and cache metrics at each step.</li>
+          <li><strong>Built</strong> a synthetic A → distractors → A replay retention workload.</li>
+          <li><strong>Instrumented</strong> Dynamo and SGLang for direct worker attribution.</li>
+          <li><strong>Increased</strong> distractor count step by step to raise cache pressure.</li>
+          <li><strong>Compared</strong> a no-hint control against a protected-hint run.</li>
+          <li><strong>Injected</strong> frontend hints only into the protected run.</li>
+          <li><strong>Recorded</strong> first-request, replay, latency, and cache metrics at each point.</li>
         </ul>
       </div>
     </div>
@@ -732,7 +770,7 @@
       <ul class="chart-interpretation">
         <li>For the control run (blue line), replay cached tokens drop to zero earlier, which means the replay request has gone cold.</li>
         <li>For the hinted run (green line), replay cached tokens stay available longer, which suggests better preservation of reusable context.</li>
-        <li>The orange line is the first A-request baseline; the key comparison is how long each replay line stays above zero.</li>
+        <li>The orange line is the first A-request baseline.</li>
       </ul>
     </div>
   </section>
