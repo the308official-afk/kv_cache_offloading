@@ -366,7 +366,7 @@ cd ~/kv_cache_offloading
 
 ./run_dynamo_single_host.sh stop
 
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
@@ -386,6 +386,9 @@ Watch the SGLang worker logs after restart:
 ```bash
 docker logs -f dynamo-sglang-worker
 ```
+
+Default rule for this README: use both `--enable-priority-scheduling` and
+`--radix-eviction-policy priority` unless a section explicitly says otherwise.
 
 If startup fails with host-memory pressure, stop Dynamo and clear page cache:
 
@@ -1341,7 +1344,7 @@ export WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs
 
 ./run_dynamo_single_host.sh stop
 
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --mem-fraction-static 0.7' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7' \
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
@@ -1442,6 +1445,10 @@ This sweep is also automated in two modes:
     `hint_profile`, `priority`, and `reuse_likelihood` when the instrumented
     worker runtime JSON and patched SGLang logger are both active
 
+By default, the retention probe and threshold sweep now launch the worker with
+both `--enable-priority-scheduling` and `--radix-eviction-policy priority`.
+Only override `WORKER_BASE_ARGS` if you intentionally want a different policy.
+
 Recommended first run:
 
 Start with a moderate setup that can still show hint differences without
@@ -1473,6 +1480,7 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1512,6 +1520,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1533,6 +1542,29 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Run this when using a smaller machine like g5.2xlarge with limited GPU capacity (this has proved to work)
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=200 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```

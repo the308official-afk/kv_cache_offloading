@@ -140,6 +140,24 @@ def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:
     }
 
 
+def load_batch_summary_rows(batch_matrix: Path) -> list[dict[str, str]]:
+    summaries = read_csv(batch_matrix)
+    if summaries:
+        return summaries
+
+    batch_progress = batch_matrix.parent / "retention_probe_progress.csv"
+    progress_rows = read_csv(batch_progress)
+    fallback_rows: list[dict[str, str]] = []
+    for progress in progress_rows:
+        summary_path = Path(progress.get("summary_csv", ""))
+        if not summary_path.is_absolute():
+            summary_path = Path.cwd() / summary_path
+        if not summary_path.exists():
+            continue
+        fallback_rows.extend(read_csv(summary_path))
+    return fallback_rows
+
+
 def summarize_request_priority(
     request_rows: dict[str, dict[str, str]],
     *,
@@ -289,6 +307,42 @@ def parse_worker_hint_evidence(
     }
 
 
+def parse_worker_priority_mechanism(worker_runtime_log: Path) -> dict[str, str]:
+    if not worker_runtime_log.exists():
+        return {
+            "worker_priority_scheduling_enabled": "",
+            "worker_radix_eviction_policy": "",
+            "worker_priority_mechanism_ready": "false",
+        }
+
+    scheduling_enabled: bool | None = None
+    eviction_policy = ""
+    scheduling_re = re.compile(r"enable_priority_scheduling=(True|False)")
+    eviction_re = re.compile(r"radix_eviction_policy='([^']+)'")
+
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = clean_log_line(raw_line)
+        if scheduling_enabled is None:
+            match = scheduling_re.search(line)
+            if match:
+                scheduling_enabled = match.group(1) == "True"
+        if not eviction_policy:
+            match = eviction_re.search(line)
+            if match:
+                eviction_policy = match.group(1)
+        if scheduling_enabled is not None and eviction_policy:
+            break
+
+    mechanism_ready = bool(scheduling_enabled) and eviction_policy == "priority"
+    return {
+        "worker_priority_scheduling_enabled": (
+            "true" if scheduling_enabled is True else "false" if scheduling_enabled is False else ""
+        ),
+        "worker_radix_eviction_policy": eviction_policy,
+        "worker_priority_mechanism_ready": "true" if mechanism_ready else "false",
+    }
+
+
 def derived_row(
     *,
     sweep_id: str,
@@ -316,6 +370,11 @@ def derived_row(
         worker_log_path = Path.cwd() / worker_log_path
     worker_capacity = parse_worker_capacity(worker_log_path)
     worker_hint_evidence = parse_worker_hint_evidence(worker_log_path, request_rows)
+    worker_priority_mechanism = parse_worker_priority_mechanism(worker_log_path)
+    sglang_priority_hint_seen = truthy(summary.get("a_replay_sglang_priority_hint_seen"))
+    sglang_scheduler_priority_applied = truthy(summary.get("a_replay_sglang_scheduler_priority_applied"))
+    sglang_worker_top_level_priority = as_int(summary.get("a_replay_sglang_worker_top_level_priority"))
+    sglang_worker_agent_hints_priority = as_int(summary.get("a_replay_sglang_worker_agent_hints_priority"))
 
     hint_profile = summary.get("protected_hint_profile", "")
     replay_status = summary.get("a_replay_status", "")
@@ -428,15 +487,82 @@ def derived_row(
         "request_top_level_priority_values": sent_priority["values"],
         "worker_top_level_priority_status": worker_hint_evidence["worker_top_level_priority_status"],
         "worker_top_level_priority_values": worker_hint_evidence["worker_top_level_priority_values"],
+        "worker_priority_scheduling_enabled": worker_priority_mechanism["worker_priority_scheduling_enabled"],
+        "worker_radix_eviction_policy": worker_priority_mechanism["worker_radix_eviction_policy"],
+        "worker_priority_mechanism_ready": worker_priority_mechanism["worker_priority_mechanism_ready"],
+        "sglang_priority_hint_seen": str(sglang_priority_hint_seen).lower(),
+        "sglang_scheduler_priority_applied": str(sglang_scheduler_priority_applied).lower(),
+        "sglang_worker_top_level_priority": sglang_worker_top_level_priority if sglang_worker_top_level_priority is not None else "",
+        "sglang_worker_agent_hints_priority": sglang_worker_agent_hints_priority if sglang_worker_agent_hints_priority is not None else "",
+        "worker_priority_path_status": (
+            "applied"
+            if sglang_scheduler_priority_applied
+            else "seen_only"
+            if sglang_priority_hint_seen
+            else "not_seen"
+        ),
         "survived_by_usage": str(survived_by_usage).lower(),
         "survived_by_events": str(survived_by_events).lower(),
         "survived_by_latency": str(survived_by_latency).lower(),
         "survived_effective": str(survived_effective).lower(),
         "effective_survival_source": effective_survival_source,
         "reuse_signal": reuse_signal,
+        "hint_runtime_effect_status": "pending_comparison",
         "requests_csv": summary.get("requests_csv", ""),
         "worker_runtime_log": summary.get("worker_runtime_log", ""),
     }
+
+
+def annotate_hint_runtime_effect(rows: list[dict[str, Any]], *, control_hint_profile: str) -> None:
+    grouped: dict[tuple[str, str, str, int], dict[str, dict[str, Any]]] = {}
+    for row in rows:
+        key = (
+            str(row["model"]),
+            str(row["retention_attribution_mode"]),
+            str(row["kv_tier_mode"]),
+            int(row["distractor_count"]),
+        )
+        grouped.setdefault(key, {})[str(row["hint_profile"])] = row
+
+    for row in rows:
+        hint_profile = str(row["hint_profile"])
+        if hint_profile == control_hint_profile:
+            row["hint_runtime_effect_status"] = "control_row"
+            continue
+
+        request_hint_status = str(row.get("request_agent_hints_priority_status", ""))
+        worker_hint_status = str(row.get("worker_hint_status", ""))
+        mechanism_ready = str(row.get("worker_priority_mechanism_ready", "false")) == "true"
+
+        if request_hint_status in {"missing_requests_csv", "none"}:
+            row["hint_runtime_effect_status"] = "not_sent"
+            continue
+        if worker_hint_status in {"missing_runtime_json", "none"}:
+            row["hint_runtime_effect_status"] = "sent_not_seen"
+            continue
+        if not mechanism_ready:
+            row["hint_runtime_effect_status"] = "seen_but_mechanism_disabled"
+            continue
+
+        key = (
+            str(row["model"]),
+            str(row["retention_attribution_mode"]),
+            str(row["kv_tier_mode"]),
+            int(row["distractor_count"]),
+        )
+        control_row = grouped.get(key, {}).get(control_hint_profile)
+        if control_row is None:
+            row["hint_runtime_effect_status"] = "mechanism_enabled_no_control_row"
+            continue
+
+        control_survived = str(control_row.get("survived_effective", "false")) == "true"
+        protected_survived = str(row.get("survived_effective", "false")) == "true"
+        if protected_survived and not control_survived:
+            row["hint_runtime_effect_status"] = "effect_observed"
+        elif protected_survived == control_survived:
+            row["hint_runtime_effect_status"] = "mechanism_enabled_no_effect"
+        else:
+            row["hint_runtime_effect_status"] = "protected_worse_than_control"
 
 
 def build_comparison_rows(
@@ -490,6 +616,11 @@ def build_comparison_rows(
                 interpretation = "same_eviction_threshold_question_hint_respected"
             else:
                 interpretation = "protected_hint_evicts_earlier"
+
+            worker_hint_statuses = sorted({str(row.get("worker_hint_status", "")) for row in profile_rows if str(row.get("worker_hint_status", ""))})
+            mechanism_states = sorted({str(row.get("worker_priority_mechanism_ready", "")) for row in profile_rows if str(row.get("worker_priority_mechanism_ready", ""))})
+            effect_states = sorted({str(row.get("hint_runtime_effect_status", "")) for row in profile_rows if str(row.get("hint_runtime_effect_status", ""))})
+            priority_path_states = sorted({str(row.get("worker_priority_path_status", "")) for row in profile_rows if str(row.get("worker_priority_path_status", ""))})
             out.append(
                 {
                     "sweep_status": sweep_status,
@@ -503,6 +634,10 @@ def build_comparison_rows(
                     "protected_last_survived_distractor_count": protected_last_survive or "",
                     "protected_first_evicted_distractor_count": protected_first_evict or "",
                     "threshold_gap_distractors": threshold_gap if threshold_gap is not None else "",
+                    "worker_hint_status": "|".join(worker_hint_statuses),
+                    "worker_priority_mechanism_ready": "|".join(mechanism_states),
+                    "worker_priority_path_status": "|".join(priority_path_states),
+                    "hint_runtime_effect_status": "|".join(effect_states),
                     "interpretation": interpretation,
                 }
             )
@@ -556,6 +691,10 @@ def write_summary_md(
                     f"- `{row['model']}` / `{row['retention_attribution_mode']}` / `{row['kv_tier_mode']}` / `{row['protected_hint_profile']}`:",
                     f"  control first evicted at `{row['control_first_evicted_distractor_count'] or 'not observed'}`, "
                     f"protected first evicted at `{row['protected_first_evicted_distractor_count'] or 'not observed'}`, "
+                    f"mechanism ready: `{row['worker_priority_mechanism_ready'] or 'unknown'}`, "
+                    f"hint status: `{row['worker_hint_status'] or 'unknown'}`, "
+                    f"priority path: `{row['worker_priority_path_status'] or 'unknown'}`, "
+                    f"effect status: `{row['hint_runtime_effect_status'] or 'unknown'}`, "
                     f"interpretation: `{row['interpretation']}`",
                 ]
             )
@@ -568,7 +707,9 @@ def main() -> int:
     matrix_rows: list[dict[str, Any]] = []
     for progress in progress_rows:
         batch_matrix = Path(progress["batch_matrix"])
-        summaries = read_csv(batch_matrix)
+        if not batch_matrix.is_absolute():
+            batch_matrix = Path.cwd() / batch_matrix
+        summaries = load_batch_summary_rows(batch_matrix)
         if not summaries:
             continue
         for summary in summaries:
@@ -588,6 +729,8 @@ def main() -> int:
                     sweep_status=args.sweep_status,
                 )
             )
+
+    annotate_hint_runtime_effect(matrix_rows, control_hint_profile=args.control_hint_profile)
 
     matrix_fields = [
         "sweep_status",
@@ -627,12 +770,21 @@ def main() -> int:
         "request_top_level_priority_values",
         "worker_top_level_priority_status",
         "worker_top_level_priority_values",
+        "worker_priority_scheduling_enabled",
+        "worker_radix_eviction_policy",
+        "worker_priority_mechanism_ready",
+        "sglang_priority_hint_seen",
+        "sglang_scheduler_priority_applied",
+        "sglang_worker_top_level_priority",
+        "sglang_worker_agent_hints_priority",
+        "worker_priority_path_status",
         "survived_by_usage",
         "survived_by_events",
         "survived_by_latency",
         "survived_effective",
         "effective_survival_source",
         "reuse_signal",
+        "hint_runtime_effect_status",
         "requests_csv",
         "worker_runtime_log",
     ]
@@ -655,6 +807,10 @@ def main() -> int:
         "protected_last_survived_distractor_count",
         "protected_first_evicted_distractor_count",
         "threshold_gap_distractors",
+        "worker_hint_status",
+        "worker_priority_mechanism_ready",
+        "worker_priority_path_status",
+        "hint_runtime_effect_status",
         "interpretation",
     ]
     write_csv(Path(args.out_comparison), comparison_rows, comparison_fields)

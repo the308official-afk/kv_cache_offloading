@@ -516,6 +516,162 @@ def _request_metadata_summary(locals_dict: dict[str, Any]) -> dict[str, Any]:
     return metadata
 
 
+def _merge_priority_metadata(target: dict[str, Any], source: dict[str, Any], source_name: str) -> None:
+    direct_priority = _safe_int(source.get("priority"))
+    if direct_priority is not None and "worker_top_level_priority" not in target:
+        target["worker_top_level_priority"] = direct_priority
+        target.setdefault("worker_top_level_priority_source", f"{source_name}.priority")
+
+    hint_profile = source.get("hint_profile")
+    if isinstance(hint_profile, str) and hint_profile and "worker_hint_profile_seen" not in target:
+        target["worker_hint_profile_seen"] = hint_profile
+        target.setdefault("worker_hint_profile_source", f"{source_name}.hint_profile")
+
+    cache_retention_priority = source.get("cache_retention_priority")
+    if (
+        isinstance(cache_retention_priority, str)
+        and cache_retention_priority
+        and "worker_cache_retention_priority" not in target
+    ):
+        target["worker_cache_retention_priority"] = cache_retention_priority
+        target.setdefault(
+            "worker_cache_retention_priority_source",
+            f"{source_name}.cache_retention_priority",
+        )
+
+    for key in _AGENT_HINT_KEYS:
+        hint_value = source.get(key)
+        if not isinstance(hint_value, dict):
+            continue
+        hint_priority = _safe_int(hint_value.get("priority"))
+        if hint_priority is not None and "worker_agent_hints_priority" not in target:
+            target["worker_agent_hints_priority"] = hint_priority
+            target.setdefault("worker_agent_hints_priority_source", f"{source_name}.{key}.priority")
+        hint_profile = hint_value.get("hint_profile")
+        if isinstance(hint_profile, str) and hint_profile and "worker_hint_profile_seen" not in target:
+            target["worker_hint_profile_seen"] = hint_profile
+            target.setdefault("worker_hint_profile_source", f"{source_name}.{key}.hint_profile")
+        cache_retention_priority = hint_value.get("cache_retention_priority")
+        if (
+            isinstance(cache_retention_priority, str)
+            and cache_retention_priority
+            and "worker_cache_retention_priority" not in target
+        ):
+            target["worker_cache_retention_priority"] = cache_retention_priority
+            target.setdefault(
+                "worker_cache_retention_priority_source",
+                f"{source_name}.{key}.cache_retention_priority",
+            )
+
+    request_context = source.get("request_context")
+    if isinstance(request_context, dict):
+        _merge_priority_metadata(target, request_context, f"{source_name}.request_context")
+
+    runtime_observability = source.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        _merge_priority_metadata(target, runtime_observability, f"{source_name}.runtime_observability")
+
+    nvext = source.get("nvext")
+    if isinstance(nvext, dict):
+        _merge_priority_metadata(target, nvext, f"{source_name}.nvext")
+
+
+def _priority_metadata_candidates_from_value(
+    source: str,
+    value: Any,
+    *,
+    depth: int = 0,
+    seen: set[int] | None = None,
+) -> dict[str, Any]:
+    if depth > 4:
+        return {}
+    if seen is None:
+        seen = set()
+    if not isinstance(value, (str, bytes, int, float, bool, list, tuple, dict)) and not _is_tensor(value):
+        ident = id(value)
+        if ident in seen:
+            return {}
+        seen.add(ident)
+
+    metadata: dict[str, Any] = {}
+    if isinstance(value, dict):
+        _merge_priority_metadata(metadata, value, source)
+        for key, item in list(value.items())[:128]:
+            if item is None:
+                continue
+            key_text = str(key).lower()
+            if (
+                key in _REQUEST_CONTEXT_KEYS + _AGENT_HINT_KEYS
+                or "priority" in key_text
+                or "hint" in key_text
+                or "request" in key_text
+                or "context" in key_text
+            ):
+                nested = _priority_metadata_candidates_from_value(
+                    f"{source}.{key}", item, depth=depth + 1, seen=seen
+                )
+                _merge_priority_metadata(metadata, nested, f"{source}.{key}")
+        return metadata
+
+    object_values: dict[str, Any] = {}
+    for attr in ("priority", "hint_profile", "cache_retention_priority", *_REQUEST_CONTEXT_KEYS, *_AGENT_HINT_KEYS):
+        try:
+            object_values[attr] = getattr(value, attr)
+        except Exception:
+            continue
+    try:
+        object_vars = vars(value)
+    except Exception:
+        object_vars = {}
+    if isinstance(object_vars, dict):
+        for key, item in list(object_vars.items())[:128]:
+            key_text = str(key).lower()
+            if (
+                key in _REQUEST_CONTEXT_KEYS + _AGENT_HINT_KEYS
+                or "priority" in key_text
+                or "hint" in key_text
+                or "request" in key_text
+                or "context" in key_text
+            ):
+                object_values.setdefault(str(key), item)
+
+    if object_values:
+        _merge_priority_metadata(metadata, object_values, source)
+        for key, item in list(object_values.items())[:128]:
+            if item is not None:
+                nested = _priority_metadata_candidates_from_value(
+                    f"{source}.{key}", item, depth=depth + 1, seen=seen
+                )
+                _merge_priority_metadata(metadata, nested, f"{source}.{key}")
+    return metadata
+
+
+def _priority_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    context = current_transfer_context()
+    if isinstance(context, dict):
+        _merge_priority_metadata(summary, context, "current_transfer_context")
+    for name, value in locals_dict.items():
+        if name == "self" or name.startswith("__sgl_transfer"):
+            continue
+        lowered = name.lower()
+        if (
+            "priority" in lowered
+            or "hint" in lowered
+            or "request" in lowered
+            or "context" in lowered
+            or isinstance(value, dict)
+        ):
+            nested = _priority_metadata_candidates_from_value(name, value)
+            _merge_priority_metadata(summary, nested, name)
+    if summary:
+        summary["priority_context_function"] = function
+        summary["worker_priority_seen"] = True
+    else:
+        summary["worker_priority_seen"] = False
+    return summary
+
+
 def _looks_like_token_ids(values: list[int]) -> bool:
     return bool(values) and all(0 <= value <= _MAX_TOKEN_ID for value in values)
 
@@ -1033,6 +1189,7 @@ def _log_cache_event_impl(
             overhead,
         )
     )
+    payload.update(_priority_summary(function, locals_dict))
     payload.update(_cache_scalar_summary(locals_dict))
     context = current_transfer_context()
     if context:
@@ -1107,6 +1264,123 @@ def log_cache_event(
                     + json.dumps(
                         {
                             "event": "sglang.cache_log_error",
+                            "function": function,
+                            "action": action,
+                            "error": repr(exc),
+                        },
+                        sort_keys=True,
+                    ),
+                    file=sys.stderr,
+                    flush=True,
+                )
+            except Exception:
+                pass
+
+
+def _log_priority_event_impl(
+    *,
+    function: str,
+    action: str,
+    locals_dict: dict[str, Any],
+    error: str | None = None,
+) -> None:
+    if not _enabled():
+        return
+
+    overhead = {} if _overhead_timing_enabled() else None
+    payload: dict[str, Any] = {
+        "event": "sglang.priority",
+        "transfer_log_profile": _profile(),
+        "function": function,
+        "action": action,
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "timestamp_ns": time.time_ns(),
+    }
+    if error or _verbose():
+        payload["error"] = error
+
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_metadata_extract",
+            _request_metadata_summary,
+            locals_dict,
+        )
+    )
+    payload.update(_priority_summary(function, locals_dict))
+    context = current_transfer_context()
+    if context:
+        payload.update(context)
+    payload.update(
+        _overhead_call(
+            overhead,
+            "request_registry_lookup",
+            _lookup_registered_request_metadata,
+            payload,
+            context,
+            locals_dict,
+        )
+    )
+
+    _attach_overhead(payload, overhead)
+    if overhead is not None or payload.get("instrumentation_overhead_enabled"):
+        payload.setdefault("instrumentation_overhead_note", "Timing fields are approximate and add measurement overhead.")
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms"))
+        _finalize_overhead(payload)
+        json_started_ns = time.perf_counter_ns()
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+        json_ms = (time.perf_counter_ns() - json_started_ns) / 1_000_000.0
+        payload["overhead_json_serialize_ms"] = _safe_float(payload.get("overhead_json_serialize_ms")) + json_ms
+        _finalize_overhead(payload)
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+    else:
+        line = _PREFIX + json.dumps(payload, sort_keys=True, default=str)
+
+    with _LOCK:
+        print(line, file=sys.stderr, flush=True)
+        path = os.environ.get("SGLANG_TRANSFER_LOG_PATH")
+        if path:
+            try:
+                with open(path, "a", encoding="utf-8") as handle:
+                    handle.write(line + "\n")
+            except Exception as exc:
+                print(
+                    _PREFIX
+                    + json.dumps(
+                        {
+                            "event": "sglang.priority_log_error",
+                            "path": path,
+                            "error": repr(exc),
+                        },
+                        sort_keys=True,
+                    ),
+                    file=sys.stderr,
+                    flush=True,
+                )
+
+
+def log_priority_event(
+    *,
+    function: str,
+    action: str,
+    locals_dict: dict[str, Any],
+    error: str | None = None,
+) -> None:
+    try:
+        _log_priority_event_impl(
+            function=function,
+            action=action,
+            locals_dict=locals_dict,
+            error=error,
+        )
+    except Exception as exc:  # pragma: no cover - instrumentation must not break serving.
+        if _verbose():
+            try:
+                print(
+                    _PREFIX
+                    + json.dumps(
+                        {
+                            "event": "sglang.priority_log_error",
                             "function": function,
                             "action": action,
                             "error": repr(exc),
@@ -1453,22 +1727,36 @@ def insert_cache_controller_imports(text: str) -> str:
 
 
 def insert_request_context_imports(text: str) -> str:
-    return insert_after_future(
+    text = insert_after_future(
         text,
         [
             "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context\n",
         ],
         "from sglang.srt.mem_cache.transfer_logging import transfer_request_context as _sgl_transfer_request_context",
     )
+    return insert_after_future(
+        text,
+        [
+            "from sglang.srt.mem_cache.transfer_logging import log_priority_event as _sgl_log_priority_event\n",
+        ],
+        "from sglang.srt.mem_cache.transfer_logging import log_priority_event as _sgl_log_priority_event",
+    )
 
 
 def insert_absolute_cache_event_imports(text: str) -> str:
-    return insert_after_future(
+    text = insert_after_future(
         text,
         [
             "from sglang.srt.mem_cache.transfer_logging import log_cache_event as _sgl_log_cache_event\n",
         ],
         "from sglang.srt.mem_cache.transfer_logging import log_cache_event as _sgl_log_cache_event",
+    )
+    return insert_after_future(
+        text,
+        [
+            "from sglang.srt.mem_cache.transfer_logging import log_priority_event as _sgl_log_priority_event\n",
+        ],
+        "from sglang.srt.mem_cache.transfer_logging import log_priority_event as _sgl_log_priority_event",
     )
 
 
@@ -1656,6 +1944,58 @@ def wrap_cache_event_function(text: str, function_name: str) -> tuple[str, int]:
     return "".join(lines), changed
 
 
+def wrap_priority_event_occurrence(
+    lines: list[str],
+    function_name: str,
+    action: str,
+    bounds: tuple[int, int, int],
+) -> bool:
+    start, signature_end, end = bounds
+    body_text = "".join(lines[signature_end + 1 : end])
+    if f'function="{function_name}"' in body_text and "_sgl_log_priority_event" in body_text:
+        return False
+
+    def_indent = len(lines[start]) - len(lines[start].lstrip(" "))
+    body_indent = " " * (def_indent + 4)
+    nested_indent = " " * (def_indent + 8)
+    original_body = lines[signature_end + 1 : end]
+    wrapped_body = [
+        f"{body_indent}__sgl_priority_event_error = None\n",
+        f"{body_indent}try:\n",
+    ]
+    for line in original_body:
+        if line.strip():
+            wrapped_body.append("    " + line)
+        else:
+            wrapped_body.append(line)
+    wrapped_body.extend(
+        [
+            f"{body_indent}except BaseException as __sgl_priority_event_exc:\n",
+            f"{nested_indent}__sgl_priority_event_error = repr(__sgl_priority_event_exc)\n",
+            f"{nested_indent}raise\n",
+            f"{body_indent}finally:\n",
+            f"{nested_indent}_sgl_log_priority_event(\n",
+            f'{nested_indent}    function="{function_name}",\n',
+            f'{nested_indent}    action="{action}",\n',
+            f"{nested_indent}    locals_dict=locals(),\n",
+            f"{nested_indent}    error=__sgl_priority_event_error,\n",
+            f"{nested_indent})\n",
+        ]
+    )
+    lines[signature_end + 1 : end] = wrapped_body
+    return True
+
+
+def wrap_priority_event_function(text: str, function_name: str, action: str) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    bounds = find_all_function_bounds(lines, function_name)
+    changed = 0
+    for occurrence in reversed(bounds):
+        if wrap_priority_event_occurrence(lines, function_name, action, occurrence):
+            changed += 1
+    return "".join(lines), changed
+
+
 def wrap_request_context_function(text: str, function_name: str) -> tuple[str, int]:
     lines = text.splitlines(keepends=True)
     bounds = find_all_function_bounds(lines, function_name)
@@ -1710,6 +2050,59 @@ def wrap_call_with_request_context(
             f"{indent}with _sgl_transfer_request_context(function=\"{function_label}\", locals_dict=locals()):\n",
         ]
         wrapped.extend("    " + item if item.strip() else item for item in block)
+        lines[index : call_end + 1] = wrapped
+        changed += 1
+        index += len(wrapped)
+    return "".join(lines), changed
+
+
+def wrap_call_with_priority_event(
+    text: str,
+    call_marker: str,
+    function_label: str,
+    action: str,
+) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    changed = 0
+    index = 0
+    while index < len(lines):
+        line = lines[index]
+        if call_marker not in line:
+            index += 1
+            continue
+        if index > 0 and "_sgl_log_priority_event" in lines[index - 1]:
+            index += 1
+            continue
+
+        indent_len = len(line) - len(line.lstrip(" "))
+        indent = " " * indent_len
+        nested_indent = " " * (indent_len + 4)
+        call_end = index
+        paren_balance = line.count("(") - line.count(")")
+        while call_end + 1 < len(lines) and paren_balance > 0:
+            call_end += 1
+            paren_balance += lines[call_end].count("(") - lines[call_end].count(")")
+
+        block = lines[index : call_end + 1]
+        wrapped = [
+            f"{indent}__sgl_priority_event_error = None\n",
+            f"{indent}try:\n",
+        ]
+        wrapped.extend("    " + item if item.strip() else item for item in block)
+        wrapped.extend(
+            [
+                f"{indent}except BaseException as __sgl_priority_event_exc:\n",
+                f"{nested_indent}__sgl_priority_event_error = repr(__sgl_priority_event_exc)\n",
+                f"{nested_indent}raise\n",
+                f"{indent}finally:\n",
+                f"{nested_indent}_sgl_log_priority_event(\n",
+                f'{nested_indent}    function="{function_label}",\n',
+                f'{nested_indent}    action="{action}",\n',
+                f"{nested_indent}    locals_dict=locals(),\n",
+                f"{nested_indent}    error=__sgl_priority_event_error,\n",
+                f"{nested_indent})\n",
+            ]
+        )
         lines[index : call_end + 1] = wrapped
         changed += 1
         index += len(wrapped)
@@ -1856,6 +2249,12 @@ def patch_radix_cache(path: Path) -> list[str]:
         text, changed = wrap_cache_event_function(text, function_name)
         if changed:
             patched.append(f"{function_name} cache event ({changed} occurrence{'s' if changed != 1 else ''})")
+    text, changed = wrap_cache_event_function(text, "evict")
+    if changed:
+        patched.append(f"evict cache event ({changed} occurrence{'s' if changed != 1 else ''})")
+    text, changed = wrap_priority_event_function(text, "evict", "radix_cache.evict")
+    if changed:
+        patched.append(f"evict priority event ({changed} occurrence{'s' if changed != 1 else ''})")
 
     if patched:
         path.write_text(text, encoding="utf-8")
@@ -1874,6 +2273,14 @@ def patch_schedule_batch(path: Path) -> list[str]:
     )
     if changed:
         patched.append(f"Req.init_next_round_input match_prefix context ({changed} call{'s' if changed != 1 else ''})")
+    text, changed = wrap_call_with_priority_event(
+        text,
+        "tree_cache.match_prefix(",
+        "Req.init_next_round_input.match_prefix",
+        "priority_hint_seen",
+    )
+    if changed:
+        patched.append(f"Req.init_next_round_input priority hint seen ({changed} call{'s' if changed != 1 else ''})")
 
     if patched:
         path.write_text(text, encoding="utf-8")
@@ -1892,6 +2299,14 @@ def patch_schedule_policy(path: Path) -> list[str]:
     )
     if changed:
         patched.append(f"SchedulePolicy init_load_back context ({changed} call{'s' if changed != 1 else ''})")
+    text, changed = wrap_call_with_priority_event(
+        text,
+        "self.tree_cache.init_load_back(",
+        "SchedulePolicy.add_one_req.init_load_back",
+        "scheduler_priority_applied",
+    )
+    if changed:
+        patched.append(f"SchedulePolicy scheduler priority applied ({changed} call{'s' if changed != 1 else ''})")
 
     if patched:
         path.write_text(text, encoding="utf-8")

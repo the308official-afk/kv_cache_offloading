@@ -116,6 +116,13 @@ REQUEST_COLUMNS = [
     "sglang_cache_token_sha256",
     "sglang_cache_direct",
     "sglang_cache_request_id_source",
+    "sglang_priority_events",
+    "sglang_priority_hint_seen",
+    "sglang_scheduler_priority_applied",
+    "sglang_priority_eviction_events",
+    "sglang_worker_top_level_priority",
+    "sglang_worker_agent_hints_priority",
+    "sglang_priority_request_id_source",
     "status",
     "error",
 ]
@@ -158,6 +165,14 @@ SUMMARY_COLUMNS = [
     "a_replay_sglang_cache_match_events",
     "a_replay_sglang_cache_semantic_tokens",
     "a_replay_sglang_cache_direct",
+    "a_first_sglang_priority_hint_seen",
+    "a_replay_sglang_priority_hint_seen",
+    "a_first_sglang_scheduler_priority_applied",
+    "a_replay_sglang_scheduler_priority_applied",
+    "a_first_sglang_worker_top_level_priority",
+    "a_replay_sglang_worker_top_level_priority",
+    "a_first_sglang_worker_agent_hints_priority",
+    "a_replay_sglang_worker_agent_hints_priority",
     "a_survived_cache_threshold",
     "cache_survival_source",
     "successful_requests",
@@ -407,7 +422,6 @@ def send_probe_request(
         payload["nvext"]["agent_hints"] = hints
     priority = top_level_priority_from_hints(hints)
     if priority is not None:
-        # Upstream SGLang reads request priority from the top-level field.
         payload["priority"] = priority
     if args.ignore_eos:
         payload["ignore_eos"] = True
@@ -669,6 +683,13 @@ def attach_cache_events(
         row["sglang_cache_token_sha256"] = ""
         row["sglang_cache_direct"] = False
         row["sglang_cache_request_id_source"] = ""
+        row["sglang_priority_events"] = 0
+        row["sglang_priority_hint_seen"] = False
+        row["sglang_scheduler_priority_applied"] = False
+        row["sglang_priority_eviction_events"] = 0
+        row["sglang_worker_top_level_priority"] = ""
+        row["sglang_worker_agent_hints_priority"] = ""
+        row["sglang_priority_request_id_source"] = ""
 
     if not cache_event_log.exists():
         return
@@ -679,7 +700,7 @@ def attach_cache_events(
     with cache_event_log.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             event = parse_sglang_event_line(line)
-            if not event or event.get("event") != "sglang.cache":
+            if not event or event.get("event") not in {"sglang.cache", "sglang.priority"}:
                 continue
             request_ids_with_source: list[tuple[str, str]] = []
             direct_request_id = event_request_id(event)
@@ -711,6 +732,25 @@ def attach_cache_events(
                 continue
             request_id, request_id_source = next(iter(matched_request_ids.items()))
             row = by_request_id[request_id]
+
+            if event.get("event") == "sglang.priority":
+                action = str(event.get("action") or event.get("function") or "").lower()
+                row["sglang_priority_events"] = int(row["sglang_priority_events"]) + 1
+                if not row.get("sglang_priority_request_id_source"):
+                    row["sglang_priority_request_id_source"] = request_id_source
+                if action == "priority_hint_seen":
+                    row["sglang_priority_hint_seen"] = True
+                if action == "scheduler_priority_applied":
+                    row["sglang_scheduler_priority_applied"] = True
+                if "evict" in action:
+                    row["sglang_priority_eviction_events"] = int(row["sglang_priority_eviction_events"]) + 1
+                top_level_priority = maybe_int(event.get("worker_top_level_priority"))
+                if top_level_priority is not None and row.get("sglang_worker_top_level_priority", "") == "":
+                    row["sglang_worker_top_level_priority"] = top_level_priority
+                agent_hint_priority = maybe_int(event.get("worker_agent_hints_priority"))
+                if agent_hint_priority is not None and row.get("sglang_worker_agent_hints_priority", "") == "":
+                    row["sglang_worker_agent_hints_priority"] = agent_hint_priority
+                continue
 
             action = str(event.get("action") or event.get("function") or "").lower()
             row["sglang_cache_events"] = int(row["sglang_cache_events"]) + 1
@@ -869,6 +909,14 @@ def build_summary(
         "a_replay_sglang_cache_match_events": int_or_empty(replay.get("sglang_cache_match_events")),
         "a_replay_sglang_cache_semantic_tokens": int_or_empty(replay.get("sglang_cache_semantic_tokens")),
         "a_replay_sglang_cache_direct": truthy(replay.get("sglang_cache_direct")),
+        "a_first_sglang_priority_hint_seen": truthy(first.get("sglang_priority_hint_seen")),
+        "a_replay_sglang_priority_hint_seen": truthy(replay.get("sglang_priority_hint_seen")),
+        "a_first_sglang_scheduler_priority_applied": truthy(first.get("sglang_scheduler_priority_applied")),
+        "a_replay_sglang_scheduler_priority_applied": truthy(replay.get("sglang_scheduler_priority_applied")),
+        "a_first_sglang_worker_top_level_priority": int_or_empty(first.get("sglang_worker_top_level_priority")),
+        "a_replay_sglang_worker_top_level_priority": int_or_empty(replay.get("sglang_worker_top_level_priority")),
+        "a_first_sglang_worker_agent_hints_priority": int_or_empty(first.get("sglang_worker_agent_hints_priority")),
+        "a_replay_sglang_worker_agent_hints_priority": int_or_empty(replay.get("sglang_worker_agent_hints_priority")),
         "a_survived_cache_threshold": survived,
         "cache_survival_source": source,
         "successful_requests": len(rows) - len(failed),
@@ -911,6 +959,10 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- replay SGLang cache events: `{summary['a_replay_sglang_cache_events']}`",
         f"- replay SGLang cache match events: `{summary['a_replay_sglang_cache_match_events']}`",
         f"- replay SGLang cache direct attribution: `{summary['a_replay_sglang_cache_direct']}`",
+        f"- replay SGLang priority hint seen: `{summary['a_replay_sglang_priority_hint_seen']}`",
+        f"- replay SGLang scheduler priority applied: `{summary['a_replay_sglang_scheduler_priority_applied']}`",
+        f"- replay SGLang top-level priority: `{summary['a_replay_sglang_worker_top_level_priority']}`",
+        f"- replay SGLang agent-hints priority: `{summary['a_replay_sglang_worker_agent_hints_priority']}`",
         f"- survived cache threshold: `{summary['a_survived_cache_threshold']}`",
         "",
         "A positive speedup ratio above 1.000 means the second A request was faster than the first A request.",
