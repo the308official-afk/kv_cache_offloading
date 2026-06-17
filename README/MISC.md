@@ -588,3 +588,26 @@ Why `force`?
 
 - `auto` is a compatibility fallback
 - `force` is better once the frontend is fixed, because it fails loudly if priority breaks again
+
+
+```bash
+cd ~/kv_cache_offloading
+
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=200 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
