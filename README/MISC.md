@@ -247,3 +247,288 @@ Then compare:
 - Did replay stay faster than first A?
 - Did cached tokens increase on replay?
 - Did protected survive deeper than control?
+
+## 12. GH200 priority regression checklist
+
+Use this when `priority` worked yesterday on GH200, but fails today.
+
+Most likely meaning:
+
+- you are not running the same frontend image today
+- or you restarted Dynamo without the instrumented local images
+- or the local Dynamo source / rebuild path drifted
+
+### A. Check which images are actually running
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
+```
+
+What you want:
+
+- `dynamo-frontend` should point to `local/dynamo-frontend:runtime-json-logs`
+- `dynamo-sglang-worker` should point to `local/dynamo-sglang:runtime-json-logs`
+
+If you see stock images instead, that is probably the problem.
+
+### B. Check that the local images exist
+
+```bash
+docker images | grep -E 'dynamo-frontend|dynamo-sglang'
+```
+
+You want to see:
+
+- `local/dynamo-frontend:runtime-json-logs`
+- `local/dynamo-sglang:runtime-json-logs`
+
+### C. Re-prepare instrumented Dynamo source
+
+```bash
+cd ~/kv_cache_offloading
+
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+```
+
+This makes sure:
+
+- upstream Dynamo source exists
+- the hint-preservation patch is applied
+- runtime JSON logging support is present
+
+### D. Rebuild instrumented images for GH200
+
+```bash
+cd ~/kv_cache_offloading
+
+DOCKER_BUILD_PLATFORM=linux/arm64 \
+DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+This is the safest rebuild path for GH200 / ARM.
+
+### E. Restart Dynamo with the local images explicitly
+
+```bash
+./run_dynamo_single_host.sh stop
+
+DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+./run_dynamo_single_host.sh start
+```
+
+Then immediately watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+### F. Re-run the direct top-level priority smoke test
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import json
+import urllib.request
+
+url = "http://127.0.0.1:8000/v1/chat/completions"
+payload = {
+    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "messages": [{"role": "user", "content": "Say hello in one word."}],
+    "max_tokens": 4,
+    "temperature": 0,
+    "priority": 10,
+}
+req = urllib.request.Request(
+    url,
+    data=json.dumps(payload).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+
+try:
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        body = resp.read().decode("utf-8")
+        print("STATUS:", resp.status)
+        print(body[:1000])
+except Exception as e:
+    print("REQUEST_FAILED:", e)
+    if hasattr(e, "read"):
+        try:
+            print(e.read().decode("utf-8"))
+        except Exception:
+            pass
+PY
+```
+
+Interpretation:
+
+- if this succeeds, the frontend currently accepts top-level `priority`
+- if this fails with `Unsupported parameter(s): priority`, the frontend path is still wrong
+
+### G. If the smoke test passes, force the retention run to use priority
+
+```bash
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=force
+```
+
+Why:
+
+- `force` makes the experiment fail loudly if priority breaks again
+- that is better than silently falling back when you are explicitly testing priority behavior
+
+### H. If the smoke test still fails
+
+Then the problem is not “GH200 cannot do it”.
+It more likely means:
+
+- the frontend build on this machine is not the same as the one that worked yesterday
+- or the runtime patch path changed
+- or you are not actually launching the rebuilt local frontend image
+
+At that point, compare:
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Image}}'
+docker inspect dynamo-frontend --format '{{.Config.Image}}'
+docker inspect dynamo-sglang-worker --format '{{.Config.Image}}'
+```
+
+and keep the output with the run notes.
+
+Goal:
+
+- confirm which images are actually running
+- confirm whether you started with the instrumented frontend
+- confirm whether the frontend still accepts top-level `priority`
+
+### A. Check the running Dynamo images
+
+```bash
+docker ps --format 'table {{.Names}}\t{{.Image}}'
+```
+
+What you want to see:
+
+- `dynamo-frontend` using `local/dynamo-frontend:runtime-json-logs`
+- `dynamo-sglang-worker` using `local/dynamo-sglang:runtime-json-logs`
+
+### B. Check image creation times
+
+```bash
+docker image inspect local/dynamo-frontend:runtime-json-logs \
+  --format 'frontend created={{.Created}} id={{.Id}}'
+
+docker image inspect local/dynamo-sglang:runtime-json-logs \
+  --format 'worker created={{.Created}} id={{.Id}}'
+```
+
+This helps you see whether today you are actually running the same build you expected.
+
+### C. Check that the local Dynamo source exists
+
+```bash
+cd ~/kv_cache_offloading
+
+ls -ld upstream/dynamo
+git -C upstream/dynamo rev-parse --short HEAD
+```
+
+### D. Prepare the instrumented Dynamo source again
+
+```bash
+cd ~/kv_cache_offloading
+
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+```
+
+### E. Rebuild the instrumented images for GH200
+
+```bash
+cd ~/kv_cache_offloading
+
+DOCKER_BUILD_PLATFORM=linux/arm64 \
+DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+### F. Restart Dynamo with the explicit local images
+
+```bash
+./run_dynamo_single_host.sh stop
+
+DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+./run_dynamo_single_host.sh start
+```
+
+Then watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+### G. Re-run the direct top-level priority smoke test
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import json
+import urllib.request
+
+url = "http://127.0.0.1:8000/v1/chat/completions"
+payload = {
+    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "messages": [{"role": "user", "content": "Say hello in one word."}],
+    "max_tokens": 4,
+    "temperature": 0,
+    "priority": 10,
+}
+req = urllib.request.Request(
+    url,
+    data=json.dumps(payload).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+
+try:
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        body = resp.read().decode("utf-8")
+        print("STATUS:", resp.status)
+        print(body[:1000])
+except Exception as e:
+    print("REQUEST_FAILED:", e)
+    if hasattr(e, "read"):
+        try:
+            print(e.read().decode("utf-8"))
+        except Exception:
+            pass
+PY
+```
+
+Interpretation:
+
+- if this succeeds, the frontend accepts top-level `priority`
+- if this fails with `Unsupported parameter(s): priority`, then the frontend path you are running today still does not support it
+
+### H. Once the smoke test passes, force the retention experiment to use priority
+
+```bash
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=force
+```
+
+Why `force`?
+
+- `auto` is a compatibility fallback
+- `force` is better once the frontend is fixed, because it fails loudly if priority breaks again
