@@ -54,6 +54,62 @@ export RETENTION_TOP_LEVEL_PRIORITY_MODE=auto
 
 for retention experiments.
 
+### B. Canonical hint-path test
+
+This checks the canonical path we care about most:
+
+- `nvext.agent_hints.priority`
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import json
+import urllib.request
+
+url = "http://127.0.0.1:8000/v1/chat/completions"
+payload = {
+    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "messages": [{"role": "user", "content": "Say hello in one word."}],
+    "max_tokens": 4,
+    "temperature": 0,
+    "nvext": {
+        "agent_hints": {
+            "priority": 10
+        }
+    }
+}
+req = urllib.request.Request(
+    url,
+    data=json.dumps(payload).encode("utf-8"),
+    headers={"Content-Type": "application/json"},
+    method="POST",
+)
+
+try:
+    with urllib.request.urlopen(req, timeout=120) as resp:
+        body = resp.read().decode("utf-8")
+        print("STATUS:", resp.status)
+        print(body[:1000])
+except Exception as e:
+    print("REQUEST_FAILED:", e)
+    if hasattr(e, "read"):
+        try:
+            print(e.read().decode("utf-8"))
+        except Exception:
+            pass
+PY
+```
+
+How to interpret it:
+
+- If the top-level priority test fails but this one succeeds, the machine does
+  not support top-level `priority`, but it does support
+  `nvext.agent_hints.priority`.
+- If both succeed, both paths are supported.
+- If this one fails too, the canonical hint path itself is broken on that
+  machine.
+
 ## 2. Start a clean instrumented Dynamo
 
 Good default startup when you want retention, hint, and runtime evidence.
