@@ -1,0 +1,34 @@
+Task mode: create
+Primary deck-profile: engineering-platform
+Secondary profile gates: appendix-heavy
+
+Audience:
+Top executives and senior engineering managers who need to understand why the new AgentBench reporting layer matters, what the latest run proves, and where the remaining execution risk sits.
+
+Required proof objects:
+- Architecture/workflow map connecting SWE-bench task input, AgentBench, Deep Agents, Dynamo frontend, SGLang worker, tools/model behavior, and artifacts.
+- Prompt evolution stage timeline showing ownership, structural transformations, and the point where request state becomes behavior state.
+- Runtime alignment proof showing 5 decision rows, 5 agreed rows, parser=hermes, and observed worker evidence.
+- Metric evidence tied to the technical system: prompt chars, prompt tokens, cached input tokens, TTFT, decode, end-to-end latency, output tokens, tool-call count, and workspace-change state.
+- Risk and roadmap slide calling out system_prompt_chars=0, finish_reason=length, read-only tool behavior, and deeper causal trace gaps.
+- Dense appendix tables with readable row grammar and source references.
+
+Source/asset requirements:
+- Use only local report artifacts from the run directory.
+- No external logos or identity assets.
+- Use editable shapes, text, and chart primitives rather than screenshots of CSVs.
+
+Brand authenticity constraints:
+- No pseudo-logos or approximated brand marks.
+- Visual identity should come from technical precision, restrained typography, and a consistent executive analytics system.
+
+Profile-specific QA gates:
+- Technical labels must remain precise and readable.
+- Connector direction and containment boundaries must be visually clear.
+- Appendix small type must remain readable in rendered previews.
+- Every main slide must have a claim, proof object, and concise support note.
+
+Known missing inputs:
+- No corporate template or executive brand guidelines were supplied.
+- No source deck/reference deck was supplied.
+- Runtime causality is limited to available logs and report artifacts.

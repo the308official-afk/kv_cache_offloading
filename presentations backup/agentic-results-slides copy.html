@@ -1,0 +1,1523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Harness Workflow Results Overview</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      background-color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      gap: 50px;
+      margin: 0;
+      padding: 60px 0;
+      align-items: center;
+      font-family: 'Inter', sans-serif;
+      color: #0f172a;
+    }
+
+    .slide {
+      background-color: #ffffff;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+      display: flex;
+      flex-direction: column;
+      height: 720px;
+      overflow: hidden;
+      padding: 50px 60px;
+      position: relative;
+      width: 1280px;
+    }
+
+    .slide-number {
+      position: absolute;
+      top: 50px;
+      right: 60px;
+      background-color: #e2e8f0;
+      color: #475569;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 4px;
+      letter-spacing: 0.5px;
+    }
+
+    h2.title {
+      font-size: 32px;
+      font-weight: 600;
+      margin: 0 0 26px 0;
+      color: #0f172a;
+      border-left: 5px solid #2563eb;
+      padding-left: 18px;
+      line-height: 1.2;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    h3 {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0 0 12px 0;
+      color: #1e293b;
+    }
+
+    p, li {
+      font-size: 18px;
+      color: #475569;
+      line-height: 1.55;
+      margin: 0;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    .content {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 0;
+    }
+
+    .subtitle {
+      font-size: 20px;
+      color: #475569;
+      line-height: 1.5;
+      max-width: 1080px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+
+    .grid-5 {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 14px;
+    }
+
+    .panel {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      padding: 22px 24px;
+    }
+
+    .panel.accent-green { border-top: 4px solid #16a34a; }
+    .panel.accent-amber { border-top: 4px solid #f59e0b; }
+    .panel.accent-blue { border-top: 4px solid #2563eb; }
+
+    .badge {
+      background-color: #e0f2fe;
+      color: #0369a1;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .metric-strip {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+    }
+
+    .metric-card {
+      background: #ffffff;
+      border: 1px solid #dbe4f0;
+      border-radius: 10px;
+      padding: 16px 18px;
+      min-height: 92px;
+    }
+
+    .metric-card .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.07em;
+      color: #64748b;
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .metric-card .value {
+      font-size: 28px;
+      font-weight: 700;
+      color: #0f172a;
+      line-height: 1.1;
+      margin-bottom: 6px;
+    }
+
+    .metric-card .note {
+      font-size: 13px;
+      line-height: 1.4;
+      color: #64748b;
+    }
+
+    .pillar-spine {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 16px 20px 10px 20px;
+      margin-bottom: 8px;
+    }
+
+    .pillar {
+      text-align: center;
+      padding: 20px 10px;
+      border: 2px solid #334155;
+      border-radius: 10px;
+      width: 22%;
+      background: #fff;
+      box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+    }
+
+    .pillar strong {
+      display: block;
+      font-size: 18px;
+      color: #1e293b;
+      margin-bottom: 4px;
+    }
+
+    .pillar span {
+      font-size: 12px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+
+    .arrow {
+      font-size: 24px;
+      color: #cbd5e1;
+      font-weight: bold;
+    }
+
+    .component-card {
+      background-color: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-top: 4px solid #ff9e64;
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+
+    .component-card h3 {
+      font-size: 19px;
+      color: #1e293b;
+      margin-bottom: 10px;
+    }
+
+    .component-card p {
+      font-size: 15px;
+      color: #334155;
+      line-height: 1.5;
+    }
+
+    .setup-rows {
+      padding: 18px 22px;
+      gap: 0;
+    }
+
+    .setup-row {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 16px;
+      align-items: start;
+      padding: 10px 0;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .setup-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .setup-row:first-child {
+      padding-top: 0;
+    }
+
+    .setup-label {
+      font-size: 16px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+
+    .setup-copy {
+      font-size: 15px;
+      line-height: 1.45;
+      color: #334155;
+    }
+
+    .setup-takeaway {
+      font-size: 17px;
+      line-height: 1.45;
+      color: #1e293b;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .table-context-line {
+      font-size: 13px;
+      line-height: 1.35;
+      color: #334155;
+      margin: -4px 0 8px 0;
+      font-weight: 600;
+    }
+
+    .table-context-line .label {
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .metric-context-line {
+      margin-top: 22px;
+      font-size: 18px;
+      line-height: 1.45;
+      color: #0f172a;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .metric-context-line > div {
+      margin-top: 4px;
+    }
+
+    .metric-context-line > div:first-child {
+      margin-top: 0;
+    }
+
+    .metric-context-line .label {
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 6px;
+    }
+
+    .table-wrap {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .table-wrap.panel {
+      background: transparent;
+      border: none;
+      border-top: none;
+      box-shadow: none;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    .table-note {
+      font-size: 14px;
+      color: #64748b;
+      margin-bottom: 10px;
+    }
+
+    table.compact {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    table.compact th {
+      background-color: #f1f5f9;
+      text-align: left;
+      padding: 9px 10px;
+      font-weight: 700;
+      border-bottom: 2px solid #cbd5e1;
+      font-size: 11px;
+      color: #334155;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      line-height: 1.2;
+    }
+
+    table.compact td {
+      padding: 8px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      font-size: 11px;
+      color: #334155;
+      vertical-align: top;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    table.compact tr:nth-child(even) td {
+      background-color: #fbfdff;
+    }
+
+    .repo-cell, .run-cell, .commit-cell, .model-cell {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10.5px;
+    }
+
+    .task-cell {
+      color: #1e293b;
+      font-weight: 500;
+    }
+
+    .action-pill {
+      display: inline-block;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #4338ca;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+
+    .yes-pill {
+      display: inline-block;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .phase-cell {
+      font-size: 10.5px;
+      color: #334155;
+    }
+
+    .patch-good {
+      color: #047857;
+      font-weight: 800;
+    }
+
+    .patch-zero {
+      color: #64748b;
+      font-weight: 700;
+    }
+
+    .table-slide .content {
+      gap: 12px;
+    }
+
+    .table-slide .table-wrap.panel {
+      padding: 0;
+    }
+
+    table.compact.tight th {
+      font-size: 10px;
+      padding: 7px 8px;
+      line-height: 1.15;
+    }
+
+    table.compact.tight td {
+      font-size: 10px;
+      padding: 7px 8px;
+      line-height: 1.25;
+    }
+
+    table.compact.tight .repo-cell,
+    table.compact.tight .run-cell,
+    table.compact.tight .commit-cell,
+    table.compact.tight .model-cell {
+      font-size: 10px;
+    }
+
+    table.compact.tight .phase-cell {
+      font-size: 9.5px;
+      line-height: 1.2;
+    }
+
+    table.compact.task-tall td {
+      padding: 11px 9px;
+      vertical-align: top;
+    }
+
+    table.compact.task-tall .task-cell {
+      line-height: 1.35;
+      font-size: 12px;
+    }
+
+    table.compact.task-tall th {
+      font-size: 11px;
+      padding: 8px 9px;
+    }
+
+    table.compact.task-tall .run-cell,
+    table.compact.task-tall .repo-cell,
+    table.compact.task-tall .commit-cell {
+      font-size: 11.5px;
+    }
+
+    table.compact.task-tall .action-pill {
+      line-height: 1.25;
+      white-space: normal;
+      font-size: 10.5px;
+      padding: 4px 7px;
+    }
+
+    table.compact.task-tall .yes-pill {
+      font-size: 10.5px;
+      padding: 4px 7px;
+    }
+
+    .task-merge-slide h2.title {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    table.compact.task-merge td {
+      padding: 8px 8px;
+      vertical-align: top;
+    }
+
+    table.compact.task-merge .task-cell {
+      line-height: 1.28;
+      font-size: 10.8px;
+    }
+
+    table.compact.task-merge th {
+      font-size: 10px;
+      padding: 7px 8px;
+    }
+
+    table.compact.task-merge .run-cell,
+    table.compact.task-merge .repo-cell,
+    table.compact.task-merge .commit-cell {
+      font-size: 10.4px;
+    }
+
+    table.compact.task-merge .action-pill,
+    table.compact.task-merge .yes-pill {
+      font-size: 9.6px;
+      padding: 3px 6px;
+      line-height: 1.2;
+      white-space: normal;
+    }
+
+    table.compact.tight .action-pill,
+    table.compact.tight .yes-pill {
+      font-size: 9px;
+      padding: 3px 6px;
+    }
+
+    .patch-row td {
+      background-color: #f0fdf4 !important;
+    }
+
+    .patch-row td:first-child {
+      box-shadow: inset 3px 0 0 #16a34a;
+    }
+
+    .dark-data h2.title,
+    .dark-data .footline,
+    .dark-data .table-note {
+      color: #000000;
+    }
+
+    .dark-data table.compact th,
+    .dark-data table.compact td,
+    .dark-data .repo-cell,
+    .dark-data .run-cell,
+    .dark-data .commit-cell,
+    .dark-data .model-cell,
+    .dark-data .phase-cell,
+    .dark-data .task-cell {
+      color: #000000;
+    }
+
+    .dark-data .patch-zero,
+    .dark-data .patch-good {
+      color: #000000;
+    }
+
+    .dark-data table.compact.tight th {
+      font-size: 11px;
+      padding: 8px 8px;
+    }
+
+    .dark-data table.compact.tight td {
+      font-size: 11px;
+      padding: 8px 8px;
+    }
+
+    .dark-data table.compact.tight .repo-cell,
+    .dark-data table.compact.tight .run-cell,
+    .dark-data table.compact.tight .model-cell {
+      font-size: 11.5px;
+    }
+
+    .dark-data table.compact.tight .phase-cell {
+      font-size: 10.5px;
+      line-height: 1.25;
+    }
+
+    .summary-panel h3 {
+      margin-bottom: 12px;
+    }
+
+    .summary-panel li {
+      font-size: 16px;
+      margin-bottom: 9px;
+      color: #334155;
+    }
+
+    .footline {
+      margin-top: 2px;
+      font-size: 13px;
+      color: #64748b;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="slide" id="slide-1">
+    <div class="slide-number">Slide 1</div>
+    <h2 class="title">Execution Setup: Core Components</h2>
+    <div class="content">
+      <p class="subtitle">A four-layer workflow that turns benchmark tasks into observable agent runs.</p>
+      <div class="pillar-spine">
+        <div class="pillar">
+          <strong>SWE-bench</strong>
+          <span>Tasks</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>Deep Agents</strong>
+          <span>Workflow</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>Dynamo</strong>
+          <span>Runtime</span>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>SGLang</strong>
+          <span>Inference</span>
+        </div>
+      </div>
+      <div class="panel accent-blue setup-rows" style="margin-top: 6px;">
+        <div class="setup-row">
+          <div class="setup-label">SWE-bench</div>
+          <div class="setup-copy">Provides realistic software-engineering tasks and expected fixes.</div>
+        </div>
+        <div class="setup-row">
+          <div class="setup-label">Deep Agents</div>
+          <div class="setup-copy">Orchestrates planning, execution, patch generation, and review.</div>
+        </div>
+        <div class="setup-row">
+          <div class="setup-label">Dynamo</div>
+          <div class="setup-copy">Packages requests and records runtime and tool observability.</div>
+        </div>
+        <div class="setup-row">
+          <div class="setup-label">SGLang</div>
+          <div class="setup-copy">Executes inference and returns tool-call and response outputs.</div>
+        </div>
+      </div>
+      <div class="setup-takeaway">Together, these components let us trace how a task moves from benchmark input to agent behavior.</div>
+    </div>
+  </div>
+
+  <div class="slide" id="slide-2">
+    <div class="slide-number">Slide 2</div>
+    <h2 class="title">Current Progress</h2>
+    <div class="content">
+      <p class="subtitle">The workflow is now observable end to end, and some runs complete through patch creation.</p>
+      <div class="grid-2" style="flex: 1;">
+        <div class="panel accent-green summary-panel">
+          <h3>What Now Works</h3>
+          <ul>
+            <li><strong>Patch creation observed:</strong> Some tasks now complete through to actual patch creation.</li>
+            <li><strong>Multi-phase flow visible:</strong> Runs now follow planning, execution, patch generation, and review.</li>
+            <li><strong>Execution is multi-step:</strong> The execution phase now moves through multiple logical steps instead of a single-shot attempt.</li>
+            <li><strong>Tool use confirmed:</strong> Tool activity is visible by phase, so we can verify what the workflow actually did.</li>
+          </ul>
+        </div>
+        <div class="panel accent-amber summary-panel">
+          <h3>What We Are Improving</h3>
+          <ul>
+            <li><strong>Completion quality:</strong> Improve performance across more repos and task types.</li>
+            <li><strong>Execution depth:</strong> Reduce inspection-heavy runs that stop short of meaningful edits.</li>
+            <li><strong>Model capability:</strong> Test a larger model to improve reasoning and patch quality.</li>
+          </ul>
+        </div>
+      </div>
+      <p style="margin-top: 4px; font-size: 16px; color: #92400e; font-weight: 700;">Bottom line: the workflow is now visible; model capability is the next major lever.</p>
+    </div>
+  </div>
+
+  <div class="slide" id="slide-2b">
+    <div class="slide-number">Slide 3</div>
+    <h2 class="title">Run Set At A Glance</h2>
+    <div class="content">
+      <p class="subtitle">A compact snapshot of the current reported run set before we look at the per-run tables.</p>
+      <div class="metric-strip" style="margin-top: 18px;">
+        <div class="metric-card">
+          <div class="label">Runs Analyzed</div>
+          <div class="value">27</div>
+          <div class="note">Current reported run set</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Tool Evidence</div>
+          <div class="value">27 / 27</div>
+          <div class="note">Every run shows recorded tool activity</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Patch Generation</div>
+          <div class="value">25 / 27</div>
+          <div class="note">Reached patch-generation phase</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Non-Empty Patches</div>
+          <div class="value">6</div>
+          <div class="note">Runs that produced real diff output</div>
+        </div>
+      </div>
+      <div class="metric-context-line">
+        <div><span class="label">Benchmark</span> SWE-bench</div>
+        <div><span class="label">Model</span> <span class="mono">Qwen/Qwen2.5-Coder-7B-Instruct</span></div>
+        <div><span class="label">Harness</span> Deepagents</div>
+      </div>
+    </div>
+  </div>
+
+  
+
+  <div class="slide table-slide task-merge-slide" id="slide-3">
+    <div class="slide-number">Slide 4</div>
+    <h2 class="title">Task Summary (1 of 2)</h2>
+    <div class="content">
+      <div class="table-context-line">
+        <span class="label">Benchmark</span> SWE-bench
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Model</span> <span class="mono">Qwen/Qwen2.5-Coder-7B-Instruct</span>
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Harness</span> Deepagents
+      </div>
+      <div class="table-wrap panel accent-blue">
+        <table class="compact tight task-tall task-merge">
+          <colgroup>
+            <col style="width:8%">
+            <col style="width:11%">
+            <col style="width:46%">
+            <col style="width:18%">
+            <col style="width:7%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Repo</th>
+              <th>Task Summary</th>
+              <th>Expected Action</th>
+              <th>Patch</th>
+              <th>Base Commit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="run-cell">190251</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">190500</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+            <tr>
+              <td class="run-cell">190534</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">190952</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">193512</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">193615</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+            <tr>
+              <td class="run-cell">193649</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">193924</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">195404</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">195450</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+            <tr>
+              <td class="run-cell">195524</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">195837</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">003009</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">003113</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footline mono">Rows 1–14 of 27</div>
+    </div>
+  </div>
+
+  <div class="slide table-slide task-merge-slide" id="slide-3c">
+    <div class="slide-number">Slide 5</div>
+    <h2 class="title">Task Summary (2 of 2)</h2>
+    <div class="content">
+      <div class="table-context-line">
+        <span class="label">Benchmark</span> SWE-bench
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Model</span> <span class="mono">Qwen/Qwen2.5-Coder-7B-Instruct</span>
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Harness</span> Deepagents
+      </div>
+      <div class="table-wrap panel accent-blue">
+        <table class="compact tight task-tall task-merge">
+          <colgroup>
+            <col style="width:8%">
+            <col style="width:11%">
+            <col style="width:46%">
+            <col style="width:18%">
+            <col style="width:7%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Repo</th>
+              <th>Task Summary</th>
+              <th>Expected Action</th>
+              <th>Patch</th>
+              <th>Base Commit</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="run-cell">003149</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">003318</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">003750</td>
+              <td class="repo-cell">ansible</td>
+              <td class="task-cell">Collection Name Validation Accepts Python Keywords</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">f533d465</td>
+            </tr>
+            <tr>
+              <td class="run-cell">010203</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">010402</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+            <tr>
+              <td class="run-cell">010438</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">010608</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">011039</td>
+              <td class="repo-cell">ansible</td>
+              <td class="task-cell">Collection Name Validation Accepts Python Keywords</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">f533d465</td>
+            </tr>
+            <tr>
+              <td class="run-cell">125502</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Email Validation Status Not Handled Correctly in ACP and Confirmation Logic</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">1e137b07</td>
+            </tr>
+            <tr>
+              <td class="run-cell">125608</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.</td>
+              <td><span class="action-pill">refactor code organization</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">ebfe9b7a</td>
+            </tr>
+            <tr>
+              <td class="run-cell">125644</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="task-cell">Move .well-known assets to separate router file, add a basic webfinger implementation</td>
+              <td><span class="action-pill">modify routing/controller logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">da2441b9</td>
+            </tr>
+            <tr>
+              <td class="run-cell">125814</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="task-cell">Host blocking does not apply to subdomains when only the parent domain is listed</td>
+              <td><span class="action-pill">fix host-matching logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">0b8cc812</td>
+            </tr>
+            <tr>
+              <td class="run-cell">130247</td>
+              <td class="repo-cell">ansible</td>
+              <td class="task-cell">Collection Name Validation Accepts Python Keywords</td>
+              <td><span class="action-pill">fix validation logic</span></td>
+              <td><span class="yes-pill">Yes</span></td>
+              <td class="commit-cell">f533d465</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footline mono">Rows 15–27 of 27</div>
+    </div>
+  </div>
+
+  <div class="slide table-slide dark-data" id="slide-4">
+    <div class="slide-number">Slide 6</div>
+    <h2 class="title">Run Overview (1 of 2)</h2>
+    <div class="content">
+      <div class="table-context-line">
+        <span class="label">Benchmark</span> SWE-bench
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Model</span> <span class="mono">Qwen/Qwen2.5-Coder-7B-Instruct</span>
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Harness</span> Deepagents
+      </div>
+      <div class="table-wrap panel accent-blue">
+        <table class="compact tight">
+          <colgroup>
+            <col style="width:7%">
+            <col style="width:8%">
+            <col style="width:8%">
+            <col style="width:5%">
+            <col style="width:9%">
+            <col style="width:15%">
+            <col style="width:12%">
+            <col style="width:10%">
+            <col style="width:11%">
+            <col style="width:5%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Repo</th>
+              <th>Model</th>
+              <th>Steps</th>
+              <th>Planning</th>
+              <th>Execution</th>
+              <th>Patch Gen</th>
+              <th>Review</th>
+              <th>Other</th>
+              <th>Total</th>
+              <th>Patch</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="run-cell">190251</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">6 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">4 · read</td>
+              <td class="run-cell">10</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">190500</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">4 · read</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">190534</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">5 · read</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="run-cell">5</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">190952</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">3 · read, todos</td>
+              <td class="phase-cell">2 · read, todos</td>
+              <td class="phase-cell">5 · read, todos</td>
+              <td class="run-cell">5</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">193512</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">2 · exec, read</td>
+              <td class="phase-cell">2 · exec, read</td>
+              <td class="phase-cell">4 · exec, read</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">193615</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">4 · read</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr class="patch-row">
+              <td class="run-cell">193649</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">7 · edit, exec, read, write</td>
+              <td class="phase-cell">5 · exec</td>
+              <td class="phase-cell">3 · exec</td>
+              <td class="phase-cell">8 · exec</td>
+              <td class="run-cell">15</td>
+              <td><span class='patch-good'>1.6 KB</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">193924</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">3 · read, todos</td>
+              <td class="phase-cell">2 · read, todos</td>
+              <td class="phase-cell">5 · read, todos</td>
+              <td class="run-cell">5</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">195404</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">2 · exec, read</td>
+              <td class="phase-cell">2 · exec, read</td>
+              <td class="phase-cell">4 · exec, read</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">195450</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">4 · read</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">195524</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">5 · read</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">3 · exec</td>
+              <td class="phase-cell">3 · exec</td>
+              <td class="run-cell">8</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">195837</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">3 · read, todos</td>
+              <td class="phase-cell">2 · read, todos</td>
+              <td class="phase-cell">5 · read, todos</td>
+              <td class="run-cell">5</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr class="patch-row">
+              <td class="run-cell">003009</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">2</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">5 · edit, exec, read</td>
+              <td class="phase-cell">2 · write</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">3 · read, write</td>
+              <td class="run-cell">8</td>
+              <td><span class='patch-good'>412 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">003113</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">3 · read</td>
+              <td class="run-cell">3</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footline mono">Rows 1–14 of 27 · phase cells show tool-call count and dominant tools</div>
+    </div>
+  </div>
+
+  <div class="slide table-slide dark-data" id="slide-4b">
+    <div class="slide-number">Slide 7</div>
+    <h2 class="title">Run Overview (2 of 2)</h2>
+    <div class="content">
+      <div class="table-context-line">
+        <span class="label">Benchmark</span> SWE-bench
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Model</span> <span class="mono">Qwen/Qwen2.5-Coder-7B-Instruct</span>
+        <span class="mono" style="margin: 0 14px;">·</span>
+        <span class="label">Harness</span> Deepagents
+      </div>
+      <div class="table-wrap panel accent-blue">
+        <table class="compact tight">
+          <colgroup>
+            <col style="width:7%">
+            <col style="width:8%">
+            <col style="width:8%">
+            <col style="width:5%">
+            <col style="width:9%">
+            <col style="width:15%">
+            <col style="width:12%">
+            <col style="width:10%">
+            <col style="width:11%">
+            <col style="width:5%">
+            <col style="width:10%">
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Repo</th>
+              <th>Model</th>
+              <th>Steps</th>
+              <th>Planning</th>
+              <th>Execution</th>
+              <th>Patch Gen</th>
+              <th>Review</th>
+              <th>Other</th>
+              <th>Total</th>
+              <th>Patch</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="patch-row">
+              <td class="run-cell">003149</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">2</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">9 · edit, exec, read, write</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec</td>
+              <td class="run-cell">11</td>
+              <td><span class='patch-good'>1.9 KB</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">003318</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · todos</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec, todos</td>
+              <td class="run-cell">2</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">003750</td>
+              <td class="repo-cell">ansible</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">2 · todos</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">4 · read, todos</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">010203</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">4 · read</td>
+              <td class="phase-cell">5 · read</td>
+              <td class="phase-cell">2 · read, todos</td>
+              <td class="phase-cell">7 · read, todos</td>
+              <td class="run-cell">11</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">010402</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">3 · read</td>
+              <td class="run-cell">3</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr class="patch-row">
+              <td class="run-cell">010438</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">2</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">9 · edit, exec, read, write</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec</td>
+              <td class="run-cell">11</td>
+              <td><span class='patch-good'>1.9 KB</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">010608</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · todos</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec, todos</td>
+              <td class="run-cell">2</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">011039</td>
+              <td class="repo-cell">ansible</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">2 · todos</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">4 · read, todos</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr class="patch-row">
+              <td class="run-cell">125502</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">2</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">5 · edit, exec, read</td>
+              <td class="phase-cell">2 · write</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">3 · read, write</td>
+              <td class="run-cell">8</td>
+              <td><span class='patch-good'>412 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">125608</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">2 · read</td>
+              <td class="phase-cell">3 · read</td>
+              <td class="run-cell">3</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr class="patch-row">
+              <td class="run-cell">125644</td>
+              <td class="repo-cell">NodeBB</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">2</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">9 · edit, exec, read, write</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec</td>
+              <td class="run-cell">11</td>
+              <td><span class='patch-good'>1.9 KB</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">125814</td>
+              <td class="repo-cell">qutebrowser</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · todos</td>
+              <td class="phase-cell">1 · exec</td>
+              <td class="phase-cell">2 · exec, todos</td>
+              <td class="run-cell">2</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+            <tr>
+              <td class="run-cell">130247</td>
+              <td class="repo-cell">ansible</td>
+              <td class="model-cell">Qwen 2.5</td>
+              <td class="run-cell">3</td>
+              <td class="phase-cell">2 · todos</td>
+              <td class="phase-cell">0 · —</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">1 · read</td>
+              <td class="phase-cell">4 · read, todos</td>
+              <td class="run-cell">4</td>
+              <td><span class='patch-zero'>0 B</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="footline mono">Rows 15–27 of 27 · patch-producing runs are highlighted</div>
+    </div>
+  </div>
+
+  <div class="slide" id="slide-5">
+    <div class="slide-number">Slide 8</div>
+    <h2 class="title">What The Results Show</h2>
+    <div class="content">
+      <div class="grid-5">
+        <div class="metric-card">
+          <div class="label">Runs</div>
+          <div class="value">27</div>
+          <div class="note">Across the current experiment set</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Task Types</div>
+          <div class="value">5</div>
+          <div class="note">Spread across 3 repos</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Patch Generation</div>
+          <div class="value">25 / 27</div>
+          <div class="note">Reached patch-generation phase</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Review Phase</div>
+          <div class="value">26 / 27</div>
+          <div class="note">Reached review</div>
+        </div>
+        <div class="metric-card">
+          <div class="label">Non-Empty Patches</div>
+          <div class="value">6</div>
+          <div class="note">Produced real diff output</div>
+        </div>
+      </div>
+      <div class="grid-2" style="flex: 1;">
+        <div class="panel accent-green summary-panel">
+          <h3>What Is Already Working</h3>
+          <ul>
+            <li>Multi-phase execution is now real and observable, not just conceptual.</li>
+            <li>Every run shows tool-call evidence, and <span class="mono">16</span> runs already use write-oriented tools.</li>
+            <li>A subset of runs now completes through patch creation, demonstrating true end-to-end workflow closure.</li>
+          </ul>
+          <p style="margin-top: 16px; font-size: 15px; color: #166534; font-weight: 700;">This means the orchestration stack can now produce inspectable evidence across the full task lifecycle.</p>
+        </div>
+        <div class="panel accent-amber summary-panel">
+          <h3>What Needs The Next Push</h3>
+          <ul>
+            <li>Patch-producing runs are currently concentrated in one repo family, so generality is still uneven.</li>
+            <li>Many runs remain inspection-heavy, especially outside the strongest-performing task cases.</li>
+            <li>The next lever is a larger model, measured against patch rate, repo coverage, and quality of final diffs.</li>
+          </ul>
+          <p style="margin-top: 16px; font-size: 15px; color: #92400e; font-weight: 700;">Bottom line: the workflow is now observable end to end; the next step is improving task-solving capability.</p>
+        </div>
+      </div>
+      <div class="footline mono">Source: experiments/reports/all_runs_task_summary.csv · experiments/reports/all_runs_overview.csv</div>
+    </div>
+  </div>
+
+</body>
+</html>

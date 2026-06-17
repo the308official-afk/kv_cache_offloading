@@ -1,0 +1,32 @@
+Source report directory:
+/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/raw/agentbench/results/instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260515_155633
+
+Primary source artifacts:
+- prompt_evolution_report.md/json/csv: prompt stage lineage, owner/component labels, structural before/after, prompt sizes, observed tool behavior, final response excerpt.
+- stage_lifecycle_table.csv: chronological lifecycle events from run initialization through artifact generation.
+- runtime_alignment_analysis.md/json: decision-vs-runtime alignment rows, worker evidence, parser, TTFT/decode/end-to-end timings.
+- final_summary.txt: final model response text from the run.
+
+Key facts used:
+- Run id: instance_NodeBB__NodeBB-04998908ba6721d64eba79ae3b65a351dcfbc5b5-vnan_20260515_155633.
+- Task: NodeBB/NodeBB email validation status and confirmation logic.
+- Model: Qwen/Qwen2.5-7B-Instruct.
+- Tool parser: hermes.
+- Expected tools: write_todos, ls, read_file, write_file, edit_file, glob, grep, execute, task.
+- Observed tools: ls, read_file.
+- Observed tool calls: 2.
+- Finish reason: length.
+- Workspace changed: False.
+- Decision alignment rows: 5 agreed, 0 diverged.
+- Worker: 7587894864635169841.
+- Prompt input tokens: 12,553.
+- Cached input tokens: 12,544.
+- Output tokens: 2,048.
+- TTFT: 141.928 ms.
+- Decode: 5,334.126 ms.
+- End-to-end latency: 81,000.822 ms.
+
+Source caveats:
+- system_prompt_chars=0 is treated as a suspicious reporting/runtime field, not as proof that no system instructions existed.
+- Runtime alignment confirms observed consistency across logs; it does not prove full causal attribution for every decision.
+- The deck describes the latest run outcome as instrumentation success and task-execution failure because no workspace patch or git diff was produced.

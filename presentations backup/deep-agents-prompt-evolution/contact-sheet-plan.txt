@@ -1,0 +1,31 @@
+Slide rhythm plan:
+01. Dark editorial cover with metric rail and pipeline motif.
+02. Light executive summary with three proof pillars and bottom thesis.
+03. Split diagnostic model: before vs after.
+04. Layered observability stack map.
+05. Full-width system flow diagram.
+06. Four-report evidence portfolio.
+07. Horizontal prompt-evolution timeline.
+08. Ownership swimlane matrix.
+09. Before/after JSON shape comparison.
+10. Bar and metric evidence slide.
+11. Runtime readiness dashboard.
+12. Runtime alignment matrix.
+13. Latest-run case study with red/amber/green state blocks.
+14. Learning split: instrumentation success vs effectiveness gap.
+15. Risk register.
+16. Roadmap timeline.
+17. Appendix divider/index.
+18. Artifact source inventory table.
+19. Full prompt evolution table.
+20. Lifecycle event sample table.
+21. Runtime alignment table.
+22. JSON key excerpts.
+23. Final response excerpt.
+24. Glossary and methodology.
+
+Contact-sheet gates:
+- No three consecutive slides use the same macro layout.
+- Main slides avoid raw CSV screenshots.
+- Appendix slides use stable table grammar and readable small type.
+- Every main slide has a proof object stronger than prose alone.

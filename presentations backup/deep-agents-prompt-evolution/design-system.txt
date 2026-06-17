@@ -1,0 +1,47 @@
+Slide size:
+1280 x 720 px, 16:9.
+
+Typography:
+- Claim/title: Aptos Display.
+- Body/labels: Aptos.
+- Code/IDs: Aptos Mono.
+
+Color palette:
+- Ink: #101820 for executive dark backgrounds and primary text.
+- Paper: #F7F4ED for warm light backgrounds.
+- Mist: #E8ECEF for rules and quiet surfaces.
+- Blue: #2563EB for request/runtime emphasis.
+- Green: #0F9F6E for agreement/success signals.
+- Amber: #D97706 for risk/suspicion signals.
+- Red: #BE123C for failure/no-change signals.
+- Violet: #6D28D9 for prompt-evolution accents.
+
+Usage rules:
+- Main narrative alternates dark editorial slides and warm paper analytic slides.
+- Avoid monochrome navy/gray dominance by using blue, green, amber, red, and violet for semantic states.
+- Use hairline rules and open layouts instead of repeated boxed card grids.
+- Use square or lightly edged boxes only when grouping data or stages.
+
+Chart grammar:
+- Use editable shapes for bars, timelines, matrices, and status panels.
+- Directly label marks; avoid legends unless the visual truly needs them.
+- Keep data labels near their corresponding marks.
+
+Diagram grammar:
+- Left-to-right flow for request paths.
+- Vertical containment for layer/ownership maps.
+- Use connector bands or thin rules instead of decorative arrows unless direction is semantically necessary.
+
+Footer/source grammar:
+- Small footer on every slide with run id short form and source family.
+- Appendix slides include an "APPENDIX" marker and source artifact reference.
+
+Title/kicker grammar:
+- Kicker: all caps, 12 px, letter spacing avoided in source code but visually separated with marker and color.
+- Claim title: conclusion sentence, 34-48 px depending on slide density.
+
+Banned motifs:
+- Spreadsheet screenshots in the main deck.
+- Decorative gradient blobs/orbs.
+- Generic AI slogans without proof.
+- Vague boxes labeled only "AI layer" or "platform".
