@@ -189,6 +189,35 @@ def summarize_request_priority(
     }
 
 
+def summarize_request_flag(
+    request_rows: dict[str, dict[str, str]],
+    *,
+    field: str,
+    roles: tuple[str, ...] = ("a_first", "a_replay"),
+) -> dict[str, str]:
+    relevant = []
+    truthy_roles = []
+    for role in roles:
+        row = request_rows.get(role, {})
+        if not row:
+            continue
+        relevant.append(role)
+        if truthy(row.get(field)):
+            truthy_roles.append(role)
+    if not relevant:
+        status = "missing_requests_csv"
+    elif not truthy_roles:
+        status = "none"
+    elif len(truthy_roles) == len(relevant):
+        status = "full"
+    else:
+        status = "partial"
+    return {
+        "status": status,
+        "values": "|".join(truthy_roles),
+    }
+
+
 def parse_worker_capacity(path: Path) -> dict[str, int | None]:
     if not path.exists():
         return {
@@ -364,6 +393,9 @@ def derived_row(
     request_rows = request_rows_by_role(requests_csv_path)
     sent_priority = summarize_request_priority(request_rows, field="top_level_priority_value")
     hint_priority = summarize_request_priority(request_rows, field="agent_hints_priority")
+    attempted_priority = summarize_request_flag(request_rows, field="top_level_priority_attempted")
+    fallback_priority = summarize_request_flag(request_rows, field="top_level_priority_fallback_used")
+    unsupported_priority = summarize_request_flag(request_rows, field="top_level_priority_unsupported")
 
     worker_log_path = Path(summary.get("worker_runtime_log", ""))
     if not worker_log_path.is_absolute():
@@ -445,6 +477,15 @@ def derived_row(
     else:
         reuse_signal = "no_reuse_evidence"
 
+    if unsupported_priority["status"] in {"full", "partial"}:
+        frontend_top_level_priority_compatibility = "unsupported"
+    elif attempted_priority["status"] == "none":
+        frontend_top_level_priority_compatibility = "not_attempted"
+    elif sent_priority["status"] in {"full", "partial"}:
+        frontend_top_level_priority_compatibility = "supported"
+    else:
+        frontend_top_level_priority_compatibility = "unknown"
+
     return {
         "sweep_status": sweep_status,
         "retention_sweep_id": sweep_id,
@@ -483,8 +524,15 @@ def derived_row(
         "worker_hint_profile_seen": worker_hint_evidence["worker_hint_profile_seen"],
         "request_agent_hints_priority_status": hint_priority["status"],
         "request_agent_hints_priority_values": hint_priority["values"],
+        "request_top_level_priority_attempt_status": attempted_priority["status"],
+        "request_top_level_priority_attempt_values": attempted_priority["values"],
         "request_top_level_priority_status": sent_priority["status"],
         "request_top_level_priority_values": sent_priority["values"],
+        "request_top_level_priority_fallback_status": fallback_priority["status"],
+        "request_top_level_priority_fallback_values": fallback_priority["values"],
+        "request_top_level_priority_unsupported_status": unsupported_priority["status"],
+        "request_top_level_priority_unsupported_values": unsupported_priority["values"],
+        "frontend_top_level_priority_compatibility": frontend_top_level_priority_compatibility,
         "worker_top_level_priority_status": worker_hint_evidence["worker_top_level_priority_status"],
         "worker_top_level_priority_values": worker_hint_evidence["worker_top_level_priority_values"],
         "worker_priority_scheduling_enabled": worker_priority_mechanism["worker_priority_scheduling_enabled"],
@@ -536,6 +584,9 @@ def annotate_hint_runtime_effect(rows: list[dict[str, Any]], *, control_hint_pro
 
         if request_hint_status in {"missing_requests_csv", "none"}:
             row["hint_runtime_effect_status"] = "not_sent"
+            continue
+        if str(row.get("frontend_top_level_priority_compatibility", "")) == "unsupported":
+            row["hint_runtime_effect_status"] = "frontend_priority_unsupported"
             continue
         if worker_hint_status in {"missing_runtime_json", "none"}:
             row["hint_runtime_effect_status"] = "sent_not_seen"
@@ -621,6 +672,7 @@ def build_comparison_rows(
             mechanism_states = sorted({str(row.get("worker_priority_mechanism_ready", "")) for row in profile_rows if str(row.get("worker_priority_mechanism_ready", ""))})
             effect_states = sorted({str(row.get("hint_runtime_effect_status", "")) for row in profile_rows if str(row.get("hint_runtime_effect_status", ""))})
             priority_path_states = sorted({str(row.get("worker_priority_path_status", "")) for row in profile_rows if str(row.get("worker_priority_path_status", ""))})
+            frontend_compat_states = sorted({str(row.get("frontend_top_level_priority_compatibility", "")) for row in profile_rows if str(row.get("frontend_top_level_priority_compatibility", ""))})
             out.append(
                 {
                     "sweep_status": sweep_status,
@@ -635,6 +687,7 @@ def build_comparison_rows(
                     "protected_first_evicted_distractor_count": protected_first_evict or "",
                     "threshold_gap_distractors": threshold_gap if threshold_gap is not None else "",
                     "worker_hint_status": "|".join(worker_hint_statuses),
+                    "frontend_top_level_priority_compatibility": "|".join(frontend_compat_states),
                     "worker_priority_mechanism_ready": "|".join(mechanism_states),
                     "worker_priority_path_status": "|".join(priority_path_states),
                     "hint_runtime_effect_status": "|".join(effect_states),
@@ -691,6 +744,7 @@ def write_summary_md(
                     f"- `{row['model']}` / `{row['retention_attribution_mode']}` / `{row['kv_tier_mode']}` / `{row['protected_hint_profile']}`:",
                     f"  control first evicted at `{row['control_first_evicted_distractor_count'] or 'not observed'}`, "
                     f"protected first evicted at `{row['protected_first_evicted_distractor_count'] or 'not observed'}`, "
+                    f"frontend top-level priority: `{row['frontend_top_level_priority_compatibility'] or 'unknown'}`, "
                     f"mechanism ready: `{row['worker_priority_mechanism_ready'] or 'unknown'}`, "
                     f"hint status: `{row['worker_hint_status'] or 'unknown'}`, "
                     f"priority path: `{row['worker_priority_path_status'] or 'unknown'}`, "
@@ -766,8 +820,15 @@ def main() -> int:
         "worker_hint_profile_seen",
         "request_agent_hints_priority_status",
         "request_agent_hints_priority_values",
+        "request_top_level_priority_attempt_status",
+        "request_top_level_priority_attempt_values",
         "request_top_level_priority_status",
         "request_top_level_priority_values",
+        "request_top_level_priority_fallback_status",
+        "request_top_level_priority_fallback_values",
+        "request_top_level_priority_unsupported_status",
+        "request_top_level_priority_unsupported_values",
+        "frontend_top_level_priority_compatibility",
         "worker_top_level_priority_status",
         "worker_top_level_priority_values",
         "worker_priority_scheduling_enabled",
@@ -808,6 +869,7 @@ def main() -> int:
         "protected_first_evicted_distractor_count",
         "threshold_gap_distractors",
         "worker_hint_status",
+        "frontend_top_level_priority_compatibility",
         "worker_priority_mechanism_ready",
         "worker_priority_path_status",
         "hint_runtime_effect_status",

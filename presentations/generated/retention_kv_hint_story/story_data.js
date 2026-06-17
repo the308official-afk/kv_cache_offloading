@@ -1,5 +1,5 @@
 window.RETENTION_STORY_DATA = {
-  "generated_at": "2026-06-17T12:23:43",
+  "generated_at": "2026-06-17T13:32:15",
   "report_path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/retention_threshold_matrix.csv",
   "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
   "kv_tier_mode": "gpu_only",
@@ -55,9 +55,9 @@ window.RETENTION_STORY_DATA = {
         256.0,
         256.0,
         256.0,
-        null,
-        null,
-        null
+        0.0,
+        0.0,
+        0.0
       ],
       "thresholds": {
         "last_survived_distractor_count": 60,

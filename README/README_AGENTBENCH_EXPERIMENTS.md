@@ -1449,6 +1449,16 @@ By default, the retention probe and threshold sweep now launch the worker with
 both `--enable-priority-scheduling` and `--radix-eviction-policy priority`.
 Only override `WORKER_BASE_ARGS` if you intentionally want a different policy.
 
+Top-level priority compatibility:
+
+- `RETENTION_TOP_LEVEL_PRIORITY_MODE=auto` is now the safest default.
+- In `auto` mode, the probe tries top-level `priority` once.
+- If the frontend rejects it with `Unsupported parameter(s): priority`, the
+  probe retries without top-level `priority`, keeps `nvext.agent_hints`, and
+  records that fallback in the report.
+- This is useful on machines where the frontend/runtime accepts agent hints but
+  does not accept top-level `priority`.
+
 Recommended first run:
 
 Start with a moderate setup that can still show hint differences without
@@ -1480,6 +1490,7 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1520,6 +1531,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1542,6 +1554,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1564,6 +1577,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1633,6 +1647,14 @@ folders under `experiments/reports/retention_threshold_sweeps/` are kept.
 The reports now also carry `retention_attribution_mode`, so you can tell
 whether a row came from the fast latency-only path or the precise attribution
 path.
+
+They also now carry frontend-priority compatibility signals, so you can tell
+whether:
+
+- top-level `priority` was attempted
+- the frontend accepted it
+- the probe had to fall back without it
+- the worker still saw `agent_hints.priority`
 
 How to read the result:
 

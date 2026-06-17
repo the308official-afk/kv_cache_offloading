@@ -1,16 +1,13 @@
+# MISC
 
+Small things worth trying next.
 
+## 1. Check whether this machine accepts top-level priority
 
-./run_dynamo_single_host.sh stop
+This is the fastest way to tell whether the frontend/runtime supports:
 
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-./run_dynamo_single_host.sh start
-
-
+- `priority` at the top level
+- or only `nvext.agent_hints.priority`
 
 ```bash
 cd ~/kv_cache_offloading
@@ -47,5 +44,206 @@ except Exception as e:
         except Exception:
             pass
 PY
-
 ```
+
+If this fails with `Unsupported parameter(s): priority`, use:
+
+```bash
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=auto
+```
+
+for retention experiments.
+
+## 2. Start a clean instrumented Dynamo
+
+Good default startup when you want retention, hint, and runtime evidence.
+
+```bash
+./run_dynamo_single_host.sh stop
+
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
+./run_dynamo_single_host.sh start
+```
+
+Then watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+## 3. Run the simplest retention sweep first
+
+This is the quickest sanity check that the pipeline works end to end.
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+DISTRACTOR_COUNTS="2 10 20" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=200 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+## 4. Compare `light` vs `precise`
+
+Use the same sweep twice:
+
+- once with `RETENTION_ATTRIBUTION_MODE=light`
+- once with `RETENTION_ATTRIBUTION_MODE=precise`
+
+Goal:
+
+- see whether the conclusion changes
+- see whether the runtime overhead is worth it
+
+## 5. Compare `high-priority` vs `high-reuse`
+
+Try the same sweep with:
+
+```bash
+PROTECTED_HINT_PROFILES="high-priority"
+```
+
+and then:
+
+```bash
+PROTECTED_HINT_PROFILES="high-reuse"
+```
+
+Goal:
+
+- check whether priority hints and reuse hints behave differently
+- see which one shows stronger retention separation
+
+## 6. Push the eviction threshold harder
+
+If `2 10 20` is too gentle, try:
+
+```bash
+DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200"
+```
+
+Goal:
+
+- find the exact point where control loses reuse
+- see whether protected survives deeper into the sweep
+
+## 7. Try a more cache-sensitive prompt size
+
+If the run is too easy, increase:
+
+```bash
+PROTECTED_INPUT_LEN=8000
+DISTRACTOR_INPUT_LEN=2000
+```
+
+If the run is too harsh, reduce:
+
+```bash
+PROTECTED_INPUT_LEN=200
+DISTRACTOR_INPUT_LEN=200
+```
+
+Goal:
+
+- find the “middle pressure” regime where hints have room to matter
+
+## 8. Check whether SGLang actually acted on priority
+
+After a retention sweep, look for these columns in:
+
+```text
+experiments/reports/retention_threshold_matrix.csv
+```
+
+Most useful columns:
+
+- `frontend_top_level_priority_compatibility`
+- `worker_hint_status`
+- `worker_priority_mechanism_ready`
+- `worker_priority_path_status`
+- `hint_runtime_effect_status`
+
+What you want to see:
+
+- frontend compatibility is not `unsupported`
+- worker hint status is `full`
+- mechanism ready is `true`
+- priority path status becomes `applied`
+
+## 9. Run the sweep in the background
+
+Useful for long runs.
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=200 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Then monitor:
+
+```bash
+LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/* | head -1)"
+echo "$LATEST_THRESHOLD_SWEEP"
+
+tail -f "$LATEST_THRESHOLD_SWEEP/nohup.log"
+cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
+```
+
+## 10. Try the same sweep on another machine
+
+Best cross-machine comparison knobs:
+
+- same model
+- same `DISTRACTOR_COUNTS`
+- same `PROTECTED_INPUT_LEN`
+- same `DISTRACTOR_INPUT_LEN`
+- same `GPU_ONLY_MEM_FRACTION_STATIC`
+- same `WORKER_BASE_ARGS`
+
+Then compare:
+
+- `worker_kv_capacity_tokens`
+- `a_replay_latency_ms`
+- `a_replay_cached_tokens`
+- `hint_runtime_effect_status`
+
+## 11. Good questions to keep asking
+
+- Does the frontend accept top-level `priority` on this machine?
+- Did the worker actually receive the hint?
+- Did the worker’s priority path apply it?
+- Did replay stay faster than first A?
+- Did cached tokens increase on replay?
+- Did protected survive deeper than control?

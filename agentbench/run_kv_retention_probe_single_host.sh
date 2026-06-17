@@ -20,6 +20,7 @@ IGNORE_EOS="${IGNORE_EOS:-1}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-17146}"
 CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
+RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
 RETENTION_MATRIX_APPEND="${RETENTION_MATRIX_APPEND:-0}"
@@ -471,6 +472,7 @@ run_probe() {
     --request-timeout "${REQUEST_TIMEOUT}"
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
+    --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
@@ -519,6 +521,7 @@ postprocess_probe() {
     --request-timeout "${REQUEST_TIMEOUT}"
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
+    --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --postprocess-only
@@ -746,6 +749,7 @@ init_matrices
   echo "Random output len: ${RANDOM_OUTPUT_LEN}"
   echo "Max context tokens: ${MAX_CONTEXT_TOKENS}"
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
+  echo "Top-level priority mode: ${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
   echo "Mem fraction static: ${MEM_FRACTION_STATIC}"
   echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
   if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then

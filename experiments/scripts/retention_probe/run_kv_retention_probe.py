@@ -97,8 +97,12 @@ REQUEST_COLUMNS = [
     "hint_profile",
     "hints_enabled",
     "agent_hints_priority",
+    "top_level_priority_mode",
+    "top_level_priority_attempted",
     "top_level_priority_sent",
     "top_level_priority_value",
+    "top_level_priority_fallback_used",
+    "top_level_priority_unsupported",
     "prompt_hash",
     "input_len",
     "output_len",
@@ -151,12 +155,20 @@ SUMMARY_COLUMNS = [
     "kv_tokens_left_after_a",
     "kv_tokens_left_after_a_after_first_distractor",
     "a_first_agent_hints_priority",
+    "a_first_top_level_priority_mode",
+    "a_first_top_level_priority_attempted",
     "a_first_top_level_priority_sent",
     "a_first_top_level_priority_value",
+    "a_first_top_level_priority_fallback_used",
+    "a_first_top_level_priority_unsupported",
     "a_first_cached_tokens",
     "a_replay_agent_hints_priority",
+    "a_replay_top_level_priority_mode",
+    "a_replay_top_level_priority_attempted",
     "a_replay_top_level_priority_sent",
     "a_replay_top_level_priority_value",
+    "a_replay_top_level_priority_fallback_used",
+    "a_replay_top_level_priority_unsupported",
     "a_replay_cached_tokens",
     "a_replay_cache_reuse_ratio",
     "a_replay_prompt_tokens",
@@ -225,6 +237,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ignore-eos", action="store_true")
     parser.add_argument("--survival-cache-reuse-threshold", type=float, default=0.8)
     parser.add_argument("--stop-on-error", action="store_true")
+    parser.add_argument(
+        "--top-level-priority-mode",
+        default=os.environ.get("RETENTION_TOP_LEVEL_PRIORITY_MODE", "auto"),
+        choices=("auto", "force", "disable"),
+        help=(
+            "How to handle top-level request priority. "
+            "'auto' tries it and retries once without it if the frontend rejects "
+            "priority, 'force' always sends it, and 'disable' never sends it."
+        ),
+    )
     args = parser.parse_args()
 
     if not args.model:
@@ -351,6 +373,13 @@ def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int
         return 0, None, str(exc)
 
 
+def priority_unsupported(status: int, error: str) -> bool:
+    if status != 400 or not error:
+        return False
+    normalized = error.lower()
+    return "unsupported parameter" in normalized and "priority" in normalized
+
+
 def get_nested(mapping: dict[str, Any], paths: list[tuple[str, ...]]) -> Any:
     for path in paths:
         current: Any = mapping
@@ -421,7 +450,10 @@ def send_probe_request(
     if hints is not None:
         payload["nvext"]["agent_hints"] = hints
     priority = top_level_priority_from_hints(hints)
-    if priority is not None:
+    should_attempt_top_level_priority = (
+        priority is not None and args.top_level_priority_mode != "disable"
+    )
+    if should_attempt_top_level_priority:
         payload["priority"] = priority
     if args.ignore_eos:
         payload["ignore_eos"] = True
@@ -429,6 +461,20 @@ def send_probe_request(
     start = time.perf_counter()
     status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
     latency_ms = (time.perf_counter() - start) * 1000
+    fallback_used = False
+    top_level_priority_unsupported = False
+
+    if (
+        should_attempt_top_level_priority
+        and args.top_level_priority_mode == "auto"
+        and priority_unsupported(status, error)
+    ):
+        fallback_used = True
+        top_level_priority_unsupported = True
+        payload.pop("priority", None)
+        start = time.perf_counter()
+        status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+        latency_ms = (time.perf_counter() - start) * 1000
 
     usage = response_json.get("usage", {}) if isinstance(response_json, dict) else {}
     prompt_tokens = as_int(
@@ -474,8 +520,12 @@ def send_probe_request(
         "hint_profile": hint_profile,
         "hints_enabled": bool(hints),
         "agent_hints_priority": priority if priority is not None else "",
-        "top_level_priority_sent": bool(priority is not None),
+        "top_level_priority_mode": args.top_level_priority_mode,
+        "top_level_priority_attempted": should_attempt_top_level_priority,
+        "top_level_priority_sent": should_attempt_top_level_priority and not fallback_used,
         "top_level_priority_value": priority if priority is not None else "",
+        "top_level_priority_fallback_used": fallback_used,
+        "top_level_priority_unsupported": top_level_priority_unsupported,
         "prompt_hash": prompt_hash,
         "input_len": len(prompt.split()),
         "output_len": args.random_output_len,
@@ -895,12 +945,20 @@ def build_summary(
         "kv_tokens_left_after_a": int_or_empty(kv_tokens_left_after_a),
         "kv_tokens_left_after_a_after_first_distractor": int_or_empty(kv_tokens_left_after_a_after_first_distractor),
         "a_first_agent_hints_priority": int_or_empty(first.get("agent_hints_priority")),
+        "a_first_top_level_priority_mode": first.get("top_level_priority_mode", ""),
+        "a_first_top_level_priority_attempted": truthy(first.get("top_level_priority_attempted")),
         "a_first_top_level_priority_sent": truthy(first.get("top_level_priority_sent")),
         "a_first_top_level_priority_value": int_or_empty(first.get("top_level_priority_value")),
+        "a_first_top_level_priority_fallback_used": truthy(first.get("top_level_priority_fallback_used")),
+        "a_first_top_level_priority_unsupported": truthy(first.get("top_level_priority_unsupported")),
         "a_first_cached_tokens": int_or_empty(first.get("cached_prompt_tokens")),
         "a_replay_agent_hints_priority": int_or_empty(replay.get("agent_hints_priority")),
+        "a_replay_top_level_priority_mode": replay.get("top_level_priority_mode", ""),
+        "a_replay_top_level_priority_attempted": truthy(replay.get("top_level_priority_attempted")),
         "a_replay_top_level_priority_sent": truthy(replay.get("top_level_priority_sent")),
         "a_replay_top_level_priority_value": int_or_empty(replay.get("top_level_priority_value")),
+        "a_replay_top_level_priority_fallback_used": truthy(replay.get("top_level_priority_fallback_used")),
+        "a_replay_top_level_priority_unsupported": truthy(replay.get("top_level_priority_unsupported")),
         "a_replay_cached_tokens": int_or_empty(replay.get("cached_prompt_tokens")),
         "a_replay_cache_reuse_ratio": round_ratio(replay_ratio),
         "a_replay_prompt_tokens": int_or_empty(replay.get("prompt_tokens")),
@@ -954,6 +1012,10 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- first distractor prompt tokens: `{summary['first_distractor_prompt_tokens']}`",
         f"- kv tokens left after A: `{summary['kv_tokens_left_after_a']}`",
         f"- kv tokens left after A and first distractor: `{summary['kv_tokens_left_after_a_after_first_distractor']}`",
+        f"- replay top-level priority mode: `{summary['a_replay_top_level_priority_mode']}`",
+        f"- replay top-level priority attempted: `{summary['a_replay_top_level_priority_attempted']}`",
+        f"- replay top-level priority fallback used: `{summary['a_replay_top_level_priority_fallback_used']}`",
+        f"- replay top-level priority unsupported: `{summary['a_replay_top_level_priority_unsupported']}`",
         f"- replay cached tokens: `{summary['a_replay_cached_tokens']}`",
         f"- replay cache reuse ratio: `{summary['a_replay_cache_reuse_ratio']}`",
         f"- replay SGLang cache events: `{summary['a_replay_sglang_cache_events']}`",

@@ -299,8 +299,16 @@ def build_story_data(
         protected_profile: {parse_int(row.get("distractor_count")): row for row in ordered_rows if row.get("hint_profile") == protected_profile},
     }
 
+    zero_fill_keys = {"a_replay_cached_tokens"}
+
     def values(profile: str, key: str) -> list[float | None]:
-        return [parse_float(profile_rows[profile].get(x, {}).get(key)) for x in x_values]
+        series: list[float | None] = []
+        for x in x_values:
+            parsed = parse_float(profile_rows[profile].get(x, {}).get(key))
+            if parsed is None and key in zero_fill_keys:
+                parsed = 0.0
+            series.append(parsed)
+        return series
 
     def first_non_empty(key: str, profiles: list[str] | None = None) -> str | None:
         active_profiles = profiles or [control_profile, protected_profile]
