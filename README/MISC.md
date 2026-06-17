@@ -12,7 +12,7 @@ WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
 
 
 
-
+```bash
 cd ~/kv_cache_offloading
 
 python3 - <<'PY'
@@ -48,4 +48,4 @@ except Exception as e:
             pass
 PY
 
-xxx
+```

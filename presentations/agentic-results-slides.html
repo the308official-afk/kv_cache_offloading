@@ -458,6 +458,21 @@
     .chart-interpretation li + li {
       margin-top: 6px;
     }
+    .slide-five {
+      --latency-chart-width: 70%;
+      --latency-chart-height: auto;
+    }
+    .slide-five .chart-frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slide-five .chart-frame img {
+      width: var(--latency-chart-width);
+      height: var(--latency-chart-height);
+      max-width: none;
+      object-fit: contain;
+    }
   </style>
 </head>
 <body>
@@ -639,7 +654,7 @@
     </div>
   </section>
 
-  <section class="slide">
+  <section class="slide slide-five">
     <div class="slide-number">05</div>
     <h2 class="title">Latency Response to Increasing Distractors</h2>
     <div class="content">
