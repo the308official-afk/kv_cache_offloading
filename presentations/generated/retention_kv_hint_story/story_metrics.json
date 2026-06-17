@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-17T15:22:40",
+  "generated_at": "2026-06-17T16:32:20",
   "report_path": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/retention_threshold_matrix--worked.csv",
   "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
   "kv_tier_mode": "gpu_only",

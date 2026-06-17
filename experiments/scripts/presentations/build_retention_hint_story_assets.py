@@ -16,9 +16,14 @@ def parse_args() -> argparse.Namespace:
         description="Generate SVG + story data assets for the KV retention hint slides."
     )
     parser.add_argument(
+        "report_path",
+        nargs="?",
+        help="Exact path to the retention report CSV to visualize",
+    )
+    parser.add_argument(
         "--input",
-        default="experiments/reports/retention_threshold_matrix.csv",
-        help="Path to retention_threshold_matrix.csv",
+        default=None,
+        help="Backward-compatible alias for report_path",
     )
     parser.add_argument(
         "--output-dir",
@@ -478,7 +483,11 @@ def write_story_assets(story: dict[str, object], output_dir: Path) -> None:
 
 def main() -> int:
     args = parse_args()
-    report_path = Path(args.input)
+    report_arg = args.report_path or args.input
+    if not report_arg:
+        raise SystemExit("Provide the exact report CSV path as report_path (or use --input for backward compatibility).")
+
+    report_path = Path(report_arg)
     output_dir = Path(args.output_dir)
 
     rows = load_rows(report_path)
