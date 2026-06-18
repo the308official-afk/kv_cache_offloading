@@ -611,3 +611,11 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+```bash
+LATEST=$(ls -td experiments/raw/agentbench/results/* | head -1)
+
+python3 experiments/scripts/agentbench_report/build_run_report.py \
+  --agentbench-result-dir "$LATEST" \
+  --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
+```
