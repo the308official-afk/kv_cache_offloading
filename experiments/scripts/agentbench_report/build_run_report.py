@@ -1644,6 +1644,39 @@ def model_behavior_tool_summary(result_dir: Path) -> dict[str, Any]:
     }
 
 
+def prompt_evolution_model_behavior_summary(result_dir: Path) -> dict[str, Any]:
+    report = load_json(result_dir / "prompt_evolution_report.json", {})
+    stages = report.get("stages")
+    if not isinstance(stages, list):
+        return {
+            "tool_call_count": 0,
+            "tool_names": [],
+            "char_delta": None,
+            "source": "unavailable",
+        }
+
+    stage = next(
+        (item for item in stages if isinstance(item, dict) and item.get("stage") == "model_behavior"),
+        {},
+    )
+    result_summary = str(stage.get("result_summary") or "")
+    key_facts = str(stage.get("key_facts") or "")
+    text = " | ".join(part for part in (result_summary, key_facts) if part)
+
+    count_match = re.search(r"observed_tool_calls=(\d+)", text)
+    tools_match = re.search(r"tools_used=([^|]+)", text)
+    tool_names = [item.strip() for item in str(tools_match.group(1) if tools_match else "").split(",") if item.strip()]
+    tool_names = [item for item in tool_names if item != "-"]
+    tool_count = as_int(count_match.group(1)) if count_match else len(tool_names)
+
+    return {
+        "tool_call_count": tool_count,
+        "tool_names": tool_names,
+        "char_delta": stage.get("char_delta"),
+        "source": "prompt_evolution_report.json:model_behavior",
+    }
+
+
 def summarize_step_tools(step_results: list[dict[str, Any]]) -> dict[str, Any]:
     phase_counts: dict[str, int] = Counter()
     phase_tools: dict[str, list[str]] = defaultdict(list)
@@ -2135,6 +2168,42 @@ def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
         if as_int(phase.get("tool_call_count")) > 0
     ]
 
+    result_dir = resolve_agentbench_result_dir(report_dir, run)
+    prompt_behavior = (
+        prompt_evolution_model_behavior_summary(result_dir)
+        if result_dir and result_dir.exists()
+        else {
+            "tool_call_count": 0,
+            "tool_names": [],
+            "char_delta": None,
+            "source": "unavailable",
+        }
+    )
+
+    execution_phase_tool_calls = as_int(execution_phase.get("tool_call_count"))
+    execution_phase_tools = execution_phase.get("tools_used", "none")
+    execution_phase_breakdown_text = phase_tool_breakdown(execution_phase, "execution")
+    execution_phase_source = str(execution_phase.get("tool_source") or "")
+
+    # Fallback for runs where prompt-evolution captured tool activity but the
+    # phase summary did not preserve execution-phase tool progress.
+    if execution_phase_tool_calls <= 0 and prompt_behavior.get("tool_call_count", 0) > 0:
+        execution_phase_tool_calls = as_int(prompt_behavior.get("tool_call_count"))
+        execution_tool_names = list_from_any(prompt_behavior.get("tool_names"))
+        execution_phase_tools = display_tools(execution_tool_names)
+        execution_phase_breakdown_text = phase_tool_breakdown(
+            {
+                "tool_call_count": execution_phase_tool_calls,
+                "tools_used": execution_phase_tools,
+            },
+            "execution",
+        )
+        execution_phase_source = str(prompt_behavior.get("source") or "prompt_evolution_report.json:model_behavior")
+
+    total_tool_calls = as_int(run.get("tool_call_count"))
+    if total_tool_calls <= 0 and execution_phase_tool_calls > 0:
+        total_tool_calls = execution_phase_tool_calls
+
     return {
         "run_id": run.get("run_id"),
         "run_short": run.get("run_short"),
@@ -2146,9 +2215,11 @@ def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
         "execution_steps": run.get("execution_subrequests"),
         "planning_tool_calls": as_int(planning_phase.get("tool_call_count")),
         "planning_tools": planning_phase.get("tools_used", "none"),
-        "execution_phase_tool_calls": as_int(execution_phase.get("tool_call_count")),
-        "execution_phase_tools": execution_phase.get("tools_used", "none"),
-        "execution_phase_breakdown": phase_tool_breakdown(execution_phase, "execution"),
+        "execution_phase_tool_calls": execution_phase_tool_calls,
+        "execution_phase_tools": execution_phase_tools,
+        "execution_phase_breakdown": execution_phase_breakdown_text,
+        "execution_phase_source": execution_phase_source,
+        "execution_size_change": prompt_behavior.get("char_delta"),
         "patch_generation_tool_calls": as_int(patch_generation_phase.get("tool_call_count")),
         "patch_generation_tools": patch_generation_phase.get("tools_used", "none"),
         "review_tool_calls": as_int(review_phase.get("tool_call_count")),
@@ -2156,7 +2227,7 @@ def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
         "other_phase_tool_calls": other_tool_count,
         "other_phase_tools": display_tools(other_tools),
         "other_phase_breakdown": "; ".join(other_phase_breakdowns) if other_phase_breakdowns else "none",
-        "total_tool_calls": run.get("tool_call_count"),
+        "total_tool_calls": total_tool_calls,
         "patch_bytes": run.get("patch_bytes"),
         "patch": run.get("patch"),
         "patch_nonempty": run.get("patch_nonempty"),
@@ -2207,6 +2278,7 @@ def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any
         "Steps",
         "Planning",
         "Execution",
+        "Exec Size Δ",
         "Patch Gen",
         "Review",
         "Other",
@@ -2232,6 +2304,7 @@ def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any
                         row.get("execution_phase_tool_calls"),
                         row.get("execution_phase_tools"),
                     ),
+                    "Exec Size Δ": row.get("execution_size_change", ""),
                     "Patch Gen": prompt_evolution_phase_cell(
                         row.get("patch_generation_tool_calls"),
                         row.get("patch_generation_tools"),
