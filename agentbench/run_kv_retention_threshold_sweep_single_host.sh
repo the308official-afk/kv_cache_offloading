@@ -12,12 +12,15 @@ DISTRACTOR_COUNTS="${DISTRACTOR_COUNTS:-25 50 75 100 125 150}"
 KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
+CONTROL_CACHE_CONTROL_PROFILE="${CONTROL_CACHE_CONTROL_PROFILE:-off}"
+PROTECTED_CACHE_CONTROL_PROFILES="${PROTECTED_CACHE_CONTROL_PROFILES:-off}"
 PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN:-14000}"
 DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN:-14000}"
 RANDOM_OUTPUT_LEN="${RANDOM_OUTPUT_LEN:-1}"
 MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-17146}"
 CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 GPU_ONLY_MEM_FRACTION_STATIC="${GPU_ONLY_MEM_FRACTION_STATIC:-0.62}"
+CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
 STOP_ON_PROBE_FAILURE="${STOP_ON_PROBE_FAILURE:-0}"
@@ -60,6 +63,14 @@ Examples:
   PROTECTED_HINT_PROFILES="high-priority" \\
   GPU_ONLY_MEM_FRACTION_STATIC=0.62 \\
   SGLANG_TRANSFER_LOG_PROFILE=full \\
+  $0 Qwen/Qwen2.5-Coder-7B-Instruct
+
+  RETENTION_ATTRIBUTION_MODE=light \\
+  DISTRACTOR_COUNTS="2 10 20" \\
+  CONTROL_HINT_PROFILE=none \\
+  PROTECTED_HINT_PROFILES=none \\
+  CONTROL_CACHE_CONTROL_PROFILE=off \\
+  PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \\
   $0 Qwen/Qwen2.5-Coder-7B-Instruct
 
 This runs the retention probe repeatedly with rising distractor counts, then
@@ -178,6 +189,7 @@ rebuild_threshold_reports() {
     --out-comparison "${SWEEP_COMPARISON}" \
     --out-summary-md "${SWEEP_SUMMARY}" \
     --control-hint-profile "${CONTROL_HINT_PROFILE}" \
+    --control-cache-control-profile "${CONTROL_CACHE_CONTROL_PROFILE}" \
     --match-event-min "${RETENTION_MATCH_EVENT_MIN}" \
     --min-speedup-ratio "${RETENTION_MIN_SPEEDUP_RATIO}" \
     --min-latency-gain-ms "${RETENTION_MIN_LATENCY_GAIN_MS}" \
@@ -209,6 +221,8 @@ init_progress_file
   echo "KV tier modes: ${KV_TIER_MODES}"
   echo "Control hint profile: ${CONTROL_HINT_PROFILE}"
   echo "Protected hint profiles: ${PROTECTED_HINT_PROFILES}"
+  echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
+  echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor counts: ${DISTRACTOR_COUNTS}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"
@@ -216,6 +230,7 @@ init_progress_file
   echo "Max context tokens: ${MAX_CONTEXT_TOKENS}"
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
   echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
+  echo "Default cache-control TTL: ${CACHE_CONTROL_EPHEMERAL_TTL}"
   echo "SGLang transfer log profile: ${SGLANG_TRANSFER_LOG_PROFILE}"
   echo "Output dir: ${SWEEP_DIR}"
   echo

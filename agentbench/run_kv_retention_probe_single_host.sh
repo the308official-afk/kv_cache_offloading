@@ -15,6 +15,8 @@ RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE:-precise}"
 KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
+CONTROL_CACHE_CONTROL_PROFILE="${CONTROL_CACHE_CONTROL_PROFILE:-off}"
+PROTECTED_CACHE_CONTROL_PROFILES="${PROTECTED_CACHE_CONTROL_PROFILES:-off}"
 PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN:-14000}"
 DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN:-14000}"
 DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-100}"
@@ -25,6 +27,7 @@ REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-17146}"
 CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
+CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
 RETENTION_MATRIX_APPEND="${RETENTION_MATRIX_APPEND:-0}"
@@ -398,7 +401,7 @@ PY
 
 init_progress_file() {
   if [[ ! -f "${BATCH_PROGRESS}" ]]; then
-    printf '%s\n' "retention_probe_id,retention_attribution_mode,model,kv_tier_mode,hint_profile,run_id,status,summary_csv,requests_csv" > "${BATCH_PROGRESS}"
+    printf '%s\n' "retention_probe_id,retention_attribution_mode,model,kv_tier_mode,hint_profile,cache_control_profile,arm_role,run_id,status,summary_csv,requests_csv" > "${BATCH_PROGRESS}"
   fi
 }
 
@@ -413,12 +416,14 @@ append_progress() {
   local model="$1"
   local kv_tier_mode="$2"
   local hint_profile="$3"
-  local run_id="$4"
-  local status="$5"
+  local cache_control_profile="$4"
+  local arm_role="$5"
+  local run_id="$6"
+  local status="$7"
   local summary_csv="experiments/reports/retention_probe/${run_id}/retention_probe_summary.csv"
   local requests_csv="experiments/reports/retention_probe/${run_id}/retention_probe_requests.csv"
 
-  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${RETENTION_PROBE_ID}" "${RETENTION_ATTRIBUTION_MODE}" "${model}" "${kv_tier_mode}" "${hint_profile}" "${run_id}" "${status}" "${summary_csv}" "${requests_csv}"
+  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${RETENTION_PROBE_ID}" "${RETENTION_ATTRIBUTION_MODE}" "${model}" "${kv_tier_mode}" "${hint_profile}" "${cache_control_profile}" "${arm_role}" "${run_id}" "${status}" "${summary_csv}" "${requests_csv}"
 import csv
 import sys
 from pathlib import Path
@@ -430,10 +435,12 @@ row = {
     "model": sys.argv[4],
     "kv_tier_mode": sys.argv[5],
     "hint_profile": sys.argv[6],
-    "run_id": sys.argv[7],
-    "status": sys.argv[8],
-    "summary_csv": sys.argv[9],
-    "requests_csv": sys.argv[10],
+    "cache_control_profile": sys.argv[7],
+    "arm_role": sys.argv[8],
+    "run_id": sys.argv[9],
+    "status": sys.argv[10],
+    "summary_csv": sys.argv[11],
+    "requests_csv": sys.argv[12],
 }
 fields = [
     "retention_probe_id",
@@ -441,6 +448,8 @@ fields = [
     "model",
     "kv_tier_mode",
     "hint_profile",
+    "cache_control_profile",
+    "arm_role",
     "run_id",
     "status",
     "summary_csv",
@@ -455,8 +464,10 @@ run_probe() {
   local model="$1"
   local kv_tier_mode="$2"
   local hint_profile="$3"
-  local run_id="$4"
-  local worker_runtime_log="$5"
+  local cache_control_profile="$4"
+  local arm_role="$5"
+  local run_id="$6"
+  local worker_runtime_log="$7"
   local -a command
 
   command=(
@@ -468,6 +479,8 @@ run_probe() {
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
+    --protected-cache-control-profile "${cache_control_profile}"
+    --distractor-cache-control-profile off
     --protected-input-len "${PROTECTED_INPUT_LEN}"
     --distractor-input-len "${DISTRACTOR_INPUT_LEN}"
     --distractor-count "${DISTRACTOR_COUNT}"
@@ -486,13 +499,13 @@ run_probe() {
     command+=(--ignore-eos)
   fi
 
-  echo "Running retention probe: model=${model} kv_tier=${kv_tier_mode} hint_profile=${hint_profile} run_id=${run_id}" | tee -a "${BATCH_LOG}"
+  echo "Running retention probe: model=${model} kv_tier=${kv_tier_mode} hint_profile=${hint_profile} cache_control_profile=${cache_control_profile} arm_role=${arm_role} run_id=${run_id}" | tee -a "${BATCH_LOG}"
   if "${command[@]}" 2>&1 | tee -a "${BATCH_LOG}"; then
-    append_progress "${model}" "${kv_tier_mode}" "${hint_profile}" "${run_id}" "ok"
+    append_progress "${model}" "${kv_tier_mode}" "${hint_profile}" "${cache_control_profile}" "${arm_role}" "${run_id}" "ok"
     return 0
   fi
 
-  append_progress "${model}" "${kv_tier_mode}" "${hint_profile}" "${run_id}" "failed"
+  append_progress "${model}" "${kv_tier_mode}" "${hint_profile}" "${cache_control_profile}" "${arm_role}" "${run_id}" "failed"
   if [[ "${STOP_ON_PROBE_FAILURE}" = "1" ]]; then
     echo "Probe failed and STOP_ON_PROBE_FAILURE=1." >&2
     exit 1
@@ -504,8 +517,9 @@ postprocess_probe() {
   local model="$1"
   local kv_tier_mode="$2"
   local hint_profile="$3"
-  local run_id="$4"
-  local worker_runtime_log="$5"
+  local cache_control_profile="$4"
+  local run_id="$5"
+  local worker_runtime_log="$6"
   local -a command
 
   command=(
@@ -517,6 +531,8 @@ postprocess_probe() {
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
+    --protected-cache-control-profile "${cache_control_profile}"
+    --distractor-cache-control-profile off
     --protected-input-len "${PROTECTED_INPUT_LEN}"
     --distractor-input-len "${DISTRACTOR_INPUT_LEN}"
     --distractor-count "${DISTRACTOR_COUNT}"
@@ -589,13 +605,15 @@ with matrix_path.open("w", encoding="utf-8", newline="") as handle:
 PY
 }
 
-iter_hint_profiles() {
-  printf '%s\n' "${CONTROL_HINT_PROFILE}"
+iter_probe_arms() {
+  printf 'control\t%s\t%s\n' "${CONTROL_HINT_PROFILE}" "${CONTROL_CACHE_CONTROL_PROFILE}"
   for hint_profile in ${PROTECTED_HINT_PROFILES}; do
-    if [[ "${hint_profile}" = "${CONTROL_HINT_PROFILE}" ]]; then
-      continue
-    fi
-    printf '%s\n' "${hint_profile}"
+    for cache_control_profile in ${PROTECTED_CACHE_CONTROL_PROFILES}; do
+      if [[ "${hint_profile}" = "${CONTROL_HINT_PROFILE}" && "${cache_control_profile}" = "${CONTROL_CACHE_CONTROL_PROFILE}" ]]; then
+        continue
+      fi
+      printf 'protected\t%s\t%s\n' "${hint_profile}" "${cache_control_profile}"
+    done
   done
 }
 
@@ -693,6 +711,7 @@ if progress_path.exists():
 models = sorted({row.get("model", "") for row in progress_rows if row.get("model")})
 tiers = sorted({row.get("kv_tier_mode", "") for row in progress_rows if row.get("kv_tier_mode")})
 profiles = sorted({row.get("hint_profile", "") for row in progress_rows if row.get("hint_profile")})
+cache_profiles = sorted({row.get("cache_control_profile", "") for row in progress_rows if row.get("cache_control_profile")})
 ok = sum(1 for row in progress_rows if row.get("status") == "ok")
 failed = sum(1 for row in progress_rows if row.get("status") == "failed")
 
@@ -705,6 +724,7 @@ lines = [
     f"- Models: {', '.join(models) if models else 'none'}",
     f"- KV tier modes: {', '.join(tiers) if tiers else 'none'}",
     f"- Hint profiles: {', '.join(profiles) if profiles else 'none'}",
+    f"- Cache-control profiles: {', '.join(cache_profiles) if cache_profiles else 'none'}",
     "",
     "## Results",
     "",
@@ -747,6 +767,8 @@ init_matrices
   echo "KV tier modes: ${KV_TIER_MODES}"
   echo "Control hint profile: ${CONTROL_HINT_PROFILE}"
   echo "Protected hint profiles: ${PROTECTED_HINT_PROFILES}"
+  echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
+  echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"
@@ -754,6 +776,7 @@ init_matrices
   echo "Max context tokens: ${MAX_CONTEXT_TOKENS}"
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
   echo "Top-level priority mode: ${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
+  echo "Default cache-control TTL: ${CACHE_CONTROL_EPHEMERAL_TTL}"
   echo "Mem fraction static: ${MEM_FRACTION_STATIC}"
   echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
   if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
@@ -780,23 +803,24 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
       echo "Each hint profile below gets a fresh Dynamo restart so cache state stays isolated."
     } | tee -a "${BATCH_LOG}"
 
-    while IFS= read -r HINT_PROFILE; do
+    while IFS=$'\t' read -r ARM_ROLE HINT_PROFILE CACHE_CONTROL_PROFILE; do
       [[ -n "${HINT_PROFILE}" ]] || continue
       HINT_SAFE_NAME="$(safe_name "${HINT_PROFILE}")"
+      CACHE_CONTROL_SAFE_NAME="$(safe_name "${CACHE_CONTROL_PROFILE}")"
       CURRENT_FILE_STORAGE_PATH=""
       CURRENT_HOST_FILE_STORAGE_PATH=""
-      SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_smoke_test.log"
-      WORKER_RUNTIME_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_worker_runtime.log"
+      SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_smoke_test.log"
+      WORKER_RUNTIME_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_worker_runtime.log"
 
       if [[ "${KV_TIER_MODE}" = "gpu_cpu_storage" ]]; then
         CURRENT_FILE_STORAGE_PATH="${FILE_STORAGE_PATH}"
-        CURRENT_HOST_FILE_STORAGE_PATH="$(storage_host_path_for_mode "${MODEL_SAFE_NAME}" "${KV_TIER_MODE}" "${HINT_SAFE_NAME}")"
+        CURRENT_HOST_FILE_STORAGE_PATH="$(storage_host_path_for_mode "${MODEL_SAFE_NAME}" "${KV_TIER_MODE}" "${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}")"
         rm -rf "${CURRENT_HOST_FILE_STORAGE_PATH}" 2>/dev/null || true
         mkdir -p "${CURRENT_HOST_FILE_STORAGE_PATH}" 2>/dev/null || true
       fi
 
       {
-        echo "--- Hint profile: ${HINT_PROFILE} (fresh start) ---"
+        echo "--- Arm role: ${ARM_ROLE} | Hint profile: ${HINT_PROFILE} | Cache-control profile: ${CACHE_CONTROL_PROFILE} (fresh start) ---"
       } | tee -a "${BATCH_LOG}"
 
       start_dynamo_for_profile \
@@ -808,15 +832,17 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         "${CURRENT_FILE_STORAGE_PATH}" \
         "${SMOKE_LOG}"
 
-      RUN_ID_SUFFIX="${HINT_SAFE_NAME}"
-      if [[ "${HINT_PROFILE}" = "${CONTROL_HINT_PROFILE}" ]]; then
-        RUN_ID_SUFFIX="${HINT_SAFE_NAME}_control"
+      RUN_ID_SUFFIX="${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}"
+      if [[ "${ARM_ROLE}" = "control" ]]; then
+        RUN_ID_SUFFIX="${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_control"
       fi
 
       run_probe \
         "${MODEL_NAME}" \
         "${KV_TIER_MODE}" \
         "${HINT_PROFILE}" \
+        "${CACHE_CONTROL_PROFILE}" \
+        "${ARM_ROLE}" \
         "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
         "${WORKER_RUNTIME_LOG}"
 
@@ -827,12 +853,13 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
           "${MODEL_NAME}" \
           "${KV_TIER_MODE}" \
           "${HINT_PROFILE}" \
+          "${CACHE_CONTROL_PROFILE}" \
           "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
           "${WORKER_RUNTIME_LOG}"
       else
         echo "Warning: could not capture worker runtime log for ${HINT_PROFILE}" | tee -a "${BATCH_LOG}"
       fi
-    done < <(iter_hint_profiles)
+    done < <(iter_probe_arms)
   done
 done
 

@@ -730,6 +730,37 @@ HINT_PROFILE=high-reuse \
 ./agentbench/run_swebench_batch_single_host.sh
 ```
 
+### Prompt Evolution Batch
+
+Use this when your main goal is to generate prompt-evolution reports across a
+range of SWE-bench Pro tasks.
+
+```bash
+cd ~/kv_cache_offloading
+
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=1
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
+START_INDEX=0 \
+END_INDEX=5 \
+HINT_PROFILE=high-reuse \
+HINT_PROVIDER=agentbench \
+FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+MODEL="$MODEL_NAME" \
+./agentbench/run_swebench_batch_single_host.sh
+```
+
+This produces prompt-evolution summaries such as:
+
+```bash
+cat experiments/reports/prompt_evolution_task_summary.csv
+cat experiments/reports/prompt_evolution_run_overview.csv
+```
+
 Batch outputs:
 
 ```text
@@ -1451,6 +1482,8 @@ Use this when you want to answer:
 - at what distractor count does prompt A stop surviving for `none`?
 - at what distractor count does prompt A stop surviving for `high-priority`?
 - do those thresholds differ enough to suggest the hint is actually respected?
+- later, does explicit `cache_control` keep A alive longer than no
+  `cache_control` under the same pressure?
 
 This sweep is also automated in two modes:
 
@@ -1486,6 +1519,13 @@ export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
 
 That keeps the experiment on the canonical hint path only and avoids the
 top-level `priority` bad-request error entirely.
+
+Cache-control variant:
+
+- `CONTROL_CACHE_CONTROL_PROFILE=off` means ordinary behavior.
+- `PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h"` means the protected A
+  requests are sent with `nvext.cache_control = {"type":"ephemeral","ttl":"1h"}`.
+- This lets you test explicit cache retention separately from priority hints.
 
 Recommended first run:
 
@@ -1523,6 +1563,36 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+Cache-control sweep of the same idea:
+
+```bash
+cd ~/kv_cache_offloading
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+DISTRACTOR_COUNTS="2 10 20" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
+PROTECTED_INPUT_LEN=8000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+That second sweep answers a different question:
+
+- priority sweep: does the protected request survive longer because of a
+  stronger priority hint?
+- cache-control sweep: does the protected request survive longer because the
+  frontend asked for explicit cache retention?
 
 Canonical-hint-only variant for machines that reject top-level `priority`:
 

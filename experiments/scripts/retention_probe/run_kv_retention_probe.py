@@ -35,6 +35,7 @@ RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 DEFAULT_PROBE_INPUT_LEN = 14000
 DEFAULT_MAX_CONTEXT_TOKENS = 17146
+DEFAULT_CACHE_CONTROL_EPHEMERAL_TTL = os.environ.get("CACHE_CONTROL_EPHEMERAL_TTL", "1h")
 
 DEFAULT_HINTS: dict[str, Any] = {
     "priority": 5,
@@ -87,6 +88,7 @@ HINT_PROFILES: dict[str, dict[str, Any]] = {
 }
 
 NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
+CACHE_CONTROL_OFF_PROFILES = {"", "none", "off", "disable", "disabled", "no-cache-control", "no_cache_control"}
 
 
 REQUEST_COLUMNS = [
@@ -97,6 +99,9 @@ REQUEST_COLUMNS = [
     "hint_profile",
     "hints_enabled",
     "agent_hints_priority",
+    "cache_control_profile",
+    "cache_control_type",
+    "cache_control_ttl",
     "top_level_priority_mode",
     "top_level_priority_attempted",
     "top_level_priority_sent",
@@ -137,6 +142,8 @@ SUMMARY_COLUMNS = [
     "kv_tier_mode",
     "protected_hint_profile",
     "distractor_hint_profile",
+    "protected_cache_control_profile",
+    "distractor_cache_control_profile",
     "protected_input_len",
     "distractor_input_len",
     "distractor_count",
@@ -226,6 +233,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--protected-hint-profile", default="high-priority")
     parser.add_argument("--distractor-hint-profile", default="none")
+    parser.add_argument(
+        "--protected-cache-control-profile",
+        default=os.environ.get("PROTECTED_CACHE_CONTROL_PROFILE", "off"),
+        help="Cache-control profile for protected A requests. Examples: off, ephemeral, ephemeral:1h",
+    )
+    parser.add_argument(
+        "--distractor-cache-control-profile",
+        default=os.environ.get("DISTRACTOR_CACHE_CONTROL_PROFILE", "off"),
+        help="Cache-control profile for distractor requests. Examples: off, ephemeral, ephemeral:1h",
+    )
+    parser.add_argument(
+        "--default-cache-control-ttl",
+        default=os.environ.get("CACHE_CONTROL_EPHEMERAL_TTL", DEFAULT_CACHE_CONTROL_EPHEMERAL_TTL),
+        help="Default TTL used when cache-control profile is 'ephemeral' without an explicit ':ttl' suffix.",
+    )
     parser.add_argument("--kv-tier-mode", default=os.environ.get("KV_TIER_MODE", os.environ.get("KV_TIER_MODES", "")))
     parser.add_argument("--request-timeout", type=float, default=600.0)
     parser.add_argument(
@@ -340,6 +362,7 @@ def request_context(
     sequence_index: int,
     prompt_hash: str,
     hint_profile: str,
+    cache_control_profile: str,
 ) -> dict[str, Any]:
     return {
         "request_id": f"{run_id}::{request_role}::{sequence_index}",
@@ -351,7 +374,32 @@ def request_context(
         "app_variant": "synthetic_retention_probe",
         "prompt_hash": prompt_hash,
         "hint_profile": hint_profile,
+        "cache_control_profile": cache_control_profile,
     }
+
+
+def build_cache_control(
+    profile: str,
+    *,
+    default_ttl: str,
+) -> tuple[dict[str, Any] | None, str, str, str]:
+    normalized = profile.strip()
+    lowered = normalized.lower()
+    if lowered in CACHE_CONTROL_OFF_PROFILES:
+        return None, "off", "", ""
+    if lowered == "ephemeral":
+        ttl = default_ttl.strip()
+        if not ttl:
+            raise SystemExit("CACHE_CONTROL_EPHEMERAL_TTL / --default-cache-control-ttl must be non-empty")
+        return {"type": "ephemeral", "ttl": ttl}, f"ephemeral:{ttl}", "ephemeral", ttl
+    if lowered.startswith("ephemeral:"):
+        ttl = normalized.split(":", 1)[1].strip()
+        if not ttl:
+            raise SystemExit(f"Invalid cache-control profile {profile!r}; expected ephemeral:<ttl>")
+        return {"type": "ephemeral", "ttl": ttl}, f"ephemeral:{ttl}", "ephemeral", ttl
+    raise SystemExit(
+        f"Unknown cache-control profile {profile!r}. Use one of: off, ephemeral, ephemeral:<ttl>"
+    )
 
 
 def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str]:
@@ -424,6 +472,7 @@ def send_probe_request(
     request_role: str,
     prompt: str,
     hint_profile: str,
+    cache_control_profile: str,
 ) -> dict[str, Any]:
     prompt_hash = short_hash(prompt)
     hints = build_hints(
@@ -439,6 +488,11 @@ def send_probe_request(
         sequence_index=sequence_index,
         prompt_hash=prompt_hash,
         hint_profile=hint_profile,
+        cache_control_profile=cache_control_profile,
+    )
+    cache_control, normalized_cache_control_profile, cache_control_type, cache_control_ttl = build_cache_control(
+        cache_control_profile,
+        default_ttl=args.default_cache_control_ttl,
     )
     payload: dict[str, Any] = {
         "model": args.model,
@@ -449,6 +503,8 @@ def send_probe_request(
     }
     if hints is not None:
         payload["nvext"]["agent_hints"] = hints
+    if cache_control is not None:
+        payload["nvext"]["cache_control"] = cache_control
     priority = top_level_priority_from_hints(hints)
     should_attempt_top_level_priority = (
         priority is not None and args.top_level_priority_mode != "disable"
@@ -520,6 +576,9 @@ def send_probe_request(
         "hint_profile": hint_profile,
         "hints_enabled": bool(hints),
         "agent_hints_priority": priority if priority is not None else "",
+        "cache_control_profile": normalized_cache_control_profile,
+        "cache_control_type": cache_control_type,
+        "cache_control_ttl": cache_control_ttl,
         "top_level_priority_mode": args.top_level_priority_mode,
         "top_level_priority_attempted": should_attempt_top_level_priority,
         "top_level_priority_sent": should_attempt_top_level_priority and not fallback_used,
@@ -927,6 +986,8 @@ def build_summary(
         "kv_tier_mode": args.kv_tier_mode,
         "protected_hint_profile": args.protected_hint_profile,
         "distractor_hint_profile": args.distractor_hint_profile,
+        "protected_cache_control_profile": first.get("cache_control_profile", ""),
+        "distractor_cache_control_profile": first_distractor.get("cache_control_profile", ""),
         "protected_input_len": args.protected_input_len,
         "distractor_input_len": args.distractor_input_len,
         "distractor_count": args.distractor_count,
@@ -996,6 +1057,8 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- kv_tier_mode: `{summary['kv_tier_mode']}`",
         f"- protected_hint_profile: `{summary['protected_hint_profile']}`",
         f"- distractor_hint_profile: `{summary['distractor_hint_profile']}`",
+        f"- protected_cache_control_profile: `{summary['protected_cache_control_profile']}`",
+        f"- distractor_cache_control_profile: `{summary['distractor_cache_control_profile']}`",
         f"- distractor_count: `{summary['distractor_count']}`",
         "",
         "## A Prompt Replay",
@@ -1064,8 +1127,8 @@ def main() -> int:
         protected_prompt = make_prompt(role="protected_A", target_len=args.protected_input_len, seed=args.seed)
         rows: list[dict[str, Any]] = []
 
-        sequence: list[tuple[str, str, str]] = [
-            ("a_first", protected_prompt, args.protected_hint_profile),
+        sequence: list[tuple[str, str, str, str]] = [
+            ("a_first", protected_prompt, args.protected_hint_profile, args.protected_cache_control_profile),
         ]
         for idx in range(args.distractor_count):
             distractor = make_prompt(
@@ -1073,16 +1136,31 @@ def main() -> int:
                 target_len=args.distractor_input_len,
                 seed=args.seed,
             )
-            sequence.append((f"distractor_{idx:04d}", distractor, args.distractor_hint_profile))
-        sequence.append(("a_replay", protected_prompt, args.protected_hint_profile))
+            sequence.append(
+                (
+                    f"distractor_{idx:04d}",
+                    distractor,
+                    args.distractor_hint_profile,
+                    args.distractor_cache_control_profile,
+                )
+            )
+        sequence.append(("a_replay", protected_prompt, args.protected_hint_profile, args.protected_cache_control_profile))
 
         print(f"KV retention probe run_id={run_id}")
         print(f"model={args.model}")
         print(f"prompt_generator_version={PROMPT_GENERATOR_VERSION}")
-        print(f"requests={len(sequence)} protected_hint_profile={args.protected_hint_profile}")
+        print(
+            "requests="
+            f"{len(sequence)} protected_hint_profile={args.protected_hint_profile} "
+            f"protected_cache_control_profile={args.protected_cache_control_profile}"
+        )
 
-        for sequence_index, (request_role, prompt, hint_profile) in enumerate(sequence):
-            print(f"[{sequence_index + 1}/{len(sequence)}] {request_role} hint_profile={hint_profile}", flush=True)
+        for sequence_index, (request_role, prompt, hint_profile, cache_control_profile) in enumerate(sequence):
+            print(
+                f"[{sequence_index + 1}/{len(sequence)}] {request_role} "
+                f"hint_profile={hint_profile} cache_control_profile={cache_control_profile}",
+                flush=True,
+            )
             row = send_probe_request(
                 args=args,
                 run_id=run_id,
@@ -1090,6 +1168,7 @@ def main() -> int:
                 request_role=request_role,
                 prompt=prompt,
                 hint_profile=hint_profile,
+                cache_control_profile=cache_control_profile,
             )
             rows.append(row)
             if row["error"]:
