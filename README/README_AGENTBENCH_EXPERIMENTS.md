@@ -1703,6 +1703,30 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This has proved to work in GH200, showing KV cache retention from provided priority hints
+
+```bash
+cd ~/kv_cache_offloading-v5
+
+export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
+
+RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+DISTRACTOR_COUNTS="200" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES="high-priority" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
 That prints:
 
 - the sweep id
