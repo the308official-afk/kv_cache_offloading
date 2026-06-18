@@ -735,6 +735,8 @@ HINT_PROFILE=high-reuse \
 Use this when your main goal is to generate prompt-evolution reports across a
 range of SWE-bench Pro tasks.
 
+Manual version:
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -752,6 +754,34 @@ HINT_PROVIDER=agentbench \
 FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
 MODEL="$MODEL_NAME" \
 ./agentbench/run_swebench_batch_single_host.sh
+```
+
+Automated version: stop Dynamo, restart it with the chosen model, wait for
+`/v1/models`, run a smoke test, then launch the batch.
+
+```bash
+cd ~/kv_cache_offloading
+
+export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export AGENTBENCH_EXECUTION_LOOP=0
+export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
+export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
+export AGENTBENCH_EXECUTION_GUARD=1
+export AGENTBENCH_PRINT_CHECKPOINTS=0
+
+START_INDEX=0 \
+END_INDEX=5 \
+HINT_PROFILE=high-reuse \
+HINT_PROVIDER=agentbench \
+FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+./agentbench/run_prompt_evolution_batch_single_host.sh \
+  "$MODEL_NAME"
+```
+
+To watch the worker after the restart:
+
+```bash
+docker logs -f dynamo-sglang-worker
 ```
 
 This produces prompt-evolution summaries such as:
