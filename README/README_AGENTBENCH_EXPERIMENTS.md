@@ -759,6 +759,16 @@ MODEL="$MODEL_NAME" \
 Automated version: stop Dynamo, restart it with the chosen model, wait for
 `/v1/models`, run a smoke test, then launch the batch.
 
+For larger models such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`, set a longer
+smoke-test window first. For this wrapper, the important knobs are the
+`MODEL_SMOKE_*` settings below.
+
+```bash
+export MODEL_SMOKE_RETRIES=180
+export MODEL_SMOKE_DELAY_SECS=15
+export MODEL_COOLDOWN_SECS=60
+```
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -783,6 +793,13 @@ To watch the worker after the restart:
 ```bash
 docker logs -f dynamo-sglang-worker
 ```
+
+Note:
+
+- this wrapper currently uses `MODEL_SMOKE_RETRIES`,
+  `MODEL_SMOKE_DELAY_SECS`, and `MODEL_COOLDOWN_SECS`
+- it does not currently use `MODEL_READY_RETRIES`,
+  `MODEL_READY_DELAY_SECS`, or `MODEL_READY_STABLE_HITS`
 
 This produces prompt-evolution summaries such as:
 
