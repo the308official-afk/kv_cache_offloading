@@ -82,6 +82,10 @@ This clones upstream into:
 
 - `/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo`
 
+By default it checks out a pinned Dynamo revision that is known to be
+compatible with this repo's instrumentation scripts, instead of following the
+moving upstream `main` branch.
+
 The fetch script uses `GIT_LFS_SKIP_SMUDGE=1` so the source clone stays usable even if large LFS assets are not needed for instrumentation work.
 
 ### 2. Prepare the instrumented Dynamo source
@@ -94,6 +98,27 @@ verifies the markers required for hint-alignment experiments.
 cd /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading
 ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
 ```
+
+If you see:
+
+- `Patch could not be applied cleanly`
+
+that can still be fine on a fresh upstream clone. The prepare script now
+repairs known upstream drift automatically. What matters is the final success
+message:
+
+- `Instrumented Dynamo source is ready.`
+
+It also prints a compact status summary now:
+
+- `applied_or_already_present`: patch matched cleanly or source was already instrumented
+- `drift_repaired`: upstream changed, but the repair step restored the required instrumentation
+
+If the summary ends with:
+
+- `Safe to continue: yes`
+
+you can proceed to the image build step.
 
 After this succeeds, build the images in step 3.
 

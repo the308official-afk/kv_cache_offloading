@@ -141,6 +141,32 @@ cd ~/kv_cache_offloading
 ls -ld ~/kv_cache_offloading/upstream/dynamo
 ```
 
+The source fetch step now checks out a pinned Dynamo revision that is known to
+work with this repo's instrumentation. That avoids breakage from upstream
+layout drift on fresh machines.
+
+If the prepare step prints `Patch could not be applied cleanly`, do not stop
+there. On a fresh upstream clone that can be expected. The script now repairs
+known Dynamo source drift automatically. The real success signal is the final:
+
+```text
+Instrumented Dynamo source is ready.
+```
+
+You will also now see a short preparation summary like:
+
+```text
+Preparation summary:
+  runtime_json_patch: drift_repaired
+  hint_preservation_patch: applied_or_already_present
+Safe to continue:
+  - yes
+```
+
+`drift_repaired` means the tracked patch no longer matched the newest upstream
+source exactly, but the automatic repair step restored the required
+instrumentation anyway.
+
 Then build the local runtime-logging images once:
 
 ```bash
@@ -153,6 +179,45 @@ docker image inspect "$FRONTEND_IMAGE" >/dev/null
 docker image inspect "$WORKER_IMAGE" >/dev/null
 echo "instrumented images ok"
 ```
+
+The build script now refuses to produce `runtime-json-logs` images from an
+unprepared Dynamo source tree. If it fails, rerun:
+
+```bash
+cd ~/kv_cache_offloading
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+If the image build fails with `no space left on device`, it means Docker ran
+out of disk while unpacking or copying layers. Before retrying:
+
+```bash
+cd ~/kv_cache_offloading
+
+./run_dynamo_single_host.sh stop || true
+
+df -h /
+docker system df
+
+docker container prune -f
+docker image prune -f
+docker builder prune -f
+```
+
+If the machine still does not have enough free space and you do not need old
+Docker state:
+
+```bash
+docker system prune -af
+docker builder prune -af
+
+df -h /
+docker system df
+```
+
+For instrumented Dynamo rebuilds, keep at least 80-120 GB free.
 
 Those local image tags are not pulled from a registry. They must be built on
 each new machine before experiments that use:
@@ -2029,6 +2094,10 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
 
 If you only want the lightweight scheduling check, you can skip Step 0 and run
 the `light` version below.
+
+If the driver log later warns that the worker log contains no `[RUNTIME_JSON]`
+lines, stop there and rebuild the local runtime-json images from the prepared
+Dynamo source before trusting the result.
 
 ### Step 1: Run The Precise Scheduling Probe
 

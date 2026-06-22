@@ -61,7 +61,52 @@ require_valid_source_repo() {
   fi
 }
 
+require_instrumentation_markers() {
+  local required_markers=(
+    "components/src/dynamo/common/runtime_logging.py:agent_hint_log_fields"
+    "components/src/dynamo/common/runtime_logging.py:_maybe_register_transfer_runtime_event"
+    "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:agent_hint_log_fields"
+    "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:worker.decode.request_received"
+    "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:agent_hint_log_fields"
+    "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_received"
+    "lib/llm/src/preprocessor.rs:runtime_observability_extra_args_from_nvext"
+    "lib/llm/src/protocols/openai/nvext.rs:expected_output_tokens"
+  )
+
+  local missing=0
+  local file=""
+  local pattern=""
+  for marker in "${required_markers[@]}"; do
+    file="${marker%%:*}"
+    pattern="${marker#*:}"
+    if ! grep -q "${pattern}" "${SOURCE_DIR}/${file}"; then
+      if [[ "${missing}" -eq 0 ]]; then
+        echo "Dynamo source is present but not instrumented for runtime JSON logging: ${SOURCE_DIR}" >&2
+        echo "Missing required instrumentation markers:" >&2
+      fi
+      echo "  ${file}: ${pattern}" >&2
+      missing=1
+    fi
+  done
+
+  if [[ "${missing}" -eq 1 ]]; then
+    cat >&2 <<EOF
+
+Before building runtime-json-logs images, prepare the Dynamo source:
+
+  cd ${ROOT_DIR}
+  ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+
+Then rebuild:
+
+  DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+EOF
+    exit 1
+  fi
+}
+
 require_valid_source_repo
+require_instrumentation_markers
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "docker is required but not available on PATH" >&2
@@ -72,6 +117,66 @@ if ! command -v python3 >/dev/null 2>&1; then
   echo "python3 is required but not available on PATH" >&2
   exit 1
 fi
+
+check_build_disk_space() {
+  local docker_root
+  docker_root="$(docker info --format '{{.DockerRootDir}}' 2>/dev/null || true)"
+  if [[ -z "${docker_root}" ]]; then
+    docker_root="/var/lib/docker"
+  fi
+
+  if [[ ! -d "${docker_root}" ]]; then
+    return 0
+  fi
+
+  local min_free_gb="${MIN_FREE_GB_FOR_DYNAMO_BUILD:-80}"
+  local available_kb
+  available_kb="$(df -Pk "${docker_root}" | awk 'NR==2 {print $4}')"
+  if [[ -z "${available_kb}" || ! "${available_kb}" =~ ^[0-9]+$ ]]; then
+    return 0
+  fi
+
+  local available_gb=$(( available_kb / 1024 / 1024 ))
+  if (( available_gb >= min_free_gb )); then
+    return 0
+  fi
+
+  cat >&2 <<EOF
+Not enough free disk space to safely build instrumented Dynamo images.
+
+Docker root:
+  ${docker_root}
+
+Available space:
+  ${available_gb} GB
+
+Recommended minimum:
+  ${min_free_gb} GB
+
+This build can fail with:
+  failed to solve: ... no space left on device
+
+Suggested recovery:
+
+  cd ${ROOT_DIR}
+  ./run_dynamo_single_host.sh stop || true
+  df -h ${docker_root}
+  docker system df
+  docker container prune -f
+  docker image prune -f
+  docker builder prune -f
+
+If you still do not have enough space and do not need old Docker state:
+
+  docker system prune -af
+  docker builder prune -af
+
+Then retry the build.
+EOF
+  exit 1
+}
+
+check_build_disk_space
 
 build_image() {
   local tag="$1"

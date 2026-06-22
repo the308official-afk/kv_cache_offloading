@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
 SOURCE_REPO="${SOURCE_REPO:-https://github.com/ai-dynamo/dynamo.git}"
+SOURCE_REF="${SOURCE_REF:-8cee1e50e10fefb0ac570144b48458a043361d94}"
 
 mkdir -p "$(dirname "${SOURCE_DIR}")"
 
@@ -27,12 +28,15 @@ if [[ -d "${SOURCE_DIR}/.git" ]]; then
 
   echo "Updating existing Dynamo source clone at ${SOURCE_DIR}"
   git -C "${SOURCE_DIR}" fetch --all --tags
-  git -C "${SOURCE_DIR}" pull --ff-only
+  git -C "${SOURCE_DIR}" checkout --detach "${SOURCE_REF}"
 else
   echo "Cloning ${SOURCE_REPO} into ${SOURCE_DIR}"
   GIT_LFS_SKIP_SMUDGE=1 git clone "${SOURCE_REPO}" "${SOURCE_DIR}"
+  git -C "${SOURCE_DIR}" checkout --detach "${SOURCE_REF}"
 fi
 
 echo
 echo "Dynamo source is ready at:"
 echo "  ${SOURCE_DIR}"
+echo "Pinned ref:"
+echo "  ${SOURCE_REF}"

@@ -28,6 +28,10 @@ From the local machine:
 ./aws/upload.sh
 ```
 
+`./aws/upload.sh` intentionally excludes `upstream/dynamo/`. Build and
+instrument Dynamo from a local checkout on the EC2 machine instead of uploading
+your local `upstream/dynamo` tree.
+
 Then SSH to the EC2 machine and work from:
 
 ```bash

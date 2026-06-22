@@ -15,19 +15,10 @@ Long-Horizon Agentic AI
 
 ### Core Thesis
 
-Long-horizon agentic AI needs memory that scales with accumulated understanding, not only
-with token history.
-
-Today, most systems mainly ask:
-
-> How do we store more tokens more cheaply?
-
-HSMA asks:
-
-> How do we preserve useful meaning at the lowest necessary fidelity, while keeping a path back
-> to exact evidence when detail matters?
-
-That is the shift.
+Current AI systems largely treat memory as the problem of storing more tokens more cheaply.
+HSMA proposes a different way of thinking: memory should be organized around meaning, not just
+history. The goal is to make long-running agents scale with accumulated understanding, while
+still preserving access to exact evidence when detail matters.
 
 The idea is not really about storing prompts intelligently. It is about storing agent memory
 intelligently, including:
@@ -86,6 +77,48 @@ The proposed novelty is the integration:
 
 In short: HSMA treats neural memory, textual memory, and symbolic memory as one connected
 system instead of separate features.
+
+## Novelty Claim
+
+The proposal should not claim novelty for KV compression, RAG, summarization, graph memory, or
+multi-tier agent memory by themselves. Those already exist in important prior work.
+
+The safer and stronger novelty claim is:
+
+> HSMA introduces a unified semantic memory architecture that connects inference-time KV memory,
+> compressed memory, summaries, concepts, and graph structure into one pointer-preserving
+> hierarchy with selective recovery.
+
+Within that broader system, the most novel individual idea may be:
+
+> Meaning-to-Meaning Attention for Memory Tiering
+
+That idea says memory importance should not be defined only by local recency, local attention,
+or local retrieval frequency. It should also be defined by semantic dependency:
+
+- what other important meanings depend on this memory?
+- if this memory is demoted, what becomes weaker or harder to recover?
+- is this memory a foundation for later reasoning, decisions, or plans?
+
+That is the part that feels least like ordinary cache policy and most like a genuinely new way
+to define memory importance.
+
+So the proposal can make two levels of claim:
+
+1. **Most novel individual mechanism**
+   Meaning-to-Meaning Attention for Memory Tiering
+
+2. **Strongest overall contribution**
+   The full HSMA system that combines dependency-aware retention, semantic demotion,
+   pointer-preserving abstraction, and selective recovery
+
+Reviewer-safe version:
+
+> The proposal's main novelty is not any single existing memory primitive, but the integration
+> of neural, textual, and symbolic memory into a dependency-aware semantic hierarchy. A central
+> new idea is Meaning-to-Meaning Attention for Memory Tiering, where retention decisions are
+> influenced not only by local importance, but by how strongly other important meanings depend
+> on a memory item.
 
 ## Pillar 1: Meaning-To-Meaning Attention For Memory Tiering
 
@@ -304,6 +337,120 @@ Preferred framing:
 
 This is stronger and more believable than claiming the system can perfectly reconstruct lost KV
 from a vague summary.
+
+## How The Core Ideas Fit Into The Overall Picture
+
+Yes. Here's the simple version of how each one fits into the bigger system.
+
+**1. Meaning-to-Meaning Attention for Memory Tiering**
+
+What it is:
+A way to decide memory importance by looking at what other meanings depend on it.
+
+Why it matters:
+Some old context looks unimportant by itself, but is actually a foundation for many newer ideas.
+
+What benefit it brings:
+It helps the system protect **foundational memories** instead of only protecting whatever was
+recent or flashy.
+
+Without it:
+The system may throw away a quiet but crucial idea just because it was old or low-attention.
+
+So in the overall picture:
+**this idea helps the system know what is structurally important.**
+
+**2. Semantic Demotion Policy**
+
+What it is:
+The rule that decides the cheapest safe form for each memory item.
+
+Why it matters:
+Not everything needs to stay as full KV or raw text. Some things can safely become summaries or
+concept memories.
+
+What benefit it brings:
+It reduces memory cost and lets the system scale to long histories.
+
+Without it:
+The system either keeps too much expensive memory, or throws things away blindly.
+
+So in the overall picture:
+**this is the part that makes the whole system efficient.**
+
+**3. Pointer-Preserving Hierarchy**
+
+What it is:
+A memory structure where higher-level abstractions keep links back to the lower-level evidence.
+
+Why it matters:
+Summaries and graphs are useful, but they are not the original source. If you lose the link
+back, the system can become vague or wrong.
+
+What benefit it brings:
+It gives the system **safe abstraction**. You can compress meaning without losing the ability to
+verify or recover detail.
+
+Without it:
+The system turns into a lossy summarizer that forgets where things came from.
+
+So in the overall picture:
+**this is what makes abstraction trustworthy.**
+
+**4. Selective Recovery**
+
+What it is:
+A way to go back down the memory hierarchy only when more detail is needed.
+
+Why it matters:
+You do not want to carry all raw detail all the time. But you also do not want to answer a
+precision question from a blurry summary.
+
+What benefit it brings:
+It keeps the system cheap most of the time, but still capable of exact answers when necessary.
+
+Without it:
+Either everything stays expensive forever, or the system gives weak answers because it cannot
+recover lost detail.
+
+So in the overall picture:
+**this is what balances efficiency with accuracy.**
+
+**How they fit together**
+
+These are not four separate tricks. They are four parts of one loop:
+
+1. **Meaning-to-Meaning Attention**
+   tells you what is foundational.
+
+2. **Semantic Demotion Policy**
+   decides how cheaply each thing can be stored.
+
+3. **Pointer-Preserving Hierarchy**
+   keeps links back to the exact source.
+
+4. **Selective Recovery**
+   brings exact detail back when the task needs it.
+
+So the overall system becomes:
+
+- smart about what matters
+- cheap about how it stores it
+- safe about how it abstracts it
+- flexible about when it restores detail
+
+That is why all four are needed.
+
+If one is missing:
+
+- without meaning-to-meaning attention, the system may forget foundations
+- without semantic demotion, it does not scale
+- without pointer-preserving hierarchy, it becomes unreliable
+- without selective recovery, it loses precision
+
+So in one line:
+
+> Each idea solves one part of the central problem: how to store less, remember better, and still recover exact detail when it matters.
 
 ## Supporting Extension: Weak-Answer Detection
 

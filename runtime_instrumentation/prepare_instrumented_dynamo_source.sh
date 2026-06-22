@@ -5,6 +5,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 SOURCE_DIR="${SOURCE_DIR:-${ROOT_DIR}/upstream/dynamo}"
+runtime_patch_status="not_run"
+hint_patch_status="not_run"
 
 echo "Preparing instrumented Dynamo source at: ${SOURCE_DIR}"
 
@@ -15,17 +17,29 @@ fi
 
 echo "Applying runtime JSON logging patch if needed..."
 if "${SCRIPT_DIR}/apply_runtime_json_logging_patch.sh"; then
+  runtime_patch_status="applied_or_already_present"
   :
 else
+  runtime_patch_status="drift_repaired"
   echo "Runtime JSON logging patch did not apply cleanly."
   echo "Continuing with repair steps; they make partially patched source usable."
 fi
 
 echo "Applying agent-hint preservation patch if needed..."
-"${SCRIPT_DIR}/apply_dynamo_hint_preservation_patch.sh"
+if "${SCRIPT_DIR}/apply_dynamo_hint_preservation_patch.sh"; then
+  hint_patch_status="applied_or_already_present"
+  :
+else
+  hint_patch_status="drift_repaired"
+  echo "Agent-hint preservation patch did not apply cleanly."
+  echo "Continuing with repair steps; they make fresh upstream clones usable."
+fi
 
 echo "Repairing hint-aware worker logging fields..."
 python3 "${SCRIPT_DIR}/repair_dynamo_hint_logging_source.py"
+
+echo "Repairing hint-preservation source drift..."
+python3 "${SCRIPT_DIR}/repair_dynamo_hint_preservation_source.py"
 
 echo "Repairing known Dynamo router field rename mismatch..."
 python3 "${SCRIPT_DIR}/repair_dynamo_router_field_rename.py"
@@ -68,6 +82,17 @@ fi
 cat <<EOF
 
 Instrumented Dynamo source is ready.
+
+Preparation summary:
+  runtime_json_patch: ${runtime_patch_status}
+  hint_preservation_patch: ${hint_patch_status}
+
+Interpretation:
+  - applied_or_already_present: patch matched cleanly or the source was already instrumented
+  - drift_repaired: upstream source drifted, but the repair steps restored the required instrumentation
+
+Safe to continue:
+  - yes
 
 Next:
   cd ${ROOT_DIR}

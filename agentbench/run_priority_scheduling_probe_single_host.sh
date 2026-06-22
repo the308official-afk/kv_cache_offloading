@@ -205,6 +205,25 @@ capture_worker_runtime_log() {
   docker logs dynamo-sglang-worker > "${out_path}" 2>&1
 }
 
+warn_if_worker_runtime_missing() {
+  local worker_runtime_log="$1"
+  if [[ ! -f "${worker_runtime_log}" ]]; then
+    return 0
+  fi
+  if ! grep -q '\[RUNTIME_JSON\]' "${worker_runtime_log}"; then
+    {
+      echo
+      echo "WARNING: captured worker log contains no [RUNTIME_JSON] lines."
+      echo "This usually means the worker image was not built from prepared/instrumented Dynamo source."
+      echo "Run:"
+      echo "  ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh"
+      echo "  DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh"
+      echo "Then restart Dynamo and rerun the probe."
+      echo
+    } | tee -a "${DRIVER_LOG}" >&2
+  fi
+}
+
 {
   echo "Priority scheduling run ID: ${PRIORITY_SCHEDULING_ID}"
   echo "Model: ${MODEL}"
@@ -291,6 +310,7 @@ echo "Running priority scheduling probe..." | tee -a "${DRIVER_LOG}"
 
 if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
   echo "Captured worker runtime log: ${WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+  warn_if_worker_runtime_missing "${WORKER_RUNTIME_LOG}"
 fi
 
 echo "Rebuilding report with worker-side evidence..." | tee -a "${DRIVER_LOG}"

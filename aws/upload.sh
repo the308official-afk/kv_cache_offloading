@@ -60,6 +60,7 @@ RSYNC_EXCLUDES=(
   --exclude 'htmlcov/'
   --exclude '.venv/'
   --exclude 'venv/'
+  --exclude 'upstream/dynamo/'
   --exclude 'agentbench/results/'
   --include 'experiments/'
   --include 'experiments/scripts/'

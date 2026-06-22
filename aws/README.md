@@ -30,6 +30,10 @@ From your Mac:
 /Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/aws/upload.sh
 ```
 
+`upload.sh` intentionally excludes `upstream/dynamo/`. The EC2 machine should
+prepare and instrument its own local Dynamo checkout before building runtime
+images there.
+
 ## 2. First-Time EC2 Setup
 
 ### GPU worker instance

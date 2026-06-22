@@ -349,8 +349,21 @@ cd ~/kv_cache_offloading
 This makes sure:
 
 - upstream Dynamo source exists
+- the source is checked out to a known-compatible pinned Dynamo revision
 - the hint-preservation patch is applied
 - runtime JSON logging support is present
+
+If it says `Patch could not be applied cleanly`, that does not automatically
+mean failure. The prepare script now repairs known upstream Dynamo drift after
+the patch step. The real pass condition is the final line:
+
+- `Instrumented Dynamo source is ready.`
+
+The new summary is easier to read:
+
+- `applied_or_already_present` = nothing to worry about
+- `drift_repaired` = upstream changed, repair succeeded
+- `Safe to continue: yes` = go ahead and build images
 
 ### D. Rebuild instrumented images for GH200
 
