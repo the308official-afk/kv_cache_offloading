@@ -1,0 +1,1124 @@
+#!/usr/bin/env python3
+"""Run a synthetic mixed-priority scheduling probe against an OpenAI-compatible endpoint."""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import hashlib
+import json
+import os
+import re
+import sys
+import time
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+DEFAULT_OUT_ROOT = REPO_ROOT / "experiments" / "reports" / "priority_scheduling"
+DEFAULT_CACHE_EVENT_LOG = (
+    REPO_ROOT
+    / "experiments"
+    / "raw"
+    / "sglang_transfer_logs"
+    / "latest_sglang_transfer_events.jsonl"
+)
+RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
+SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+DEFAULT_HINTS: dict[str, Any] = {
+    "reuse_likelihood": 0.5,
+    "agent_phase": "priority_scheduling_probe",
+    "latency_sensitivity": 0.6,
+    "program_id": "agentbench.synthetic_priority_scheduling_probe",
+    "context_type": "synthetic_priority_queue_probe",
+    "expected_output_tokens": 128,
+}
+
+NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
+
+REQUEST_COLUMNS = [
+    "run_id",
+    "request_id",
+    "request_role",
+    "priority_class",
+    "hint_profile",
+    "arrival_index",
+    "planned_offset_ms",
+    "client_send_timestamp_utc",
+    "client_response_timestamp_utc",
+    "client_latency_ms",
+    "status",
+    "error",
+    "input_len_words",
+    "output_len_tokens",
+    "prompt_hash",
+    "agent_hints_priority",
+    "top_level_priority_mode",
+    "top_level_priority_attempted",
+    "top_level_priority_sent",
+    "top_level_priority_value",
+    "top_level_priority_fallback_used",
+    "top_level_priority_unsupported",
+    "worker_runtime_matched",
+    "worker_request_received_timestamp",
+    "worker_request_attached_timestamp",
+    "worker_request_completed_timestamp",
+    "worker_queue_wait_ms",
+    "worker_service_ms",
+    "worker_total_runtime_ms",
+    "worker_prompt_tokens",
+    "worker_cached_tokens",
+    "worker_agent_hints_priority",
+    "worker_top_level_priority",
+    "sglang_priority_events",
+    "sglang_priority_hint_seen",
+    "sglang_scheduler_priority_applied",
+    "attached_rank",
+    "completed_rank",
+    "overtook_earlier_low_attached_count",
+    "overtook_earlier_low_completed_count",
+]
+
+SUMMARY_COLUMNS = [
+    "run_id",
+    "model",
+    "attribution_mode",
+    "low_priority_count",
+    "high_priority_count",
+    "input_len_words",
+    "output_len_tokens",
+    "arrival_gap_ms",
+    "inter_request_gap_ms",
+    "frontend_top_level_priority_compatibility",
+    "worker_high_hint_received_status",
+    "worker_high_top_level_priority_status",
+    "worker_priority_path_status",
+    "worker_runtime_event_coverage",
+    "mean_low_queue_wait_ms",
+    "mean_high_queue_wait_ms",
+    "mean_low_client_latency_ms",
+    "mean_high_client_latency_ms",
+    "high_priority_attached_leapfrogs",
+    "high_priority_completed_leapfrogs",
+    "scheduling_effect_observed",
+    "requests_csv",
+    "worker_runtime_log",
+    "cache_event_log",
+]
+
+
+@dataclass(frozen=True)
+class RequestSpec:
+    request_role: str
+    priority_class: str
+    priority_value: int
+    hint_profile: str
+    arrival_index: int
+    planned_offset_ms: int
+    prompt: str
+
+
+def now_run_id() -> str:
+    return f"priority_scheduling_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--frontend-url",
+        default=f"http://127.0.0.1:{os.environ.get('DYNAMO_FRONTEND_PORT', '8000')}/v1/chat/completions",
+    )
+    parser.add_argument("--model", default=os.environ.get("MODEL_NAME", ""))
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--output-root", default=str(DEFAULT_OUT_ROOT))
+    parser.add_argument("--cache-event-log", default=str(DEFAULT_CACHE_EVENT_LOG))
+    parser.add_argument("--worker-runtime-log", default="")
+    parser.add_argument("--postprocess-only", action="store_true")
+    parser.add_argument(
+        "--attribution-mode",
+        default=os.environ.get("PRIORITY_SCHEDULING_ATTRIBUTION_MODE", "precise"),
+        choices=("light", "precise"),
+    )
+    parser.add_argument("--low-priority-count", type=int, default=int(os.environ.get("LOW_PRIORITY_COUNT", "8")))
+    parser.add_argument("--high-priority-count", type=int, default=int(os.environ.get("HIGH_PRIORITY_COUNT", "4")))
+    parser.add_argument("--low-priority-value", type=int, default=int(os.environ.get("LOW_PRIORITY_VALUE", "1")))
+    parser.add_argument("--high-priority-value", type=int, default=int(os.environ.get("HIGH_PRIORITY_VALUE", "10")))
+    parser.add_argument("--input-len-words", type=int, default=int(os.environ.get("PRIORITY_INPUT_LEN", "4000")))
+    parser.add_argument("--output-len-tokens", type=int, default=int(os.environ.get("PRIORITY_OUTPUT_LEN", "128")))
+    parser.add_argument("--arrival-gap-ms", type=int, default=int(os.environ.get("PRIORITY_ARRIVAL_GAP_MS", "200")))
+    parser.add_argument(
+        "--inter-request-gap-ms",
+        type=int,
+        default=int(os.environ.get("PRIORITY_INTER_REQUEST_GAP_MS", "20")),
+    )
+    parser.add_argument("--seed", type=int, default=int(os.environ.get("PRIORITY_PROBE_SEED", "42")))
+    parser.add_argument("--request-timeout", type=float, default=float(os.environ.get("REQUEST_TIMEOUT", "600")))
+    parser.add_argument(
+        "--top-level-priority-mode",
+        default=os.environ.get("PRIORITY_TOP_LEVEL_PRIORITY_MODE", "auto"),
+        choices=("auto", "force", "disable"),
+        help=(
+            "How to handle top-level request priority. "
+            "'auto' retries without top-level priority if the frontend rejects it, "
+            "'force' always sends it, and 'disable' never sends it."
+        ),
+    )
+    parser.add_argument("--ignore-eos", action="store_true")
+    args = parser.parse_args()
+
+    if not args.model:
+        parser.error("--model is required or MODEL_NAME must be set")
+    if args.low_priority_count < 0 or args.high_priority_count < 0:
+        parser.error("priority counts must be >= 0")
+    if args.low_priority_count == 0 and args.high_priority_count == 0:
+        parser.error("at least one request is required")
+    if args.input_len_words <= 0 or args.output_len_tokens <= 0:
+        parser.error("input/output lengths must be positive")
+    if args.arrival_gap_ms < 0 or args.inter_request_gap_ms < 0:
+        parser.error("timing gaps must be >= 0")
+    return args
+
+
+def short_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def utc_now_text() -> str:
+    return utc_now().isoformat()
+
+
+def parse_dt(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def ms_between(start: datetime | None, end: datetime | None) -> int | str:
+    if start is None or end is None:
+        return ""
+    return int(round((end - start).total_seconds() * 1000))
+
+
+def round_ms(value: float | None) -> int | str:
+    if value is None:
+        return ""
+    return int(round(value))
+
+
+def maybe_int(value: Any) -> int | None:
+    if value in ("", None):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def maybe_float(value: Any) -> float | None:
+    if value in ("", None):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def mean_int(values: list[int]) -> int | str:
+    if not values:
+        return ""
+    return int(round(sum(values) / len(values)))
+
+
+def truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def clean_log_line(line: str) -> str:
+    return ANSI_RE.sub("", line)
+
+
+def parse_runtime_json_payload(line: str) -> tuple[dict[str, Any] | None, str | None]:
+    if RUNTIME_JSON_PREFIX not in line:
+        return None, None
+    prefix, payload = line.split(RUNTIME_JSON_PREFIX, 1)
+    payload = payload.strip()
+    json_start = payload.find("{")
+    if json_start >= 0:
+        payload = payload[json_start:]
+    try:
+        parsed = json.loads(payload)
+    except json.JSONDecodeError:
+        return None, None
+    timestamp = None
+    prefix = prefix.strip()
+    if prefix:
+        timestamp = prefix.split()[0]
+    if isinstance(parsed, dict) and not parsed.get("timestamp") and timestamp:
+        parsed["timestamp"] = timestamp
+    return (parsed if isinstance(parsed, dict) else None), timestamp
+
+
+def parse_sglang_event_line(line: str) -> dict[str, Any] | None:
+    text = line.strip()
+    if not text:
+        return None
+    if text.startswith(SGLANG_EVENT_PREFIX):
+        text = text[len(SGLANG_EVENT_PREFIX) :]
+    elif not text.startswith("{"):
+        return None
+    try:
+        event = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    return event if isinstance(event, dict) else None
+
+
+def build_hint_payload(
+    *,
+    run_id: str,
+    request_role: str,
+    priority_class: str,
+    priority_value: int,
+    arrival_index: int,
+    output_len_tokens: int,
+) -> dict[str, Any]:
+    payload = dict(DEFAULT_HINTS)
+    payload["priority"] = priority_value
+    payload["hint_profile"] = priority_class
+    payload["hint_probe_id"] = f"{run_id}::{request_role}"
+    payload["phase_sequence_index"] = arrival_index
+    payload["expected_output_tokens"] = output_len_tokens
+    payload["priority_class"] = priority_class
+    payload["cache_retention_priority"] = "high" if priority_value >= 10 else "normal"
+    return payload
+
+
+def request_context(
+    *,
+    run_id: str,
+    request_role: str,
+    arrival_index: int,
+    priority_class: str,
+    prompt_hash: str,
+) -> dict[str, Any]:
+    return {
+        "request_id": f"{run_id}::{request_role}",
+        "parent_run_id": run_id,
+        "task_instance_id": "synthetic_priority_scheduling_probe",
+        "phase": "priority_scheduling_probe",
+        "step_index": arrival_index,
+        "step_title": request_role,
+        "app_variant": "synthetic_priority_scheduling_probe",
+        "priority_class": priority_class,
+        "prompt_hash": prompt_hash,
+    }
+
+
+def top_level_priority_from_hints(hints: dict[str, Any] | None) -> int | None:
+    if not hints:
+        return None
+    value = hints.get("priority")
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def priority_unsupported(status: int, error: str) -> bool:
+    if status != 400 or not error:
+        return False
+    normalized = error.lower()
+    return "unsupported parameter" in normalized and "priority" in normalized
+
+
+def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str]:
+    encoded = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read().decode("utf-8", errors="replace")
+            return response.status, json.loads(raw), ""
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return exc.code, None, body[:1000]
+    except Exception as exc:  # noqa: BLE001
+        return 0, None, str(exc)
+
+
+def get_nested(mapping: dict[str, Any], paths: list[tuple[str, ...]]) -> Any:
+    for path in paths:
+        current: Any = mapping
+        found = True
+        for key in path:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                found = False
+                break
+        if found:
+            return current
+    return None
+
+
+def usage_prompt_tokens(usage: dict[str, Any]) -> tuple[int | None, int | None]:
+    prompt_tokens = maybe_int(
+        get_nested(
+            usage,
+            [("prompt_tokens",), ("input_tokens",)],
+        )
+    )
+    cached_tokens = maybe_int(
+        get_nested(
+            usage,
+            [
+                ("prompt_tokens_details", "cached_tokens"),
+                ("prompt_token_details", "cached_tokens"),
+                ("input_tokens_details", "cached_tokens"),
+                ("cached_prompt_tokens",),
+                ("cached_tokens",),
+            ],
+        )
+    )
+    return prompt_tokens, cached_tokens
+
+
+def make_prompt(*, request_role: str, target_len: int, seed: int) -> str:
+    marker = short_hash(f"{request_role}:{seed}:{target_len}")
+    header = (
+        f"Priority scheduling probe request {request_role}. "
+        f"Marker {marker}. "
+        "Return a concise answer. "
+        "The repeated words below create queueing pressure only. "
+    )
+    words = ["priority"] * target_len
+    for idx in range(0, target_len, 256):
+        words[idx] = f"marker{idx}"
+    return header + " ".join(words)
+
+
+def build_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
+    specs: list[RequestSpec] = []
+    arrival_index = 0
+    for idx in range(args.low_priority_count):
+        request_role = f"low_{idx:04d}"
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="low-priority",
+                priority_value=args.low_priority_value,
+                hint_profile="low-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=idx * args.inter_request_gap_ms,
+                prompt=make_prompt(
+                    request_role=request_role,
+                    target_len=args.input_len_words,
+                    seed=args.seed + idx,
+                ),
+            )
+        )
+        arrival_index += 1
+
+    high_start_ms = args.arrival_gap_ms
+    for idx in range(args.high_priority_count):
+        request_role = f"high_{idx:04d}"
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="high-priority",
+                priority_value=args.high_priority_value,
+                hint_profile="high-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=high_start_ms + idx * args.inter_request_gap_ms,
+                prompt=make_prompt(
+                    request_role=request_role,
+                    target_len=args.input_len_words,
+                    seed=args.seed + 10_000 + idx,
+                ),
+            )
+        )
+        arrival_index += 1
+    return specs
+
+
+def send_one_request(
+    args: argparse.Namespace,
+    run_id: str,
+    run_start_monotonic: float,
+    spec: RequestSpec,
+) -> dict[str, Any]:
+    target_monotonic = run_start_monotonic + (spec.planned_offset_ms / 1000.0)
+    while True:
+        now = time.perf_counter()
+        remaining = target_monotonic - now
+        if remaining <= 0:
+            break
+        time.sleep(min(remaining, 0.01))
+
+    prompt_hash = short_hash(spec.prompt)
+    hints = build_hint_payload(
+        run_id=run_id,
+        request_role=spec.request_role,
+        priority_class=spec.priority_class,
+        priority_value=spec.priority_value,
+        arrival_index=spec.arrival_index,
+        output_len_tokens=args.output_len_tokens,
+    )
+    context = request_context(
+        run_id=run_id,
+        request_role=spec.request_role,
+        arrival_index=spec.arrival_index,
+        priority_class=spec.priority_class,
+        prompt_hash=prompt_hash,
+    )
+    payload: dict[str, Any] = {
+        "model": args.model,
+        "messages": [{"role": "user", "content": spec.prompt}],
+        "max_tokens": args.output_len_tokens,
+        "temperature": 0,
+        "nvext": {
+            "request_context": context,
+            "agent_hints": hints,
+        },
+    }
+    if args.ignore_eos:
+        payload["ignore_eos"] = True
+
+    priority = top_level_priority_from_hints(hints)
+    should_attempt_top_level_priority = (
+        priority is not None and args.top_level_priority_mode != "disable"
+    )
+    if should_attempt_top_level_priority:
+        payload["priority"] = priority
+
+    send_started = utc_now()
+    start = time.perf_counter()
+    status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+    latency_ms = (time.perf_counter() - start) * 1000
+    send_finished = utc_now()
+
+    fallback_used = False
+    top_level_priority_unsupported = False
+    if (
+        should_attempt_top_level_priority
+        and args.top_level_priority_mode == "auto"
+        and priority_unsupported(status, error)
+    ):
+        fallback_used = True
+        top_level_priority_unsupported = True
+        payload.pop("priority", None)
+        send_started = utc_now()
+        start = time.perf_counter()
+        status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+        latency_ms = (time.perf_counter() - start) * 1000
+        send_finished = utc_now()
+
+    usage = response_json.get("usage", {}) if isinstance(response_json, dict) else {}
+    prompt_tokens, cached_tokens = usage_prompt_tokens(usage if isinstance(usage, dict) else {})
+
+    return {
+        "run_id": run_id,
+        "request_id": context["request_id"],
+        "request_role": spec.request_role,
+        "priority_class": spec.priority_class,
+        "hint_profile": spec.hint_profile,
+        "arrival_index": spec.arrival_index,
+        "planned_offset_ms": spec.planned_offset_ms,
+        "client_send_timestamp_utc": send_started.isoformat(),
+        "client_response_timestamp_utc": send_finished.isoformat(),
+        "client_latency_ms": round_ms(latency_ms),
+        "status": status,
+        "error": error,
+        "input_len_words": args.input_len_words,
+        "output_len_tokens": args.output_len_tokens,
+        "prompt_hash": prompt_hash,
+        "agent_hints_priority": priority if priority is not None else "",
+        "top_level_priority_mode": args.top_level_priority_mode,
+        "top_level_priority_attempted": should_attempt_top_level_priority,
+        "top_level_priority_sent": should_attempt_top_level_priority and not fallback_used,
+        "top_level_priority_value": priority if priority is not None else "",
+        "top_level_priority_fallback_used": fallback_used,
+        "top_level_priority_unsupported": top_level_priority_unsupported,
+        "worker_runtime_matched": False,
+        "worker_request_received_timestamp": "",
+        "worker_request_attached_timestamp": "",
+        "worker_request_completed_timestamp": "",
+        "worker_queue_wait_ms": "",
+        "worker_service_ms": "",
+        "worker_total_runtime_ms": "",
+        "worker_prompt_tokens": prompt_tokens if prompt_tokens is not None else "",
+        "worker_cached_tokens": cached_tokens if cached_tokens is not None else "",
+        "worker_agent_hints_priority": "",
+        "worker_top_level_priority": "",
+        "sglang_priority_events": 0,
+        "sglang_priority_hint_seen": False,
+        "sglang_scheduler_priority_applied": False,
+        "attached_rank": "",
+        "completed_rank": "",
+        "overtook_earlier_low_attached_count": 0,
+        "overtook_earlier_low_completed_count": 0,
+    }
+
+
+def write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def read_csv_rows(path: Path) -> list[dict[str, str]]:
+    if not path.exists():
+        return []
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def runtime_request_context(record: dict[str, Any]) -> dict[str, Any]:
+    request_context = record.get("request_context")
+    if isinstance(request_context, dict):
+        return request_context
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        nested = runtime_observability.get("request_context")
+        if isinstance(nested, dict):
+            return nested
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("request_context"), dict):
+            return nested_nvext["request_context"]
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
+        return nvext["request_context"]
+    return {}
+
+
+def runtime_agent_hints(record: dict[str, Any]) -> dict[str, Any]:
+    agent_hints = record.get("agent_hints")
+    if isinstance(agent_hints, dict):
+        return agent_hints
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        nested = runtime_observability.get("agent_hints")
+        if isinstance(nested, dict):
+            return nested
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("agent_hints"), dict):
+            return nested_nvext["agent_hints"]
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("agent_hints"), dict):
+        return nvext["agent_hints"]
+    return {}
+
+
+def record_request_ids(record: dict[str, Any]) -> set[str]:
+    values: set[str] = set()
+    for key in (
+        "request_id",
+        "external_request_id",
+        "runtime_request_id",
+        "runtime_context_id",
+        "frontend_request_id",
+        "sglang_request_id",
+        "hint_probe_id",
+    ):
+        value = record.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    request_context = runtime_request_context(record)
+    for key in ("request_id", "parent_run_id", "task_instance_id"):
+        value = request_context.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    hints = runtime_agent_hints(record)
+    for key in ("request_id", "hint_probe_id"):
+        value = hints.get(key)
+        if isinstance(value, str) and value:
+            values.add(value)
+    return values
+
+
+def build_worker_runtime_alias_map(worker_runtime_log: Path) -> dict[str, set[str]]:
+    alias_map: dict[str, set[str]] = {}
+    if not worker_runtime_log.exists():
+        return alias_map
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        record, _line_ts = parse_runtime_json_payload(clean_log_line(raw_line))
+        if not isinstance(record, dict):
+            continue
+        request_context = runtime_request_context(record)
+        canonical_request_id = request_context.get("request_id")
+        if not isinstance(canonical_request_id, str) or not canonical_request_id:
+            canonical_request_id = record.get("external_request_id")
+        if not isinstance(canonical_request_id, str) or not canonical_request_id:
+            continue
+        alias_map.setdefault(canonical_request_id, set()).add(canonical_request_id)
+        for alias in record_request_ids(record):
+            alias_map.setdefault(alias, set()).add(canonical_request_id)
+    return alias_map
+
+
+def extract_runtime_records(worker_runtime_log: Path) -> dict[str, dict[str, Any]]:
+    records_by_request: dict[str, dict[str, Any]] = {}
+    if not worker_runtime_log.exists():
+        return records_by_request
+
+    for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
+        record, _line_ts = parse_runtime_json_payload(clean_log_line(raw_line))
+        if not isinstance(record, dict):
+            continue
+        event_type = str(record.get("event_type") or "")
+        if not event_type.startswith("worker.decode."):
+            continue
+
+        request_context = runtime_request_context(record)
+        request_id = request_context.get("request_id") or record.get("external_request_id")
+        if not isinstance(request_id, str) or not request_id:
+            continue
+
+        info = records_by_request.setdefault(
+            request_id,
+            {
+                "event_types": set(),
+                "received_dt": None,
+                "attached_dt": None,
+                "completed_dt": None,
+                "agent_hints_priority": None,
+                "top_level_priority": None,
+                "prompt_tokens": None,
+                "cached_tokens": None,
+            },
+        )
+        info["event_types"].add(event_type)
+
+        timestamp_dt = parse_dt(str(record.get("timestamp") or ""))
+        if event_type.endswith("request_received") and info["received_dt"] is None:
+            info["received_dt"] = timestamp_dt
+        elif event_type.endswith("request_attached") and info["attached_dt"] is None:
+            info["attached_dt"] = timestamp_dt
+        elif event_type.endswith("request_completed"):
+            info["completed_dt"] = timestamp_dt
+
+        hints = runtime_agent_hints(record)
+        hint_priority = maybe_int(hints.get("priority"))
+        if hint_priority is not None and info["agent_hints_priority"] is None:
+            info["agent_hints_priority"] = hint_priority
+
+        top_level_priority = maybe_int(record.get("priority"))
+        if top_level_priority is not None and info["top_level_priority"] is None:
+            info["top_level_priority"] = top_level_priority
+
+        usage = record.get("usage")
+        if isinstance(usage, dict):
+            prompt_tokens, cached_tokens = usage_prompt_tokens(usage)
+            if prompt_tokens is not None and info["prompt_tokens"] is None:
+                info["prompt_tokens"] = prompt_tokens
+            if cached_tokens is not None and info["cached_tokens"] is None:
+                info["cached_tokens"] = cached_tokens
+
+    return records_by_request
+
+
+def event_request_id(event: dict[str, Any]) -> str:
+    for key in ("request_id", "external_request_id", "runtime_request_id", "hint_probe_id"):
+        value = event.get(key)
+        if isinstance(value, str) and value:
+            return value
+    for parent_key in ("request_context", "runtime_observability", "agent_hints"):
+        nested = event.get(parent_key)
+        if not isinstance(nested, dict):
+            continue
+        for key in ("request_id", "external_request_id", "runtime_request_id", "hint_probe_id"):
+            value = nested.get(key)
+            if isinstance(value, str) and value:
+                return value
+    return ""
+
+
+def attach_sglang_priority_events(
+    rows: list[dict[str, Any]],
+    cache_event_log: Path,
+    worker_runtime_log: Path | None,
+) -> None:
+    if not cache_event_log.exists():
+        return
+    by_request_id = {str(row.get("request_id")): row for row in rows if row.get("request_id")}
+    worker_alias_map = (
+        build_worker_runtime_alias_map(worker_runtime_log)
+        if isinstance(worker_runtime_log, Path) and worker_runtime_log.exists()
+        else {}
+    )
+    with cache_event_log.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            event = parse_sglang_event_line(line)
+            if not event or event.get("event") != "sglang.priority":
+                continue
+
+            request_ids_with_source: list[str] = []
+            direct_request_id = event_request_id(event)
+            if direct_request_id:
+                request_ids_with_source.append(direct_request_id)
+            for alias_key in (
+                "request_id",
+                "external_request_id",
+                "runtime_request_id",
+                "runtime_context_id",
+                "hint_probe_id",
+                "sglang_request_id",
+            ):
+                alias_value = event.get(alias_key)
+                if not isinstance(alias_value, str) or not alias_value:
+                    continue
+                for mapped in sorted(worker_alias_map.get(alias_value, set())):
+                    request_ids_with_source.append(mapped)
+
+            matched = []
+            for request_id in request_ids_with_source:
+                if request_id in by_request_id and request_id not in matched:
+                    matched.append(request_id)
+            if len(matched) != 1:
+                continue
+
+            row = by_request_id[matched[0]]
+            row["sglang_priority_events"] = int(row.get("sglang_priority_events") or 0) + 1
+            action = str(event.get("action") or event.get("function") or "").lower()
+            if action == "priority_hint_seen":
+                row["sglang_priority_hint_seen"] = True
+            if action == "scheduler_priority_applied":
+                row["sglang_scheduler_priority_applied"] = True
+            top_level_priority = maybe_int(event.get("worker_top_level_priority"))
+            if top_level_priority is not None and str(row.get("worker_top_level_priority", "")) == "":
+                row["worker_top_level_priority"] = top_level_priority
+            agent_hints_priority = maybe_int(event.get("worker_agent_hints_priority"))
+            if agent_hints_priority is not None and str(row.get("worker_agent_hints_priority", "")) == "":
+                row["worker_agent_hints_priority"] = agent_hints_priority
+
+
+def attach_worker_runtime(rows: list[dict[str, Any]], worker_runtime_log: Path) -> None:
+    if not worker_runtime_log.exists():
+        return
+    records_by_request = extract_runtime_records(worker_runtime_log)
+    for row in rows:
+        info = records_by_request.get(str(row.get("request_id")))
+        if not info:
+            continue
+        row["worker_runtime_matched"] = True
+        received_dt = info.get("received_dt")
+        attached_dt = info.get("attached_dt")
+        completed_dt = info.get("completed_dt")
+        row["worker_request_received_timestamp"] = received_dt.isoformat() if isinstance(received_dt, datetime) else ""
+        row["worker_request_attached_timestamp"] = attached_dt.isoformat() if isinstance(attached_dt, datetime) else ""
+        row["worker_request_completed_timestamp"] = completed_dt.isoformat() if isinstance(completed_dt, datetime) else ""
+        row["worker_queue_wait_ms"] = ms_between(received_dt, attached_dt)
+        row["worker_service_ms"] = ms_between(attached_dt, completed_dt)
+        row["worker_total_runtime_ms"] = ms_between(received_dt, completed_dt)
+        if info.get("prompt_tokens") is not None:
+            row["worker_prompt_tokens"] = info["prompt_tokens"]
+        if info.get("cached_tokens") is not None:
+            row["worker_cached_tokens"] = info["cached_tokens"]
+        if info.get("agent_hints_priority") is not None:
+            row["worker_agent_hints_priority"] = info["agent_hints_priority"]
+        if info.get("top_level_priority") is not None:
+            row["worker_top_level_priority"] = info["top_level_priority"]
+
+
+def assign_order_metrics(rows: list[dict[str, Any]]) -> None:
+    attached_rows = [
+        row for row in rows
+        if parse_dt(str(row.get("worker_request_attached_timestamp") or "")) is not None
+    ]
+    attached_rows.sort(key=lambda row: parse_dt(str(row.get("worker_request_attached_timestamp"))) or datetime.max.replace(tzinfo=timezone.utc))
+    for index, row in enumerate(attached_rows, start=1):
+        row["attached_rank"] = index
+
+    completed_rows = [
+        row for row in rows
+        if parse_dt(str(row.get("worker_request_completed_timestamp") or "")) is not None
+    ]
+    completed_rows.sort(key=lambda row: parse_dt(str(row.get("worker_request_completed_timestamp"))) or datetime.max.replace(tzinfo=timezone.utc))
+    for index, row in enumerate(completed_rows, start=1):
+        row["completed_rank"] = index
+
+    low_rows = [row for row in rows if row.get("priority_class") == "low-priority"]
+    high_rows = [row for row in rows if row.get("priority_class") == "high-priority"]
+    for row in high_rows:
+        high_arrival = maybe_int(row.get("arrival_index"))
+        high_attached = maybe_int(row.get("attached_rank"))
+        high_completed = maybe_int(row.get("completed_rank"))
+        if high_arrival is None:
+            continue
+        earlier_lows = [
+            candidate for candidate in low_rows
+            if maybe_int(candidate.get("arrival_index")) is not None
+            and maybe_int(candidate.get("arrival_index")) < high_arrival
+        ]
+        attached_leapfrogs = 0
+        completed_leapfrogs = 0
+        if high_attached is not None:
+            for candidate in earlier_lows:
+                low_attached = maybe_int(candidate.get("attached_rank"))
+                if low_attached is not None and low_attached > high_attached:
+                    attached_leapfrogs += 1
+        if high_completed is not None:
+            for candidate in earlier_lows:
+                low_completed = maybe_int(candidate.get("completed_rank"))
+                if low_completed is not None and low_completed > high_completed:
+                    completed_leapfrogs += 1
+        row["overtook_earlier_low_attached_count"] = attached_leapfrogs
+        row["overtook_earlier_low_completed_count"] = completed_leapfrogs
+
+
+def request_priority_status(rows: list[dict[str, Any]], *, field: str, expected: int) -> str:
+    values = []
+    for row in rows:
+        value = maybe_int(row.get(field))
+        if value is not None:
+            values.append(value)
+    if not rows:
+        return "missing"
+    if not values:
+        return "none"
+    if all(value == expected for value in values) and len(values) == len(rows):
+        return "full"
+    return "partial"
+
+
+def frontend_priority_compatibility(rows: list[dict[str, Any]]) -> str:
+    if any(truthy(row.get("top_level_priority_unsupported")) for row in rows):
+        return "unsupported"
+    if any(truthy(row.get("top_level_priority_sent")) for row in rows):
+        return "supported"
+    return "not_attempted"
+
+
+def worker_priority_path_status(high_rows: list[dict[str, Any]]) -> str:
+    if any(truthy(row.get("sglang_scheduler_priority_applied")) for row in high_rows):
+        return "applied"
+    if any(truthy(row.get("sglang_priority_hint_seen")) for row in high_rows):
+        return "seen_not_applied"
+    if any(maybe_int(row.get("worker_agent_hints_priority")) is not None for row in high_rows):
+        return "worker_received_hint"
+    return "not_seen"
+
+
+def build_summary(
+    *,
+    args: argparse.Namespace,
+    run_id: str,
+    requests_csv: Path,
+    worker_runtime_log: Path | None,
+    cache_event_log: Path | None,
+    rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    low_rows = [row for row in rows if row.get("priority_class") == "low-priority"]
+    high_rows = [row for row in rows if row.get("priority_class") == "high-priority"]
+
+    low_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in low_rows) if value is not None]
+    high_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in high_rows) if value is not None]
+    low_client_latencies = [value for value in (maybe_int(row.get("client_latency_ms")) for row in low_rows) if value is not None]
+    high_client_latencies = [value for value in (maybe_int(row.get("client_latency_ms")) for row in high_rows) if value is not None]
+
+    high_attached_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_attached_count")) or 0 for row in high_rows)
+    high_completed_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_completed_count")) or 0 for row in high_rows)
+
+    runtime_coverage = f"{sum(1 for row in rows if truthy(row.get('worker_runtime_matched')))} / {len(rows)}"
+    summary = {
+        "run_id": run_id,
+        "model": args.model,
+        "attribution_mode": args.attribution_mode,
+        "low_priority_count": args.low_priority_count,
+        "high_priority_count": args.high_priority_count,
+        "input_len_words": args.input_len_words,
+        "output_len_tokens": args.output_len_tokens,
+        "arrival_gap_ms": args.arrival_gap_ms,
+        "inter_request_gap_ms": args.inter_request_gap_ms,
+        "frontend_top_level_priority_compatibility": frontend_priority_compatibility(rows),
+        "worker_high_hint_received_status": request_priority_status(
+            high_rows,
+            field="worker_agent_hints_priority",
+            expected=args.high_priority_value,
+        ),
+        "worker_high_top_level_priority_status": request_priority_status(
+            high_rows,
+            field="worker_top_level_priority",
+            expected=args.high_priority_value,
+        ),
+        "worker_priority_path_status": worker_priority_path_status(high_rows),
+        "worker_runtime_event_coverage": runtime_coverage,
+        "mean_low_queue_wait_ms": mean_int(low_queue_waits),
+        "mean_high_queue_wait_ms": mean_int(high_queue_waits),
+        "mean_low_client_latency_ms": mean_int(low_client_latencies),
+        "mean_high_client_latency_ms": mean_int(high_client_latencies),
+        "high_priority_attached_leapfrogs": high_attached_leapfrogs,
+        "high_priority_completed_leapfrogs": high_completed_leapfrogs,
+        "scheduling_effect_observed": high_attached_leapfrogs > 0,
+        "requests_csv": str(requests_csv),
+        "worker_runtime_log": str(worker_runtime_log) if isinstance(worker_runtime_log, Path) and str(worker_runtime_log) else "",
+        "cache_event_log": str(cache_event_log) if isinstance(cache_event_log, Path) and str(cache_event_log) else "",
+    }
+    return summary
+
+
+def build_summary_md(summary: dict[str, Any]) -> str:
+    effect = "yes" if truthy(summary.get("scheduling_effect_observed")) else "no"
+    lines = [
+        f"# Priority Scheduling Probe: {summary['run_id']}",
+        "",
+        "## Setup",
+        "",
+        f"- Model: `{summary['model']}`",
+        f"- Attribution mode: `{summary['attribution_mode']}`",
+        f"- Low-priority requests: `{summary['low_priority_count']}`",
+        f"- High-priority requests: `{summary['high_priority_count']}`",
+        f"- Input length (words): `{summary['input_len_words']}`",
+        f"- Output length (tokens): `{summary['output_len_tokens']}`",
+        f"- Arrival gap ms: `{summary['arrival_gap_ms']}`",
+        f"- Inter-request gap ms: `{summary['inter_request_gap_ms']}`",
+        "",
+        "## What happened",
+        "",
+        f"- Frontend top-level priority compatibility: `{summary['frontend_top_level_priority_compatibility']}`",
+        f"- Worker high-hint received status: `{summary['worker_high_hint_received_status']}`",
+        f"- Worker high top-level priority status: `{summary['worker_high_top_level_priority_status']}`",
+        f"- Worker priority path status: `{summary['worker_priority_path_status']}`",
+        f"- Worker runtime coverage: `{summary['worker_runtime_event_coverage']}`",
+        f"- Mean low queue wait ms: `{summary['mean_low_queue_wait_ms']}`",
+        f"- Mean high queue wait ms: `{summary['mean_high_queue_wait_ms']}`",
+        f"- Mean low client latency ms: `{summary['mean_low_client_latency_ms']}`",
+        f"- Mean high client latency ms: `{summary['mean_high_client_latency_ms']}`",
+        f"- High-priority attached leapfrogs: `{summary['high_priority_attached_leapfrogs']}`",
+        f"- High-priority completed leapfrogs: `{summary['high_priority_completed_leapfrogs']}`",
+        f"- Scheduling effect observed: `{effect}`",
+        "",
+        "## Files",
+        "",
+        f"- Requests CSV: `{summary['requests_csv']}`",
+        f"- Worker runtime log: `{summary['worker_runtime_log']}`",
+        f"- Cache event log: `{summary['cache_event_log']}`",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def output_paths(root: Path, run_id: str) -> dict[str, Path]:
+    run_dir = root / run_id
+    return {
+        "run_dir": run_dir,
+        "requests_csv": run_dir / "priority_scheduling_requests.csv",
+        "summary_csv": run_dir / "priority_scheduling_summary.csv",
+        "summary_md": run_dir / "priority_scheduling_summary.md",
+        "latest_requests_csv": root.parent / "priority_scheduling_requests.csv",
+        "latest_summary_csv": root.parent / "priority_scheduling_summary.csv",
+        "latest_summary_md": root.parent / "priority_scheduling_summary.md",
+    }
+
+
+def save_outputs(paths: dict[str, Path], rows: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+    write_csv(paths["requests_csv"], rows, REQUEST_COLUMNS)
+    write_csv(paths["summary_csv"], [summary], SUMMARY_COLUMNS)
+    paths["summary_md"].write_text(build_summary_md(summary), encoding="utf-8")
+
+    for source_key, latest_key in (
+        ("requests_csv", "latest_requests_csv"),
+        ("summary_csv", "latest_summary_csv"),
+        ("summary_md", "latest_summary_md"),
+    ):
+        paths[latest_key].parent.mkdir(parents=True, exist_ok=True)
+        paths[latest_key].write_text(paths[source_key].read_text(encoding="utf-8"), encoding="utf-8")
+
+
+def load_rows_for_postprocess(path: Path) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    for row in read_csv_rows(path):
+        converted: dict[str, Any] = {}
+        for key, value in row.items():
+            converted[key] = value
+        rows.append(converted)
+    return rows
+
+
+def run_requests(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
+    specs = build_request_specs(args)
+    run_start_monotonic = time.perf_counter() + 0.1
+    max_workers = max(1, len(specs))
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = [
+            pool.submit(send_one_request, args, run_id, run_start_monotonic, spec)
+            for spec in specs
+        ]
+        rows = [future.result() for future in futures]
+    rows.sort(key=lambda row: maybe_int(row.get("arrival_index")) or 0)
+    return rows
+
+
+def main() -> int:
+    args = parse_args()
+    run_id = args.run_id or now_run_id()
+    root = Path(args.output_root).resolve()
+    paths = output_paths(root, run_id)
+    worker_runtime_log = Path(args.worker_runtime_log).resolve() if args.worker_runtime_log else None
+    cache_event_log = Path(args.cache_event_log).resolve() if args.cache_event_log else None
+
+    if args.postprocess_only:
+        rows = load_rows_for_postprocess(paths["requests_csv"])
+    else:
+        rows = run_requests(args, run_id)
+
+    if isinstance(worker_runtime_log, Path) and worker_runtime_log.exists():
+        attach_worker_runtime(rows, worker_runtime_log)
+    if (
+        args.attribution_mode == "precise"
+        and isinstance(cache_event_log, Path)
+        and cache_event_log.exists()
+    ):
+        attach_sglang_priority_events(rows, cache_event_log, worker_runtime_log)
+
+    assign_order_metrics(rows)
+    summary = build_summary(
+        args=args,
+        run_id=run_id,
+        requests_csv=paths["requests_csv"],
+        worker_runtime_log=worker_runtime_log,
+        cache_event_log=cache_event_log,
+        rows=rows,
+    )
+    save_outputs(paths, rows, summary)
+
+    print(f"Priority scheduling run_id={run_id}")
+    print(f"Requests CSV: {paths['requests_csv']}")
+    print(f"Summary CSV: {paths['summary_csv']}")
+    print(f"Summary MD: {paths['summary_md']}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

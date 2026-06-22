@@ -1922,6 +1922,183 @@ This probe is synthetic on purpose. After it shows a clear effect, use
 Experiment 8 to test the same idea across real SWE-bench tasks, hint profiles,
 and KV tier modes.
 
+## Experiment 10: Priority Scheduling Probe
+
+Use this when you want to test queue ordering directly:
+
+- send a burst of low-priority requests first
+- send a burst of high-priority requests slightly later
+- check whether the later high-priority requests get attached first anyway
+
+This is a synthetic scheduling experiment. It does **not** use SWE-bench.
+
+What it measures:
+
+- did high-priority requests leapfrog earlier low-priority requests?
+- did high-priority requests wait less in the worker queue?
+- did the worker actually receive the priority hints?
+- if patched SGLang is active, did the SGLang priority path say it applied priority?
+
+If you already prepared instrumented Dynamo in Experiment 3, you can go
+straight to the run command. In `precise` mode, the wrapper uses worker runtime
+JSON for direct attribution. If `SGLANG_ROOT` is also set to your patched
+SGLang tree, it will additionally capture SGLang priority-path events.
+
+Run it:
+
+```bash
+cd ~/kv_cache_offloading
+
+PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
+PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_ARRIVAL_GAP_MS=200 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+PRIORITY_TOP_LEVEL_PRIORITY_MODE=auto \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_priority_scheduling_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Canonical-hint-only variant for machines that reject top-level `priority`:
+
+```bash
+cd ~/kv_cache_offloading
+
+PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
+PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_ARRIVAL_GAP_MS=200 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+PRIORITY_TOP_LEVEL_PRIORITY_MODE=disable \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_priority_scheduling_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Fast/light version:
+
+```bash
+cd ~/kv_cache_offloading
+
+PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
+PRIORITY_SCHEDULING_ATTRIBUTION_MODE=light \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_ARRIVAL_GAP_MS=200 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_priority_scheduling_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+To watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Outputs:
+
+```bash
+LATEST_PRIORITY="$(ls -td experiments/reports/priority_scheduling/* | head -1)"
+echo "$LATEST_PRIORITY"
+
+cat "$LATEST_PRIORITY/priority_scheduling_requests.csv"
+cat "$LATEST_PRIORITY/priority_scheduling_summary.csv"
+cat "$LATEST_PRIORITY/priority_scheduling_summary.md"
+```
+
+Top-level latest copies:
+
+```bash
+cat experiments/reports/priority_scheduling_requests.csv
+cat experiments/reports/priority_scheduling_summary.csv
+cat experiments/reports/priority_scheduling_summary.md
+```
+
+What the files mean:
+
+```text
+priority_scheduling_requests.csv
+  One row per synthetic request.
+
+priority_scheduling_summary.csv
+  One compact row with the main queue-order metrics.
+
+priority_scheduling_summary.md
+  Short interpretation of whether high-priority actually jumped ahead.
+```
+
+How to read the result:
+
+```text
+If high_priority_attached_leapfrogs > 0, later high-priority requests were
+attached before earlier low-priority requests.
+
+If high_priority_completed_leapfrogs > 0, later high-priority requests also
+finished ahead of earlier low-priority requests.
+
+If mean_high_queue_wait_ms is clearly lower than mean_low_queue_wait_ms, that
+is extra evidence that priority affected scheduling.
+
+If leapfrogs stay at 0 and queue waits look similar, the runtime likely did
+not reorder based on the supplied priority path.
+```
+
+Most important request-level columns:
+
+```text
+priority_class                      low-priority or high-priority
+arrival_index                       Planned client arrival order
+client_latency_ms                   End-to-end client wall-clock latency
+worker_request_received_timestamp   When the worker first saw the request
+worker_request_attached_timestamp   When the worker attached/scheduled it
+worker_queue_wait_ms                Worker-side wait before attach
+attached_rank                       Order in which requests were attached
+completed_rank                      Order in which requests finished
+overtook_earlier_low_attached_count For each high-priority row, how many earlier
+                                    low-priority rows it beat in attach order
+worker_agent_hints_priority         Priority value seen in worker-side hint payload
+worker_top_level_priority           Top-level priority value seen by worker path,
+                                    when available
+sglang_scheduler_priority_applied   Whether the SGLang priority-path log said
+                                    scheduler priority was applied
+```
+
+Most important summary columns:
+
+```text
+frontend_top_level_priority_compatibility
+  supported / unsupported / not_attempted
+
+worker_high_hint_received_status
+  Whether the worker actually received the expected high-priority hint values
+
+worker_high_top_level_priority_status
+  Whether the worker actually saw the top-level priority values
+
+worker_priority_path_status
+  applied / seen_not_applied / worker_received_hint / not_seen
+
+high_priority_attached_leapfrogs
+  Total number of earlier low-priority requests that were beaten by later
+  high-priority requests in attach order
+
+scheduling_effect_observed
+  Simple yes/no summary of whether leapfrogging happened
+```
+
 ## Utilities
 
 ### Latest Result And Report
