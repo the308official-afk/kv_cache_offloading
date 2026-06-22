@@ -389,7 +389,7 @@ cd ~/kv_cache_offloading
 
 ./run_dynamo_single_host.sh stop
 
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --enable-hierarchical-cache --mem-fraction-static 0.7 --hicache-ratio 1' \
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
@@ -411,7 +411,9 @@ docker logs -f dynamo-sglang-worker
 ```
 
 Default rule for this README: use both `--enable-priority-scheduling` and
-`--radix-eviction-policy priority` unless a section explicitly says otherwise.
+`--radix-eviction-policy lru` unless a section explicitly says otherwise.
+This is because the SGLang build used in this setup accepts `lru` and `lfu`
+for `--radix-eviction-policy`, but does not accept `priority`.
 
 If startup fails with host-memory pressure, stop Dynamo and clear page cache:
 
@@ -1448,7 +1450,7 @@ source runtime_instrumentation/dynamo_machine_profile.sh
 
 ./run_dynamo_single_host.sh stop
 
-WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7' \
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru --mem-fraction-static 0.7' \
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
 SGLANG_TRANSFER_LOG=1 \
@@ -1552,7 +1554,7 @@ This sweep is also automated in two modes:
     worker runtime JSON and patched SGLang logger are both active
 
 By default, the retention probe and threshold sweep now launch the worker with
-both `--enable-priority-scheduling` and `--radix-eviction-policy priority`.
+both `--enable-priority-scheduling` and `--radix-eviction-policy lru`.
 Only override `WORKER_BASE_ARGS` if you intentionally want a different policy.
 
 Top-level priority compatibility:
@@ -1613,7 +1615,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1636,7 +1638,7 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1666,7 +1668,7 @@ DISTRACTOR_INPUT_LEN=2000 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1706,7 +1708,7 @@ RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1729,7 +1731,7 @@ RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1752,7 +1754,7 @@ RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -1776,7 +1778,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
@@ -1989,7 +1991,7 @@ PRIORITY_ARRIVAL_GAP_MS=200 \
 PRIORITY_INTER_REQUEST_GAP_MS=20 \
 PRIORITY_TOP_LEVEL_PRIORITY_MODE=auto \
 SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_priority_scheduling_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -2015,7 +2017,7 @@ PRIORITY_ARRIVAL_GAP_MS=200 \
 PRIORITY_INTER_REQUEST_GAP_MS=20 \
 PRIORITY_TOP_LEVEL_PRIORITY_MODE=disable \
 SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_priority_scheduling_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -2035,7 +2037,7 @@ PRIORITY_INPUT_LEN=4000 \
 PRIORITY_OUTPUT_LEN=128 \
 PRIORITY_ARRIVAL_GAP_MS=200 \
 PRIORITY_INTER_REQUEST_GAP_MS=20 \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_priority_scheduling_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```

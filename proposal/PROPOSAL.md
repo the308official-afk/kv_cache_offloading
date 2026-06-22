@@ -4,7 +4,7 @@ This document is the living Markdown companion to the proposal artifacts in this
 It captures the current state of the idea in plain language so we can keep extending it as
 the brainstorming evolves.
 
-Last updated: 2026-06-15
+Last updated: 2026-06-22
 
 ## Current Thesis
 
@@ -18,6 +18,51 @@ Today, most systems mainly ask:
 The HSMA direction asks:
 
 > How do we preserve useful understanding at the lowest necessary fidelity?
+
+Yes. That is very close to the heart of it.
+
+A cleaner way to say it is:
+
+> HSMA treats memory as a system for storing and recovering meaning intelligently, not just storing prompt history efficiently.
+
+So instead of asking:
+
+- where do I put these old tokens?
+- how do I compress this prompt?
+- how do I offload this KV block?
+
+the system asks:
+
+- what does this interaction actually mean?
+- how important is that meaning?
+- what is the cheapest safe way to preserve it?
+- if I need the exact detail later, how do I get back to it?
+
+That is the shift.
+
+The only nuance I'd add is: it is not saying raw prompts, raw text, or raw KV no longer matter. It is saying those should become the lower layers of memory, while higher layers store more abstract meaning.
+
+So the picture is:
+
+```text
+low level = exact tokens / KV / raw evidence
+high level = summaries / concepts / relationships / meaning
+```
+
+And the system moves between them intelligently.
+
+One more small tightening: it is not only about storing prompts intelligently. It is really about storing agent memory intelligently, including:
+
+- prompts
+- responses
+- tool outputs
+- decisions
+- constraints
+- plans
+- user preferences
+- relationships between ideas
+
+So yes: your idea is basically about turning the memory hierarchy from a token-storage hierarchy into a meaning-storage hierarchy, while still keeping a path back to exact evidence when needed.
 
 ## Core Idea
 

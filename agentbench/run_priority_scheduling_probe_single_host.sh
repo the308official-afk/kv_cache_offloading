@@ -25,7 +25,7 @@ MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-60}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-10}"
 MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-30}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
-WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority}"
+WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru}"
 SGLANG_ROOT="${SGLANG_ROOT:-}"
 IGNORE_EOS="${IGNORE_EOS:-0}"
 
@@ -49,7 +49,7 @@ Examples:
   PRIORITY_INPUT_LEN=4000 \\
   PRIORITY_OUTPUT_LEN=128 \\
   PRIORITY_ARRIVAL_GAP_MS=200 \\
-  WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \\
+  WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \\
   $0 Qwen/Qwen2.5-Coder-7B-Instruct
 
 This wrapper:

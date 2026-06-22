@@ -150,7 +150,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -262,7 +262,7 @@ RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
@@ -589,6 +589,34 @@ Why `force`?
 - `auto` is a compatibility fallback
 - `force` is better once the frontend is fixed, because it fails loudly if priority breaks again
 
+### I. Compare the worker runtime across machines
+
+If `--radix-eviction-policy priority` worked on one machine but fails on
+another, capture the actual worker runtime on both machines and compare them:
+
+```bash
+cd ~/kv_cache_offloading
+
+export DYNAMO_MACHINE_PROFILE=ec2   # or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+./runtime_instrumentation/probe_worker_runtime.sh
+```
+
+This writes a report under:
+
+```bash
+experiments/reports/runtime_probe/
+```
+
+Compare these fields between the two machines:
+
+- `worker_image`
+- `architecture`
+- package versions for `dynamo` / `sglang`
+- whether `probe_value=priority` is accepted or rejected
+- the `Help Snippet` section around `radix-eviction-policy`
+
 
 ```bash
 cd ~/kv_cache_offloading
@@ -607,7 +635,7 @@ GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy lru" \
 ./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
