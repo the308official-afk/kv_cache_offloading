@@ -1695,7 +1695,7 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
-DISTRACTOR_COUNTS="2 10 20" \
+DISTRACTOR_COUNTS="10" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
