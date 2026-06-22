@@ -1267,6 +1267,7 @@ cd ~/kv_cache_offloading
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1316,6 +1317,7 @@ cd ~/kv_cache_offloading
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1336,6 +1338,7 @@ cd ~/kv_cache_offloading
 
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1366,6 +1369,7 @@ Multiple models:
 ```bash
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 KV_TIER_MODES="gpu_only" \
 PROTECTED_HINT_PROFILES="high-priority" \
 DISTRACTOR_COUNT=10 \
@@ -1496,6 +1500,7 @@ cd ~/kv_cache_offloading
 python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
   --model "$MODEL_NAME" \
+  --request-context-mode auto \
   --kv-tier-mode gpu_only \
   --protected-hint-profile none \
   --distractor-hint-profile none \
@@ -1516,6 +1521,7 @@ cd ~/kv_cache_offloading
 python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
   --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
   --model "$MODEL_NAME" \
+  --request-context-mode auto \
   --kv-tier-mode gpu_only \
   --protected-hint-profile high-priority \
   --distractor-hint-profile none \
@@ -1620,6 +1626,7 @@ cd ~/kv_cache_offloading
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 DISTRACTOR_COUNTS="2 10 20" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
@@ -1642,6 +1649,7 @@ cd ~/kv_cache_offloading
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 DISTRACTOR_COUNTS="2 10 20" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
@@ -1674,6 +1682,7 @@ export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
 
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=light \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
 DISTRACTOR_COUNTS="2 10 20" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
@@ -2003,6 +2012,7 @@ cd ~/kv_cache_offloading
 
 PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
 PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
+PRIORITY_REQUEST_CONTEXT_MODE=auto \
 LOW_PRIORITY_COUNT=8 \
 HIGH_PRIORITY_COUNT=4 \
 PRIORITY_INPUT_LEN=4000 \
@@ -2029,6 +2039,7 @@ cd ~/kv_cache_offloading
 
 PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
 PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
+PRIORITY_REQUEST_CONTEXT_MODE=auto \
 LOW_PRIORITY_COUNT=8 \
 HIGH_PRIORITY_COUNT=4 \
 PRIORITY_INPUT_LEN=4000 \
@@ -2051,6 +2062,7 @@ cd ~/kv_cache_offloading
 
 PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
 PRIORITY_SCHEDULING_ATTRIBUTION_MODE=light \
+PRIORITY_REQUEST_CONTEXT_MODE=auto \
 LOW_PRIORITY_COUNT=8 \
 HIGH_PRIORITY_COUNT=4 \
 PRIORITY_INPUT_LEN=4000 \
