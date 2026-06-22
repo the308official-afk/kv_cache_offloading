@@ -891,6 +891,151 @@ If there is a single biggest underexplored angle right now, it is:
 That is where the gains can move from nice memory optimization to the whole system working
 differently.
 
+## New Current Idea: Meaning-To-Meaning Attention
+
+Yes. I think that is a very strong direction.
+
+In simple words, you are saying:
+
+**don't judge each memory item alone.  
+Judge it by what other meanings depend on it.**
+
+That is much better than asking only:
+
+- was this attended to recently?
+- is this old?
+- is this summary short enough?
+
+Because some contexts matter not because they are flashy on their own, but because many other
+things quietly rely on them.
+
+A good mental model is:
+
+```text
+memory item A = "same-day ranking uses availability first"
+memory item B = "stylist discovery policy"
+memory item C = "search relevance experiment"
+memory item D = "booking UX recommendation"
+```
+
+If `B`, `C`, and `D` all depend on `A`, then `A` is more important than it looks locally.
+
+So yes: a meaning-to-meaning attention / dependency infrastructure could be the thing that
+helps crack the nut.
+
+The version I would recommend is not literally "transformer attention" at first.
+I would build it more like a semantic dependency graph with weighted links.
+
+Each memory unit could have links like:
+
+- `supports`
+- `depends_on`
+- `contradicts`
+- `refines`
+- `derived_from`
+- `used_by_active_task`
+
+Then each link gets a weight.
+
+So instead of saying:
+
+> this memory is low-attention, throw it away
+
+the system asks:
+
+> if I demote this memory, what other important memories become weaker, less interpretable, or harder to recover?
+
+That is powerful.
+
+A simple retention score could become:
+
+```text
+retention_value =
+local_importance
++ dependency_importance
++ active_task_usage
++ recovery_cost
++ fanout
+- age_decay
+- storage_cost
+```
+
+Where:
+
+- `local_importance` = how important this item looks by itself
+- `dependency_importance` = how much important stuff depends on it
+- `fanout` = how many other nodes point to it
+- `recovery_cost` = how painful it would be to recover later
+
+This gives you a much smarter rule.
+
+Example:
+
+```text
+Context X looks boring by itself
+But 9 important concept nodes depend on it
+So X should stay in a stronger tier
+```
+
+That is exactly the kind of thing a naive summarization system misses.
+
+I think this opens three very interesting possibilities.
+
+**1. Dependency-aware retention**  
+Keep memory hot not only because it is important, but because it is a foundation for other
+important memories.
+
+**2. Dependency-aware demotion**  
+If a memory item is demoted, the system can also update the dependent nodes and maybe preserve
+a stronger pointer structure around them.
+
+**3. Dependency-aware recovery**  
+When an answer looks weak, the system does not just fetch one missing source. It can walk the
+dependency structure and recover the supporting chain.
+
+That could make recovery much smarter.
+
+The big caution is this:
+
+**semantic dependency is not the same thing as semantic similarity.**
+
+Two contexts can be very similar but not depend on each other.  
+And two contexts can depend on each other strongly even if they do not look similar on the
+surface.
+
+So if you build this, the system should learn or infer links like:
+
+- "this policy conclusion depends on this earlier constraint"
+- "this experiment interpretation depends on this exact metric definition"
+- "this plan step depends on this earlier design choice"
+
+not just "these two memories talk about similar topics."
+
+That distinction matters a lot.
+
+If I were shaping this into a concrete sub-idea, I'd call it something like:
+
+**Dependency-Aware Semantic Retention**
+
+or
+
+**Meaning-to-Meaning Attention for Memory Tiering**
+
+And the practical first version would be:
+
+1. Split history into memory units.
+2. Extract semantic links between them.
+3. Build a weighted dependency graph.
+4. Use that graph to compute retention priority.
+5. Keep foundational nodes hotter than leaf nodes when needed.
+6. Use the same graph during recovery.
+
+That feels like a genuinely important extension of HSMA.  
+It moves the system from "store important memories" to **"store the foundations that important
+memories stand on."**
+
+That is a very good idea.
+
 ## Current Open Questions
 
 - How should memory units be defined: token spans, turns, facts, tasks, tool outputs, or all of the above?

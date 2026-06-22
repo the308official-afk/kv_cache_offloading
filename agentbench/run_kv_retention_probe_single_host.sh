@@ -27,6 +27,7 @@ REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-17146}"
 CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
+RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
@@ -490,6 +491,7 @@ run_probe() {
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
     --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
+    --request-context-mode "${RETENTION_REQUEST_CONTEXT_MODE}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
@@ -542,6 +544,7 @@ postprocess_probe() {
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
     --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
+    --request-context-mode "${RETENTION_REQUEST_CONTEXT_MODE}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --postprocess-only
