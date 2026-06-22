@@ -972,6 +972,66 @@ If there is a single biggest underexplored angle right now, it is:
 That is where the gains can move from nice memory optimization to the whole system working
 differently.
 
+## Comparison With SGLang Radix Tree Prompt Reuse
+
+SGLang’s radix tree and your idea are related, but they operate at **different levels**.
+
+SGLang RadixAttention is mainly about **reusing exact token/KV prefixes**. If many requests begin with the same system prompt, same conversation prefix, same tool definitions, or same previous turns, SGLang stores the KV cache in a radix tree and reuses the shared prefix instead of recomputing it. The SGLang docs describe this as detecting shared prefixes, reusing cached KV states, storing completed requests, and evicting old entries when memory fills. Sources: [SGLang prefix caching](https://sgl-project-sglang-93.mintlify.app/concepts/prefix-caching), [SGLang RadixAttention](https://sgl-project-sglang-93.mintlify.app/concepts/radix-attention), [LMSYS SGLang blog](https://lmsys.org/blog/2024-01-17-sglang/).
+
+Your **Meaning-to-Meaning Attention for Memory Tiering** is different. It is not asking:
+
+> do these prompts share the same token prefix?
+
+It asks:
+
+> what meanings depend on what other meanings?
+
+So SGLang reuses this:
+
+```text
+same tokens -> reuse same KV prefix
+```
+
+Your idea tracks this:
+
+```text
+meaning A supports meaning B
+meaning B affects plan C
+plan C depends on constraint D
+```
+
+That means your system could preserve a memory because it is **semantically foundational**, even if its exact tokens are old, not recent, or not part of the current prefix.
+
+A simple contrast:
+
+| System | What It Indexes | Main Question | Reuse Type |
+|---|---|---|---|
+| SGLang radix tree | token sequences / KV prefixes | “Have I seen this exact prefix before?” | exact KV reuse |
+| Meaning-to-Meaning tiering | concepts, decisions, constraints, dependencies | “What important meanings depend on this?” | semantic retention and recovery |
+
+The important point is: **your idea can sit above SGLang rather than replace it.**
+
+SGLang can be the low-level KV reuse engine. HSMA can be the semantic control layer that says:
+
+- this prefix/KV block is tied to an important decision
+- this old context supports many later meanings
+- this subagent cache is temporary and safe to demote
+- this source span must stay recoverable
+- this memory should get stronger retention priority
+
+That matters especially for agentic systems, because NVIDIA’s Dynamo docs note that normal radix cache behavior can let short-lived subagent KV compete with a lead agent’s long-lived prefix for eviction in agentic workloads: [Dynamo SGLang agentic workloads](https://docs.nvidia.com/dynamo/backends/sg-lang/agentic-workloads).
+
+So the clean framing is:
+
+> SGLang’s radix tree reuses identical token/KV prefixes. HSMA’s Meaning-to-Meaning Attention decides which semantic foundations deserve stronger retention, even when token prefixes are not identical.
+
+In simple words:
+
+**SGLang remembers repeated text efficiently.  
+Your idea remembers what the repeated or old text means, and what depends on it.**
+
+They are complementary. SGLang answers “can I reuse this KV?” HSMA answers “is this memory important enough to keep, demote, or recover later?”
+
 ## Current Research Roadmap
 
 The current order of attack should stay conservative:

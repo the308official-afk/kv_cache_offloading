@@ -61,12 +61,12 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=0
 export PYTHONWARNINGS="ignore::DeprecationWarning,ignore::PendingDeprecationWarning"
-export MODEL_READY_RETRIES=120
-export MODEL_READY_DELAY_SECS=2
+export MODEL_READY_RETRIES=900
+export MODEL_READY_DELAY_SECS=3
 export MODEL_READY_STABLE_HITS=2
-export MODEL_SMOKE_RETRIES=60
-export MODEL_SMOKE_DELAY_SECS=10
-export MODEL_COOLDOWN_SECS=30
+export MODEL_SMOKE_RETRIES=180
+export MODEL_SMOKE_DELAY_SECS=15
+export MODEL_COOLDOWN_SECS=60
 
 echo "Using model: $MODEL_NAME"
 echo "Using machine profile: $DYNAMO_MACHINE_PROFILE"
@@ -89,8 +89,9 @@ source runtime_instrumentation/dynamo_machine_profile.sh
 All experiments below inherit this execution policy unless you explicitly
 override it in the shell.
 
-For larger models such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`, raise the
-readiness window before starting long experiments:
+These are now the default safe readiness settings across the automation
+wrappers, and they are the recommended values for larger models such as
+`Qwen/Qwen3-Coder-30B-A3B-Instruct`:
 
 ```bash
 export MODEL_READY_RETRIES=900
@@ -282,7 +283,8 @@ DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
 ./run_dynamo_single_host.sh start
 ```
 
-For larger models, increase the Dynamo startup-registration wait first:
+These startup-registration waits are the default safe values. Re-export them
+explicitly if you want to sanity-check your shell before a restart:
 
 ```bash
 export MODEL_READY_RETRIES=900
@@ -843,8 +845,8 @@ MODEL="$MODEL_NAME" \
 Automated version: stop Dynamo, restart it with the chosen model, wait for
 `/v1/models`, run a smoke test, then launch the batch.
 
-For larger models such as `Qwen/Qwen3-Coder-30B-A3B-Instruct`, set a longer
-readiness and smoke-test window first.
+These larger-model readiness and smoke-test values are already the default for
+this batch wrapper, but you can re-export them explicitly before starting:
 
 ```bash
 export MODEL_READY_RETRIES=900
@@ -1004,17 +1006,17 @@ Useful knobs:
 positional model args              Highest-priority model source.
 MODELS='model-a,model-b'          Override the model-list file.
 MODEL_LIST_FILE=...               Read one model per line.
-MODEL_READY_RETRIES=120          Dynamo start wait for model registration.
-MODEL_READY_DELAY_SECS=2         Seconds between registration checks.
+MODEL_READY_RETRIES=900          Dynamo start wait for model registration.
+MODEL_READY_DELAY_SECS=3         Seconds between registration checks.
 MODEL_READY_STABLE_HITS=2        Required consecutive successful registration checks.
-MODEL_SMOKE_RETRIES=60           Smoke-test retry count.
-MODEL_SMOKE_DELAY_SECS=10        Seconds between smoke-test retries.
-MODEL_COOLDOWN_SECS=30           Extra wait after smoke-test success.
+MODEL_SMOKE_RETRIES=180          Smoke-test retry count.
+MODEL_SMOKE_DELAY_SECS=15        Seconds between smoke-test retries.
+MODEL_COOLDOWN_SECS=60           Extra wait after smoke-test success.
 STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
 ```
 
-For larger models, especially 30B/31B-class models, use a wider readiness
-window:
+These wider readiness values are already the default for the design-space
+wrapper:
 
 ```bash
 MODEL_READY_RETRIES=900
@@ -1199,13 +1201,13 @@ STORAGE_MEDIA                   Label such as local_nvme, ebs_gp3, or fsx_lustre
 HICACHE_WRITE_POLICY            Optional; adds --hicache-write-policy when set.
 HICACHE_EXTRA_ARGS              Optional extra HiCache flags appended to worker args.
 WORKER_EXTRA_ARGS_SUFFIX        Optional extra SGLang worker flags appended to all modes.
-MODEL_SMOKE_RETRIES             Default 60.
-MODEL_SMOKE_DELAY_SECS          Default 10.
-MODEL_COOLDOWN_SECS             Default 30.
+MODEL_SMOKE_RETRIES             Default 180.
+MODEL_SMOKE_DELAY_SECS          Default 15.
+MODEL_COOLDOWN_SECS             Default 60.
 STOP_DYNAMO_WHEN_DONE=1         Stop Dynamo after the final model.
 ```
 
-For larger models, increase those to something like:
+Those are now the default shared values:
 
 ```text
 MODEL_READY_RETRIES=900
