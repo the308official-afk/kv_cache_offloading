@@ -24,6 +24,11 @@ if git -C "${SOURCE_DIR}" apply --check "${PATCH_FILE}" >/dev/null 2>&1; then
   exit 0
 fi
 
+if git -C "${SOURCE_DIR}" apply --3way "${PATCH_FILE}" >/dev/null 2>&1; then
+  echo "Applied runtime instrumentation patch to ${SOURCE_DIR} via 3-way merge"
+  exit 0
+fi
+
 if git -C "${SOURCE_DIR}" apply --reverse --check "${PATCH_FILE}" >/dev/null 2>&1; then
   echo "Runtime instrumentation patch is already applied in ${SOURCE_DIR}"
   exit 0

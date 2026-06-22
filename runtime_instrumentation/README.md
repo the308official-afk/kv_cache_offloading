@@ -120,6 +120,11 @@ If the summary ends with:
 
 you can proceed to the image build step.
 
+That repair path now also recreates `components/src/dynamo/common/runtime_logging.py`
+if the runtime patch could not create it on a fresh clone, and patches the old
+SGLang worker handler files directly when they still use the pre-instrumentation
+layout.
+
 After this succeeds, build the images in step 3.
 
 ### 2a. Apply the tracked logging patch manually

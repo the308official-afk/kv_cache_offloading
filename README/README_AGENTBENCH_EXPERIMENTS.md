@@ -167,6 +167,11 @@ Safe to continue:
 source exactly, but the automatic repair step restored the required
 instrumentation anyway.
 
+That repair path also recreates `runtime_logging.py` automatically if the
+runtime patch did not lay it down on a fresh Dynamo clone, and patches the old
+SGLang worker handler files directly when they still use the pre-instrumentation
+layout.
+
 Then build the local runtime-logging images once:
 
 ```bash
