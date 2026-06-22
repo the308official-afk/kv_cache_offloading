@@ -1939,12 +1939,42 @@ What it measures:
 - did the worker actually receive the priority hints?
 - if patched SGLang is active, did the SGLang priority path say it applied priority?
 
-If you already prepared instrumented Dynamo in Experiment 3, you can go
-straight to the run command. In `precise` mode, the wrapper uses worker runtime
-JSON for direct attribution. If `SGLANG_ROOT` is also set to your patched
-SGLang tree, it will additionally capture SGLang priority-path events.
+### Step 0: Prepare Instrumented Dynamo And Patched SGLang
 
-Run it:
+Do this once before the `precise` version if you want the strongest proof:
+
+- worker runtime JSON from Dynamo
+- patched SGLang priority-path events
+
+```bash
+cd ~/kv_cache_offloading
+
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1 || \
+  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+
+SGLANG_IMAGE="$WORKER_IMAGE" \
+./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+if [ -d upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+elif [ -d runtime_upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/runtime_upstream/sglang/python/sglang"
+else
+  echo "Could not find extracted SGLang source" >&2
+  exit 1
+fi
+
+python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+  --sglang-root "$SGLANG_ROOT"
+```
+
+If you only want the lightweight scheduling check, you can skip Step 0 and run
+the `light` version below.
+
+### Step 1: Run The Precise Scheduling Probe
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1963,6 +1993,12 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
 ./agentbench/run_priority_scheduling_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+This `precise` path gives you:
+
+- worker runtime ordering evidence
+- worker-side hint-received evidence
+- and, if `SGLANG_ROOT` is exported from Step 0, patched SGLang priority-path evidence
 
 Canonical-hint-only variant for machines that reject top-level `priority`:
 
@@ -1984,6 +2020,8 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+### Step 2: Run The Fast/Light Version
+
 Fast/light version:
 
 ```bash
@@ -2002,11 +2040,21 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This `light` path is simpler:
+
+- no patched-SGLang requirement
+- no transfer-log dependency
+- still useful for checking whether high-priority requests jumped ahead
+
+### Step 3: Watch The Worker
+
 To watch the worker:
 
 ```bash
 docker logs -f dynamo-sglang-worker
 ```
+
+### Step 4: Inspect Outputs
 
 Outputs:
 
