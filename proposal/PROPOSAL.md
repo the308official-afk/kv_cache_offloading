@@ -6,7 +6,14 @@ the brainstorming evolves.
 
 Last updated: 2026-06-22
 
-## Current Thesis
+## Executive Proposal
+
+### Title
+
+Hierarchical Semantic Memory Architecture (HSMA): A Meaning-Centered Memory System for
+Long-Horizon Agentic AI
+
+### Core Thesis
 
 Long-horizon agentic AI needs memory that scales with accumulated understanding, not only
 with token history.
@@ -15,43 +22,15 @@ Today, most systems mainly ask:
 
 > How do we store more tokens more cheaply?
 
-The HSMA direction asks:
+HSMA asks:
 
-> How do we preserve useful understanding at the lowest necessary fidelity?
-
-Yes. That is very close to the heart of it.
-
-A cleaner way to say it is:
-
-> HSMA treats memory as a system for storing and recovering meaning intelligently, not just storing prompt history efficiently.
-
-So instead of asking:
-
-- where do I put these old tokens?
-- how do I compress this prompt?
-- how do I offload this KV block?
-
-the system asks:
-
-- what does this interaction actually mean?
-- how important is that meaning?
-- what is the cheapest safe way to preserve it?
-- if I need the exact detail later, how do I get back to it?
+> How do we preserve useful meaning at the lowest necessary fidelity, while keeping a path back
+> to exact evidence when detail matters?
 
 That is the shift.
 
-The only nuance I'd add is: it is not saying raw prompts, raw text, or raw KV no longer matter. It is saying those should become the lower layers of memory, while higher layers store more abstract meaning.
-
-So the picture is:
-
-```text
-low level = exact tokens / KV / raw evidence
-high level = summaries / concepts / relationships / meaning
-```
-
-And the system moves between them intelligently.
-
-One more small tightening: it is not only about storing prompts intelligently. It is really about storing agent memory intelligently, including:
+The idea is not really about storing prompts intelligently. It is about storing agent memory
+intelligently, including:
 
 - prompts
 - responses
@@ -62,14 +41,14 @@ One more small tightening: it is not only about storing prompts intelligently. I
 - user preferences
 - relationships between ideas
 
-So yes: your idea is basically about turning the memory hierarchy from a token-storage hierarchy into a meaning-storage hierarchy, while still keeping a path back to exact evidence when needed.
+### One-Sentence Pitch
 
-## Core Idea
+HSMA turns memory from a token-storage hierarchy into a meaning-storage hierarchy, while still
+preserving escape hatches back to exact evidence.
 
-Instead of keeping all old context forever as one giant pile of tokens or KV state, the
-system gradually transforms history into cheaper and more structured forms of memory.
+## Core Architecture
 
-Working hierarchy:
+HSMA organizes memory as a multi-level hierarchy:
 
 ```text
 Raw KV
@@ -79,7 +58,14 @@ Raw KV
 -> Knowledge Tree / Graph
 ```
 
-The system should preserve exact, expensive memory only where it is still useful for active
+Lower levels preserve exactness. Higher levels preserve meaning.
+
+```text
+low level = exact tokens / KV / raw evidence
+high level = summaries / concepts / relationships / meaning
+```
+
+The system should keep exact, expensive memory only where it is still useful for active
 reasoning, and demote older context into cheaper forms when possible.
 
 ## What Feels Novel
@@ -91,27 +77,125 @@ The novelty is not any one component by itself.
 - Agent summarization already exists.
 - Graph memory already exists.
 
-The current innovation hypothesis is the integration:
+The proposed novelty is the integration:
 
-1. A semantic demotion policy that decides the cheapest safe memory form.
-2. A pointer-preserving hierarchy that links all memory levels together.
-3. A selective recovery path that pulls detail back only when needed.
+1. Meaning-to-Meaning Attention for Memory Tiering
+2. Semantic Demotion Policy
+3. Pointer-Preserving Hierarchy
+4. Selective Recovery
 
 In short: HSMA treats neural memory, textual memory, and symbolic memory as one connected
 system instead of separate features.
 
-## Mental Model
+## Pillar 1: Meaning-To-Meaning Attention For Memory Tiering
 
-The simplest way to think about HSMA is:
+This is one of the most important parts of the proposal and should be treated as a first-class
+mechanism, not a side extension.
 
-- hot context stays close to the model as raw KV
-- warm context becomes compressed or offloaded KV
-- cooler context becomes summaries and concept memories
-- old but still meaningful context lives in a graph/tree with links back to evidence
+In simple words:
 
-This is closer to a semantic memory hierarchy than a flat transcript buffer.
+> Do not judge each memory item alone. Judge it by what other meanings depend on it.
 
-## Core Mechanism 1: Semantic Demotion Policy
+That is much better than asking only:
+
+- was this attended to recently?
+- is this old?
+- is this summary short enough?
+
+Because some contexts matter not because they are flashy on their own, but because many other
+things quietly rely on them.
+
+A good mental model is:
+
+```text
+memory item A = "same-day ranking uses availability first"
+memory item B = "stylist discovery policy"
+memory item C = "search relevance experiment"
+memory item D = "booking UX recommendation"
+```
+
+If `B`, `C`, and `D` all depend on `A`, then `A` is more important than it looks locally.
+
+The practical recommendation is to start with a semantic dependency graph with weighted links,
+not literal transformer attention.
+
+Possible link types:
+
+- `supports`
+- `depends_on`
+- `contradicts`
+- `refines`
+- `derived_from`
+- `used_by_active_task`
+
+Then each link gets a weight.
+
+So instead of saying:
+
+> this memory is low-attention, throw it away
+
+the system asks:
+
+> if I demote this memory, what other important memories become weaker, less interpretable, or
+> harder to recover?
+
+That is powerful.
+
+A simple retention score could become:
+
+```text
+retention_value =
+local_importance
++ dependency_importance
++ active_task_usage
++ recovery_cost
++ fanout
+- age_decay
+- storage_cost
+```
+
+Where:
+
+- `local_importance` = how important the item looks by itself
+- `dependency_importance` = how much important stuff depends on it
+- `fanout` = how many other nodes point to it
+- `recovery_cost` = how painful it would be to recover later
+
+This gives a smarter retention rule than plain recency or token-level attention.
+
+Three important uses:
+
+1. **Dependency-aware retention**
+   Keep memory hot not only because it is important, but because it is a foundation for other
+   important memories.
+
+2. **Dependency-aware demotion**
+   If a memory item is demoted, update dependent nodes and preserve stronger pointer structure
+   around them.
+
+3. **Dependency-aware recovery**
+   When an answer looks weak, recover not just one missing source, but the supporting chain.
+
+The big caution is this:
+
+> semantic dependency is not the same thing as semantic similarity
+
+Two memories can be similar without depending on each other. Two memories can depend strongly
+on each other even if they do not look similar on the surface.
+
+So the system should learn or infer links like:
+
+- this policy conclusion depends on this earlier constraint
+- this experiment interpretation depends on this exact metric definition
+- this plan step depends on this earlier design choice
+
+not just:
+
+- these two memories talk about similar topics
+
+This mechanism may be one of the keys to making the whole proposal work.
+
+## Pillar 2: Semantic Demotion Policy
 
 The system continuously decides what should stay exact and what can be abstracted.
 
@@ -144,22 +228,24 @@ It should also consider:
 - whether a tool output depends on it
 - whether it is hard to recover later
 - whether it is central in the concept graph
+- what other meanings depend on it
 
 Working scoring idea:
 
 ```text
-importance
-= attention
+importance =
+attention
 + reuse
 + task relevance
 + graph centrality
++ dependency_importance
 + recovery cost
 - age decay
 ```
 
 This is not final math, just the current intuition.
 
-## Core Mechanism 2: Pointer-Preserving Hierarchy
+## Pillar 3: Pointer-Preserving Hierarchy
 
 Higher-level abstractions should not replace lower-level evidence blindly.
 
@@ -193,7 +279,7 @@ Pointers:
 
 This is important because the graph is a map, not the full territory.
 
-## Core Mechanism 3: Selective Recovery
+## Pillar 4: Selective Recovery
 
 The system should not assume summaries or concept graphs can magically recreate exact old KV.
 
@@ -212,17 +298,17 @@ Question arrives
 -> else restore deeper raw state if available
 ```
 
-The current preferred framing is:
+Preferred framing:
 
 > selective recovery = retrieve evidence, replay source spans, or rehydrate compressed KV
 
 This is stronger and more believable than claiming the system can perfectly reconstruct lost KV
 from a vague summary.
 
-## New Current Idea: Weak-Answer Detection
+## Supporting Extension: Weak-Answer Detection
 
-A key recent extension is that the system may be able to detect when an answer is weak because
-it is relying on overly abstracted memory.
+A key extension is that the system may be able to detect when an answer is weak because it is
+relying on overly abstracted memory.
 
 High-level flow:
 
@@ -232,8 +318,6 @@ Try answer from summary / concept / graph layer
 -> if weak, recover deeper evidence
 -> regenerate the answer
 ```
-
-The important insight is:
 
 The trigger should not rely only on model confidence.
 
@@ -249,8 +333,8 @@ Better trigger signals may include:
 Possible runtime framing:
 
 ```text
-weakness_score
-= detail_demand
+weakness_score =
+detail_demand
 + evidence_gap
 + conflict_score
 + importance_of_question
@@ -260,10 +344,10 @@ weakness_score
 
 If the weakness score crosses a threshold, the system escalates to deeper recovery and retries.
 
-## New Current Idea: Relative Semantic Delta Memory
+## Supporting Extension: Relative Semantic Delta Memory
 
-Another possible extension is to store new prompts in relation to earlier prompts instead of
-always storing them as fully independent memory items.
+Another extension is to store new prompts in relation to earlier prompts instead of always
+storing them as fully independent memory items.
 
 Simple version:
 
@@ -281,9 +365,6 @@ Then stores:
 Z = A + semantic delta
 ```
 
-The goal is to avoid repeatedly storing the same semantic structure when the new prompt mostly
-overlaps with earlier context.
-
 Example:
 
 ```text
@@ -299,28 +380,9 @@ delta = add coding-agent focus + weak-summary failure concern
 ```
 
 This is different from ordinary prompt compression because the compressed object is not just a
-shorter version of `Z`. It is a pointer-preserving relation:
+shorter version of `Z`. It is a pointer-preserving relation.
 
-```text
-Z memory record:
-- nearest anchor: A
-- shared semantic structure: KV offloading + long-horizon agents
-- delta: coding agents + detail loss from summaries
-- source pointer: raw prompt Z
-- recovery pointer: anchor A evidence + Z evidence
-```
-
-This may fit HSMA well because it adds another kind of demotion:
-
-```text
-full prompt
--> semantic parse
--> nearest anchor
--> relative delta
--> graph update
-```
-
-The system could use this for:
+Possible use cases:
 
 - repeated user questions with small changes
 - iterative experiment design
@@ -333,15 +395,10 @@ Important caveat:
 The delta must not replace the raw prompt. It should be a compact routing and reuse structure.
 The original prompt still needs a pointer so exact wording can be recovered later.
 
-Open question:
-
-Can relative semantic deltas be made reliable enough to reduce prompt/KV/storage cost without
-causing the system to miss small but important differences?
-
-## New Current Idea: Hint-Aware Resource Policy
+## Supporting Extension: Hint-Aware Resource Policy
 
 DeepAgents or an agent runtime may mark a request, prompt, phase, or memory item as important.
-For example, it may say:
+For example:
 
 ```text
 priority = high
@@ -364,18 +421,15 @@ archive raw evidence only
 evict if the value is too low
 ```
 
-The important design principle:
+The design principle:
 
-Hints should be treated as weighted signals, not absolute commands.
-
-A high-priority prompt should be harder to evict, but it should not be impossible to demote.
-Otherwise the system can become inefficient or unfair under pressure.
+> hints should be treated as weighted signals, not absolute commands
 
 Possible scoring frame:
 
 ```text
-retention_value
-= agent_priority
+retention_value =
+agent_priority
 + reuse_likelihood
 + active_task_relevance
 + recovery_cost
@@ -389,35 +443,49 @@ retention_value
 This gives the runtime a way to preserve important agent context while still making practical
 hardware-aware choices.
 
+## The Key Nut To Crack
+
+The key nut to crack is:
+
+> Can the system predict what details future-you will need exactly, before it throws those
+> details away?
+
+That is the real problem.
+
+In simple words, the idea only works if the system gets good at this judgment:
+
+- this old context can safely become a summary
+- this one must stay exact
+- this one can be compressed
+- this one can be abstracted, but only if a strong pointer back to the source is kept
+- this answer looks weak, so the system should go fetch deeper evidence before replying
+
+Everything else is more straightforward engineering:
+
+- building the graph
+- storing summaries
+- moving KV between GPU, CPU, and storage
+- keeping pointers between layers
+
+Those are hard, but they are not the deepest risk.
+
+The deepest risk is bad forgetting.
+
 Example:
 
-```text
-High priority + high reuse + low pressure
-=> keep full KV hot
+- if the system summarizes "we discussed ranking policy," that may be fine
+- but if the real detail was "availability first, then reviews, then distance, only for same-day bookings," losing that exact wording can break the answer later
 
-High priority + high reuse + high pressure
-=> keep summary hot, move raw/compressed KV to secondary tier
+One-sentence version:
 
-High priority + low reuse + high pressure
-=> keep concept/summary hot, archive raw evidence
+> The idea succeeds or fails based on whether it can abstract aggressively without accidentally
+> throwing away future-critical detail.
 
-Low priority + low reuse + high pressure
-=> demote or evict aggressively
-```
+A successful version needs to do three things well:
 
-This fits the HSMA idea because the runtime is not just asking:
-
-> Is this prompt important?
-
-It is asking:
-
-> Given importance, resource pressure, recovery cost, and future utility, what is the cheapest
-> safe memory form for this prompt right now?
-
-Open question:
-
-Can runtime hints from DeepAgents be reliable enough to improve KV retention and memory-tier
-placement without over-protecting the wrong prompts?
+- demote safely
+- preserve escape hatches
+- recover in time
 
 ## Quality Tradeoff
 
@@ -450,51 +518,6 @@ So the safe version of HSMA is:
 - abstraction helps routing
 - evidence is still preserved somewhere
 - when precision matters, the runtime goes back down
-
-## The Key Nut To Crack
-
-The key nut to crack is:
-
-Can the system predict what details future-you will need exactly, before it throws those
-details away?
-
-That is the real problem.
-
-In simple words, the idea only works if the system gets good at this judgment:
-
-- this old context can safely become a summary
-- this one must stay exact
-- this one can be compressed
-- this one can be abstracted, but only if a strong pointer back to the source is kept
-- this answer looks weak, so the system should go fetch deeper evidence before replying
-
-That is the heart of it.
-
-Everything else is more straightforward engineering:
-
-- building the graph
-- storing summaries
-- moving KV between GPU, CPU, and storage
-- keeping pointers between layers
-
-Those are hard, but they are not the deepest risk.
-
-The deepest risk is bad forgetting.
-
-Example:
-
-- if the system summarizes "we discussed ranking policy," that may be fine
-- but if the real detail was "availability first, then reviews, then distance, only for same-day bookings," losing that exact wording can break the answer later
-
-One-sentence version:
-
-> The idea succeeds or fails based on whether it can abstract aggressively without accidentally throwing away future-critical detail.
-
-A successful version needs to do three things well:
-
-- demote safely: know what can be summarized
-- preserve escape hatches: keep strong links back to exact evidence
-- recover in time: detect weak answers and fetch deeper context before the user sees a bad result
 
 ## Practical Mapping To Current Repo Thinking
 
@@ -530,30 +553,25 @@ Where the new semantic tier would add:
 - graph memory
 - evidence pointers
 - selective recovery logic
+- meaning-to-meaning dependency tracking
 
-## Current Research Roadmap
+## Potential Benefits
 
-The current order of attack should stay conservative:
+If HSMA works, the benefits could be substantial:
 
-1. Prove the long-horizon memory problem clearly on real agent workloads.
-2. Build a software-only HSMA prototype.
-3. Add semantic demotion and pointer tracking.
-4. Test selective recovery paths.
-5. Add weak-answer detection and retry.
-6. Measure memory saved, latency added, and answer quality retained.
-7. Only then ask what deserves hardware acceleration.
+- much lower active KV memory
+- much higher session capacity and concurrency
+- better long-horizon recall
+- less prompt bloat and less irrelevant history in active reasoning
+- smarter recovery when detail matters
+- better reuse across repeated or slightly modified tasks
+- better multi-agent collaboration through shared semantic memory
+- phase-aware memory loading
+- lower retrieval overhead when the system can jump to the right semantic branch
+- better hardware utilization across GPU, CPU, and storage tiers
 
-## What Would Need To Be Measured
-
-Key validation questions:
-
-- Does HSMA reduce peak KV memory at acceptable quality?
-- Does it reduce HBM bandwidth pressure?
-- Does long-horizon recall improve or stay stable?
-- How often are summaries enough?
-- How often must the system recover exact evidence?
-- Does weak-answer detection actually catch failures before the user sees them?
-- What is the latency cost of recovery and retry?
+The biggest practical win may not be single-turn speed. It may be making very long-lived
+agents economically and operationally feasible.
 
 ## Back-Of-The-Envelope Speedups
 
@@ -717,172 +735,19 @@ If you pull this off well, expected ranges are something like:
 - KV-limited concurrency improvement: 4x to 8x
 - bigger practical win: very long agent histories become feasible without keeping enormous full KV hot
 
-So the value proposition is less:
-
-> answers become magically 10x faster
-
-and more:
-
-> long-horizon agents stop collapsing under memory pressure, and long-context turns get materially faster too
-
 ## Angles For Even Bigger Gains
 
 The really huge gains may come from avoiding work, not just storing memory better.
 
-Right now, a lot of the framing is:
+Promising angles:
 
-- store old context more cheaply
-- move memory between GPU / CPU / storage
-- recover detail only when needed
-
-That is good. But even bigger gains happen if HSMA lets the system not do certain computation
-at all.
-
-Here are the angles that currently look most promising.
-
-### 1. Reuse Meaning, Not Just Recover It
-
-If the system already knows:
-
-- the task structure
-- the old decision path
-- the relevant constraints
-- the likely answer region
-
-then sometimes it should not re-read history at all. It should jump directly into the right
-semantic branch.
-
-That means the win is not just smaller KV. It is:
-
-- less retrieval
-- less prompt rebuilding
-- less attention over irrelevant history
-- fewer wasted reasoning steps
-
-This can be bigger than ordinary KV savings.
-
-### 2. Branch-Level Reuse
-
-A lot of long-horizon work is not brand-new thinking. It is:
-
-- same project, slightly new question
-- same experiment, slightly changed constraint
-- same codebase, different file
-- same policy, slightly different edge case
-
-If HSMA can store memory as:
-
-```text
-old branch + semantic delta
-```
-
-then you get a stronger form of reuse than standard prompt caching.
-
-That could produce much bigger gains on iterative workflows, because the agent is not starting
-from scratch each time.
-
-### 3. Multi-Agent Shared Meaning
-
-If multiple agents work on the same project, they should not each carry their own giant private
-copy of the same history.
-
-They should share:
-
-- common concept graph
-- shared decisions
-- shared tool results
-- shared evidence pointers
-- shared summaries
-
-Then each agent only keeps its local active KV.
-
-That means HSMA could reduce duplication across agents, not just within one agent.
-
-For multi-agent systems, that may be one of the biggest wins.
-
-### 4. Phase-Aware Memory
-
-Not all agent phases need the same memory fidelity.
-
-Examples:
-
-- planning phase needs goals, constraints, prior decisions
-- coding phase needs exact code and APIs
-- debugging phase needs logs, errors, traces
-- reporting phase needs high-level summaries
-
-If HSMA is phase-aware, it can load the right kind of memory for the current mode.
-
-That is better than one generic retention policy.
-
-### 5. Turn Summaries Into Execution Shortcuts
-
-A strong version of HSMA may store not only what happened, but also what to do next.
-
-For example:
-
-- preferred debugging sequence
-- known good command chain
-- known bad branches to avoid
-- proven recovery path
-- accepted design constraints
-
-Then the memory is not only recall. It becomes operational policy.
-
-That can cut reasoning depth and tool churn a lot.
-
-### 6. Precompute In The Background
-
-A very practical angle:
-
-Do semantic parsing, graph updates, memory scoring, and pointer building asynchronously after
-each turn, instead of waiting until the next query.
-
-Then when the next question comes, the semantic memory is already ready.
-
-That helps latency a lot.
-
-### 7. Fetch Text Before Raw KV Whenever Possible
-
-You may not need raw KV recovery as often as it seems.
-
-A lot of the value may come from:
-
-- summary says where to look
-- system fetches exact source span
-- model rebuilds only that small relevant context
-
-That is much cheaper and simpler than restoring huge old KV blocks.
-
-So one way to get bigger gains is to make the recovery ladder very smart:
-
-```text
-graph -> summary -> exact text span -> small replay -> compressed KV -> raw KV
-```
-
-If most cases stop early, you win big.
-
-### 8. The Biggest Win May Be Concurrency, Not Single-Turn Speed
-
-You may not get a dramatic 10x latency improvement on one answer.
-
-But you might get:
-
-- many more long-lived agents per machine
-- much longer histories before quality falls apart
-- much less duplicated hot memory
-- fewer memory-pressure stalls
-
-That can matter more than single-request speedup.
-
-Current order for pushing toward even bigger gains:
-
-1. Make HSMA a work-avoidance system, not only a storage system.
-2. Add branch / delta reuse for iterative tasks.
-3. Add multi-agent shared semantic memory.
-4. Make the runtime phase-aware.
-5. Keep recovery cheap by preferring exact-text recovery before KV recovery.
-6. Do semantic maintenance in the background.
+- reuse meaning, not just recover it
+- branch-level reuse through semantic deltas
+- multi-agent shared semantic memory
+- phase-aware memory
+- turning summaries into execution shortcuts
+- precomputing semantic maintenance in the background
+- preferring exact-text recovery before raw-KV recovery
 
 If there is a single biggest underexplored angle right now, it is:
 
@@ -891,150 +756,32 @@ If there is a single biggest underexplored angle right now, it is:
 That is where the gains can move from nice memory optimization to the whole system working
 differently.
 
-## New Current Idea: Meaning-To-Meaning Attention
+## Current Research Roadmap
 
-Yes. I think that is a very strong direction.
+The current order of attack should stay conservative:
 
-In simple words, you are saying:
+1. Prove the long-horizon memory problem clearly on real agent workloads.
+2. Build a software-only HSMA prototype.
+3. Add meaning-to-meaning dependency tracking.
+4. Add semantic demotion and pointer tracking.
+5. Test selective recovery paths.
+6. Add weak-answer detection and retry.
+7. Measure memory saved, latency added, and answer quality retained.
+8. Only then ask what deserves hardware acceleration.
 
-**don't judge each memory item alone.  
-Judge it by what other meanings depend on it.**
+## What Would Need To Be Measured
 
-That is much better than asking only:
+Key validation questions:
 
-- was this attended to recently?
-- is this old?
-- is this summary short enough?
-
-Because some contexts matter not because they are flashy on their own, but because many other
-things quietly rely on them.
-
-A good mental model is:
-
-```text
-memory item A = "same-day ranking uses availability first"
-memory item B = "stylist discovery policy"
-memory item C = "search relevance experiment"
-memory item D = "booking UX recommendation"
-```
-
-If `B`, `C`, and `D` all depend on `A`, then `A` is more important than it looks locally.
-
-So yes: a meaning-to-meaning attention / dependency infrastructure could be the thing that
-helps crack the nut.
-
-The version I would recommend is not literally "transformer attention" at first.
-I would build it more like a semantic dependency graph with weighted links.
-
-Each memory unit could have links like:
-
-- `supports`
-- `depends_on`
-- `contradicts`
-- `refines`
-- `derived_from`
-- `used_by_active_task`
-
-Then each link gets a weight.
-
-So instead of saying:
-
-> this memory is low-attention, throw it away
-
-the system asks:
-
-> if I demote this memory, what other important memories become weaker, less interpretable, or harder to recover?
-
-That is powerful.
-
-A simple retention score could become:
-
-```text
-retention_value =
-local_importance
-+ dependency_importance
-+ active_task_usage
-+ recovery_cost
-+ fanout
-- age_decay
-- storage_cost
-```
-
-Where:
-
-- `local_importance` = how important this item looks by itself
-- `dependency_importance` = how much important stuff depends on it
-- `fanout` = how many other nodes point to it
-- `recovery_cost` = how painful it would be to recover later
-
-This gives you a much smarter rule.
-
-Example:
-
-```text
-Context X looks boring by itself
-But 9 important concept nodes depend on it
-So X should stay in a stronger tier
-```
-
-That is exactly the kind of thing a naive summarization system misses.
-
-I think this opens three very interesting possibilities.
-
-**1. Dependency-aware retention**  
-Keep memory hot not only because it is important, but because it is a foundation for other
-important memories.
-
-**2. Dependency-aware demotion**  
-If a memory item is demoted, the system can also update the dependent nodes and maybe preserve
-a stronger pointer structure around them.
-
-**3. Dependency-aware recovery**  
-When an answer looks weak, the system does not just fetch one missing source. It can walk the
-dependency structure and recover the supporting chain.
-
-That could make recovery much smarter.
-
-The big caution is this:
-
-**semantic dependency is not the same thing as semantic similarity.**
-
-Two contexts can be very similar but not depend on each other.  
-And two contexts can depend on each other strongly even if they do not look similar on the
-surface.
-
-So if you build this, the system should learn or infer links like:
-
-- "this policy conclusion depends on this earlier constraint"
-- "this experiment interpretation depends on this exact metric definition"
-- "this plan step depends on this earlier design choice"
-
-not just "these two memories talk about similar topics."
-
-That distinction matters a lot.
-
-If I were shaping this into a concrete sub-idea, I'd call it something like:
-
-**Dependency-Aware Semantic Retention**
-
-or
-
-**Meaning-to-Meaning Attention for Memory Tiering**
-
-And the practical first version would be:
-
-1. Split history into memory units.
-2. Extract semantic links between them.
-3. Build a weighted dependency graph.
-4. Use that graph to compute retention priority.
-5. Keep foundational nodes hotter than leaf nodes when needed.
-6. Use the same graph during recovery.
-
-That feels like a genuinely important extension of HSMA.  
-It moves the system from "store important memories" to **"store the foundations that important
-memories stand on."**
-
-That is a very good idea.
+- Does HSMA reduce peak KV memory at acceptable quality?
+- Does it reduce HBM bandwidth pressure?
+- Does long-horizon recall improve or stay stable?
+- How often are summaries enough?
+- How often must the system recover exact evidence?
+- Does weak-answer detection actually catch failures before the user sees them?
+- What is the latency cost of recovery and retry?
+- Does dependency-aware retention outperform plain recency / attention policies?
+- Can delta-based reuse cut repeated-work cost without missing important differences?
 
 ## Current Open Questions
 
@@ -1045,15 +792,20 @@ That is a very good idea.
 - What signals best predict that detail will matter later?
 - When is raw text replay enough, and when is compressed-KV rehydration better?
 - Can weak-answer detection be made reliable enough to justify the extra recovery step?
+- Can relative semantic deltas be made reliable enough to cut storage without missing critical differences?
+- How should dependency weights be learned or updated over time?
 - Which parts of this should stay software, and which parts might eventually justify hardware support?
 
-## Current One-Paragraph Summary
+## One-Paragraph Summary
 
 HSMA is a proposal for a semantic memory-management layer for long-horizon agentic AI.
 Instead of keeping all history forever as raw tokens or KV cache, the system gradually demotes
 older context into compressed KV, summaries, concept nodes, and a knowledge graph while
-preserving pointers back to the underlying evidence. When a question can be answered from
-abstract memory, the system stays cheap. When the answer looks weak or under-supported, the
-runtime selectively recovers deeper context, such as source spans, compressed KV, or archived
-state, and retries. The long-term goal is to make agents scale with understanding, not merely
-with accumulated token history.
+preserving typed pointers back to exact evidence. A central mechanism is Meaning-to-Meaning
+Attention for Memory Tiering: memories are retained not only based on their own local
+importance, but also based on how many other important meanings depend on them. When a question
+can be answered from abstract memory, the system stays cheap. When the answer looks weak or
+under-supported, the runtime selectively recovers deeper context, such as source spans,
+compressed KV, or archived state, and retries. With extensions like weak-answer detection,
+relative semantic delta memory, and hint-aware resource policy, HSMA aims to make agents scale
+with understanding rather than with accumulated token history.

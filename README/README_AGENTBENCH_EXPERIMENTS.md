@@ -635,6 +635,19 @@ deepagents   Derive deterministic hints from Deep Agents runtime phase state.
 none         Send request context only, without nvext.agent_hints.
 ```
 
+For portability, the broader AgentBench / Deep Agents path now sends only the
+Dynamo-safe runtime-control subset in `nvext.agent_hints`:
+
+- `priority`
+- `osl`
+- `expected_output_tokens`
+- `speculative_prefill`
+- `latency_sensitivity`
+
+Experiment metadata such as `hint_profile`, `hint_probe_id`, `agent_phase`,
+and `program_id` is carried separately through `nvext.request_context`,
+`nvext.agent_context`, and `nvext.annotations`.
+
 To compare providers on the same task:
 
 ```bash
@@ -1574,6 +1587,18 @@ This sweep is also automated in two modes:
     `hint_profile`, `priority`, and `reuse_likelihood` when the instrumented
     worker runtime JSON and patched SGLang logger are both active
 
+For portability, the synthetic retention probe now keeps `nvext.agent_hints`
+minimal and Dynamo-safe:
+
+- runtime control sent in `agent_hints`: `priority`
+- experiment metadata sent separately in:
+  - `nvext.request_context`
+  - `nvext.agent_context`
+  - `nvext.annotations`
+
+This avoids bad-request errors from unsupported hint keys such as
+`reuse_likelihood` while preserving direct attribution.
+
 By default, the retention probe and threshold sweep now launch the worker with
 both `--enable-priority-scheduling` and `--radix-eviction-policy priority`.
 Only override `WORKER_BASE_ARGS` if you intentionally want a different policy.
@@ -2031,6 +2056,17 @@ This `precise` path gives you:
 - worker runtime ordering evidence
 - worker-side hint-received evidence
 - and, if `SGLANG_ROOT` is exported from Step 0, patched SGLang priority-path evidence
+- automatic retry without top-level `priority` if the frontend rejects that field
+- automatic retry without `nvext.request_context` if that field is unsupported
+
+For portability, the synthetic scheduling probe also keeps
+`nvext.agent_hints` minimal and Dynamo-safe:
+
+- runtime control sent in `agent_hints`: `priority`
+- request identity and experiment metadata sent separately in:
+  - `nvext.request_context`
+  - `nvext.agent_context`
+  - `nvext.annotations`
 
 Canonical-hint-only variant for machines that reject top-level `priority`:
 
@@ -2052,6 +2088,17 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
 ./agentbench/run_priority_scheduling_probe_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+How the two priority modes differ:
+
+- `PRIORITY_TOP_LEVEL_PRIORITY_MODE=auto`
+  - tries top-level `priority` first
+  - if the frontend returns `Unsupported parameter(s): priority`, the probe retries without it
+  - this is the safest default when moving between machines
+- `PRIORITY_TOP_LEVEL_PRIORITY_MODE=disable`
+  - never sends top-level `priority`
+  - only uses the canonical `nvext.agent_hints.priority` path
+  - use this when you already know the frontend rejects top-level `priority`
 
 ### Step 2: Run The Fast/Light Version
 
@@ -2120,6 +2167,20 @@ priority_scheduling_summary.csv
 
 priority_scheduling_summary.md
   Short interpretation of whether high-priority actually jumped ahead.
+```
+
+Important failure signal:
+
+```text
+If priority_scheduling_summary.csv shows:
+
+  frontend_top_level_priority_compatibility=unsupported
+  worker_runtime_event_coverage=0 / N
+  worker_priority_path_status=not_seen
+
+then the probe did not really reach the worker scheduling path.
+That run should be treated as a frontend-validation failure, not as evidence
+that priority scheduling had no effect.
 ```
 
 How to read the result:

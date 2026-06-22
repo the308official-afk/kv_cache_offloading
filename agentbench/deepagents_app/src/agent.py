@@ -63,8 +63,11 @@ from langchain_openai import ChatOpenAI
 
 from .hint_providers import (
     HINT_PROVIDER_AGENTBENCH,
+    build_agent_context,
+    build_annotations,
     build_hint_payload,
     normalize_hint_provider,
+    supported_agent_hints,
 )
 from .prompts import (
     DYNAMO_HINT_NOTES,
@@ -1018,11 +1021,14 @@ def build_dynamo_chat_model(
 ) -> ChatOpenAI:
     # Debugging note: this is the Deep Agents -> Dynamo adaptation hook.
     # Instead of sending requests to a cloud model endpoint, the app points ChatOpenAI at local Dynamo.
-    payload = hint_payload or {}
+    full_hint_payload = hint_payload or {}
+    payload = supported_agent_hints(full_hint_payload)
     context = request_context or {}
     extra_body = {
         "nvext": {
             "request_context": context,
+            "agent_context": build_agent_context(context),
+            "annotations": build_annotations(context, full_hint_payload),
         },
     }
     if payload:
@@ -1034,12 +1040,16 @@ def build_dynamo_chat_model(
     }:
         runtime_observability = {
             "agent_hints": payload or None,
-            "agent_hints_source": payload.get("hint_source") if payload else "none",
+            "agent_hints_source": full_hint_payload.get("hint_source") if full_hint_payload else "none",
             "agent_hints_keys": sorted(str(key) for key in payload),
-            "hint_probe_id": payload.get("hint_probe_id"),
+            "hint_probe_id": full_hint_payload.get("hint_probe_id"),
             "request_context": context,
+            "agent_context": build_agent_context(context),
+            "annotations": build_annotations(context, full_hint_payload),
             "nvext": {
                 "request_context": context,
+                "agent_context": build_agent_context(context),
+                "annotations": build_annotations(context, full_hint_payload),
             },
         }
         if payload:

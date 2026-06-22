@@ -41,6 +41,8 @@ REMOTE_RUN_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports/runs"
 LOCAL_RUN_REPORTS_DIR="${REPO_ROOT}/experiments/reports/runs"
 REMOTE_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports"
 LOCAL_REPORTS_DIR="${REPO_ROOT}/experiments/reports"
+REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR="${REMOTE_REPORTS_DIR}/priority_scheduling"
+LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR="${LOCAL_REPORTS_DIR}/priority_scheduling"
 LOGGING_PROFILE_WALLTIME_REPORT="sglang_logging_profile_walltime.csv"
 DESIGN_SPACE_MATRIX_REPORT="design_space_matrix.csv"
 DESIGN_SPACE_RETENTION_MATRIX_REPORT="design_space_retention_matrix.csv"
@@ -76,6 +78,7 @@ mkdir -p "$LOCAL_RESULTS_DIR"
 mkdir -p "$LOCAL_TRANSFER_LOG_DIR"
 mkdir -p "$LOCAL_RUN_REPORTS_DIR"
 mkdir -p "$LOCAL_REPORTS_DIR"
+mkdir -p "$LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR"
 
 SSH_OPTS=(
   -i "$PEM"
@@ -284,6 +287,20 @@ for report in \
     echo "Remote retention-threshold report not found (${report}); skipping." >&2
   fi
 done
+
+echo "==== Downloading priority-scheduling reports from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}/"
+echo "Local dest:    ${LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR}/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}/" \
+    "${LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR}/"
+else
+  echo "Remote priority-scheduling report directory not found; skipping." >&2
+fi
 
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then
   echo "==== Building local latest run report ===="

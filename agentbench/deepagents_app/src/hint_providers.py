@@ -18,6 +18,14 @@ HINT_PROVIDERS = (
     HINT_PROVIDER_NONE,
 )
 
+SUPPORTED_DYNAMO_AGENT_HINT_KEYS = (
+    "priority",
+    "osl",
+    "expected_output_tokens",
+    "speculative_prefill",
+    "latency_sensitivity",
+)
+
 
 DEEPAGENTS_PHASE_POLICIES: dict[str, dict[str, Any]] = {
     "baseline_execution": {
@@ -112,3 +120,72 @@ def build_hint_payload(
     if context.get("request_id"):
         hints["request_id"] = context["request_id"]
     return hints
+
+
+def supported_agent_hints(hints: dict[str, Any] | None) -> dict[str, Any]:
+    """Return only the Dynamo-safe runtime-control hint subset.
+
+    Research metadata such as hint profiles and probe ids should travel via
+    request context / agent context / annotations, not via nvext.agent_hints.
+    """
+
+    if not isinstance(hints, dict):
+        return {}
+
+    filtered: dict[str, Any] = {}
+    for key in SUPPORTED_DYNAMO_AGENT_HINT_KEYS:
+        value = hints.get(key)
+        if value in (None, ""):
+            continue
+        filtered[key] = value
+    return filtered
+
+
+def build_agent_context(request_context: dict[str, Any] | None) -> dict[str, Any]:
+    context = request_context or {}
+    return {
+        "session_type_id": "agentbench.deepagents_app:v1",
+        "session_id": str(context.get("parent_run_id") or "agentbench"),
+        "trajectory_id": str(context.get("request_id") or ""),
+        "parent_trajectory_id": str(context.get("parent_run_id") or ""),
+    }
+
+
+def build_annotations(
+    request_context: dict[str, Any] | None,
+    hint_payload: dict[str, Any] | None,
+) -> list[str]:
+    context = request_context or {}
+    hints = hint_payload or {}
+    annotations: list[str] = []
+
+    for key in (
+        "request_id",
+        "parent_run_id",
+        "task_instance_id",
+        "phase",
+        "step_index",
+        "step_title",
+        "app_variant",
+    ):
+        value = context.get(key)
+        if value in (None, ""):
+            continue
+        annotations.append(f"{key}:{value}")
+
+    for key in (
+        "hint_profile",
+        "hint_provider",
+        "hint_probe_id",
+        "agent_phase",
+        "program_id",
+        "context_type",
+        "agentbench_hint_profile_seed",
+        "hint_source",
+    ):
+        value = hints.get(key)
+        if value in (None, ""):
+            continue
+        annotations.append(f"{key}:{value}")
+
+    return annotations

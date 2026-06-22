@@ -19,6 +19,7 @@ PRIORITY_OUTPUT_LEN="${PRIORITY_OUTPUT_LEN:-128}"
 PRIORITY_ARRIVAL_GAP_MS="${PRIORITY_ARRIVAL_GAP_MS:-200}"
 PRIORITY_INTER_REQUEST_GAP_MS="${PRIORITY_INTER_REQUEST_GAP_MS:-20}"
 PRIORITY_TOP_LEVEL_PRIORITY_MODE="${PRIORITY_TOP_LEVEL_PRIORITY_MODE:-auto}"
+PRIORITY_REQUEST_CONTEXT_MODE="${PRIORITY_REQUEST_CONTEXT_MODE:-auto}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-60}"
@@ -215,6 +216,7 @@ capture_worker_runtime_log() {
   echo "Arrival gap ms: ${PRIORITY_ARRIVAL_GAP_MS}"
   echo "Inter-request gap ms: ${PRIORITY_INTER_REQUEST_GAP_MS}"
   echo "Top-level priority mode: ${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
+  echo "Request-context mode: ${PRIORITY_REQUEST_CONTEXT_MODE}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
   echo "Worker runtime log: ${WORKER_RUNTIME_LOG}"
@@ -276,6 +278,7 @@ probe_cmd=(
   --inter-request-gap-ms "${PRIORITY_INTER_REQUEST_GAP_MS}"
   --request-timeout "${REQUEST_TIMEOUT}"
   --top-level-priority-mode "${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
+  --request-context-mode "${PRIORITY_REQUEST_CONTEXT_MODE}"
   --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
   --worker-runtime-log "${WORKER_RUNTIME_LOG}"
 )

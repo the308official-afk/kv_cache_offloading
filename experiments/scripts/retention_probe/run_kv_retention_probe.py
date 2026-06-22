@@ -37,54 +37,24 @@ DEFAULT_PROBE_INPUT_LEN = 14000
 DEFAULT_MAX_CONTEXT_TOKENS = 17146
 DEFAULT_CACHE_CONTROL_EPHEMERAL_TTL = os.environ.get("CACHE_CONTROL_EPHEMERAL_TTL", "1h")
 
+#
+# Important: the synthetic retention probe keeps runtime-control hints intentionally
+# minimal for cross-machine compatibility. Request attribution metadata travels via
+# request_context / agent_context / annotations, while nvext.agent_hints only carries
+# the Dynamo-safe priority signal we want the runtime to act on.
+#
 DEFAULT_HINTS: dict[str, Any] = {
     "priority": 5,
-    "reuse_likelihood": 0.9,
-    "agent_phase": "retention_probe",
-    "latency_sensitivity": 0.7,
-    "program_id": "agentbench.synthetic_retention_probe",
-    "context_type": "synthetic_kv_retention_probe",
-    "expected_output_tokens": 1,
 }
 
 HINT_PROFILES: dict[str, dict[str, Any]] = {
-    "baseline": {},
-    "high-reuse": {
-        "priority": 5,
-        "reuse_likelihood": 1.0,
-        "latency_sensitivity": 0.5,
-        "expected_output_tokens": 1,
-    },
-    "low-reuse": {
-        "priority": 5,
-        "reuse_likelihood": 0.0,
-        "latency_sensitivity": 0.5,
-        "expected_output_tokens": 1,
-    },
-    "high-priority": {
-        "priority": 10,
-        "reuse_likelihood": 0.5,
-        "latency_sensitivity": 1.0,
-        "expected_output_tokens": 1,
-    },
-    "low-priority": {
-        "priority": 1,
-        "reuse_likelihood": 0.5,
-        "latency_sensitivity": 0.2,
-        "expected_output_tokens": 1,
-    },
-    "long-output": {
-        "priority": 5,
-        "reuse_likelihood": 0.8,
-        "latency_sensitivity": 0.5,
-        "expected_output_tokens": 2048,
-    },
-    "short-output": {
-        "priority": 5,
-        "reuse_likelihood": 0.8,
-        "latency_sensitivity": 0.5,
-        "expected_output_tokens": 128,
-    },
+    "baseline": {"priority": 5},
+    "high-reuse": {"priority": 5},
+    "low-reuse": {"priority": 5},
+    "high-priority": {"priority": 10},
+    "low-priority": {"priority": 1},
+    "long-output": {"priority": 5},
+    "short-output": {"priority": 5},
 }
 
 NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
@@ -345,13 +315,6 @@ def build_hints(*, profile: str, run_id: str, request_role: str, sequence_index:
 
     hints = dict(DEFAULT_HINTS)
     hints.update(HINT_PROFILES[normalized])
-    hints["agent_phase"] = "retention_probe"
-    hints["hint_profile"] = normalized
-    hints["hint_probe_id"] = f"{run_id}::{request_role}::{sequence_index}"
-    hints["phase_sequence_index"] = sequence_index
-    hints["expected_output_tokens"] = output_len
-    hints["retention_probe_role"] = request_role
-    hints["cache_retention_priority"] = "high" if int(hints.get("priority", 0)) >= 10 else "normal"
     return hints
 
 

@@ -33,14 +33,13 @@ RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
 
-DEFAULT_HINTS: dict[str, Any] = {
-    "reuse_likelihood": 0.5,
-    "agent_phase": "priority_scheduling_probe",
-    "latency_sensitivity": 0.6,
-    "program_id": "agentbench.synthetic_priority_scheduling_probe",
-    "context_type": "synthetic_priority_queue_probe",
-    "expected_output_tokens": 128,
-}
+#
+# Important: the synthetic priority-scheduling probe keeps nvext.agent_hints
+# limited to the Dynamo-safe runtime-control field we actually want scheduled
+# against: priority. Request identity and experiment metadata travel separately
+# through request_context / agent_context / annotations.
+#
+DEFAULT_HINTS: dict[str, Any] = {}
 
 NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
 
@@ -313,12 +312,6 @@ def build_hint_payload(
 ) -> dict[str, Any]:
     payload = dict(DEFAULT_HINTS)
     payload["priority"] = priority_value
-    payload["hint_profile"] = priority_class
-    payload["hint_probe_id"] = f"{run_id}::{request_role}"
-    payload["phase_sequence_index"] = arrival_index
-    payload["expected_output_tokens"] = output_len_tokens
-    payload["priority_class"] = priority_class
-    payload["cache_retention_priority"] = "high" if priority_value >= 10 else "normal"
     return payload
 
 
@@ -400,6 +393,14 @@ def request_context_unsupported(status: int, error: str) -> bool:
         return False
     normalized = error.lower()
     return "request_context" in normalized and "unknown field" in normalized
+
+
+def request_succeeded(status: Any) -> bool:
+    try:
+        code = int(status)
+    except (TypeError, ValueError):
+        return False
+    return 200 <= code < 300
 
 
 def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str]:
@@ -546,20 +547,19 @@ def send_one_request(
         priority_class=spec.priority_class,
         prompt_hash=prompt_hash,
     )
+    base_nvext: dict[str, Any] = {
+        "agent_context": build_agent_context(context),
+        "annotations": build_annotations(context),
+        "agent_hints": hints,
+    }
     payload: dict[str, Any] = {
         "model": args.model,
         "messages": [{"role": "user", "content": spec.prompt}],
         "max_tokens": args.output_len_tokens,
         "temperature": 0,
-        "nvext": {
-            "agent_context": build_agent_context(context),
-            "annotations": build_annotations(context),
-            "agent_hints": hints,
-        },
+        "nvext": dict(base_nvext),
     }
     should_attempt_request_context = args.request_context_mode != "disable"
-    if should_attempt_request_context:
-        payload["nvext"]["request_context"] = context
     if args.ignore_eos:
         payload["ignore_eos"] = True
 
@@ -567,44 +567,52 @@ def send_one_request(
     should_attempt_top_level_priority = (
         priority is not None and args.top_level_priority_mode != "disable"
     )
-    if should_attempt_top_level_priority:
-        payload["priority"] = priority
-
-    send_started = utc_now()
-    start = time.perf_counter()
-    status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
-    latency_ms = (time.perf_counter() - start) * 1000
-    send_finished = utc_now()
-
+    include_top_level_priority = should_attempt_top_level_priority
+    include_request_context = should_attempt_request_context
     fallback_used = False
     top_level_priority_unsupported = False
     request_context_fallback_used = False
-    if (
-        should_attempt_top_level_priority
-        and args.top_level_priority_mode == "auto"
-        and priority_unsupported(status, error)
-    ):
-        fallback_used = True
-        top_level_priority_unsupported = True
-        payload.pop("priority", None)
-        send_started = utc_now()
-        start = time.perf_counter()
-        status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
-        latency_ms = (time.perf_counter() - start) * 1000
-        send_finished = utc_now()
+    send_started = utc_now()
+    send_finished = send_started
+    latency_ms = 0.0
+    status = 0
+    response_json = None
+    error = ""
 
-    if (
-        should_attempt_request_context
-        and args.request_context_mode == "auto"
-        and request_context_unsupported(status, error)
-    ):
-        request_context_fallback_used = True
-        payload["nvext"].pop("request_context", None)
+    while True:
+        payload["nvext"] = dict(base_nvext)
+        if include_request_context:
+            payload["nvext"]["request_context"] = context
+        else:
+            payload["nvext"].pop("request_context", None)
+        if include_top_level_priority and priority is not None:
+            payload["priority"] = priority
+        else:
+            payload.pop("priority", None)
+
         send_started = utc_now()
         start = time.perf_counter()
         status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
         latency_ms = (time.perf_counter() - start) * 1000
         send_finished = utc_now()
+        if (
+            include_top_level_priority
+            and args.top_level_priority_mode == "auto"
+            and priority_unsupported(status, error)
+        ):
+            include_top_level_priority = False
+            fallback_used = True
+            top_level_priority_unsupported = True
+            continue
+        if (
+            include_request_context
+            and args.request_context_mode == "auto"
+            and request_context_unsupported(status, error)
+        ):
+            include_request_context = False
+            request_context_fallback_used = True
+            continue
+        break
 
     usage = response_json.get("usage", {}) if isinstance(response_json, dict) else {}
     prompt_tokens, cached_tokens = usage_prompt_tokens(usage if isinstance(usage, dict) else {})
@@ -628,7 +636,7 @@ def send_one_request(
         "agent_hints_priority": priority if priority is not None else "",
         "top_level_priority_mode": args.top_level_priority_mode,
         "top_level_priority_attempted": should_attempt_top_level_priority,
-        "top_level_priority_sent": should_attempt_top_level_priority and not fallback_used,
+        "top_level_priority_sent": include_top_level_priority and request_succeeded(status),
         "top_level_priority_value": priority if priority is not None else "",
         "top_level_priority_fallback_used": fallback_used,
         "top_level_priority_unsupported": top_level_priority_unsupported,
@@ -1042,6 +1050,8 @@ def request_priority_status(rows: list[dict[str, Any]], *, field: str, expected:
 def frontend_priority_compatibility(rows: list[dict[str, Any]]) -> str:
     if any(truthy(row.get("top_level_priority_unsupported")) for row in rows):
         return "unsupported"
+    if any(priority_unsupported(maybe_int(row.get("status")) or 0, str(row.get("error") or "")) for row in rows):
+        return "unsupported"
     if any(truthy(row.get("top_level_priority_sent")) for row in rows):
         return "supported"
     return "not_attempted"
@@ -1071,8 +1081,24 @@ def build_summary(
 
     low_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in low_rows) if value is not None]
     high_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in high_rows) if value is not None]
-    low_client_latencies = [value for value in (maybe_int(row.get("client_latency_ms")) for row in low_rows) if value is not None]
-    high_client_latencies = [value for value in (maybe_int(row.get("client_latency_ms")) for row in high_rows) if value is not None]
+    low_client_latencies = [
+        value
+        for value in (
+            maybe_int(row.get("client_latency_ms"))
+            for row in low_rows
+            if request_succeeded(row.get("status"))
+        )
+        if value is not None
+    ]
+    high_client_latencies = [
+        value
+        for value in (
+            maybe_int(row.get("client_latency_ms"))
+            for row in high_rows
+            if request_succeeded(row.get("status"))
+        )
+        if value is not None
+    ]
 
     high_attached_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_attached_count")) or 0 for row in high_rows)
     high_completed_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_completed_count")) or 0 for row in high_rows)
@@ -1189,6 +1215,10 @@ def load_rows_for_postprocess(path: Path) -> list[dict[str, Any]]:
         converted: dict[str, Any] = {}
         for key, value in row.items():
             converted[key] = value
+        status = maybe_int(converted.get("status"))
+        error = str(converted.get("error") or "")
+        if priority_unsupported(status or 0, error):
+            converted["top_level_priority_unsupported"] = True
         rows.append(converted)
     return rows
 
