@@ -110,6 +110,49 @@ def parse_runtime_json_payload(line: str) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) else None
 
 
+def annotations_from_record(record: dict[str, Any]) -> list[str]:
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("annotations"), list):
+        return [str(item) for item in nvext["annotations"] if item not in (None, "")]
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        annotations = runtime_observability.get("annotations")
+        if isinstance(annotations, list):
+            return [str(item) for item in annotations if item not in (None, "")]
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("annotations"), list):
+            return [str(item) for item in nested_nvext["annotations"] if item not in (None, "")]
+    return []
+
+
+def annotation_map_from_record(record: dict[str, Any]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in annotations_from_record(record):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value and key not in values:
+            values[key] = value
+    return values
+
+
+def agent_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("agent_context"), dict):
+        return nvext["agent_context"]
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        agent_context = runtime_observability.get("agent_context")
+        if isinstance(agent_context, dict):
+            return agent_context
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("agent_context"), dict):
+            return nested_nvext["agent_context"]
+    return {}
+
+
 def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
     request_context = record.get("request_context")
     if isinstance(request_context, dict):
@@ -127,7 +170,29 @@ def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
     nvext = record.get("nvext")
     if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
         return nvext["request_context"]
-    return {}
+    annotations = annotation_map_from_record(record)
+    agent_context = agent_context_from_record(record)
+    request_id = annotations.get("request_id")
+    if not request_id and isinstance(agent_context.get("trajectory_id"), str):
+        request_id = agent_context.get("trajectory_id")
+    parent_run_id = annotations.get("parent_run_id")
+    if not parent_run_id and isinstance(agent_context.get("session_id"), str):
+        parent_run_id = agent_context.get("session_id")
+    if not request_id and not parent_run_id and not annotations:
+        return {}
+    return {
+        "request_id": request_id or "",
+        "parent_run_id": parent_run_id or "",
+        "task_instance_id": annotations.get("task_instance_id", ""),
+        "phase": annotations.get("phase", ""),
+        "step_index": annotations.get("step_index", ""),
+        "step_title": annotations.get("step_title", ""),
+        "app_variant": annotations.get("app_variant", ""),
+        "prompt_hash": annotations.get("prompt_hash", ""),
+        "hint_profile": annotations.get("hint_profile", ""),
+        "cache_control_profile": annotations.get("cache_control_profile", ""),
+        "priority_class": annotations.get("priority_class", ""),
+    }
 
 
 def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:

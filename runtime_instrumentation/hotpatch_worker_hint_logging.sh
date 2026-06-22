@@ -201,6 +201,82 @@ def extract_request_context(request: dict[str, Any]) -> dict[str, Any] | None:
         if isinstance(request_context, dict):
             return _sanitize(request_context)
 
+    annotations = extract_annotations(request)
+    agent_context = extract_agent_context(request) or {}
+    annotation_map = annotations_to_map(annotations)
+    request_id = annotation_map.get("request_id")
+    if not request_id and isinstance(agent_context.get("trajectory_id"), str):
+        request_id = agent_context.get("trajectory_id")
+    parent_run_id = annotation_map.get("parent_run_id")
+    if not parent_run_id and isinstance(agent_context.get("session_id"), str):
+        parent_run_id = agent_context.get("session_id")
+    if not request_id and not parent_run_id and not annotation_map:
+        return None
+    return _sanitize(
+        {
+            "request_id": request_id or "",
+            "parent_run_id": parent_run_id or "",
+            "task_instance_id": annotation_map.get("task_instance_id", ""),
+            "phase": annotation_map.get("phase", ""),
+            "step_index": annotation_map.get("step_index", ""),
+            "step_title": annotation_map.get("step_title", ""),
+            "app_variant": annotation_map.get("app_variant", ""),
+            "prompt_hash": annotation_map.get("prompt_hash", ""),
+            "hint_profile": annotation_map.get("hint_profile", ""),
+            "cache_control_profile": annotation_map.get("cache_control_profile", ""),
+            "priority_class": annotation_map.get("priority_class", ""),
+        }
+    )
+
+
+def extract_annotations(request: dict[str, Any]) -> list[str]:
+    nvext = request.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("annotations"), list):
+        return [str(item) for item in nvext["annotations"] if item not in (None, "")]
+
+    runtime_observability = extract_runtime_observability(request)
+    annotations = runtime_observability.get("annotations")
+    if isinstance(annotations, list):
+        return [str(item) for item in annotations if item not in (None, "")]
+
+    nested_nvext = runtime_observability.get("nvext")
+    if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("annotations"), list):
+        return [str(item) for item in nested_nvext["annotations"] if item not in (None, "")]
+
+    return []
+
+
+def annotations_to_map(annotations: list[str]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in annotations:
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value and key not in values:
+            values[key] = value
+    return values
+
+
+def extract_agent_context(request: dict[str, Any]) -> dict[str, Any] | None:
+    nvext = request.get("nvext")
+    if isinstance(nvext, dict):
+        agent_context = nvext.get("agent_context")
+        if isinstance(agent_context, dict):
+            return _sanitize(agent_context)
+
+    runtime_observability = extract_runtime_observability(request)
+    agent_context = runtime_observability.get("agent_context")
+    if isinstance(agent_context, dict):
+        return _sanitize(agent_context)
+
+    nested_nvext = runtime_observability.get("nvext")
+    if isinstance(nested_nvext, dict):
+        agent_context = nested_nvext.get("agent_context")
+        if isinstance(agent_context, dict):
+            return _sanitize(agent_context)
+
     return None
 
 
@@ -234,18 +310,27 @@ def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
 
 def agent_hint_log_fields(request: dict[str, Any]) -> dict[str, Any]:
     agent_hints, source = extract_agent_hints_with_source(request)
+    agent_context = extract_agent_context(request)
+    annotations = extract_annotations(request)
+    request_context = extract_request_context(request)
     if not isinstance(agent_hints, dict):
         return {
             "agent_hints": None,
             "agent_hints_source": source,
             "agent_hints_keys": [],
             "hint_probe_id": None,
+            "agent_context": agent_context,
+            "annotations": annotations,
+            "request_context": request_context,
         }
     return {
         "agent_hints": agent_hints,
         "agent_hints_source": source,
         "agent_hints_keys": sorted(str(key) for key in agent_hints),
         "hint_probe_id": agent_hints.get("hint_probe_id"),
+        "agent_context": agent_context,
+        "annotations": annotations,
+        "request_context": request_context,
     }
 
 

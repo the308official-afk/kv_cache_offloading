@@ -171,6 +171,16 @@ def parse_args() -> argparse.Namespace:
             "'force' always sends it, and 'disable' never sends it."
         ),
     )
+    parser.add_argument(
+        "--request-context-mode",
+        default=os.environ.get("PRIORITY_REQUEST_CONTEXT_MODE", "auto"),
+        choices=("auto", "force", "disable"),
+        help=(
+            "How to handle nvext.request_context. "
+            "'auto' retries without it if the frontend rejects that field, "
+            "'force' always sends it, and 'disable' never sends it."
+        ),
+    )
     parser.add_argument("--ignore-eos", action="store_true")
     args = parser.parse_args()
 
@@ -333,6 +343,35 @@ def request_context(
     }
 
 
+def build_agent_context(context: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "session_type_id": "synthetic_priority_scheduling_probe:v1",
+        "session_id": str(context.get("parent_run_id") or "priority_scheduling_probe"),
+        "trajectory_id": str(context.get("request_id") or ""),
+        "parent_trajectory_id": str(context.get("parent_run_id") or ""),
+    }
+
+
+def build_annotations(context: dict[str, Any]) -> list[str]:
+    annotations: list[str] = []
+    for key in (
+        "request_id",
+        "parent_run_id",
+        "task_instance_id",
+        "phase",
+        "step_index",
+        "step_title",
+        "app_variant",
+        "priority_class",
+        "prompt_hash",
+    ):
+        value = context.get(key)
+        if value in (None, ""):
+            continue
+        annotations.append(f"{key}:{value}")
+    return annotations
+
+
 def top_level_priority_from_hints(hints: dict[str, Any] | None) -> int | None:
     if not hints:
         return None
@@ -354,6 +393,13 @@ def priority_unsupported(status: int, error: str) -> bool:
         return False
     normalized = error.lower()
     return "unsupported parameter" in normalized and "priority" in normalized
+
+
+def request_context_unsupported(status: int, error: str) -> bool:
+    if status != 400 or not error:
+        return False
+    normalized = error.lower()
+    return "request_context" in normalized and "unknown field" in normalized
 
 
 def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str]:
@@ -506,10 +552,14 @@ def send_one_request(
         "max_tokens": args.output_len_tokens,
         "temperature": 0,
         "nvext": {
-            "request_context": context,
+            "agent_context": build_agent_context(context),
+            "annotations": build_annotations(context),
             "agent_hints": hints,
         },
     }
+    should_attempt_request_context = args.request_context_mode != "disable"
+    if should_attempt_request_context:
+        payload["nvext"]["request_context"] = context
     if args.ignore_eos:
         payload["ignore_eos"] = True
 
@@ -528,6 +578,7 @@ def send_one_request(
 
     fallback_used = False
     top_level_priority_unsupported = False
+    request_context_fallback_used = False
     if (
         should_attempt_top_level_priority
         and args.top_level_priority_mode == "auto"
@@ -536,6 +587,19 @@ def send_one_request(
         fallback_used = True
         top_level_priority_unsupported = True
         payload.pop("priority", None)
+        send_started = utc_now()
+        start = time.perf_counter()
+        status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+        latency_ms = (time.perf_counter() - start) * 1000
+        send_finished = utc_now()
+
+    if (
+        should_attempt_request_context
+        and args.request_context_mode == "auto"
+        and request_context_unsupported(status, error)
+    ):
+        request_context_fallback_used = True
+        payload["nvext"].pop("request_context", None)
         send_started = utc_now()
         start = time.perf_counter()
         status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
@@ -604,6 +668,49 @@ def read_csv_rows(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def runtime_annotations(record: dict[str, Any]) -> list[str]:
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("annotations"), list):
+        return [str(item) for item in nvext["annotations"] if item not in (None, "")]
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        nested = runtime_observability.get("annotations")
+        if isinstance(nested, list):
+            return [str(item) for item in nested if item not in (None, "")]
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("annotations"), list):
+            return [str(item) for item in nested_nvext["annotations"] if item not in (None, "")]
+    return []
+
+
+def runtime_annotation_map(record: dict[str, Any]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in runtime_annotations(record):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value and key not in values:
+            values[key] = value
+    return values
+
+
+def runtime_agent_context(record: dict[str, Any]) -> dict[str, Any]:
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("agent_context"), dict):
+        return nvext["agent_context"]
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        nested = runtime_observability.get("agent_context")
+        if isinstance(nested, dict):
+            return nested
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("agent_context"), dict):
+            return nested_nvext["agent_context"]
+    return {}
+
+
 def runtime_request_context(record: dict[str, Any]) -> dict[str, Any]:
     request_context = record.get("request_context")
     if isinstance(request_context, dict):
@@ -619,7 +726,27 @@ def runtime_request_context(record: dict[str, Any]) -> dict[str, Any]:
     nvext = record.get("nvext")
     if isinstance(nvext, dict) and isinstance(nvext.get("request_context"), dict):
         return nvext["request_context"]
-    return {}
+    annotations = runtime_annotation_map(record)
+    agent_context = runtime_agent_context(record)
+    request_id = annotations.get("request_id")
+    if not request_id and isinstance(agent_context.get("trajectory_id"), str):
+        request_id = agent_context.get("trajectory_id")
+    parent_run_id = annotations.get("parent_run_id")
+    if not parent_run_id and isinstance(agent_context.get("session_id"), str):
+        parent_run_id = agent_context.get("session_id")
+    if not request_id and not parent_run_id and not annotations:
+        return {}
+    return {
+        "request_id": request_id or "",
+        "parent_run_id": parent_run_id or "",
+        "task_instance_id": annotations.get("task_instance_id", ""),
+        "phase": annotations.get("phase", ""),
+        "step_index": annotations.get("step_index", ""),
+        "step_title": annotations.get("step_title", ""),
+        "app_variant": annotations.get("app_variant", ""),
+        "priority_class": annotations.get("priority_class", ""),
+        "prompt_hash": annotations.get("prompt_hash", ""),
+    }
 
 
 def runtime_agent_hints(record: dict[str, Any]) -> dict[str, Any]:

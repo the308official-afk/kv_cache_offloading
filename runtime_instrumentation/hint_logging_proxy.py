@@ -28,6 +28,106 @@ def sanitize(value: Any) -> Any:
     return str(value)
 
 
+def extract_annotations(payload: dict[str, Any]) -> list[str]:
+    nvext = payload.get("nvext")
+    if isinstance(nvext, dict) and isinstance(nvext.get("annotations"), list):
+        return [str(item) for item in nvext["annotations"] if item not in (None, "")]
+
+    extra_args = payload.get("extra_args")
+    if isinstance(extra_args, dict):
+        runtime_observability = extra_args.get("runtime_observability")
+        if isinstance(runtime_observability, dict):
+            annotations = runtime_observability.get("annotations")
+            if isinstance(annotations, list):
+                return [str(item) for item in annotations if item not in (None, "")]
+            nested_nvext = runtime_observability.get("nvext")
+            if isinstance(nested_nvext, dict) and isinstance(nested_nvext.get("annotations"), list):
+                return [str(item) for item in nested_nvext["annotations"] if item not in (None, "")]
+    return []
+
+
+def annotations_to_map(payload: dict[str, Any]) -> dict[str, str]:
+    values: dict[str, str] = {}
+    for item in extract_annotations(payload):
+        if ":" not in item:
+            continue
+        key, value = item.split(":", 1)
+        key = key.strip()
+        value = value.strip()
+        if key and value and key not in values:
+            values[key] = value
+    return values
+
+
+def extract_agent_context(payload: dict[str, Any]) -> dict[str, Any] | None:
+    nvext = payload.get("nvext")
+    if isinstance(nvext, dict):
+        agent_context = nvext.get("agent_context")
+        if isinstance(agent_context, dict):
+            return sanitize(agent_context)
+
+    extra_args = payload.get("extra_args")
+    if isinstance(extra_args, dict):
+        runtime_observability = extra_args.get("runtime_observability")
+        if isinstance(runtime_observability, dict):
+            agent_context = runtime_observability.get("agent_context")
+            if isinstance(agent_context, dict):
+                return sanitize(agent_context)
+            nested_nvext = runtime_observability.get("nvext")
+            if isinstance(nested_nvext, dict):
+                agent_context = nested_nvext.get("agent_context")
+                if isinstance(agent_context, dict):
+                    return sanitize(agent_context)
+    return None
+
+
+def extract_request_context(payload: dict[str, Any]) -> dict[str, Any] | None:
+    nvext = payload.get("nvext")
+    if isinstance(nvext, dict):
+        request_context = nvext.get("request_context")
+        if isinstance(request_context, dict):
+            return sanitize(request_context)
+
+    extra_args = payload.get("extra_args")
+    if isinstance(extra_args, dict):
+        runtime_observability = extra_args.get("runtime_observability")
+        if isinstance(runtime_observability, dict):
+            request_context = runtime_observability.get("request_context")
+            if isinstance(request_context, dict):
+                return sanitize(request_context)
+            nested_nvext = runtime_observability.get("nvext")
+            if isinstance(nested_nvext, dict):
+                request_context = nested_nvext.get("request_context")
+                if isinstance(request_context, dict):
+                    return sanitize(request_context)
+
+    annotation_map = annotations_to_map(payload)
+    agent_context = extract_agent_context(payload) or {}
+    request_id = annotation_map.get("request_id")
+    if not request_id and isinstance(agent_context.get("trajectory_id"), str):
+        request_id = agent_context.get("trajectory_id")
+    parent_run_id = annotation_map.get("parent_run_id")
+    if not parent_run_id and isinstance(agent_context.get("session_id"), str):
+        parent_run_id = agent_context.get("session_id")
+    if not request_id and not parent_run_id and not annotation_map:
+        return None
+    return sanitize(
+        {
+            "request_id": request_id or "",
+            "parent_run_id": parent_run_id or "",
+            "task_instance_id": annotation_map.get("task_instance_id", ""),
+            "phase": annotation_map.get("phase", ""),
+            "step_index": annotation_map.get("step_index", ""),
+            "step_title": annotation_map.get("step_title", ""),
+            "app_variant": annotation_map.get("app_variant", ""),
+            "prompt_hash": annotation_map.get("prompt_hash", ""),
+            "hint_profile": annotation_map.get("hint_profile", ""),
+            "cache_control_profile": annotation_map.get("cache_control_profile", ""),
+            "priority_class": annotation_map.get("priority_class", ""),
+        }
+    )
+
+
 def extract_agent_hints_with_source(payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
     nvext = payload.get("nvext")
     if isinstance(nvext, dict):
@@ -62,12 +162,18 @@ def agent_hint_log_fields(payload: dict[str, Any]) -> dict[str, Any]:
             "agent_hints_source": source,
             "agent_hints_keys": [],
             "hint_probe_id": None,
+            "agent_context": extract_agent_context(payload),
+            "annotations": extract_annotations(payload),
+            "request_context": extract_request_context(payload),
         }
     return {
         "agent_hints": agent_hints,
         "agent_hints_source": source,
         "agent_hints_keys": sorted(str(key) for key in agent_hints),
         "hint_probe_id": agent_hints.get("hint_probe_id"),
+        "agent_context": extract_agent_context(payload),
+        "annotations": extract_annotations(payload),
+        "request_context": extract_request_context(payload),
     }
 
 

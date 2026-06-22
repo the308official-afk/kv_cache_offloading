@@ -85,6 +85,9 @@ _REQUEST_METADATA_KEYS = (
     "step_title",
     "app_variant",
     "hint_profile",
+    "cache_control_profile",
+    "priority_class",
+    "prompt_hash",
     "hint_probe_id",
 )
 _REQUEST_METADATA_ALIASES = {
@@ -100,7 +103,14 @@ _REQUEST_METADATA_ALIASES = {
     "agent_phase": "agent_phase",
     "phase": "phase",
 }
-_REQUEST_CONTEXT_KEYS = ("request_context", "runtime_observability", "nvext", "sglang_transfer_context")
+_REQUEST_CONTEXT_KEYS = (
+    "request_context",
+    "runtime_observability",
+    "nvext",
+    "sglang_transfer_context",
+    "agent_context",
+    "annotations",
+)
 _AGENT_HINT_KEYS = ("agent_hints", "hints", "request_hints")
 _REQUEST_LOOKUP_HINTS = (
     "request",
@@ -329,6 +339,21 @@ def _is_metadata_scalar(value: Any) -> bool:
     return value is None or isinstance(value, (bool, int, float, str))
 
 
+def _annotation_map(value: Any) -> dict[str, str]:
+    if not isinstance(value, list):
+        return {}
+    out: dict[str, str] = {}
+    for item in value[:128]:
+        if not isinstance(item, str) or ":" not in item:
+            continue
+        key, raw_value = item.split(":", 1)
+        key = key.strip()
+        raw_value = raw_value.strip()
+        if key and raw_value and key not in out:
+            out[key] = raw_value
+    return out
+
+
 def _merge_request_metadata(target: dict[str, Any], source: dict[str, Any], source_name: str) -> None:
     for alias, canonical in _REQUEST_METADATA_ALIASES.items():
         value = source.get(alias)
@@ -367,6 +392,46 @@ def _merge_request_metadata(target: dict[str, Any], source: dict[str, Any], sour
         if isinstance(nvext.get("request_context"), dict):
             target.setdefault("request_context", _sanitize_metadata(nvext["request_context"]))
         _merge_request_metadata(target, nvext, f"{source_name}.nvext")
+
+    agent_context = source.get("agent_context")
+    if isinstance(agent_context, dict):
+        target.setdefault("agent_context", _sanitize_metadata(agent_context))
+        trajectory_id = agent_context.get("trajectory_id")
+        session_id = agent_context.get("session_id")
+        if isinstance(trajectory_id, str) and trajectory_id and "request_id" not in target:
+            target["request_id"] = trajectory_id
+            target.setdefault("request_metadata_source", f"{source_name}.agent_context.trajectory_id")
+        if isinstance(session_id, str) and session_id and "parent_run_id" not in target:
+            target["parent_run_id"] = session_id
+            target.setdefault("request_metadata_source", f"{source_name}.agent_context.session_id")
+
+    annotations = source.get("annotations")
+    annotation_map = _annotation_map(annotations)
+    if annotation_map:
+        target.setdefault("annotations", _sanitize_metadata(annotations))
+        for key, value in annotation_map.items():
+            if key in _REQUEST_METADATA_KEYS and key not in target:
+                target[key] = value
+                target.setdefault("request_metadata_source", f"{source_name}.annotations.{key}")
+        request_context = target.get("request_context")
+        if not isinstance(request_context, dict):
+            request_context = {}
+            target["request_context"] = request_context
+        for key in (
+            "request_id",
+            "parent_run_id",
+            "task_instance_id",
+            "phase",
+            "step_index",
+            "step_title",
+            "app_variant",
+            "prompt_hash",
+            "hint_profile",
+            "cache_control_profile",
+            "priority_class",
+        ):
+            if key in annotation_map and key not in request_context:
+                request_context[key] = annotation_map[key]
 
 
 def _request_metadata_alias_values(metadata: dict[str, Any]) -> list[str]:
