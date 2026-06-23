@@ -8,6 +8,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   # shellcheck disable=SC1091
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
+source runtime_instrumentation/precise_sglang_helper.sh
 
 MODEL_LIST_FILE="${MODEL_LIST_FILE:-agentbench/model_lists/multi_model_batch.txt}"
 RETENTION_PROBE_ID="${RETENTION_PROBE_ID:-retention_probe_$(date +%Y%m%d_%H%M%S)}"
@@ -155,60 +156,12 @@ EOF
   awk '{$1=$1}; NF && $1 !~ /^#/' "${MODEL_LIST_FILE}"
 }
 
-resolve_sglang_root() {
-  if [[ -n "${SGLANG_ROOT:-}" && -f "${SGLANG_ROOT}/__init__.py" ]]; then
-    echo "${SGLANG_ROOT}"
-    return
-  fi
-  if [[ -n "${WORKER_SGLANG_SOURCE_ROOT:-}" && -f "${WORKER_SGLANG_SOURCE_ROOT}/__init__.py" ]]; then
-    echo "${WORKER_SGLANG_SOURCE_ROOT}"
-    return
-  fi
-  if [[ -f "${PWD}/upstream/sglang/python/sglang/__init__.py" ]]; then
-    echo "${PWD}/upstream/sglang/python/sglang"
-    return
-  fi
-  if [[ -f "${PWD}/runtime_upstream/sglang/python/sglang/__init__.py" ]]; then
-    echo "${PWD}/runtime_upstream/sglang/python/sglang"
-    return
-  fi
-}
-
 require_precise_kv_ready() {
   if [[ "${REQUIRE_PRECISE_KV}" != "1" ]]; then
     return 0
   fi
-
-  if [[ -z "${RESOLVED_SGLANG_ROOT:-}" ]]; then
-    local image="${SGLANG_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}"
-    echo "Extracting SGLang source for precise KV attribution..." >&2
-    SGLANG_IMAGE="${image}" \
-      ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh >&2
-    RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
-  fi
-
-  if [[ -z "${RESOLVED_SGLANG_ROOT:-}" ]]; then
-    cat >&2 <<EOF
-Precise KV attribution requires extracted SGLang source.
-
-Expected one of:
-  ${PWD}/upstream/sglang/python/sglang
-  ${PWD}/runtime_upstream/sglang/python/sglang
-EOF
-    exit 1
-  fi
-
-  echo "Refreshing SGLang transfer logging patch for precise KV attribution..." >&2
-  "${PYTHON_BIN:-python3}" runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
-    --sglang-root "${RESOLVED_SGLANG_ROOT}" >&2
-
-  if ! grep -q "_sgl_log_transfer_event" "${RESOLVED_SGLANG_ROOT}/srt/mem_cache/memory_pool_host.py" 2>/dev/null; then
-    cat >&2 <<EOF
-SGLang source does not appear patched for transfer logging:
-  ${RESOLVED_SGLANG_ROOT}
-EOF
-    exit 1
-  fi
+  prepare_precise_sglang_for_run "precise KV attribution" "" "transfer"
+  RESOLVED_SGLANG_ROOT="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
 }
 
 require_retention_probe_script_ready() {

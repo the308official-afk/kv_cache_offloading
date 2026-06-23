@@ -74,6 +74,16 @@ echo "Frontend image: $FRONTEND_IMAGE"
 echo "Worker image: $WORKER_IMAGE"
 ```
 
+Precise-attribution note:
+
+- the precise wrappers now share one reusable helper:
+  [runtime_instrumentation/precise_sglang_helper.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/precise_sglang_helper.sh)
+- this helper auto-extracts and re-patches the SGLang overlay before precise runs
+- so you should not need to manually re-run the SGLang extract/patch steps for
+  every precise experiment anymore
+- you may still need to build the instrumented Dynamo images on a fresh machine
+  or after deleting/rebuilding images
+
 Machine profile quick switch:
 
 ```bash
