@@ -180,23 +180,32 @@ require_precise_kv_ready() {
   fi
 
   if [[ -z "${RESOLVED_SGLANG_ROOT:-}" ]]; then
-    cat >&2 <<EOF
-Precise KV attribution requires patched SGLang source.
+    local image="${SGLANG_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}"
+    echo "Extracting SGLang source for precise KV attribution..." >&2
+    SGLANG_IMAGE="${image}" \
+      ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh >&2
+    RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
+  fi
 
-Set SGLANG_ROOT or WORKER_SGLANG_SOURCE_ROOT to the extracted/patched package,
-for example:
-  export SGLANG_ROOT="\$PWD/upstream/sglang/python/sglang"
+  if [[ -z "${RESOLVED_SGLANG_ROOT:-}" ]]; then
+    cat >&2 <<EOF
+Precise KV attribution requires extracted SGLang source.
+
+Expected one of:
+  ${PWD}/upstream/sglang/python/sglang
+  ${PWD}/runtime_upstream/sglang/python/sglang
 EOF
     exit 1
   fi
+
+  echo "Refreshing SGLang transfer logging patch for precise KV attribution..." >&2
+  "${PYTHON_BIN:-python3}" runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+    --sglang-root "${RESOLVED_SGLANG_ROOT}" >&2
 
   if ! grep -q "_sgl_log_transfer_event" "${RESOLVED_SGLANG_ROOT}/srt/mem_cache/memory_pool_host.py" 2>/dev/null; then
     cat >&2 <<EOF
 SGLang source does not appear patched for transfer logging:
   ${RESOLVED_SGLANG_ROOT}
-
-Run:
-  python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py --sglang-root "${RESOLVED_SGLANG_ROOT}"
 EOF
     exit 1
   fi

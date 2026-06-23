@@ -737,6 +737,22 @@ def _priority_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, A
     return summary
 
 
+def _finalize_priority_presence(target: dict[str, Any], function: str) -> None:
+    _merge_priority_metadata(target, target, "payload")
+    if any(
+        key in target
+        for key in (
+            "worker_top_level_priority",
+            "worker_agent_hints_priority",
+            "worker_cache_retention_priority",
+        )
+    ):
+        target["priority_context_function"] = function
+        target["worker_priority_seen"] = True
+    else:
+        target["worker_priority_seen"] = False
+
+
 def _looks_like_token_ids(values: list[int]) -> bool:
     return bool(values) and all(0 <= value <= _MAX_TOKEN_ID for value in values)
 
@@ -1283,6 +1299,7 @@ def _log_cache_event_impl(
         )
     )
     _register_request_metadata_aliases(payload)
+    _finalize_priority_presence(payload, function)
 
     _attach_overhead(payload, overhead)
     if overhead is not None or payload.get("instrumentation_overhead_enabled"):
@@ -1401,6 +1418,7 @@ def _log_priority_event_impl(
         )
     )
     _register_request_metadata_aliases(payload)
+    _finalize_priority_presence(payload, function)
 
     _attach_overhead(payload, overhead)
     if overhead is not None or payload.get("instrumentation_overhead_enabled"):

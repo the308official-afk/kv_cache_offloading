@@ -1840,6 +1840,11 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+The precise retention wrapper now re-runs the SGLang patcher automatically
+before the experiment starts. So Step 0 is still the cleanest first-time setup,
+but you no longer have to worry as much about a stale partially patched overlay
+from an older run.
+
 Run the same sweep in the background with `nohup`:
 
 ```bash
@@ -2106,6 +2111,11 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
 If you only want the lightweight scheduling check, you can skip Step 0 and run
 the `light` version below.
 
+The precise priority wrapper now also refreshes the extracted SGLang patch
+automatically before it launches Dynamo. That means Step 0 is still the best
+first-time setup, but the wrapper is now much less likely to accidentally reuse
+an older partially patched overlay.
+
 If the driver log later warns that the worker log contains no `[RUNTIME_JSON]`
 lines, stop there and rebuild the local runtime-json images from the prepared
 Dynamo source before trusting the result.
@@ -2135,7 +2145,7 @@ This `precise` path gives you:
 
 - worker runtime ordering evidence
 - worker-side hint-received evidence
-- and, if `SGLANG_ROOT` is exported from Step 0, patched SGLang priority-path evidence
+- patched SGLang priority-path evidence
 - automatic retry without top-level `priority` if the frontend rejects that field
 - automatic retry without `nvext.request_context` if that field is unsupported
 

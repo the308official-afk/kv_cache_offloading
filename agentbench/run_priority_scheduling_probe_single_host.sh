@@ -36,6 +36,68 @@ SMOKE_LOG="${RUN_DIR}/priority_scheduling_smoke_test.log"
 WORKER_RUNTIME_LOG="${RUN_DIR}/priority_scheduling_worker_runtime.log"
 mkdir -p "${RUN_DIR}"
 
+resolve_sglang_root() {
+  if [[ -n "${SGLANG_ROOT:-}" && -f "${SGLANG_ROOT}/__init__.py" ]]; then
+    echo "${SGLANG_ROOT}"
+    return
+  fi
+  if [[ -n "${WORKER_SGLANG_SOURCE_ROOT:-}" && -f "${WORKER_SGLANG_SOURCE_ROOT}/__init__.py" ]]; then
+    echo "${WORKER_SGLANG_SOURCE_ROOT}"
+    return
+  fi
+  if [[ -f "${PWD}/upstream/sglang/python/sglang/__init__.py" ]]; then
+    echo "${PWD}/upstream/sglang/python/sglang"
+    return
+  fi
+  if [[ -f "${PWD}/runtime_upstream/sglang/python/sglang/__init__.py" ]]; then
+    echo "${PWD}/runtime_upstream/sglang/python/sglang"
+    return
+  fi
+}
+
+prepare_precise_priority_sglang() {
+  if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+
+  local resolved_root
+  resolved_root="$(resolve_sglang_root || true)"
+  if [[ -z "${resolved_root}" ]]; then
+    local image="${SGLANG_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}"
+    echo "Extracting SGLang source for precise priority attribution..." | tee -a "${DRIVER_LOG}"
+    SGLANG_IMAGE="${image}" \
+      ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh >> "${DRIVER_LOG}" 2>&1
+    resolved_root="$(resolve_sglang_root || true)"
+  fi
+
+  if [[ -z "${resolved_root}" ]]; then
+    cat >&2 <<EOF
+Could not resolve extracted SGLang source for precise priority attribution.
+
+Expected one of:
+  ${PWD}/upstream/sglang/python/sglang
+  ${PWD}/runtime_upstream/sglang/python/sglang
+EOF
+    exit 1
+  fi
+
+  echo "Refreshing SGLang transfer logging patch for precise priority attribution..." | tee -a "${DRIVER_LOG}"
+  "${PYTHON_BIN}" runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+    --sglang-root "${resolved_root}" >> "${DRIVER_LOG}" 2>&1
+
+  if ! rg -q "_sgl_log_priority_event|priority_hint_seen|scheduler_priority_applied" \
+    "${resolved_root}/srt/managers" \
+    "${resolved_root}/srt/mem_cache" 2>/dev/null; then
+    cat >&2 <<EOF
+SGLang source does not appear patched for priority-path instrumentation:
+  ${resolved_root}
+EOF
+    exit 1
+  fi
+
+  SGLANG_ROOT="${resolved_root}"
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -73,6 +135,8 @@ if [[ -z "${MODEL}" ]]; then
   echo "No model specified. Pass it as an argument or set MODEL / MODEL_NAME." >&2
   exit 1
 fi
+
+prepare_precise_priority_sglang
 
 worker_stopped() {
   if ! command -v docker >/dev/null 2>&1; then
