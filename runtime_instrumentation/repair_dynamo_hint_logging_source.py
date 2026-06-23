@@ -446,6 +446,96 @@ def _decode_request_payload(
                 raise SystemExit(f"Could not patch decode generate() runtime event in {path}")
             text = text.replace(old_generate, new_generate, 1)
 
+        if 'worker.decode.request_attached' not in text:
+            attach_old = '''                        request_id_future.set_result(sglang_request_id)
+                        logging.debug(f"New SGLang Request ID: {sglang_request_id}")
+
+                # Check cancellation before yielding to allow proper cleanup.
+'''
+            attach_new = '''                        request_id_future.set_result(sglang_request_id)
+                        logging.debug(f"New SGLang Request ID: {sglang_request_id}")
+                        if not attach_logged:
+                            emit_runtime_event(
+                                logging.getLogger(__name__),
+                                "worker.decode.request_attached",
+                                "worker.decode",
+                                sglang_request_id=sglang_request_id,
+                                model=self.config.server_args.served_model_name,
+                                **_decode_request_payload(request, context.id()),
+                            )
+                            attach_logged = True
+
+                # Check cancellation before yielding to allow proper cleanup.
+'''
+            replaced = text.replace(attach_old, attach_new)
+            if replaced == text:
+                raise SystemExit(f"Could not patch decode attached runtime event in {path}")
+            text = replaced
+
+        if 'worker.decode.request_completed' not in text:
+            complete_old = '''                    out["completion_usage"] = {
+                        "prompt_tokens": input_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": input_tokens + completion_tokens,
+                        "prompt_tokens_details": prefill_prompt_tokens_details,
+                    }
+                if not context.is_stopped():
+                    yield out
+'''
+            complete_new = '''                    out["completion_usage"] = {
+                        "prompt_tokens": input_tokens,
+                        "completion_tokens": completion_tokens,
+                        "total_tokens": input_tokens + completion_tokens,
+                        "prompt_tokens_details": prefill_prompt_tokens_details,
+                    }
+                    emit_runtime_event(
+                        logging.getLogger(__name__),
+                        "worker.decode.request_completed",
+                        "worker.decode",
+                        sglang_request_id=res["meta_info"].get("id"),
+                        finish_reason=out.get("finish_reason"),
+                        stop_reason=out.get("stop_reason"),
+                        completion_usage=out["completion_usage"],
+                        model=self.config.server_args.served_model_name,
+                        serving_mode=str(self.serving_mode),
+                        **_decode_request_payload(request, context.id()),
+                    )
+                if not context.is_stopped():
+                    yield out
+'''
+            replaced = text.replace(complete_old, complete_new)
+            if replaced == text:
+                text_chunk_old = '''                    if cached_tokens is not None and cached_tokens > 0:
+                        completion_usage["prompt_tokens_details"] = {
+                            "cached_tokens": cached_tokens
+                        }
+                if not context.is_stopped():
+                    yield response
+'''
+                text_chunk_new = '''                    if cached_tokens is not None and cached_tokens > 0:
+                        completion_usage["prompt_tokens_details"] = {
+                            "cached_tokens": cached_tokens
+                        }
+                    emit_runtime_event(
+                        logging.getLogger(__name__),
+                        "worker.decode.request_completed",
+                        "worker.decode",
+                        sglang_request_id=meta_info.get("id"),
+                        finish_reason=finish_reason_type,
+                        stop_reason=stop_reason,
+                        completion_usage=completion_usage,
+                        model=self.config.server_args.served_model_name,
+                        serving_mode=str(self.serving_mode),
+                        **_decode_request_payload(request, context.id()),
+                    )
+                if not context.is_stopped():
+                    yield response
+'''
+                replaced = text.replace(text_chunk_old, text_chunk_new)
+            if replaced == text:
+                raise SystemExit(f"Could not patch decode completed runtime event in {path}")
+            text = replaced
+
     elif helper_name == "_prefill_request_payload":
         old_import = """from dynamo._core import Context
 from dynamo.common.utils.otel_tracing import build_trace_headers
@@ -486,6 +576,25 @@ def _prefill_request_payload(
             if end_marker not in text:
                 raise SystemExit(f"Could not insert prefill payload helper in {path}")
             text = text.replace(end_marker, end_marker + helper_block + "\n", 1)
+
+        old_task_call = "        task = asyncio.create_task(self._consume_results(results, context))\n"
+        new_task_call = "        task = asyncio.create_task(self._consume_results(results, context, inner_request))\n"
+        if old_task_call in text and new_task_call not in text:
+            text = text.replace(old_task_call, new_task_call, 1)
+
+        old_signature = '''    async def _consume_results(
+        self, results: AsyncGenerator[Any, None], context: Context
+    ) -> None:
+'''
+        new_signature = '''    async def _consume_results(
+        self,
+        results: AsyncGenerator[Any, None],
+        context: Context,
+        request: Dict[str, Any],
+    ) -> None:
+'''
+        if old_signature in text and new_signature not in text:
+            text = text.replace(old_signature, new_signature, 1)
 
         old_generate = '''        logging.debug(f"New Request ID: {context.id()}")
         trace_id = context.trace_id
@@ -530,6 +639,114 @@ def _prefill_request_payload(
             if after_request_parse not in text:
                 raise SystemExit(f"Could not place prefill runtime event after request parsing in {path}")
             text = text.replace(after_request_parse, insertion, 1)
+
+        if "        attach_logged = False\n" not in text:
+            marker = "        request_id_future: asyncio.Future[str] = asyncio.Future()\n"
+            replacement = marker + "        attach_logged = False\n        last_meta_info: Dict[str, Any] | None = None\n"
+            if marker not in text:
+                raise SystemExit(f"Could not add prefill helper state in {path}")
+            text = text.replace(marker, replacement, 1)
+
+        last_meta_marker = '''            async for res in results:
+                # Extract SGLang request ID from the first response and set the future
+'''
+        last_meta_replacement = '''            async for res in results:
+                meta_info = res.get("meta_info", {})
+                if isinstance(meta_info, dict):
+                    last_meta_info = meta_info
+                # Extract SGLang request ID from the first response and set the future
+'''
+        if "last_meta_info = meta_info" not in text:
+            if last_meta_marker not in text:
+                raise SystemExit(f"Could not add prefill meta_info tracking in {path}")
+            text = text.replace(last_meta_marker, last_meta_replacement, 1)
+
+        if 'worker.prefill.request_attached' not in text:
+            attach_old = '''                        request_id_future.set_result(sglang_request_id)
+                        logging.debug(f"New Prefill Request ID: {sglang_request_id}")
+
+                # Note: No explicit cancellation checks needed here.
+'''
+            attach_new = '''                        request_id_future.set_result(sglang_request_id)
+                        logging.debug(f"New Prefill Request ID: {sglang_request_id}")
+                        if not attach_logged:
+                            emit_runtime_event(
+                                logging.getLogger(__name__),
+                                "worker.prefill.request_attached",
+                                "worker.prefill",
+                                sglang_request_id=sglang_request_id,
+                                model=self.config.server_args.served_model_name,
+                                **_prefill_request_payload(request, context.id()),
+                            )
+                            attach_logged = True
+
+                # Note: No explicit cancellation checks needed here.
+'''
+            replaced = text.replace(attach_old, attach_new)
+            if replaced == text:
+                raise SystemExit(f"Could not patch prefill attached runtime event in {path}")
+            text = replaced
+
+        if 'worker.prefill.request_completed' not in text:
+            complete_old = '''            if cached_tokens is not None and cached_tokens > 0:
+                completion_usage["prompt_tokens_details"] = {
+                    "cached_tokens": cached_tokens
+                }
+'''
+            complete_new = '''            if cached_tokens is not None and cached_tokens > 0:
+                completion_usage["prompt_tokens_details"] = {
+                    "cached_tokens": cached_tokens
+                }
+            emit_runtime_event(
+                logging.getLogger(__name__),
+                "worker.prefill.request_completed",
+                "worker.prefill",
+                sglang_request_id=last_meta_info.get("id"),
+                finish_reason=last_meta_info.get("finish_reason"),
+                completion_usage=completion_usage,
+                bootstrap_host=self.bootstrap_host,
+                bootstrap_port=self.bootstrap_port,
+                model=self.config.server_args.served_model_name,
+                **_prefill_request_payload(request, context.id()),
+            )
+'''
+            replaced = text.replace(complete_old, complete_new)
+            if replaced == text:
+                append_marker = '''                # Note: No explicit cancellation checks needed here.
+                # When abort_request is called by the cancellation monitor,
+                # SGLang will terminate this async generator automatically.
+'''
+                append_replacement = append_marker + '''
+        if last_meta_info:
+            prompt_tokens = last_meta_info.get("prompt_tokens")
+            completion_tokens = last_meta_info.get("completion_tokens")
+            completion_usage: Dict[str, Any] = {
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": (prompt_tokens or 0) + (completion_tokens or 0),
+            }
+            cached_tokens = last_meta_info.get("cached_tokens")
+            if cached_tokens is not None and cached_tokens > 0:
+                completion_usage["prompt_tokens_details"] = {
+                    "cached_tokens": cached_tokens
+                }
+            emit_runtime_event(
+                logging.getLogger(__name__),
+                "worker.prefill.request_completed",
+                "worker.prefill",
+                sglang_request_id=last_meta_info.get("id"),
+                finish_reason=last_meta_info.get("finish_reason"),
+                completion_usage=completion_usage,
+                bootstrap_host=self.bootstrap_host,
+                bootstrap_port=self.bootstrap_port,
+                model=self.config.server_args.served_model_name,
+                **_prefill_request_payload(request, context.id()),
+            )
+'''
+                replaced = text.replace(append_marker, append_replacement, 1)
+            if replaced == text:
+                raise SystemExit(f"Could not patch prefill completed runtime event in {path}")
+            text = replaced
 
     if "agent_hint_log_fields" not in text:
         raise SystemExit(f"Failed to add agent_hint_log_fields to {helper_name}: {path}")

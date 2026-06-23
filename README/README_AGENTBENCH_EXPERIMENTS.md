@@ -187,7 +187,22 @@ instrumentation anyway.
 That repair path also recreates `runtime_logging.py` automatically if the
 runtime patch did not lay it down on a fresh Dynamo clone, and patches the old
 SGLang worker handler files directly when they still use the pre-instrumentation
-layout.
+layout. That now includes older prefill-handler layouts where the helper
+function signature and completion logging block still differ from the newer
+instrumented form.
+
+The prepare step now verifies the full worker-runtime event path too, not just
+the first marker. In other words, it checks for:
+
+- `worker.decode.request_received`
+- `worker.decode.request_attached`
+- `worker.decode.request_completed`
+- `worker.prefill.request_received`
+- `worker.prefill.request_attached`
+- `worker.prefill.request_completed`
+
+So if `prepare_instrumented_dynamo_source.sh` ends successfully, it should now
+be genuinely safe to continue into the image build.
 
 Then build the local runtime-logging images once:
 

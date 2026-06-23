@@ -53,7 +53,13 @@ required_markers=(
   "components/src/dynamo/common/runtime_logging.py:agent_hint_log_fields"
   "components/src/dynamo/common/runtime_logging.py:_maybe_register_transfer_runtime_event"
   "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:agent_hint_log_fields"
+  "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:worker.decode.request_received"
+  "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:worker.decode.request_attached"
+  "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:worker.decode.request_completed"
   "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:agent_hint_log_fields"
+  "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_received"
+  "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_attached"
+  "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_completed"
   "lib/llm/src/preprocessor.rs:runtime_observability_extra_args_from_nvext"
   "lib/llm/src/protocols/openai/nvext.rs:expected_output_tokens"
 )
