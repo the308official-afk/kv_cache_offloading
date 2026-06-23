@@ -422,7 +422,7 @@ This is the main experiment for hint-impact analysis. It uses instrumented
 Dynamo images, a patched SGLang overlay, HiCache, runtime JSON logs, and
 request-id transfer attribution.
 
-### Step 1: Build Images And Patch SGLang
+### Step 1: First-Time Runtime Prep For Manual Precise Attribution
 
 ```bash
 cd ~/kv_cache_offloading
@@ -450,9 +450,17 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 ```
 
-If you have pulled new repo changes that touched the SGLang patcher, rerun this
-Step 0 before trusting `precise` attribution again. The extracted overlay does
-not update itself automatically.
+Use this manual prep block when you are:
+
+- preparing a fresh machine
+- rebuilding instrumented Dynamo images
+- or manually launching instrumented Dynamo/SGLang outside the higher-level
+  experiment wrappers
+
+For the precise wrappers in later experiments, the SGLang extract/patch refresh
+is now handled automatically by the shared helper. The part that is still
+manual on a fresh machine is building the instrumented Dynamo images when they
+do not already exist.
 
 Verify the patch:
 
@@ -1256,15 +1264,21 @@ Run this first with `KV_TIER_MODE=gpu_only`. That answers the simplest
 retention question: did prompt A appear to stay in GPU KV cache after pressure
 from distractor prompts?
 
-### Step 0: Prepare Instrumented SGLang
+### Step 0: Optional First-Time Setup Or Recovery
 
 Only do this for **precise** retention runs. You can skip it for **light**
 retention runs.
 
-Run this before the automated retention run. It makes sure the Dynamo images
-exist, extracts the SGLang source into the repo, and patches it so SGLang emits
-direct cache events such as `event: "sglang.cache"` with your external retention
-probe request IDs attached when the patch is active.
+This step is now optional for repeated runs on an already prepared machine.
+Use it when you are:
+
+- preparing a fresh machine
+- rebuilding the instrumented Dynamo images
+- or recovering from missing/stale extracted SGLang source
+
+The precise retention wrapper now refreshes the extracted SGLang patch
+automatically before the run starts. So this Step 0 is no longer something you
+should need before every precise retention experiment.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1304,8 +1318,9 @@ for file in \
 done
 ```
 
-If you skip this step, the retention probe still runs, but the
-`sglang_cache_*` columns will stay empty/zero.
+If you skip this step on a fresh machine, the retention probe may still run,
+but precise cache-attribution fields can be missing if the instrumented runtime
+images are not already built.
 
 Use the same image for `SGLANG_IMAGE` and `WORKER_IMAGE`. If you extract
 SGLang from a different image, the source overlay can mismatch the worker's
@@ -1850,10 +1865,8 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-The precise retention wrapper now re-runs the SGLang patcher automatically
-before the experiment starts. So Step 0 is still the cleanest first-time setup,
-but you no longer have to worry as much about a stale partially patched overlay
-from an older run.
+This command assumes your instrumented Dynamo images already exist. The wrapper
+handles the SGLang patch refresh automatically during precise runs.
 
 Run the same sweep in the background with `nohup`:
 
@@ -2086,9 +2099,10 @@ What it measures:
 - did the worker actually receive the priority hints?
 - if patched SGLang is active, did the SGLang priority path say it applied priority?
 
-### Step 0: Prepare Instrumented Dynamo And Patched SGLang
+### Step 0: Optional First-Time Setup Or Recovery
 
-Do this once before the `precise` version if you want the strongest proof:
+Do this on a fresh machine, after rebuilding images, or when recovering a
+broken instrumented runtime. It gives you the strongest proof:
 
 - worker runtime JSON from Dynamo
 - patched SGLang priority-path events
@@ -2118,13 +2132,13 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 ```
 
-If you only want the lightweight scheduling check, you can skip Step 0 and run
-the `light` version below.
+If you only want the lightweight scheduling check, you can skip this step and
+run the `light` version below.
 
-The precise priority wrapper now also refreshes the extracted SGLang patch
-automatically before it launches Dynamo. That means Step 0 is still the best
-first-time setup, but the wrapper is now much less likely to accidentally reuse
-an older partially patched overlay.
+The precise priority wrapper now refreshes the extracted SGLang patch
+automatically before it launches Dynamo. So this step is no longer required
+before every precise priority run. It is mainly for first-time setup,
+instrumented-image rebuilds, and recovery.
 
 If the driver log later warns that the worker log contains no `[RUNTIME_JSON]`
 lines, stop there and rebuild the local runtime-json images from the prepared
