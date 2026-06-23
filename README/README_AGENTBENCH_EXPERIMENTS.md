@@ -53,6 +53,7 @@ esac
 export MODEL_NAME
 export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"  # ec2 or gh200
 source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/sglang_source_profile.sh
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_TASK_OVERRIDES_FILE=agentbench/prompt_overrides/task_overrides.txt
 export AGENTBENCH_EXECUTION_LOOP=0
@@ -72,17 +73,22 @@ echo "Using model: $MODEL_NAME"
 echo "Using machine profile: $DYNAMO_MACHINE_PROFILE"
 echo "Frontend image: $FRONTEND_IMAGE"
 echo "Worker image: $WORKER_IMAGE"
+echo "Pinned SGLang source image: $SGLANG_SOURCE_IMAGE"
 ```
 
 Precise-attribution note:
 
 - the precise wrappers now share one reusable helper:
   [runtime_instrumentation/precise_sglang_helper.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/precise_sglang_helper.sh)
+- the helper uses a known-good pinned SGLang source image by default:
+  [runtime_instrumentation/sglang_source_profile.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_source_profile.sh)
 - this helper auto-extracts and re-patches the SGLang overlay before precise runs
 - so you should not need to manually re-run the SGLang extract/patch steps for
   every precise experiment anymore
 - you may still need to build the instrumented Dynamo images on a fresh machine
   or after deleting/rebuilding images
+- if you intentionally want a different SGLang source, override it explicitly:
+  `export SGLANG_IMAGE=...` before the run
 
 Machine profile quick switch:
 
@@ -435,6 +441,7 @@ if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 fi
 
+source runtime_instrumentation/sglang_source_profile.sh
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
 if [ -d upstream/sglang/python/sglang ]; then
@@ -448,6 +455,8 @@ fi
 
 python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
   --sglang-root "$SGLANG_ROOT"
+
+cat upstream/sglang/SOURCE_IMAGE.txt
 ```
 
 Use this manual prep block when you are:
@@ -1285,13 +1294,13 @@ cd ~/kv_cache_offloading
 
 export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
 source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/sglang_source_profile.sh
 
 if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
    ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 fi
 
-SGLANG_IMAGE="$WORKER_IMAGE" \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
 if [ -d upstream/sglang/python/sglang ]; then
@@ -1305,6 +1314,8 @@ fi
 
 python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
   --sglang-root "$SGLANG_ROOT"
+
+cat upstream/sglang/SOURCE_IMAGE.txt
 ```
 
 Quick patch check:
@@ -1322,9 +1333,10 @@ If you skip this step on a fresh machine, the retention probe may still run,
 but precise cache-attribution fields can be missing if the instrumented runtime
 images are not already built.
 
-Use the same image for `SGLANG_IMAGE` and `WORKER_IMAGE`. If you extract
-SGLang from a different image, the source overlay can mismatch the worker's
-installed `sgl_kernel` package and the worker can fail during import.
+By default we keep the SGLang source pinned to a known-good image so upstream
+layout changes do not break precise patching unexpectedly. If you intentionally
+override `SGLANG_IMAGE`, check `upstream/sglang/SOURCE_IMAGE.txt` afterward so
+you know exactly what source build was mounted into the worker.
 
 ### Automated Run
 
@@ -1830,8 +1842,8 @@ cd ~/kv_cache_offloading
 
 export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
 source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/sglang_source_profile.sh
 
-SGLANG_IMAGE="$WORKER_IMAGE" \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
 if [ -d upstream/sglang/python/sglang ]; then
@@ -2111,12 +2123,12 @@ broken instrumented runtime. It gives you the strongest proof:
 cd ~/kv_cache_offloading
 
 source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/sglang_source_profile.sh
 
 docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
 docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1 || \
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
 
-SGLANG_IMAGE="$WORKER_IMAGE" \
 ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
 
 if [ -d upstream/sglang/python/sglang ]; then
@@ -2140,9 +2152,31 @@ automatically before it launches Dynamo. So this step is no longer required
 before every precise priority run. It is mainly for first-time setup,
 instrumented-image rebuilds, and recovery.
 
+If the current SGLang version does not expose the exact priority-path patch
+points our helper expects, the wrapper now warns and continues instead of
+aborting the run. In that case, you still get precise worker/runtime
+attribution, but the report may not include direct SGLang priority-path proof.
+
 If the driver log later warns that the worker log contains no `[RUNTIME_JSON]`
 lines, stop there and rebuild the local runtime-json images from the prepared
 Dynamo source before trusting the result.
+
+Also check these fields in `priority_scheduling_summary.csv`:
+
+- `worker_runtime_event_coverage`
+- `worker_attached_event_coverage`
+- `worker_completed_event_coverage`
+- `worker_runtime_event_types_seen`
+
+Interpret them like this:
+
+- if coverage is `12 / 12`, the worker saw all probe requests
+- if attached/completed coverage is `0 / 12`, the worker image is only emitting
+  `request_received` events, so queue-order metrics will stay blank
+- if `worker_runtime_event_types_seen=received`, you can trust hint-delivery
+  evidence but not attach/completion ordering yet
+- if you want true queue-order proof, rebuild the instrumented runtime images
+  until attached/completed events also show up
 
 ### Step 1: Run The Precise Scheduling Probe
 

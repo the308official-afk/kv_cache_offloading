@@ -101,6 +101,9 @@ SUMMARY_COLUMNS = [
     "worker_high_top_level_priority_status",
     "worker_priority_path_status",
     "worker_runtime_event_coverage",
+    "worker_attached_event_coverage",
+    "worker_completed_event_coverage",
+    "worker_runtime_event_types_seen",
     "mean_low_queue_wait_ms",
     "mean_high_queue_wait_ms",
     "mean_low_client_latency_ms",
@@ -1078,6 +1081,9 @@ def build_summary(
 ) -> dict[str, Any]:
     low_rows = [row for row in rows if row.get("priority_class") == "low-priority"]
     high_rows = [row for row in rows if row.get("priority_class") == "high-priority"]
+    matched_rows = [row for row in rows if truthy(row.get("worker_runtime_matched"))]
+    attached_rows = [row for row in rows if str(row.get("worker_request_attached_timestamp") or "")]
+    completed_rows = [row for row in rows if str(row.get("worker_request_completed_timestamp") or "")]
 
     low_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in low_rows) if value is not None]
     high_queue_waits = [value for value in (maybe_int(row.get("worker_queue_wait_ms")) for row in high_rows) if value is not None]
@@ -1103,7 +1109,21 @@ def build_summary(
     high_attached_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_attached_count")) or 0 for row in high_rows)
     high_completed_leapfrogs = sum(maybe_int(row.get("overtook_earlier_low_completed_count")) or 0 for row in high_rows)
 
-    runtime_coverage = f"{sum(1 for row in rows if truthy(row.get('worker_runtime_matched')))} / {len(rows)}"
+    runtime_coverage = f"{len(matched_rows)} / {len(rows)}"
+    attached_coverage = f"{len(attached_rows)} / {len(rows)}"
+    completed_coverage = f"{len(completed_rows)} / {len(rows)}"
+    event_types_seen: list[str] = []
+    if matched_rows:
+        has_received = any(str(row.get("worker_request_received_timestamp") or "") for row in matched_rows)
+        has_attached = bool(attached_rows)
+        has_completed = bool(completed_rows)
+        if has_received:
+            event_types_seen.append("received")
+        if has_attached:
+            event_types_seen.append("attached")
+        if has_completed:
+            event_types_seen.append("completed")
+
     summary = {
         "run_id": run_id,
         "model": args.model,
@@ -1127,6 +1147,9 @@ def build_summary(
         ),
         "worker_priority_path_status": worker_priority_path_status(high_rows),
         "worker_runtime_event_coverage": runtime_coverage,
+        "worker_attached_event_coverage": attached_coverage,
+        "worker_completed_event_coverage": completed_coverage,
+        "worker_runtime_event_types_seen": ",".join(event_types_seen),
         "mean_low_queue_wait_ms": mean_int(low_queue_waits),
         "mean_high_queue_wait_ms": mean_int(high_queue_waits),
         "mean_low_client_latency_ms": mean_int(low_client_latencies),
@@ -1164,6 +1187,9 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Worker high top-level priority status: `{summary['worker_high_top_level_priority_status']}`",
         f"- Worker priority path status: `{summary['worker_priority_path_status']}`",
         f"- Worker runtime coverage: `{summary['worker_runtime_event_coverage']}`",
+        f"- Worker attached-event coverage: `{summary['worker_attached_event_coverage']}`",
+        f"- Worker completed-event coverage: `{summary['worker_completed_event_coverage']}`",
+        f"- Worker runtime event types seen: `{summary['worker_runtime_event_types_seen']}`",
         f"- Mean low queue wait ms: `{summary['mean_low_queue_wait_ms']}`",
         f"- Mean high queue wait ms: `{summary['mean_high_queue_wait_ms']}`",
         f"- Mean low client latency ms: `{summary['mean_low_client_latency_ms']}`",

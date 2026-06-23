@@ -232,6 +232,25 @@ warn_if_worker_runtime_missing() {
       echo
     } | tee -a "${DRIVER_LOG}" >&2
   fi
+  if grep -q '\[RUNTIME_JSON\].*worker\.\(decode\|prefill\)\.request_received' "${worker_runtime_log}" && \
+     ! grep -q '\[RUNTIME_JSON\].*worker\.\(decode\|prefill\)\.request_attached' "${worker_runtime_log}"; then
+    {
+      echo
+      echo "WARNING: worker runtime log has request_received events but no request_attached events."
+      echo "Queue-order metrics will be blank, so the probe can only prove hint delivery, not attach/completion ordering."
+      echo "Rebuild the instrumented runtime images from prepared Dynamo source, then rerun."
+      echo
+    } | tee -a "${DRIVER_LOG}" >&2
+  fi
+  if grep -q '\[RUNTIME_JSON\].*worker\.\(decode\|prefill\)\.request_received' "${worker_runtime_log}" && \
+     ! grep -q '\[RUNTIME_JSON\].*worker\.\(decode\|prefill\)\.request_completed' "${worker_runtime_log}"; then
+    {
+      echo
+      echo "WARNING: worker runtime log has request_received events but no request_completed events."
+      echo "Completion-order metrics will be blank until the worker image emits full runtime event coverage."
+      echo
+    } | tee -a "${DRIVER_LOG}" >&2
+  fi
 }
 
 {
@@ -249,6 +268,9 @@ warn_if_worker_runtime_missing() {
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
   echo "Worker runtime log: ${WORKER_RUNTIME_LOG}"
+  if [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
+    echo "Priority-path markers: unavailable on this extracted SGLang version; run will continue with worker/runtime attribution only."
+  fi
   echo
   echo "Stopping Dynamo..."
 } | tee -a "${DRIVER_LOG}"

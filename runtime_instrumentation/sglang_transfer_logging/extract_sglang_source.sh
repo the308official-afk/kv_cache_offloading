@@ -4,8 +4,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+PROFILE_SCRIPT="${REPO_ROOT}/runtime_instrumentation/sglang_source_profile.sh"
+if [[ -f "${PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${PROFILE_SCRIPT}"
+fi
 
-SGLANG_IMAGE="${SGLANG_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}"
+SGLANG_IMAGE="${SGLANG_IMAGE:-${SGLANG_SOURCE_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}}"
 SGLANG_CONTAINER="${SGLANG_CONTAINER:-}"
 DEST_ROOT="${DEST_ROOT:-${REPO_ROOT}/upstream/sglang}"
 DEST_PACKAGE_DIR="${DEST_PACKAGE_DIR:-${DEST_ROOT}/python/sglang}"
@@ -18,6 +23,9 @@ Extract the installed Python sglang package from the worker image into the repo.
 
 Environment:
   SGLANG_IMAGE      Default: ${SGLANG_IMAGE}
+  SGLANG_SOURCE_IMAGE
+                    Default: ${SGLANG_SOURCE_IMAGE:-<unset>}
+                    Preferred stable source image for extraction
   SGLANG_CONTAINER  Default: ${SGLANG_CONTAINER:-<unset>} (optional existing container name)
   DEST_ROOT         Default: ${DEST_ROOT}
   DEST_PACKAGE_DIR  Default: ${DEST_PACKAGE_DIR}
@@ -44,6 +52,9 @@ cleanup() {
   fi
 }
 trap cleanup EXIT
+
+image_id=""
+repo_digests=""
 
 resolve_probe='
 import importlib.util
@@ -116,6 +127,8 @@ if [[ -n "${SGLANG_CONTAINER}" ]]; then
     tar -C "${package_parent}" "${tar_excludes[@]}" -cf - "${package_name}" | \
     tar -C "${DEST_ROOT}/python" -xf -
 else
+  image_id="$(docker image inspect --format '{{.Id}}' "${SGLANG_IMAGE}" 2>/dev/null || true)"
+  repo_digests="$(docker image inspect --format '{{join .RepoDigests ","}}' "${SGLANG_IMAGE}" 2>/dev/null || true)"
   tmp_container="$(docker create --entrypoint sleep "${SGLANG_IMAGE}" infinity)"
   docker start "${tmp_container}" >/dev/null
   docker exec -i "${tmp_container}" \
@@ -130,7 +143,12 @@ fi
 
 cat > "${DEST_ROOT}/SOURCE_IMAGE.txt" <<EOF
 image=${SGLANG_IMAGE}
+source_image=${SGLANG_SOURCE_IMAGE:-}
+pinned_source_image=${SGLANG_PINNED_SOURCE_IMAGE:-}
 container=${SGLANG_CONTAINER}
+image_id=${image_id}
+repo_digests=${repo_digests}
+extracted_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 EOF
 
 find "${DEST_PACKAGE_DIR}" -name 'memory_pool_host.py' -print > "${DEST_ROOT}/TARGET_FILES.txt" || true

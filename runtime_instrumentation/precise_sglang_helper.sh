@@ -2,6 +2,12 @@
 
 # Source this file from experiment wrappers that need patched SGLang overlays
 # for precise attribution.
+REPO_ROOT_FOR_PRECISE_SGLANG_HELPER="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SGLANG_SOURCE_PROFILE_SCRIPT="${REPO_ROOT_FOR_PRECISE_SGLANG_HELPER}/runtime_instrumentation/sglang_source_profile.sh"
+if [[ -f "${SGLANG_SOURCE_PROFILE_SCRIPT}" ]]; then
+  # shellcheck disable=SC1090
+  source "${SGLANG_SOURCE_PROFILE_SCRIPT}"
+fi
 
 choose_precise_sglang_python() {
   if [[ -n "${PYTHON_BIN:-}" ]]; then
@@ -77,6 +83,34 @@ _precise_sglang_require_markers() {
   esac
 }
 
+_precise_sglang_warn_missing_priority_markers() {
+  local root="$1"
+  local log_file="${2:-}"
+  _precise_sglang_log "WARNING: priority-path markers were not found in extracted SGLang source." "${log_file}"
+  _precise_sglang_log "WARNING: continuing with precise runtime/transfer attribution, but SGLang priority-path proof may be unavailable for this run." "${log_file}"
+  _precise_sglang_log "WARNING: source root: ${root}" "${log_file}"
+}
+
+resolve_precise_sglang_source_image() {
+  if [[ -n "${SGLANG_IMAGE:-}" ]]; then
+    printf '%s\n' "${SGLANG_IMAGE}"
+    return
+  fi
+  if [[ -n "${SGLANG_SOURCE_IMAGE:-}" ]]; then
+    printf '%s\n' "${SGLANG_SOURCE_IMAGE}"
+    return
+  fi
+  if [[ -n "${SGLANG_PINNED_SOURCE_IMAGE:-}" ]]; then
+    printf '%s\n' "${SGLANG_PINNED_SOURCE_IMAGE}"
+    return
+  fi
+  if [[ -n "${WORKER_IMAGE:-}" ]]; then
+    printf '%s\n' "${WORKER_IMAGE}"
+    return
+  fi
+  printf '%s\n' "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2"
+}
+
 prepare_precise_sglang_for_run() {
   local reason="${1:-precise attribution}"
   local log_file="${2:-}"
@@ -86,11 +120,15 @@ prepare_precise_sglang_for_run() {
 
   resolved_root="$(resolve_precise_sglang_root || true)"
   if [[ -z "${resolved_root}" ]]; then
-    local image="${SGLANG_IMAGE:-${WORKER_IMAGE:-nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2}}"
+    local image
+    image="$(resolve_precise_sglang_source_image)"
     _precise_sglang_log "Extracting SGLang source for ${reason}..." "${log_file}"
+    _precise_sglang_log "Using pinned/selected SGLang source image: ${image}" "${log_file}"
     _precise_sglang_run "${log_file}" env "SGLANG_IMAGE=${image}" \
       ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
     resolved_root="$(resolve_precise_sglang_root || true)"
+  else
+    _precise_sglang_log "Reusing extracted SGLang source root: ${resolved_root}" "${log_file}"
   fi
 
   if [[ -z "${resolved_root}" ]]; then
@@ -110,12 +148,31 @@ EOF
     --sglang-root "${resolved_root}"
 
   if ! _precise_sglang_require_markers "${resolved_root}" "${require_mode}"; then
-    cat >&2 <<EOF
+    if [[ "${require_mode}" = "priority" ]]; then
+      if ! _precise_sglang_require_markers "${resolved_root}" "transfer"; then
+        cat >&2 <<EOF
 SGLang source does not appear patched for ${reason}:
   ${resolved_root}
 Required marker set: ${require_mode}
 EOF
-    return 1
+        return 1
+      fi
+      _precise_sglang_warn_missing_priority_markers "${resolved_root}" "${log_file}"
+      PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT=0
+      export PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT
+    else
+      cat >&2 <<EOF
+SGLang source does not appear patched for ${reason}:
+  ${resolved_root}
+Required marker set: ${require_mode}
+EOF
+      return 1
+    fi
+  else
+    if [[ "${require_mode}" = "priority" ]]; then
+      PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT=1
+      export PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT
+    fi
   fi
 
   PREPARED_SGLANG_ROOT="${resolved_root}"
