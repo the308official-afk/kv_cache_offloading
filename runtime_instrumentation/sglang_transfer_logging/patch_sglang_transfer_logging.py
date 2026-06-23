@@ -942,6 +942,8 @@ def transfer_request_context(*, function: str, locals_dict: dict[str, Any]):
         request_metadata["request_context_function"] = function
     _attach_overhead(request_metadata, overhead)
     context = _merge_transfer_context_pair(context, request_metadata)
+    if context:
+        _register_request_metadata_aliases(context)
     _attach_transfer_context_to_locals(
         function=function,
         locals_dict=locals_dict,
@@ -978,8 +980,19 @@ def _merge_transfer_context_pair(
 def _attach_transfer_context_to_object(obj: Any, context: dict[str, Any] | None) -> None:
     if obj is None or not isinstance(context, dict):
         return
+    merged_context = copy.deepcopy(context)
     try:
-        setattr(obj, "sglang_transfer_context", copy.deepcopy(context))
+        existing_context = getattr(obj, "sglang_transfer_context", None)
+    except Exception:
+        existing_context = None
+    if isinstance(existing_context, dict):
+        merged_context = _merge_transfer_context_pair(existing_context, merged_context)
+    object_metadata = _request_metadata_candidates_from_value("attached_object", obj)
+    if object_metadata:
+        merged_context = _merge_transfer_context_pair(merged_context, object_metadata)
+    _register_request_metadata_aliases(merged_context)
+    try:
+        setattr(obj, "sglang_transfer_context", copy.deepcopy(merged_context))
     except Exception:
         return
 
@@ -1269,6 +1282,7 @@ def _log_cache_event_impl(
             locals_dict,
         )
     )
+    _register_request_metadata_aliases(payload)
 
     _attach_overhead(payload, overhead)
     if overhead is not None or payload.get("instrumentation_overhead_enabled"):
@@ -1386,6 +1400,7 @@ def _log_priority_event_impl(
             locals_dict,
         )
     )
+    _register_request_metadata_aliases(payload)
 
     _attach_overhead(payload, overhead)
     if overhead is not None or payload.get("instrumentation_overhead_enabled"):

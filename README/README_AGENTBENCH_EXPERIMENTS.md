@@ -440,6 +440,10 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 ```
 
+If you have pulled new repo changes that touched the SGLang patcher, rerun this
+Step 0 before trusting `precise` attribution again. The extracted overlay does
+not update itself automatically.
+
 Verify the patch:
 
 ```bash
