@@ -607,6 +607,9 @@ fi
 RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
 ensure_precise_runtime_images
 require_precise_kv_ready
+if [[ "${REQUIRE_PRECISE_KV}" = "1" ]]; then
+  precise_print_local_ready_summary "transfer" "${DESIGN_SPACE_LOG}"
+fi
 
 GPU_HBM_GB="${GPU_HBM_GB:-$(auto_gpu_hbm_gb || true)}"
 HOST_RAM_GB="${HOST_RAM_GB:-$(auto_host_ram_gb || true)}"
@@ -708,6 +711,9 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
     smoke_test_model "${MODEL_NAME}" "${SMOKE_LOG}"
     check_precise_kv_runtime_ready "${SMOKE_LOG}"
+    if [[ "${REQUIRE_PRECISE_KV}" = "1" ]]; then
+      precise_print_go_summary "transfer" "${DESIGN_SPACE_LOG}"
+    fi
 
     if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
       echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DESIGN_SPACE_LOG}"

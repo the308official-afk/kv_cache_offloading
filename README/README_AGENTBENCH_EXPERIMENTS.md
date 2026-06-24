@@ -1170,6 +1170,14 @@ live preflight after each Dynamo restart and model smoke test. If the running
 worker is missing the patched precise-attribution markers, the sweep stops
 before launching the expensive batch.
 
+For each precise restart, you should now see this readiness chain before the
+batch starts:
+
+- `PRECISE RUNTIME IMAGE READY`
+- `PRECISE LOCAL READY`
+- `PRECISE ATTRIBUTION READY`
+- `PRECISE EXPERIMENT GO`
+
 It also now resolves the machine profile (`ec2` or `gh200`), prints the exact
 `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and auto-builds them on
 fresh machines by default.
@@ -1476,6 +1484,17 @@ Use `precise` when you also want:
 - request-level attribution
 - transfer logging / richer proof
 
+For any `precise` run, the wrapper now prints a visible readiness chain before
+requests begin:
+
+- `PRECISE RUNTIME IMAGE READY`
+- `PRECISE LOCAL READY`
+- `PRECISE ATTRIBUTION READY`
+- `PRECISE EXPERIMENT GO`
+
+If one of those checks fails, the wrapper stops before launching the real
+workload.
+
 If the worker crashes with an error like:
 
 ```text
@@ -1494,6 +1513,17 @@ LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
 ```
 
 Then restart Dynamo and rerun the experiment.
+
+If the worker crashes with an error like:
+
+```text
+SyntaxError: too many statically nested blocks
+```
+
+that means an older extracted SGLang source tree still has the heavy
+`schedule_batch.py` wrapper from a previous patcher version. Sync the latest
+repo changes, then rerun the precise experiment. The current patcher now
+removes that old wrapper automatically before Dynamo starts.
 
 For cross-machine attribution safety, use:
 
@@ -2318,6 +2348,14 @@ The precise priority wrapper now also runs a live preflight after Dynamo
 starts and after the model smoke test passes. If the running worker does not
 actually contain the patched precise-attribution markers, the wrapper stops
 before launching the scheduling probe.
+
+For a healthy precise scheduling run, you should now see this readiness chain
+before the synthetic requests are sent:
+
+- `PRECISE RUNTIME IMAGE READY`
+- `PRECISE LOCAL READY`
+- `PRECISE ATTRIBUTION READY`
+- `PRECISE EXPERIMENT GO`
 
 Before that restart, it now also resolves the machine profile (`ec2` or
 `gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they

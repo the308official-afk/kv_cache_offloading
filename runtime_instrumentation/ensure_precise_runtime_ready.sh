@@ -94,7 +94,7 @@ fi
 
 if [[ "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 ]]; then
   echo "========================================"
-  echo "PRECISE RUNTIME IMAGE READY"
+  echo "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
   echo "========================================"
   exit 0
 fi
@@ -136,5 +136,5 @@ docker image inspect "${WORKER_IMAGE}" >/dev/null 2>&1 || {
 echo "frontend image ok"
 echo "worker image ok"
 echo "========================================"
-echo "PRECISE RUNTIME IMAGE READY"
+echo "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
 echo "========================================"

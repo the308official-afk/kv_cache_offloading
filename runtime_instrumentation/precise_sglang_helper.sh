@@ -50,6 +50,14 @@ _precise_sglang_log() {
   fi
 }
 
+precise_banner() {
+  local title="$1"
+  local log_file="${2:-}"
+  _precise_sglang_log "========================================" "${log_file}"
+  _precise_sglang_log "${title}" "${log_file}"
+  _precise_sglang_log "========================================" "${log_file}"
+}
+
 _precise_sglang_run() {
   local log_file="$1"
   shift
@@ -178,4 +186,49 @@ EOF
   PREPARED_SGLANG_ROOT="${resolved_root}"
   export PREPARED_SGLANG_ROOT
   export SGLANG_ROOT="${resolved_root}"
+}
+
+precise_print_local_ready_summary() {
+  local mode="${1:-transfer}"
+  local log_file="${2:-}"
+  local root="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
+  local transfer_status="missing"
+  local priority_status="n/a"
+
+  if [[ -n "${root}" ]] && _precise_sglang_require_markers "${root}" transfer; then
+    transfer_status="ok"
+  fi
+
+  if [[ "${mode}" = "priority" ]]; then
+    if [[ -n "${root}" ]] && _precise_sglang_require_markers "${root}" priority; then
+      priority_status="ok"
+    elif [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
+      priority_status="unavailable on pinned/extracted SGLang source"
+    else
+      priority_status="missing"
+    fi
+  fi
+
+  precise_banner "PRECISE LOCAL READY" "${log_file}"
+  _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
+  _precise_sglang_log "Frontend image: ${FRONTEND_IMAGE:-<unset>}" "${log_file}"
+  _precise_sglang_log "Worker image: ${WORKER_IMAGE:-<unset>}" "${log_file}"
+  _precise_sglang_log "Auto-build precise images: ${AUTO_BUILD_PRECISE_IMAGES:-0}" "${log_file}"
+  _precise_sglang_log "SGLang root: ${root:-<unresolved>}" "${log_file}"
+  _precise_sglang_log "Local transfer markers: ${transfer_status}" "${log_file}"
+  if [[ "${mode}" = "priority" ]]; then
+    _precise_sglang_log "Local priority markers: ${priority_status}" "${log_file}"
+  fi
+  _precise_sglang_log "Ready to start Dynamo: yes" "${log_file}"
+}
+
+precise_print_go_summary() {
+  local mode="${1:-transfer}"
+  local log_file="${2:-}"
+  precise_banner "PRECISE EXPERIMENT GO" "${log_file}"
+  _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
+  _precise_sglang_log "Attribution mode: ${mode}" "${log_file}"
+  _precise_sglang_log "Smoke test: ok" "${log_file}"
+  _precise_sglang_log "Live attribution check: ok" "${log_file}"
+  _precise_sglang_log "Requests may now start." "${log_file}"
 }

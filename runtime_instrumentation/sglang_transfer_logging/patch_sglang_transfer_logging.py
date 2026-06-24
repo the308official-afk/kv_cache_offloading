@@ -2207,6 +2207,99 @@ def wrap_call_with_priority_event(
     return "".join(lines), changed
 
 
+def _line_indent_len(line: str) -> int:
+    return len(line) - len(line.lstrip(" "))
+
+
+def _dedent_block_lines(lines: list[str], spaces: int = 4) -> list[str]:
+    result: list[str] = []
+    prefix = " " * spaces
+    for line in lines:
+        if line.startswith(prefix):
+            result.append(line[spaces:])
+        else:
+            result.append(line)
+    return result
+
+
+def strip_schedule_batch_match_prefix_wrappers(text: str) -> tuple[str, list[str]]:
+    lines = text.splitlines(keepends=True)
+    notes: list[str] = []
+
+    changed = True
+    while changed:
+        changed = False
+
+        # Remove the request-context wrapper around Req.init_next_round_input.match_prefix.
+        index = 0
+        while index < len(lines):
+            stripped = lines[index].strip()
+            if not stripped.startswith('with _sgl_transfer_request_context(function="Req.init_next_round_input.match_prefix"'):
+                index += 1
+                continue
+            indent_len = _line_indent_len(lines[index])
+            block_end = index + 1
+            while block_end < len(lines):
+                candidate = lines[block_end]
+                if candidate.strip() and _line_indent_len(candidate) <= indent_len:
+                    break
+                block_end += 1
+            body = _dedent_block_lines(lines[index + 1 : block_end])
+            lines[index:block_end] = body
+            notes.append("removed schedule_batch request-context wrapper")
+            changed = True
+            break
+
+        if changed:
+            continue
+
+        # Remove the priority-event try/finally wrapper around Req.init_next_round_input.match_prefix.
+        index = 0
+        while index + 1 < len(lines):
+            if lines[index].strip() != "__sgl_priority_event_error = None":
+                index += 1
+                continue
+            indent_len = _line_indent_len(lines[index])
+            if lines[index + 1].strip() != "try:" or _line_indent_len(lines[index + 1]) != indent_len:
+                index += 1
+                continue
+
+            except_idx = None
+            for cursor in range(index + 2, len(lines)):
+                if (
+                    _line_indent_len(lines[cursor]) == indent_len
+                    and lines[cursor].strip().startswith("except BaseException as __sgl_priority_event_exc:")
+                ):
+                    except_idx = cursor
+                    break
+            if except_idx is None:
+                index += 1
+                continue
+
+            log_idx = None
+            for cursor in range(except_idx, len(lines)):
+                if '_sgl_log_priority_event(' in lines[cursor] and 'Req.init_next_round_input.match_prefix' in "".join(lines[except_idx: min(len(lines), cursor + 8)]):
+                    log_idx = cursor
+                    break
+            if log_idx is None:
+                index += 1
+                continue
+
+            body = _dedent_block_lines(lines[index + 2 : except_idx])
+            paren_balance = lines[log_idx].count("(") - lines[log_idx].count(")")
+            log_end = log_idx
+            while log_end + 1 < len(lines) and paren_balance > 0:
+                log_end += 1
+                paren_balance += lines[log_end].count("(") - lines[log_end].count(")")
+
+            lines[index : log_end + 1] = body
+            notes.append("removed schedule_batch priority-event wrapper")
+            changed = True
+            break
+
+    return "".join(lines), notes
+
+
 def add_cache_operation_context_capture(text: str) -> tuple[str, bool]:
     if "self.sglang_transfer_context = _sgl_current_transfer_context()" in text:
         return text, False
@@ -2361,24 +2454,10 @@ def patch_radix_cache(path: Path) -> list[str]:
 
 def patch_schedule_batch(path: Path) -> list[str]:
     text = path.read_text(encoding="utf-8")
-    text = insert_request_context_imports(text)
     patched: list[str] = []
 
-    text, changed = wrap_call_with_request_context(
-        text,
-        "tree_cache.match_prefix(",
-        "Req.init_next_round_input.match_prefix",
-    )
-    if changed:
-        patched.append(f"Req.init_next_round_input match_prefix context ({changed} call{'s' if changed != 1 else ''})")
-    text, changed = wrap_call_with_priority_event(
-        text,
-        "tree_cache.match_prefix(",
-        "Req.init_next_round_input.match_prefix",
-        "priority_hint_seen",
-    )
-    if changed:
-        patched.append(f"Req.init_next_round_input priority hint seen ({changed} call{'s' if changed != 1 else ''})")
+    text, cleanup_notes = strip_schedule_batch_match_prefix_wrappers(text)
+    patched.extend(cleanup_notes)
 
     if patched:
         path.write_text(text, encoding="utf-8")

@@ -36,17 +36,28 @@ SSH_OPTS=(
   -o ControlPersist=10m
   -o ControlPath=/tmp/kv-cache-offloading-upload-%r@%h:%p
   -o StrictHostKeyChecking=accept-new
+  -o ConnectTimeout=15
+  -o ServerAliveInterval=15
+  -o ServerAliveCountMax=3
 )
 SSH_CMD="ssh ${SSH_OPTS[*]}"
 
 RSYNC_COMMON_OPTS=(
   -az
+  --human-readable
   --itemize-changes
   --omit-dir-times
   --no-perms
   --no-owner
   --no-group
 )
+
+RSYNC_PROGRESS_OPTS=()
+if rsync --version 2>/dev/null | head -1 | grep -q 'version 3'; then
+  RSYNC_PROGRESS_OPTS=(--info=progress2)
+else
+  RSYNC_PROGRESS_OPTS=(--progress)
+fi
 
 RSYNC_EXCLUDES=(
   --exclude '.git/'
@@ -74,6 +85,7 @@ rsync_upload_repo() {
 
   rsync \
     "${RSYNC_COMMON_OPTS[@]}" \
+    "${RSYNC_PROGRESS_OPTS[@]}" \
     "${RSYNC_EXCLUDES[@]}" \
     -e "$SSH_CMD" \
     "$source_path" \
@@ -121,9 +133,13 @@ for i in "${TARGET_INDICES[@]}"; do
   echo "==== Uploading ${REPO_NAME} to ${label} (${ip}) ===="
   echo "Local source: ${LOCAL_BASE}/"
   echo "Remote dest:  ${REMOTE_PROJECT_DIR}/"
+  echo "Creating remote directory..."
 
   ssh "${SSH_OPTS[@]}" "$remote_host" "mkdir -p '${REMOTE_PROJECT_DIR}'"
+  echo "Remote directory ready."
 
   # Trailing slash uploads the full repo contents into REMOTE_PROJECT_DIR.
+  echo "Starting rsync transfer..."
   rsync_upload_repo "${LOCAL_BASE}/" "$remote_base"
+  echo "Upload to ${label} complete."
 done

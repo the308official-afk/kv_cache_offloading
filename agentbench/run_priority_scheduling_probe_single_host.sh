@@ -116,6 +116,9 @@ fi
 
 prepare_precise_priority_sglang
 ensure_precise_priority_runtime_images
+if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" = "precise" ]]; then
+  precise_print_local_ready_summary "priority" "${DRIVER_LOG}"
+fi
 
 worker_stopped() {
   if ! command -v docker >/dev/null 2>&1; then
@@ -344,6 +347,9 @@ fi
 
 smoke_test_model "${MODEL}" "${SMOKE_LOG}"
 check_precise_priority_runtime_ready
+if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" = "precise" ]]; then
+  precise_print_go_summary "priority" "${DRIVER_LOG}"
+fi
 
 if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
   echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"

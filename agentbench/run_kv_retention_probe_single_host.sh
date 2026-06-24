@@ -670,6 +670,9 @@ start_dynamo_for_profile() {
 
   smoke_test_model "${model}" "${smoke_log}"
   check_precise_kv_runtime_ready "${smoke_log}"
+  if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+    precise_print_go_summary "transfer" "${BATCH_LOG}"
+  fi
 
   if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
     echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${BATCH_LOG}"
@@ -749,6 +752,9 @@ fi
 RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
 ensure_precise_runtime_images
 require_precise_kv_ready
+if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+  precise_print_local_ready_summary "transfer" "${BATCH_LOG}"
+fi
 require_retention_probe_script_ready
 init_progress_file
 init_matrices
