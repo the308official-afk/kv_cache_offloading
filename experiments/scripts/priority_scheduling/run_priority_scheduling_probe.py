@@ -50,40 +50,40 @@ REQUEST_COLUMNS = [
     "priority_class",
     "hint_profile",
     "arrival_index",
+    "attached_rank",
+    "completed_rank",
+    "overtook_earlier_low_attached_count",
+    "overtook_earlier_low_completed_count",
+    "worker_queue_wait_ms",
+    "client_latency_ms",
+    "agent_hints_priority",
+    "worker_agent_hints_priority",
+    "top_level_priority_sent",
+    "worker_top_level_priority",
+    "sglang_priority_hint_seen",
+    "sglang_scheduler_priority_applied",
+    "worker_runtime_matched",
     "planned_offset_ms",
     "client_send_timestamp_utc",
     "client_response_timestamp_utc",
-    "client_latency_ms",
     "status",
     "error",
     "input_len_words",
     "output_len_tokens",
     "prompt_hash",
-    "agent_hints_priority",
     "top_level_priority_mode",
     "top_level_priority_attempted",
-    "top_level_priority_sent",
     "top_level_priority_value",
     "top_level_priority_fallback_used",
     "top_level_priority_unsupported",
-    "worker_runtime_matched",
     "worker_request_received_timestamp",
     "worker_request_attached_timestamp",
     "worker_request_completed_timestamp",
-    "worker_queue_wait_ms",
     "worker_service_ms",
     "worker_total_runtime_ms",
     "worker_prompt_tokens",
     "worker_cached_tokens",
-    "worker_agent_hints_priority",
-    "worker_top_level_priority",
     "sglang_priority_events",
-    "sglang_priority_hint_seen",
-    "sglang_scheduler_priority_applied",
-    "attached_rank",
-    "completed_rank",
-    "overtook_earlier_low_attached_count",
-    "overtook_earlier_low_completed_count",
 ]
 
 READABLE_REQUEST_COLUMNS = [
@@ -95,6 +95,24 @@ READABLE_REQUEST_COLUMNS = [
     "completed_rank",
     "attach_priority_gain",
     "completion_priority_gain",
+    "overtook_earlier_low_attached_count",
+    "overtook_earlier_low_completed_count",
+    "worker_queue_wait_ms",
+    "client_latency_ms",
+    "worker_agent_hints_priority",
+    "top_level_priority_sent",
+    "sglang_scheduler_priority_applied",
+    "worker_runtime_matched",
+    "scheduling_success_signal",
+]
+
+PROOF_REQUEST_COLUMNS = [
+    "run_id",
+    "request_role",
+    "priority_class",
+    "arrival_index",
+    "attached_rank",
+    "completed_rank",
     "overtook_earlier_low_attached_count",
     "overtook_earlier_low_completed_count",
     "worker_queue_wait_ms",
@@ -1303,29 +1321,62 @@ def output_paths(root: Path, run_id: str) -> dict[str, Path]:
         "run_dir": run_dir,
         "requests_csv": run_dir / "priority_scheduling_requests.csv",
         "readable_requests_csv": run_dir / "priority_scheduling_readable.csv",
+        "proof_requests_csv": run_dir / "priority_scheduling_proof.csv",
         "summary_csv": run_dir / "priority_scheduling_summary.csv",
         "summary_md": run_dir / "priority_scheduling_summary.md",
         "latest_requests_csv": root.parent / "priority_scheduling_requests.csv",
         "latest_readable_requests_csv": root.parent / "priority_scheduling_readable.csv",
+        "latest_proof_requests_csv": root.parent / "priority_scheduling_proof.csv",
         "latest_summary_csv": root.parent / "priority_scheduling_summary.csv",
         "latest_summary_md": root.parent / "priority_scheduling_summary.md",
+        "latest_named_requests_csv": root.parent / "latest_priority_scheduling_requests.csv",
+        "latest_named_readable_requests_csv": root.parent / "latest_priority_scheduling_readable.csv",
+        "latest_named_proof_requests_csv": root.parent / "latest_priority_scheduling_proof.csv",
+        "latest_named_summary_csv": root.parent / "latest_priority_scheduling_summary.csv",
+        "latest_named_summary_md": root.parent / "latest_priority_scheduling_summary.md",
+        "latest_named_run_txt": root.parent / "latest_priority_scheduling_run.txt",
     }
 
 
 def save_outputs(paths: dict[str, Path], rows: list[dict[str, Any]], summary: dict[str, Any]) -> None:
+    readable_rows = build_readable_rows(rows)
     write_csv(paths["requests_csv"], rows, REQUEST_COLUMNS)
-    write_csv(paths["readable_requests_csv"], build_readable_rows(rows), READABLE_REQUEST_COLUMNS)
+    write_csv(paths["readable_requests_csv"], readable_rows, READABLE_REQUEST_COLUMNS)
+    write_csv(paths["proof_requests_csv"], readable_rows, PROOF_REQUEST_COLUMNS)
     write_csv(paths["summary_csv"], [summary], SUMMARY_COLUMNS)
     paths["summary_md"].write_text(build_summary_md(summary), encoding="utf-8")
 
     for source_key, latest_key in (
         ("requests_csv", "latest_requests_csv"),
         ("readable_requests_csv", "latest_readable_requests_csv"),
+        ("proof_requests_csv", "latest_proof_requests_csv"),
         ("summary_csv", "latest_summary_csv"),
         ("summary_md", "latest_summary_md"),
+        ("requests_csv", "latest_named_requests_csv"),
+        ("readable_requests_csv", "latest_named_readable_requests_csv"),
+        ("proof_requests_csv", "latest_named_proof_requests_csv"),
+        ("summary_csv", "latest_named_summary_csv"),
+        ("summary_md", "latest_named_summary_md"),
     ):
         paths[latest_key].parent.mkdir(parents=True, exist_ok=True)
         paths[latest_key].write_text(paths[source_key].read_text(encoding="utf-8"), encoding="utf-8")
+
+    paths["latest_named_run_txt"].parent.mkdir(parents=True, exist_ok=True)
+    paths["latest_named_run_txt"].write_text(
+        "\n".join(
+            [
+                f"run_id={summary['run_id']}",
+                f"run_dir={paths['run_dir']}",
+                f"requests_csv={paths['requests_csv']}",
+                f"readable_csv={paths['readable_requests_csv']}",
+                f"proof_csv={paths['proof_requests_csv']}",
+                f"summary_csv={paths['summary_csv']}",
+                f"summary_md={paths['summary_md']}",
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
 
 
 def load_rows_for_postprocess(path: Path) -> list[dict[str, Any]]:
@@ -1392,6 +1443,7 @@ def main() -> int:
     print(f"Priority scheduling run_id={run_id}")
     print(f"Requests CSV: {paths['requests_csv']}")
     print(f"Readable CSV: {paths['readable_requests_csv']}")
+    print(f"Proof CSV: {paths['proof_requests_csv']}")
     print(f"Summary CSV: {paths['summary_csv']}")
     print(f"Summary MD: {paths['summary_md']}")
     return 0

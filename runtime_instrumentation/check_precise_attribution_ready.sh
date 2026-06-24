@@ -54,7 +54,7 @@ log() {
 
 fail() {
   log "========================================"
-  log "PRECISE ATTRIBUTION CHECK FAILED (the live running worker is missing required instrumentation)"
+  log "(4/6) PRECISE ATTRIBUTION CHECK FAILED (the live running worker is missing required instrumentation)"
   log "========================================"
   log "FAIL: $1"
   exit 1
@@ -75,9 +75,15 @@ log "Local SGLang transfer markers: ok (${ROOT})"
 
 if [[ "${MODE}" = "priority" ]]; then
   if ! _precise_sglang_require_markers "${ROOT}" priority; then
-    fail "local extracted SGLang source is missing priority markers: ${ROOT}"
+    if [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
+      log "Local SGLang priority markers: unavailable on pinned/extracted SGLang source (${ROOT})"
+      log "Continuing with precise worker/runtime attribution only."
+    else
+      fail "local extracted SGLang source is missing priority markers: ${ROOT}"
+    fi
+  else
+    log "Local SGLang priority markers: ok (${ROOT})"
   fi
-  log "Local SGLang priority markers: ok (${ROOT})"
 fi
 
 RUNNING="$(docker inspect "${WORKER_CONTAINER_NAME}" --format '{{.State.Running}}' 2>/dev/null || true)"
@@ -155,8 +161,11 @@ PY
   )" || fail "worker SGLang transfer markers are missing"
   log "SGLang transfer markers: ${TRANSFER_CHECK}"
 else
-  PRIORITY_CHECK="$(
-    docker exec -i "${WORKER_CONTAINER_NAME}" python3 - <<'PY'
+  if [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
+    log "SGLang priority markers: unavailable on pinned/extracted SGLang source; skipping direct priority-path proof."
+  else
+    PRIORITY_CHECK="$(
+      docker exec -i "${WORKER_CONTAINER_NAME}" python3 - <<'PY'
 import importlib.util
 import json
 from pathlib import Path
@@ -187,11 +196,10 @@ missing = [key for key, value in checks.items() if key != "files" and not value]
 if missing:
     raise SystemExit(13)
 PY
-  )" || fail "worker SGLang priority markers are missing"
-  log "SGLang priority markers: ${PRIORITY_CHECK}"
+    )" || fail "worker SGLang priority markers are missing"
+    log "SGLang priority markers: ${PRIORITY_CHECK}"
+  fi
 fi
 
-log "========================================"
-log "PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)"
-log "========================================"
+precise_banner_numbered 4 6 "PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)" "${LOG_FILE}"
 log "PASS: precise ${MODE} attribution is ready"

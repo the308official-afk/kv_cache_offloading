@@ -236,12 +236,14 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
   ./run_dynamo_single_host.sh stop >> "${MULTI_MODEL_LOG}" 2>&1 || true
 
+  agentbench_print_model_readiness_active_banner | tee -a "${MULTI_MODEL_LOG}"
   echo "Starting Dynamo for ${MODEL_NAME}..." | tee -a "${MULTI_MODEL_LOG}"
   DYNAMO_MODEL_PATH="${MODEL_NAME}" \
   DYNAMO_SERVED_MODEL_NAME="${MODEL_NAME}" \
   ./run_dynamo_single_host.sh start >> "${MULTI_MODEL_LOG}" 2>&1
 
   smoke_test_model "${MODEL_NAME}" "${SMOKE_LOG}"
+  agentbench_print_model_readiness_go_banner | tee -a "${MULTI_MODEL_LOG}"
 
   if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
     echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${MULTI_MODEL_LOG}"

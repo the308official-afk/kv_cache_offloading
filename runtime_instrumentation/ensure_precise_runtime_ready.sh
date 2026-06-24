@@ -62,6 +62,7 @@ EOF
 fi
 
 source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/precise_sglang_helper.sh
 
 if [[ -z "${FRONTEND_IMAGE:-}" || -z "${WORKER_IMAGE:-}" ]]; then
   cat >&2 <<EOF
@@ -93,9 +94,7 @@ if docker image inspect "${WORKER_IMAGE}" >/dev/null 2>&1; then
 fi
 
 if [[ "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 ]]; then
-  echo "========================================"
-  echo "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
-  echo "========================================"
+  precise_banner_numbered 1 6 "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
   exit 0
 fi
 
@@ -135,6 +134,4 @@ docker image inspect "${WORKER_IMAGE}" >/dev/null 2>&1 || {
 
 echo "frontend image ok"
 echo "worker image ok"
-echo "========================================"
-echo "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
-echo "========================================"
+precise_banner_numbered 1 6 "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"

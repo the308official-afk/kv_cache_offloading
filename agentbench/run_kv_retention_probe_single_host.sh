@@ -623,6 +623,7 @@ start_dynamo_for_profile() {
   } | tee -a "${BATCH_LOG}"
   ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
 
+  agentbench_print_model_readiness_active_banner | tee -a "${BATCH_LOG}"
   echo "Starting Dynamo for ${model} with KV tier ${kv_tier_mode}..." | tee -a "${BATCH_LOG}"
   local -a env_vars
   local -a env_cmd
@@ -670,6 +671,7 @@ start_dynamo_for_profile() {
 
   smoke_test_model "${model}" "${smoke_log}"
   check_precise_kv_runtime_ready "${smoke_log}"
+  agentbench_print_model_readiness_go_banner | tee -a "${BATCH_LOG}"
   if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
     precise_print_go_summary "transfer" "${BATCH_LOG}"
   fi

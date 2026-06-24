@@ -40,6 +40,15 @@ resolve_precise_sglang_root() {
   fi
 }
 
+read_precise_sglang_source_image() {
+  local root="$1"
+  local source_file
+  source_file="$(cd "${root}/../../" 2>/dev/null && pwd)/SOURCE_IMAGE.txt"
+  if [[ -f "${source_file}" ]]; then
+    grep '^image=' "${source_file}" | head -1 | cut -d= -f2-
+  fi
+}
+
 _precise_sglang_log() {
   local message="$1"
   local log_file="${2:-}"
@@ -56,6 +65,21 @@ precise_banner() {
   _precise_sglang_log "========================================" "${log_file}"
   _precise_sglang_log "${title}" "${log_file}"
   _precise_sglang_log "========================================" "${log_file}"
+}
+
+precise_numbered_title() {
+  local step="$1"
+  local total="$2"
+  local title="$3"
+  printf '(%s/%s) %s\n' "${step}" "${total}" "${title}"
+}
+
+precise_banner_numbered() {
+  local step="$1"
+  local total="$2"
+  local title="$3"
+  local log_file="${4:-}"
+  precise_banner "$(precise_numbered_title "${step}" "${total}" "${title}")" "${log_file}"
 }
 
 _precise_sglang_run() {
@@ -104,6 +128,12 @@ resolve_precise_sglang_source_image() {
     printf '%s\n' "${SGLANG_IMAGE}"
     return
   fi
+  if [[ -n "${WORKER_IMAGE:-}" ]] && command -v docker >/dev/null 2>&1; then
+    if docker image inspect "${WORKER_IMAGE}" >/dev/null 2>&1; then
+      printf '%s\n' "${WORKER_IMAGE}"
+      return
+    fi
+  fi
   if [[ -n "${SGLANG_SOURCE_IMAGE:-}" ]]; then
     printf '%s\n' "${SGLANG_SOURCE_IMAGE}"
     return
@@ -116,7 +146,7 @@ resolve_precise_sglang_source_image() {
     printf '%s\n' "${WORKER_IMAGE}"
     return
   fi
-  printf '%s\n' "nvcr.io/nvidia/ai-dynamo/sglang-runtime:1.0.2"
+  printf '%s\n' "lmsysorg/sglang:v0.5.11-cu129-runtime"
 }
 
 prepare_precise_sglang_for_run() {
@@ -125,18 +155,30 @@ prepare_precise_sglang_for_run() {
   local require_mode="${3:-transfer}"
   local py_bin="${PYTHON_BIN:-$(choose_precise_sglang_python)}"
   local resolved_root
+  local desired_image=""
 
+  desired_image="$(resolve_precise_sglang_source_image)"
   resolved_root="$(resolve_precise_sglang_root || true)"
+  if [[ -n "${resolved_root}" ]]; then
+    _precise_sglang_log "Reusing extracted SGLang source root: ${resolved_root}" "${log_file}"
+    local existing_image=""
+    existing_image="$(read_precise_sglang_source_image "${resolved_root}" || true)"
+    if [[ -n "${existing_image}" && -n "${desired_image}" && "${existing_image}" != "${desired_image}" ]]; then
+      _precise_sglang_log "Existing extracted source image does not match desired image." "${log_file}"
+      _precise_sglang_log "Existing: ${existing_image}" "${log_file}"
+      _precise_sglang_log "Desired:  ${desired_image}" "${log_file}"
+      _precise_sglang_log "Refreshing extracted SGLang source from desired image..." "${log_file}"
+      rm -rf "$(cd "${resolved_root}/../../" && pwd)"
+      resolved_root=""
+    fi
+  fi
+
   if [[ -z "${resolved_root}" ]]; then
-    local image
-    image="$(resolve_precise_sglang_source_image)"
     _precise_sglang_log "Extracting SGLang source for ${reason}..." "${log_file}"
-    _precise_sglang_log "Using pinned/selected SGLang source image: ${image}" "${log_file}"
-    _precise_sglang_run "${log_file}" env "SGLANG_IMAGE=${image}" \
+    _precise_sglang_log "Using pinned/selected SGLang source image: ${desired_image}" "${log_file}"
+    _precise_sglang_run "${log_file}" env "SGLANG_IMAGE=${desired_image}" \
       ./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
     resolved_root="$(resolve_precise_sglang_root || true)"
-  else
-    _precise_sglang_log "Reusing extracted SGLang source root: ${resolved_root}" "${log_file}"
   fi
 
   if [[ -z "${resolved_root}" ]]; then
@@ -209,7 +251,7 @@ precise_print_local_ready_summary() {
     fi
   fi
 
-  precise_banner "PRECISE LOCAL READY (the local extracted/patched SGLang source is good)" "${log_file}"
+  precise_banner_numbered 2 6 "PRECISE LOCAL READY (the local extracted/patched SGLang source is good)" "${log_file}"
   _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
   _precise_sglang_log "Frontend image: ${FRONTEND_IMAGE:-<unset>}" "${log_file}"
   _precise_sglang_log "Worker image: ${WORKER_IMAGE:-<unset>}" "${log_file}"
@@ -225,7 +267,7 @@ precise_print_local_ready_summary() {
 precise_print_go_summary() {
   local mode="${1:-transfer}"
   local log_file="${2:-}"
-  precise_banner "PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)" "${log_file}"
+  precise_banner_numbered 6 6 "PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)" "${log_file}"
   _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
   _precise_sglang_log "Attribution mode: ${mode}" "${log_file}"
   _precise_sglang_log "Smoke test: ok" "${log_file}"

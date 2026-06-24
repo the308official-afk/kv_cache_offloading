@@ -114,8 +114,8 @@ if [[ -z "${MODEL}" ]]; then
   exit 1
 fi
 
-prepare_precise_priority_sglang
 ensure_precise_priority_runtime_images
+prepare_precise_priority_sglang
 if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" = "precise" ]]; then
   precise_print_local_ready_summary "priority" "${DRIVER_LOG}"
 fi
@@ -317,6 +317,7 @@ warn_if_worker_runtime_missing() {
 
 ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
 
+agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
 echo "Starting Dynamo for ${MODEL}..." | tee -a "${DRIVER_LOG}"
 env_cmd=(
   env
@@ -347,6 +348,7 @@ fi
 
 smoke_test_model "${MODEL}" "${SMOKE_LOG}"
 check_precise_priority_runtime_ready
+agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
 if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" = "precise" ]]; then
   precise_print_go_summary "priority" "${DRIVER_LOG}"
 fi

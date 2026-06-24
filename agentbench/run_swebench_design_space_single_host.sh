@@ -692,6 +692,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
     ./run_dynamo_single_host.sh stop >> "${DESIGN_SPACE_LOG}" 2>&1 || true
 
+    agentbench_print_model_readiness_active_banner | tee -a "${DESIGN_SPACE_LOG}"
     echo "Starting Dynamo for ${MODEL_NAME} with KV tier ${KV_TIER_MODE}..." | tee -a "${DESIGN_SPACE_LOG}"
     DYNAMO_MODEL_PATH="${MODEL_NAME}" \
     DYNAMO_SERVED_MODEL_NAME="${MODEL_NAME}" \
@@ -711,6 +712,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
     smoke_test_model "${MODEL_NAME}" "${SMOKE_LOG}"
     check_precise_kv_runtime_ready "${SMOKE_LOG}"
+    agentbench_print_model_readiness_go_banner | tee -a "${DESIGN_SPACE_LOG}"
     if [[ "${REQUIRE_PRECISE_KV}" = "1" ]]; then
       precise_print_go_summary "transfer" "${DESIGN_SPACE_LOG}"
     fi

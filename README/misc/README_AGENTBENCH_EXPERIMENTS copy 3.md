@@ -1384,74 +1384,223 @@ gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
 
 ## Experiment 9: KV Retention Probe
 
-Use this to test whether prompt A still looks warm after unrelated prompts are
-inserted between the first and second copy.
+Use this to test whether a protected prompt stays useful in cache after many
+unrelated prompts.
 
-Synthetic sequence:
+The synthetic sequence is:
 
 ```text
-A first request -> distractor requests -> same A request again
+A first request -> many unique distractor requests -> same A request again
 ```
 
-Start with `KV_TIER_MODES="gpu_only"`. That gives the cleanest first answer:
-did A appear to stay in GPU KV cache after the distractors?
+Run this first with `KV_TIER_MODE=gpu_only`. That answers the simplest
+retention question: did prompt A appear to stay in GPU KV cache after pressure
+from distractor prompts?
 
-### What this experiment answers
+### Step 0: Optional First-Time Setup Or Recovery
 
-- Does replay A stay faster than first A?
-- Does `high-priority` preserve A better than `none`?
-- At what point do distractors wipe out the replay speedup?
+Only do this for **precise** retention runs. You can skip it for **light**
+retention runs.
 
-### Modes
+This step is now optional for repeated runs on an already prepared machine.
+Use it when you are:
 
-- `RETENTION_ATTRIBUTION_MODE=light`
-  - fastest path
-  - retention judged mainly from replay latency / speedup
-- `RETENTION_ATTRIBUTION_MODE=precise`
-  - slower path
-  - adds worker/runtime/transfer attribution when available
-  - runs the 6 readiness checks before requests begin
+- preparing a fresh machine
+- rebuilding the instrumented Dynamo images
+- or recovering from missing/stale extracted SGLang source
 
-For precise runs, the wrapper now prints:
+The precise retention wrapper now refreshes the extracted SGLang patch
+automatically before the run starts. So this Step 0 is no longer something you
+should need before every precise retention experiment.
 
-- `(1/6) PRECISE RUNTIME IMAGE READY`
-- `(2/6) PRECISE LOCAL READY`
-- `(3/6) MODEL READINESS ACTIVE`
-- `(4/6) PRECISE ATTRIBUTION READY`
-- `(5/6) MODEL READINESS GO`
-- `(6/6) PRECISE EXPERIMENT GO`
+The precise retention wrapper now also runs a live preflight after Dynamo
+starts and after the model smoke test passes. If the running worker does not
+actually contain the patched precise-attribution markers, the wrapper stops
+before launching the probe.
 
-The wrapper already stops and restarts Dynamo for each arm, so you do not need
-to start Dynamo manually first.
-
-### Recommended First Run
-
-Use this small run first. It is the easiest way to prove warm replay speedup
-exists at all.
+Before that restart, it now also resolves the machine profile (`ec2` or
+`gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they
+exist, and auto-builds them on fresh machines by default.
 
 ```bash
 cd ~/kv_cache_offloading
 
-DYNAMO_MACHINE_PROFILE=ec2 \
-RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=light \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-DISTRACTOR_COUNT=2 \
-PROTECTED_INPUT_LEN=500 \
-DISTRACTOR_INPUT_LEN=500 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-./agentbench/run_kv_retention_probe_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
+export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+source runtime_instrumentation/sglang_source_profile.sh
+
+if ! docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
+   ! docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1; then
+  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+fi
+
+./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
+
+if [ -d upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+elif [ -d runtime_upstream/sglang/python/sglang ]; then
+  export SGLANG_ROOT="$PWD/runtime_upstream/sglang/python/sglang"
+else
+  echo "Could not find extracted SGLang source" >&2
+  exit 1
+fi
+
+python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
+  --sglang-root "$SGLANG_ROOT"
+
+cat upstream/sglang/SOURCE_IMAGE.txt
 ```
 
-### Precise Run
+Quick patch check:
 
-Use this when you also want direct worker/runtime/transfer evidence.
+```bash
+for file in \
+  "$SGLANG_ROOT/srt/mem_cache/memory_pool_host.py" \
+  "$SGLANG_ROOT/srt/mem_cache/radix_cache.py" \
+  "$SGLANG_ROOT/srt/mem_cache/hiradix_cache.py"; do
+  [ -f "$file" ] && grep -n "_sgl_log_cache_event\|_sgl_log_transfer_event" "$file"
+done
+```
+
+If you skip this step on a fresh machine, the retention probe may still run,
+but precise cache-attribution fields can be missing if the instrumented runtime
+images are not already built.
+
+By default we keep the SGLang source pinned to a known-good image so upstream
+layout changes do not break precise patching unexpectedly. If you intentionally
+override `SGLANG_IMAGE`, check `upstream/sglang/SOURCE_IMAGE.txt` afterward so
+you know exactly what source build was mounted into the worker.
+
+### Automated Run
+
+There are now two automated modes:
+
+- `RETENTION_ATTRIBUTION_MODE=light`
+  - fastest path
+  - no instrumented Dynamo requirement
+  - no patched SGLang requirement
+  - decides retention mainly from replay latency / speedup
+- `RETENTION_ATTRIBUTION_MODE=precise`
+  - slower path
+  - requires Step 0
+  - adds direct cache / transfer attribution when available
+
+Use `light` when you only want to know:
+
+- did replay A stay faster?
+- at what distractor count did that speedup disappear?
+- did `high-priority` survive longer than `none`?
+
+Use `precise` when you also want:
+
+- direct cache-event evidence
+- request-level attribution
+- transfer logging / richer proof
+
+For any `precise` run, the wrapper now prints a visible readiness chain before
+requests begin:
+
+- `(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)`
+- `(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)`
+- `(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)`
+- `(4/6) PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
+- `(5/6) MODEL READINESS GO (model registration and smoke test both passed)`
+- `(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
+
+If one of those checks fails, the wrapper stops before launching the real
+workload.
+
+If the worker crashes with an error like:
+
+```text
+UnboundLocalError: cannot access local variable 'attach_logged'
+```
+
+that means the runtime images were built from an older partially repaired
+Dynamo source tree. The recovery is:
+
+```bash
+cd ~/kv_cache_offloading
+rm -rf upstream/dynamo
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+Then restart Dynamo and rerun the experiment.
+
+If the worker crashes with an error like:
+
+```text
+SyntaxError: too many statically nested blocks
+```
+
+that means an older extracted SGLang source tree still has the heavy
+`schedule_batch.py` wrapper from a previous patcher version. Sync the latest
+repo changes, then rerun the precise experiment. The current patcher now
+removes that old wrapper automatically before Dynamo starts.
+
+If the worker crashes with an error like:
+
+```text
+ModuleNotFoundError: No module named 'sglang.srt.utils.network'
+```
+
+that means the extracted SGLang overlay came from an older source layout than
+the current worker expects. Sync the latest repo changes, then rerun the
+precise wrapper. The wrapper now prefers the built worker image itself as the
+extraction source and only falls back to the pinned stable image if the worker
+image is not available yet.
+
+For cross-machine attribution safety, use:
+
+- `RETENTION_REQUEST_CONTEXT_MODE=auto`
+  - the probe first tries `nvext.request_context`
+  - if the frontend rejects that field, it retries without it
+  - request identity is still carried through `nvext.agent_context` and
+    `nvext.annotations`
+
+This keeps attribution precise without falling back to time-window guessing.
+
+This is the default path. It gives every hint profile its own fresh Dynamo
+restart and cold cache start, then writes the reports. That prevents the
+`high-priority` or `high-reuse` runs from inheriting warm KV cache from the
+earlier `none` control run.
+
+The automated wrapper already stops and restarts Dynamo for each arm, so you do
+not need to manually run `./run_dynamo_single_host.sh start` first.
+
+Manual preflight command for retention runs:
+
+```bash
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
+  --build-if-missing
+
+./runtime_instrumentation/check_precise_attribution_ready.sh transfer
+```
+
+If you need to debug a fresh machine manually, use:
+
+```bash
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+from dynamo.sglang.request_handlers.llm import decode_handler
+src = inspect.getsource(decode_handler.DecodeWorkerHandler._process_token_stream)
+print("attach_logged = False" in src)
+print("worker.decode.request_attached" in src)
+print("request: Dict[str, Any]" in src)
+PY
+
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+import sglang.srt.mem_cache.memory_pool_host as mph
+src = inspect.getsource(mph)
+print("_sgl_log_transfer_event" in src)
+PY
+```
+
+Precise version of the same run:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1463,7 +1612,7 @@ RETENTION_REQUEST_CONTEXT_MODE=auto \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES="high-priority" \
-DISTRACTOR_COUNT=2 \
+DISTRACTOR_COUNT=200 \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=500 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
@@ -1474,14 +1623,7 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-For portability, keep:
-
-- `RETENTION_REQUEST_CONTEXT_MODE=auto`
-
-That lets the probe retry safely if a frontend rejects `nvext.request_context`,
-while still preserving attribution through the other metadata channels.
-
-### Multi-Model Run
+Multiple models:
 
 ```bash
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
@@ -1499,7 +1641,23 @@ MAX_CONTEXT_TOKENS=17146 \
   Qwen/Qwen2.5-7B-Instruct
 ```
 
-### Outputs
+To watch the worker after the wrapper starts Dynamo:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Automated-run behavior:
+
+```text
+1. stop Dynamo
+2. start Dynamo for one model + one KV tier + one hint profile
+3. wait for readiness and pass a smoke test
+4. run that one retention probe
+5. repeat from a fresh start for the next hint profile
+```
+
+Automated-run outputs:
 
 ```bash
 LATEST_RETENTION_BATCH="$(ls -td experiments/reports/retention_probe_batches/* | head -1)"
@@ -1511,49 +1669,147 @@ cat "$LATEST_RETENTION_BATCH/design_space_retention_matrix.csv"
 cat experiments/reports/design_space_retention_matrix.csv
 ```
 
-The durable per-batch matrix is:
+Each hint-profile run also saves a worker runtime log in the batch directory.
+In `precise` mode, the retention report uses that worker log to map SGLang
+internal request ids back to your external retention probe request ids, then
+re-attaches `sglang.cache` events during postprocessing.
+
+`experiments/reports/design_space_retention_matrix.csv` is a latest-batch view.
+Each automated retention run refreshes it from that batch only, so it should not
+mix old retention runs with the current run. The durable per-batch copy is:
 
 ```text
 experiments/reports/retention_probe_batches/<RETENTION_PROBE_ID>/design_space_retention_matrix.csv
 ```
 
-Each new automated retention run refreshes the top-level
-`experiments/reports/design_space_retention_matrix.csv` from that batch only,
-so it should not mix old and new retention results.
-
-### How To Read The Result
-
-- `a_first_latency_ms`
-  - latency of the first protected prompt A
-- `a_replay_latency_ms`
-  - latency of A when sent again after the distractors
-- if `a_replay_latency_ms` is much lower than `a_first_latency_ms`
-  - A likely stayed warm
-- if the `high-priority` row keeps that replay advantage longer than `none`
-  - the hint likely helped retention
-
-### Important Knobs
+Useful knobs:
 
 ```text
-RETENTION_ATTRIBUTION_MODE     light or precise.
-KV_TIER_MODES                 gpu_only, gpu_cpu, gpu_cpu_storage.
-CONTROL_HINT_PROFILE          Usually none.
-PROTECTED_HINT_PROFILES       high-priority high-reuse baseline, etc.
-DISTRACTOR_COUNT              Number of distractor prompts between first A and replay A.
-PROTECTED_INPUT_LEN           Prompt A approximate input length.
-DISTRACTOR_INPUT_LEN          Each distractor approximate input length.
-RANDOM_OUTPUT_LEN             Keep at 1 for latency-focused retention probes.
-MAX_CONTEXT_TOKENS            Effective worker context limit.
-SGLANG_TRANSFER_LOG_PROFILE   off, light, timing, or full. Precise mode only.
+RETENTION_ATTRIBUTION_MODE       light or precise.
+KV_TIER_MODES                  gpu_only, gpu_cpu, gpu_cpu_storage.
+CONTROL_HINT_PROFILE           Usually none.
+PROTECTED_HINT_PROFILES        high-priority high-reuse baseline, etc.
+DISTRACTOR_COUNT               Number of distractor prompts sent between first A and replay A.
+PROTECTED_INPUT_LEN            Prompt A approximate input length.
+DISTRACTOR_INPUT_LEN           Each distractor prompt approximate input length.
+RANDOM_OUTPUT_LEN              Keep at 1 for retention latency probes.
+MAX_CONTEXT_TOKENS             Effective worker context limit. Use the worker log value if SGLang reports one.
+CONTEXT_RESERVE_TOKENS         Safety reserve for chat template and output tokens.
+RETENTION_PROBE_SEED           Reproducible prompt generation seed.
+SGLANG_TRANSFER_LOG_PROFILE    off, light, timing, or full. Precise mode only.
+MEM_FRACTION_STATIC            SGLang static memory fraction.
+GPU_ONLY_MEM_FRACTION_STATIC   Override GPU-only cache pressure directly.
+HICACHE_RATIO                  Host KV pool ratio for gpu_cpu/gpu_cpu_storage.
+STOP_DYNAMO_WHEN_DONE=1        Stop Dynamo after the final probe.
 ```
 
-Practical guidance:
+Do not set `PROTECTED_INPUT_LEN` or `DISTRACTOR_INPUT_LEN` above the effective
+worker limit. If the worker logs `Input length (...) exceeds the maximum allowed
+length (...)`, set `MAX_CONTEXT_TOKENS` to that allowed length and reduce both
+input lengths. Also do not make them so large that one distractor immediately
+consumes all leftover GPU KV room after prompt A. Start with `500/500` to prove
+warm replay speedup exists, then move to something like `8000/2000` when you
+want a hint-sensitive retention test.
 
-- start with `500/500` to prove warm replay speedup exists
-- move toward something like `8000/2000` when you want a stronger,
-  hint-sensitive retention test
-- if the worker says the input length exceeds the allowed maximum, reduce both
-  input lengths and keep `MAX_CONTEXT_TOKENS` aligned with the worker limit
+### Manual Debugging Path
+
+Use this only when you want to start Dynamo and run each probe by hand.
+
+#### Step 1: Start Dynamo For GPU-Only Retention
+
+This uses precise runtime logging, but disables hierarchical cache so the first
+probe focuses on GPU-only retention.
+
+```bash
+cd ~/kv_cache_offloading
+
+export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+./run_dynamo_single_host.sh stop
+
+WORKER_EXTRA_ARGS='--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7' \
+WORKER_SGLANG_DEV_MODE=1 \
+WORKER_SGLANG_SOURCE_ROOT="$SGLANG_ROOT" \
+SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+SGLANG_TRANSFER_LOG_SYNC_TIMING=1 \
+DYN_RUNTIME_JSON_LOGS=1 \
+DYN_TOOL_CALL_PARSER=hermes \
+DYNAMO_MODEL_PATH="$MODEL_NAME" \
+DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
+FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+WORKER_IMAGE="$WORKER_IMAGE" \
+./run_dynamo_single_host.sh start
+```
+
+Watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+#### Step 2: Run No-Hint Control
+
+Use a small positive-control setup first.
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --request-context-mode auto \
+  --kv-tier-mode gpu_only \
+  --protected-hint-profile none \
+  --distractor-hint-profile none \
+  --protected-input-len 500 \
+  --distractor-input-len 500 \
+  --distractor-count 2 \
+  --random-output-len 1 \
+  --ignore-eos
+```
+
+#### Step 3: Run Protected-Hint Probe
+
+This marks prompt A as high priority. Distractors still carry no hints.
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 experiments/scripts/retention_probe/run_kv_retention_probe.py \
+  --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
+  --model "$MODEL_NAME" \
+  --request-context-mode auto \
+  --kv-tier-mode gpu_only \
+  --protected-hint-profile high-priority \
+  --distractor-hint-profile none \
+  --protected-input-len 500 \
+  --distractor-input-len 500 \
+  --distractor-count 2 \
+  --random-output-len 1 \
+  --ignore-eos
+```
+
+If the positive control works, increase pressure gradually:
+
+```bash
+--protected-input-len 8000
+--distractor-input-len 2000
+--distractor-count 10
+```
+
+#### Step 4: Read The Retention Reports
+
+```bash
+LATEST_RETENTION="$(ls -td experiments/reports/retention_probe/* | head -1)"
+echo "$LATEST_RETENTION"
+
+cat "$LATEST_RETENTION/retention_probe_summary.md"
+cat "$LATEST_RETENTION/retention_probe_summary.csv"
+cat "$LATEST_RETENTION/retention_probe_requests.csv"
+cat experiments/reports/design_space_retention_matrix.csv
+```
 
 ### Retention Threshold Sweep
 

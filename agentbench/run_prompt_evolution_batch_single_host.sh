@@ -116,12 +116,14 @@ smoke_test_model() {
 
 ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
 
+agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
 echo "Starting Dynamo for ${MODEL}..." | tee -a "${DRIVER_LOG}"
 DYNAMO_MODEL_PATH="${MODEL}" \
 DYNAMO_SERVED_MODEL_NAME="${MODEL}" \
 ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
 
 smoke_test_model "${MODEL}" "${SMOKE_LOG}"
+agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
 
 if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
   echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
