@@ -64,6 +64,10 @@ BATCH_PROGRESS="${BATCH_DIR}/retention_probe_progress.csv"
 BATCH_SUMMARY="${BATCH_DIR}/retention_probe_batch_summary.md"
 BATCH_MATRIX="${BATCH_DIR}/design_space_retention_matrix.csv"
 GLOBAL_MATRIX="experiments/reports/design_space_retention_matrix.csv"
+LATEST_PROBE_PROGRESS="experiments/reports/latest_retention_probe_progress.csv"
+LATEST_PROBE_MATRIX="experiments/reports/latest_retention_probe_matrix.csv"
+LATEST_PROBE_REQUESTS="experiments/reports/latest_retention_probe_requests.csv"
+LATEST_PROBE_SUMMARY="experiments/reports/latest_retention_probe_summary.md"
 mkdir -p "${BATCH_DIR}"
 
 usage() {
@@ -402,6 +406,14 @@ init_matrices() {
   rm -f "${BATCH_MATRIX}" "${GLOBAL_MATRIX}"
 }
 
+reset_latest_probe_reports() {
+  rm -f \
+    "${LATEST_PROBE_PROGRESS}" \
+    "${LATEST_PROBE_MATRIX}" \
+    "${LATEST_PROBE_REQUESTS}" \
+    "${LATEST_PROBE_SUMMARY}"
+}
+
 append_progress() {
   local model="$1"
   local kv_tier_mode="$2"
@@ -687,9 +699,11 @@ write_batch_summary() {
   if [[ -f "${BATCH_MATRIX}" ]]; then
     mkdir -p "$(dirname "${GLOBAL_MATRIX}")"
     cp "${BATCH_MATRIX}" "${GLOBAL_MATRIX}"
+    cp "${BATCH_MATRIX}" "${LATEST_PROBE_MATRIX}"
   fi
+  cp "${BATCH_PROGRESS}" "${LATEST_PROBE_PROGRESS}"
 
-  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_SUMMARY}" "${BATCH_MATRIX}" "${GLOBAL_MATRIX}" "${RETENTION_PROBE_ID}" "${BATCH_LOG}"
+  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_SUMMARY}" "${BATCH_MATRIX}" "${GLOBAL_MATRIX}" "${RETENTION_PROBE_ID}" "${BATCH_LOG}" "${LATEST_PROBE_REQUESTS}"
 import csv
 import sys
 from pathlib import Path
@@ -700,6 +714,7 @@ batch_matrix_path = Path(sys.argv[3])
 global_matrix_path = Path(sys.argv[4])
 probe_id = sys.argv[5]
 log_path = sys.argv[6]
+latest_requests_path = Path(sys.argv[7])
 
 progress_rows = []
 if progress_path.exists():
@@ -712,6 +727,30 @@ profiles = sorted({row.get("hint_profile", "") for row in progress_rows if row.g
 cache_profiles = sorted({row.get("cache_control_profile", "") for row in progress_rows if row.get("cache_control_profile")})
 ok = sum(1 for row in progress_rows if row.get("status") == "ok")
 failed = sum(1 for row in progress_rows if row.get("status") == "failed")
+
+request_rows = []
+request_fieldnames = None
+for progress_row in progress_rows:
+    requests_path_str = progress_row.get("requests_csv", "")
+    if not requests_path_str:
+        continue
+    requests_path = Path(requests_path_str)
+    if not requests_path.exists():
+        continue
+    with requests_path.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if rows and request_fieldnames is None:
+        request_fieldnames = list(rows[0].keys())
+    request_rows.extend(rows)
+
+if request_fieldnames:
+    latest_requests_path.parent.mkdir(parents=True, exist_ok=True)
+    with latest_requests_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=request_fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(request_rows)
+else:
+    latest_requests_path.unlink(missing_ok=True)
 
 lines = [
     f"# KV Retention Probe Batch: {probe_id}",
@@ -735,11 +774,15 @@ lines = [
     f"- Progress CSV: `{progress_path}`",
     f"- Batch retention matrix: `{batch_matrix_path}`",
     f"- Latest/current retention matrix: `{global_matrix_path}`",
+    f"- Latest probe progress: `experiments/reports/latest_retention_probe_progress.csv`",
+    f"- Latest probe matrix: `experiments/reports/latest_retention_probe_matrix.csv`",
+    f"- Latest probe requests: `experiments/reports/latest_retention_probe_requests.csv`",
     f"- Progress log: `{log_path}`",
     "",
 ]
 summary_path.write_text("\n".join(lines), encoding="utf-8")
 PY
+  cp "${BATCH_SUMMARY}" "${LATEST_PROBE_SUMMARY}"
 }
 
 MODELS_TO_RUN=()
@@ -760,6 +803,7 @@ fi
 require_retention_probe_script_ready
 init_progress_file
 init_matrices
+reset_latest_probe_reports
 
 {
   echo "Retention probe ID: ${RETENTION_PROBE_ID}"
@@ -882,3 +926,7 @@ echo "Batch summary: ${BATCH_SUMMARY}"
 echo "Progress CSV:   ${BATCH_PROGRESS}"
 echo "Batch matrix:   ${BATCH_MATRIX}"
 echo "Latest matrix:  ${GLOBAL_MATRIX}"
+echo "Latest probe progress: ${LATEST_PROBE_PROGRESS}"
+echo "Latest probe matrix:   ${LATEST_PROBE_MATRIX}"
+echo "Latest probe requests: ${LATEST_PROBE_REQUESTS}"
+echo "Latest probe summary:  ${LATEST_PROBE_SUMMARY}"

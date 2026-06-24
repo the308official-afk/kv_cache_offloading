@@ -20,6 +20,8 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **Many models**: use Experiment 7.
 - **Full design-space sweep**: use Experiment 8.
 - **KV retention/eviction probe**: use Experiment 9.
+- **Cache-control retention**: use Experiment 10.
+- **Priority scheduling**: use Experiment 11.
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -1277,40 +1279,13 @@ gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
 
 ## Experiment 9: KV Retention Probe
 
-Use this to test whether prompt A still looks warm after unrelated prompts are
-inserted between the first and second copy.
-
-Synthetic sequence:
+Use this for hint-based KV retention:
 
 ```text
-A first request -> distractor requests -> same A request again
+A first -> distractors -> A replay
 ```
 
-Start with `KV_TIER_MODES="gpu_only"`. That gives the cleanest first answer:
-did A appear to stay in GPU KV cache after the distractors?
-
-### What this experiment answers
-
-- Does replay A stay faster than first A?
-- Does `high-priority` preserve A better than `none`?
-- Does `nvext.cache_control` (for example `ephemeral:1h`) preserve A better than `off`?
-- At what point do distractors wipe out the replay speedup?
-
-For precise runs, the wrapper now prints:
-
-- `(1/6) PRECISE RUNTIME IMAGE READY`
-- `(2/6) PRECISE LOCAL READY`
-- `(3/6) MODEL READINESS ACTIVE`
-- `(4/6) PRECISE ATTRIBUTION READY`
-- `(5/6) MODEL READINESS GO`
-- `(6/6) PRECISE EXPERIMENT GO`
-
-The wrapper already stops and restarts Dynamo for each arm, so you do not need
-to start Dynamo manually first.
-
-### Recommended First Run
-
-Use this when you also want direct worker/runtime/transfer evidence.
+Best first run:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1333,27 +1308,30 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Multi-Model Run
+Quick-look outputs:
 
 ```bash
-RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=light \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-KV_TIER_MODES="gpu_only" \
-PROTECTED_HINT_PROFILES="high-priority" \
-DISTRACTOR_COUNT=10 \
-PROTECTED_INPUT_LEN=8000 \
-DISTRACTOR_INPUT_LEN=2000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
-MAX_CONTEXT_TOKENS=17146 \
-./agentbench/run_kv_retention_probe_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct \
-  Qwen/Qwen2.5-7B-Instruct
+cat experiments/reports/latest_retention_probe_progress.csv
+cat experiments/reports/latest_retention_probe_matrix.csv
+cat experiments/reports/latest_retention_probe_requests.csv
+cat experiments/reports/latest_retention_probe_summary.md
 ```
 
-### Cache-Control Variant
+Main knobs:
 
-Use this when you want to test cache policy directly instead of priority.
+```text
+DISTRACTOR_COUNT
+PROTECTED_INPUT_LEN
+DISTRACTOR_INPUT_LEN
+GPU_ONLY_MEM_FRACTION_STATIC
+PROTECTED_HINT_PROFILES
+```
+
+## Experiment 10: Cache-Control Retention
+
+Use this to test `nvext.cache_control` directly.
+
+Simple probe:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1367,7 +1345,7 @@ CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES=none \
 CONTROL_CACHE_CONTROL_PROFILE=off \
 PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
-DISTRACTOR_COUNT=2 \
+DISTRACTOR_COUNT=200 \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=500 \
 GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
@@ -1378,32 +1356,7 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Important Knobs
-
-```text
-RETENTION_ATTRIBUTION_MODE     light or precise.
-KV_TIER_MODES                 gpu_only, gpu_cpu, gpu_cpu_storage.
-CONTROL_HINT_PROFILE          Usually none.
-PROTECTED_HINT_PROFILES       high-priority high-reuse baseline, etc.
-DISTRACTOR_COUNT              Number of distractor prompts between first A and replay A.
-PROTECTED_INPUT_LEN           Prompt A approximate input length.
-DISTRACTOR_INPUT_LEN          Each distractor approximate input length.
-RANDOM_OUTPUT_LEN             Keep at 1 for latency-focused retention probes.
-MAX_CONTEXT_TOKENS            Effective worker context limit.
-SGLANG_TRANSFER_LOG_PROFILE   off, light, timing, or full. Precise mode only.
-```
-
-Key proof fields in `retention_threshold_matrix.csv` and the per-run retention
-reports:
-
-```text
-request_cache_control_status   The harness sent a cache-control policy.
-request_cache_control_values   The exact policy sent, e.g. a_first:ephemeral:1h.
-worker_cache_control_status    The live worker/runtime logs saw cache_control.
-worker_cache_control_values    The exact cache-control value seen by the worker.
-```
-
-Run the same sweep in the background with `nohup`: This has proved to work with g5.2xlarge with limited GPU capacity
+Override pressure knobs when needed:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1412,67 +1365,52 @@ DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
-DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
 KV_TIER_MODES="gpu_only" \
 CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=200 \
-DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
+DISTRACTOR_COUNTS="4 8 12 16 20" \
+PROTECTED_INPUT_LEN=3000 \
+DISTRACTOR_INPUT_LEN=3000 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.58 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
-RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
 WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+./agentbench/run_cache_control_retention_threshold_sweep_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-Run the same sweep in the background with `nohup`: This has proved to work with GH200 with larger GPU capacity
+Main knobs:
 
-```bash
-cd ~/kv_cache_offloading-v5
-
-export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=precise \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-DISTRACTOR_COUNTS="200" \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```text
+DISTRACTOR_COUNTS
+PROTECTED_INPUT_LEN
+DISTRACTOR_INPUT_LEN
+GPU_ONLY_MEM_FRACTION_STATIC
+PROTECTED_CACHE_CONTROL_PROFILES
 ```
 
-To watch the worker:
+Proof fields:
 
-```bash
-docker logs -f dynamo-sglang-worker
+```text
+request_cache_control_status
+request_cache_control_values
+worker_cache_control_status
+worker_cache_control_values
 ```
 
-Outputs:
+Top-level outputs:
 
 ```bash
-LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/* | head -1)"
-echo "$LATEST_THRESHOLD_SWEEP"
-
-cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_sweep_progress.csv"
-cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
-cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_comparison.csv"
-cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_summary.md"
+cat experiments/reports/latest_retention_probe_matrix.csv
+cat experiments/reports/retention_threshold_matrix.csv
+cat experiments/reports/retention_threshold_comparison.csv
+cat experiments/reports/retention_threshold_summary.md
 ```
 
-## Experiment 10: Priority Scheduling Probe
+## Experiment 11: Priority Scheduling Probe
 
 Use this when you want to test queue ordering directly:
 
