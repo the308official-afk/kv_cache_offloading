@@ -44,6 +44,15 @@ prepare_precise_priority_sglang() {
   prepare_precise_sglang_for_run "precise priority attribution" "${DRIVER_LOG}" "priority"
 }
 
+check_precise_priority_runtime_ready() {
+  if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  echo "Running precise priority-attribution preflight..." | tee -a "${DRIVER_LOG}"
+  LOG_FILE="${DRIVER_LOG}" \
+    ./runtime_instrumentation/check_precise_attribution_ready.sh priority
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -306,6 +315,7 @@ fi
 "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
 
 smoke_test_model "${MODEL}" "${SMOKE_LOG}"
+check_precise_priority_runtime_ready
 
 if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
   echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
@@ -358,6 +368,7 @@ fi
   echo "Priority scheduling probe finished."
   echo "Run dir: ${RUN_DIR}"
   echo "Requests CSV: ${RUN_DIR}/priority_scheduling_requests.csv"
+  echo "Readable CSV: ${RUN_DIR}/priority_scheduling_readable.csv"
   echo "Summary CSV: ${RUN_DIR}/priority_scheduling_summary.csv"
   echo "Summary MD: ${RUN_DIR}/priority_scheduling_summary.md"
 } | tee -a "${DRIVER_LOG}"

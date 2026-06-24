@@ -86,6 +86,26 @@ REQUEST_COLUMNS = [
     "overtook_earlier_low_completed_count",
 ]
 
+READABLE_REQUEST_COLUMNS = [
+    "run_id",
+    "request_role",
+    "priority_class",
+    "arrival_index",
+    "attached_rank",
+    "completed_rank",
+    "attach_priority_gain",
+    "completion_priority_gain",
+    "overtook_earlier_low_attached_count",
+    "overtook_earlier_low_completed_count",
+    "worker_queue_wait_ms",
+    "client_latency_ms",
+    "worker_agent_hints_priority",
+    "top_level_priority_sent",
+    "sglang_scheduler_priority_applied",
+    "worker_runtime_matched",
+    "scheduling_success_signal",
+]
+
 SUMMARY_COLUMNS = [
     "run_id",
     "model",
@@ -254,6 +274,11 @@ def mean_int(values: list[int]) -> int | str:
     if not values:
         return ""
     return int(round(sum(values) / len(values)))
+
+
+def safe_int_str(value: Any) -> int | str:
+    parsed = maybe_int(value)
+    return parsed if parsed is not None else ""
 
 
 def truthy(value: Any) -> bool:
@@ -670,6 +695,70 @@ def write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Non
         writer = csv.DictWriter(handle, fieldnames=columns, extrasaction="ignore", lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
+
+
+def request_scheduling_signal(row: dict[str, Any]) -> str:
+    priority_class = str(row.get("priority_class") or "")
+    attached_leapfrogs = maybe_int(row.get("overtook_earlier_low_attached_count")) or 0
+    attached_gain = maybe_int(row.get("attach_priority_gain")) or 0
+    matched = truthy(row.get("worker_runtime_matched"))
+
+    if priority_class == "low-priority":
+        return "baseline_low"
+    if not matched:
+        return "unknown"
+    if attached_leapfrogs > 0:
+        return "yes_strong"
+    if attached_gain > 0:
+        return "yes_partial"
+    return "no"
+
+
+def build_readable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    readable_rows: list[dict[str, Any]] = []
+    for row in rows:
+        arrival_index = maybe_int(row.get("arrival_index"))
+        attached_rank = maybe_int(row.get("attached_rank"))
+        completed_rank = maybe_int(row.get("completed_rank"))
+        attach_priority_gain = (
+            arrival_index - attached_rank
+            if arrival_index is not None and attached_rank is not None
+            else None
+        )
+        completion_priority_gain = (
+            arrival_index - completed_rank
+            if arrival_index is not None and completed_rank is not None
+            else None
+        )
+        readable = {
+            "run_id": row.get("run_id", ""),
+            "request_role": row.get("request_role", ""),
+            "priority_class": row.get("priority_class", ""),
+            "arrival_index": safe_int_str(row.get("arrival_index")),
+            "attached_rank": safe_int_str(row.get("attached_rank")),
+            "completed_rank": safe_int_str(row.get("completed_rank")),
+            "attach_priority_gain": attach_priority_gain if attach_priority_gain is not None else "",
+            "completion_priority_gain": (
+                completion_priority_gain if completion_priority_gain is not None else ""
+            ),
+            "overtook_earlier_low_attached_count": safe_int_str(
+                row.get("overtook_earlier_low_attached_count")
+            ),
+            "overtook_earlier_low_completed_count": safe_int_str(
+                row.get("overtook_earlier_low_completed_count")
+            ),
+            "worker_queue_wait_ms": safe_int_str(row.get("worker_queue_wait_ms")),
+            "client_latency_ms": safe_int_str(row.get("client_latency_ms")),
+            "worker_agent_hints_priority": safe_int_str(row.get("worker_agent_hints_priority")),
+            "top_level_priority_sent": row.get("top_level_priority_sent", ""),
+            "sglang_scheduler_priority_applied": row.get(
+                "sglang_scheduler_priority_applied", ""
+            ),
+            "worker_runtime_matched": row.get("worker_runtime_matched", ""),
+        }
+        readable["scheduling_success_signal"] = request_scheduling_signal(readable | row)
+        readable_rows.append(readable)
+    return readable_rows
 
 
 def read_csv_rows(path: Path) -> list[dict[str, str]]:
@@ -1213,9 +1302,11 @@ def output_paths(root: Path, run_id: str) -> dict[str, Path]:
     return {
         "run_dir": run_dir,
         "requests_csv": run_dir / "priority_scheduling_requests.csv",
+        "readable_requests_csv": run_dir / "priority_scheduling_readable.csv",
         "summary_csv": run_dir / "priority_scheduling_summary.csv",
         "summary_md": run_dir / "priority_scheduling_summary.md",
         "latest_requests_csv": root.parent / "priority_scheduling_requests.csv",
+        "latest_readable_requests_csv": root.parent / "priority_scheduling_readable.csv",
         "latest_summary_csv": root.parent / "priority_scheduling_summary.csv",
         "latest_summary_md": root.parent / "priority_scheduling_summary.md",
     }
@@ -1223,11 +1314,13 @@ def output_paths(root: Path, run_id: str) -> dict[str, Path]:
 
 def save_outputs(paths: dict[str, Path], rows: list[dict[str, Any]], summary: dict[str, Any]) -> None:
     write_csv(paths["requests_csv"], rows, REQUEST_COLUMNS)
+    write_csv(paths["readable_requests_csv"], build_readable_rows(rows), READABLE_REQUEST_COLUMNS)
     write_csv(paths["summary_csv"], [summary], SUMMARY_COLUMNS)
     paths["summary_md"].write_text(build_summary_md(summary), encoding="utf-8")
 
     for source_key, latest_key in (
         ("requests_csv", "latest_requests_csv"),
+        ("readable_requests_csv", "latest_readable_requests_csv"),
         ("summary_csv", "latest_summary_csv"),
         ("summary_md", "latest_summary_md"),
     ):
@@ -1298,6 +1391,7 @@ def main() -> int:
 
     print(f"Priority scheduling run_id={run_id}")
     print(f"Requests CSV: {paths['requests_csv']}")
+    print(f"Readable CSV: {paths['readable_requests_csv']}")
     print(f"Summary CSV: {paths['summary_csv']}")
     print(f"Summary MD: {paths['summary_md']}")
     return 0

@@ -164,6 +164,16 @@ require_precise_kv_ready() {
   RESOLVED_SGLANG_ROOT="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
 }
 
+check_precise_kv_runtime_ready() {
+  local log_file="$1"
+  if [[ "${RETENTION_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  echo "Running precise KV-attribution preflight..." | tee -a "${BATCH_LOG}" "${log_file}"
+  LOG_FILE="${log_file}" \
+    ./runtime_instrumentation/check_precise_attribution_ready.sh transfer | tee -a "${BATCH_LOG}"
+}
+
 require_retention_probe_script_ready() {
   local probe_script="experiments/scripts/retention_probe/run_kv_retention_probe.py"
   if [[ ! -f "${probe_script}" ]]; then
@@ -642,6 +652,7 @@ start_dynamo_for_profile() {
   "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
 
   smoke_test_model "${model}" "${smoke_log}"
+  check_precise_kv_runtime_ready "${smoke_log}"
 
   if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
     echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${BATCH_LOG}"

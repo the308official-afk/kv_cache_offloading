@@ -174,6 +174,16 @@ require_precise_kv_ready() {
   RESOLVED_SGLANG_ROOT="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
 }
 
+check_precise_kv_runtime_ready() {
+  local smoke_log="$1"
+  if [[ "${REQUIRE_PRECISE_KV}" != "1" ]]; then
+    return 0
+  fi
+  echo "Running precise KV-attribution preflight..." | tee -a "${DESIGN_SPACE_LOG}" "${smoke_log}"
+  LOG_FILE="${smoke_log}" \
+    ./runtime_instrumentation/check_precise_attribution_ready.sh transfer | tee -a "${DESIGN_SPACE_LOG}"
+}
+
 init_matrix_file() {
   local path="$1"
   if [[ -f "${path}" && "$(head -n 1 "${path}")" != "${DESIGN_SPACE_HEADER}" ]]; then
@@ -675,6 +685,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
     ./run_dynamo_single_host.sh start >> "${DESIGN_SPACE_LOG}" 2>&1
 
     smoke_test_model "${MODEL_NAME}" "${SMOKE_LOG}"
+    check_precise_kv_runtime_ready "${SMOKE_LOG}"
 
     if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
       echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DESIGN_SPACE_LOG}"

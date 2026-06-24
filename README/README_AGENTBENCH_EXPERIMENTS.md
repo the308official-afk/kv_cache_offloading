@@ -577,6 +577,8 @@ so keep `--hicache-ratio 1` or higher.
 ### Step 3: Verify Instrumentation Is Active
 
 ```bash
+./runtime_instrumentation/check_precise_attribution_ready.sh transfer
+
 docker inspect dynamo-sglang-worker \
   --format '{{range .Config.Env}}{{println .}}{{end}}' | \
   grep -E 'SGLANG_TRANSFER_LOG|SGLANG_TRANSFER_LOG_SYNC_TIMING|DYN_RUNTIME_JSON_LOGS'
@@ -599,6 +601,26 @@ Expected:
 SGLANG_TRANSFER_LOG=1
 SGLANG_TRANSFER_LOG_PROFILE=full
 _sgl_log_transfer_event: True
+```
+
+If the automatic preflight fails, use these manual debug signals:
+
+```bash
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+from dynamo.sglang.request_handlers.llm import decode_handler
+src = inspect.getsource(decode_handler.DecodeWorkerHandler._process_token_stream)
+print("attach_logged = False" in src)
+print("worker.decode.request_attached" in src)
+print("request: Dict[str, Any]" in src)
+PY
+
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+import sglang.srt.mem_cache.memory_pool_host as mph
+src = inspect.getsource(mph)
+print("_sgl_log_transfer_event" in src)
+PY
 ```
 
 Use `SGLANG_TRANSFER_LOG_PROFILE=off` to disable transfer logging.
@@ -1125,6 +1147,17 @@ design-space matrix. The normal run reports still get generated, including
 Before running this, complete Experiment 3 Step 1 once so the instrumented
 images and patched SGLang source exist.
 
+When this sweep runs in its precise KV-attribution mode, the wrapper now does a
+live preflight after each Dynamo restart and model smoke test. If the running
+worker is missing the patched precise-attribution markers, the sweep stops
+before launching the expensive batch.
+
+Manual preflight command for the precise design-space path:
+
+```bash
+./runtime_instrumentation/check_precise_attribution_ready.sh transfer
+```
+
 ### Pilot Sweep
 
 Use this first. It is small enough to catch setup issues before a long run.
@@ -1334,6 +1367,11 @@ The precise retention wrapper now refreshes the extracted SGLang patch
 automatically before the run starts. So this Step 0 is no longer something you
 should need before every precise retention experiment.
 
+The precise retention wrapper now also runs a live preflight after Dynamo
+starts and after the model smoke test passes. If the running worker does not
+actually contain the patched precise-attribution markers, the wrapper stops
+before launching the probe.
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1445,6 +1483,32 @@ earlier `none` control run.
 
 The automated wrapper already stops and restarts Dynamo for each arm, so you do
 not need to manually run `./run_dynamo_single_host.sh start` first.
+
+Manual preflight command for retention runs:
+
+```bash
+./runtime_instrumentation/check_precise_attribution_ready.sh transfer
+```
+
+If you need to debug a fresh machine manually, use:
+
+```bash
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+from dynamo.sglang.request_handlers.llm import decode_handler
+src = inspect.getsource(decode_handler.DecodeWorkerHandler._process_token_stream)
+print("attach_logged = False" in src)
+print("worker.decode.request_attached" in src)
+print("request: Dict[str, Any]" in src)
+PY
+
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+import sglang.srt.mem_cache.memory_pool_host as mph
+src = inspect.getsource(mph)
+print("_sgl_log_transfer_event" in src)
+PY
+```
 
 Positive-control pilot:
 
@@ -2216,6 +2280,11 @@ automatically before it launches Dynamo. So this step is no longer required
 before every precise priority run. It is mainly for first-time setup,
 instrumented-image rebuilds, and recovery.
 
+The precise priority wrapper now also runs a live preflight after Dynamo
+starts and after the model smoke test passes. If the running worker does not
+actually contain the patched precise-attribution markers, the wrapper stops
+before launching the scheduling probe.
+
 If the current SGLang version does not expose the exact priority-path patch
 points our helper expects, the wrapper now warns and continues instead of
 aborting the run. In that case, you still get precise worker/runtime
@@ -2241,6 +2310,44 @@ Interpret them like this:
   evidence but not attach/completion ordering yet
 - if you want true queue-order proof, rebuild the instrumented runtime images
   until attached/completed events also show up
+
+Manual preflight command for precise priority runs:
+
+```bash
+./runtime_instrumentation/check_precise_attribution_ready.sh priority
+```
+
+Manual debug signals for fresh machines:
+
+```bash
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import inspect
+from dynamo.sglang.request_handlers.llm import decode_handler
+src = inspect.getsource(decode_handler.DecodeWorkerHandler._process_token_stream)
+print("attach_logged = False" in src)
+print("worker.decode.request_attached" in src)
+print("request: Dict[str, Any]" in src)
+PY
+
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+import importlib.util
+from pathlib import Path
+
+root_spec = importlib.util.find_spec("sglang")
+root = Path(root_spec.origin).resolve().parent
+combined = ""
+for path in (
+    root / "srt" / "mem_cache" / "transfer_logging.py",
+    root / "srt" / "managers" / "cache_controller.py",
+    root / "srt" / "mem_cache" / "hiradix_cache.py",
+):
+    if path.exists():
+        combined += path.read_text() + "\\n"
+print("_sgl_log_priority_event" in combined)
+print("priority_hint_seen" in combined)
+print("scheduler_priority_applied" in combined)
+PY
+```
 
 ### Step 1: Run The Precise Scheduling Probe
 
@@ -2355,6 +2462,7 @@ Outputs:
 LATEST_PRIORITY="$(ls -td experiments/reports/priority_scheduling/* | head -1)"
 echo "$LATEST_PRIORITY"
 
+cat "$LATEST_PRIORITY/priority_scheduling_readable.csv"
 cat "$LATEST_PRIORITY/priority_scheduling_requests.csv"
 cat "$LATEST_PRIORITY/priority_scheduling_summary.csv"
 cat "$LATEST_PRIORITY/priority_scheduling_summary.md"
@@ -2363,6 +2471,7 @@ cat "$LATEST_PRIORITY/priority_scheduling_summary.md"
 Top-level latest copies:
 
 ```bash
+cat experiments/reports/priority_scheduling_readable.csv
 cat experiments/reports/priority_scheduling_requests.csv
 cat experiments/reports/priority_scheduling_summary.csv
 cat experiments/reports/priority_scheduling_summary.md
@@ -2371,8 +2480,13 @@ cat experiments/reports/priority_scheduling_summary.md
 What the files mean:
 
 ```text
+priority_scheduling_readable.csv
+  One row per synthetic request, arranged for quick interpretation:
+  send order, attach order, completion order, leapfrogs, queue wait, and a
+  compact scheduling success signal.
+
 priority_scheduling_requests.csv
-  One row per synthetic request.
+  One row per synthetic request, with the full raw/debug fields preserved.
 
 priority_scheduling_summary.csv
   One compact row with the main queue-order metrics.
