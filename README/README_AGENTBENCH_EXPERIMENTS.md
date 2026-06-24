@@ -1185,6 +1185,10 @@ It also now resolves the machine profile (`ec2` or `gh200`), prints the exact
 `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and auto-builds them on
 fresh machines by default.
 
+The precise SGLang patcher also now auto-cleans older fragile
+`schedule_policy.py` wrappers before each run, so if you sync the latest repo
+you should not hit the old `too many statically nested blocks` import failure.
+
 Manual preflight command for the precise design-space path:
 
 ```bash
@@ -1443,6 +1447,10 @@ before the synthetic requests are sent:
 - `(4/6) PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
 - `(5/6) MODEL READINESS GO (model registration and smoke test both passed)`
 - `(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
+
+The precise SGLang patcher now removes older fragile `schedule_policy.py`
+wrappers before the run, so syncing the latest repo should also prevent the
+old `too many statically nested blocks` startup error.
 
 ### Step 1: Run The Precise Scheduling Probe
 
