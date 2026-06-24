@@ -88,6 +88,8 @@ Precise-attribution note:
 - and the runtime-image helper now resolves the machine profile (`ec2` or `gh200`),
   prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and
   auto-builds them on fresh machines by default inside the precise wrappers
+- if you want check-only behavior instead, set:
+  `AUTO_BUILD_PRECISE_IMAGES=0`
 - so you should not need to manually re-run the SGLang extract/patch steps for
   every precise experiment anymore
 - you may still want to run the helper manually when debugging a fresh machine:
@@ -1189,14 +1191,12 @@ Use this first. It is small enough to catch setup issues before a long run.
 ```bash
 cd ~/kv_cache_offloading
 
-export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-source runtime_instrumentation/dynamo_machine_profile.sh
-
 export AGENTBENCH_EXECUTION_LOOP=0
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 DESIGN_SPACE_ID="pilot_design_space_$(date +%Y%m%d_%H%M%S)" \
 START_INDEX=0 \
 END_INDEX=1 \
@@ -1230,6 +1230,7 @@ docker logs -f dynamo-sglang-worker
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 DESIGN_SPACE_ID="design_space_$(date +%Y%m%d_%H%M%S)" \
 START_INDEX=0 \
 END_INDEX=30 \
@@ -1572,10 +1573,7 @@ Precise version of the same run:
 ```bash
 cd ~/kv_cache_offloading
 
-export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
-source runtime_instrumentation/dynamo_machine_profile.sh
-
+DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
@@ -2018,6 +2016,7 @@ fi
 python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
   --sglang-root "$SGLANG_ROOT"
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
@@ -2045,6 +2044,7 @@ Run the same sweep in the background with `nohup`:
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
@@ -2069,6 +2069,7 @@ Run this when using a smaller machine like g5.2xlarge with limited GPU capacity 
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
@@ -2095,6 +2096,7 @@ cd ~/kv_cache_offloading-v5
 
 export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
 
+DYNAMO_MACHINE_PROFILE=gh200 \
 RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
@@ -2394,6 +2396,7 @@ PY
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
 PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
 PRIORITY_REQUEST_CONTEXT_MODE=auto \
@@ -2432,6 +2435,7 @@ Canonical-hint-only variant for machines that reject top-level `priority`:
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=ec2 \
 PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
 PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
 PRIORITY_REQUEST_CONTEXT_MODE=auto \

@@ -170,10 +170,15 @@ ensure_precise_runtime_images() {
     return 0
   fi
   echo "Ensuring machine-specific precise runtime images..." | tee -a "${BATCH_LOG}"
+  local -a cmd=(
+    ./runtime_instrumentation/ensure_precise_runtime_ready.sh
+    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}"
+  )
+  if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
+    cmd+=(--build-if-missing)
+  fi
   AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
-    ./runtime_instrumentation/ensure_precise_runtime_ready.sh \
-    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}" \
-    --build-if-missing | tee -a "${BATCH_LOG}"
+    "${cmd[@]}" | tee -a "${BATCH_LOG}"
 }
 
 check_precise_kv_runtime_ready() {
@@ -750,6 +755,10 @@ init_matrices
 
 {
   echo "Retention probe ID: ${RETENTION_PROBE_ID}"
+  echo "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}"
+  echo "Frontend image: ${FRONTEND_IMAGE}"
+  echo "Worker image: ${WORKER_IMAGE}"
+  echo "Auto-build precise images: ${AUTO_BUILD_PRECISE_IMAGES}"
   echo "Attribution mode: ${RETENTION_ATTRIBUTION_MODE}"
   echo "Models: ${#MODELS_TO_RUN[@]}"
   printf '  %s\n' "${MODELS_TO_RUN[@]}"

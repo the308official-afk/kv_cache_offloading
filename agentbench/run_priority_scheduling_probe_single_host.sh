@@ -56,10 +56,15 @@ ensure_precise_priority_runtime_images() {
     return 0
   fi
   echo "Ensuring machine-specific precise runtime images..." | tee -a "${DRIVER_LOG}"
+  local -a cmd=(
+    ./runtime_instrumentation/ensure_precise_runtime_ready.sh
+    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}"
+  )
+  if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
+    cmd+=(--build-if-missing)
+  fi
   AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
-    ./runtime_instrumentation/ensure_precise_runtime_ready.sh \
-    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}" \
-    --build-if-missing | tee -a "${DRIVER_LOG}"
+    "${cmd[@]}" | tee -a "${DRIVER_LOG}"
 }
 
 check_precise_priority_runtime_ready() {
@@ -284,6 +289,10 @@ warn_if_worker_runtime_missing() {
 {
   echo "Priority scheduling run ID: ${PRIORITY_SCHEDULING_ID}"
   echo "Model: ${MODEL}"
+  echo "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}"
+  echo "Frontend image: ${FRONTEND_IMAGE}"
+  echo "Worker image: ${WORKER_IMAGE}"
+  echo "Auto-build precise images: ${AUTO_BUILD_PRECISE_IMAGES}"
   echo "Attribution mode: ${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}"
   echo "Low-priority count: ${LOW_PRIORITY_COUNT}"
   echo "High-priority count: ${HIGH_PRIORITY_COUNT}"
