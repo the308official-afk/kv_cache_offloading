@@ -53,6 +53,9 @@ log() {
 }
 
 fail() {
+  log "========================================"
+  log "PRECISE ATTRIBUTION CHECK FAILED"
+  log "========================================"
   log "FAIL: $1"
   exit 1
 }
@@ -188,4 +191,7 @@ PY
   log "SGLang priority markers: ${PRIORITY_CHECK}"
 fi
 
+log "========================================"
+log "PRECISE ATTRIBUTION READY"
+log "========================================"
 log "PASS: precise ${MODE} attribution is ready"

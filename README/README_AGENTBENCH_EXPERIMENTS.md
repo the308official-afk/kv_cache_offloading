@@ -80,13 +80,18 @@ Precise-attribution note:
 
 - the precise wrappers now share one reusable helper:
   [runtime_instrumentation/precise_sglang_helper.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/precise_sglang_helper.sh)
+- the precise wrappers also now share one machine-aware runtime image helper:
+  [runtime_instrumentation/ensure_precise_runtime_ready.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/ensure_precise_runtime_ready.sh)
 - the helper uses a known-good pinned SGLang source image by default:
   [runtime_instrumentation/sglang_source_profile.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_source_profile.sh)
 - this helper auto-extracts and re-patches the SGLang overlay before precise runs
+- and the runtime-image helper now resolves the machine profile (`ec2` or `gh200`),
+  prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and
+  auto-builds them on fresh machines by default inside the precise wrappers
 - so you should not need to manually re-run the SGLang extract/patch steps for
   every precise experiment anymore
-- you may still need to build the instrumented Dynamo images on a fresh machine
-  or after deleting/rebuilding images
+- you may still want to run the helper manually when debugging a fresh machine:
+  `./runtime_instrumentation/ensure_precise_runtime_ready.sh --machine-profile ec2 --build-if-missing`
 - if you intentionally want a different SGLang source, override it explicitly:
   `export SGLANG_IMAGE=...` before the run
 
@@ -101,6 +106,9 @@ source runtime_instrumentation/dynamo_machine_profile.sh
 export DYNAMO_MACHINE_PROFILE=gh200
 source runtime_instrumentation/dynamo_machine_profile.sh
 ```
+
+For precise experiments, treat this machine profile as required. The new
+runtime helper will now stop early if `DYNAMO_MACHINE_PROFILE` is unset.
 
 All experiments below inherit this execution policy unless you explicitly
 override it in the shell.
@@ -515,6 +523,14 @@ For the precise wrappers in later experiments, the SGLang extract/patch refresh
 is now handled automatically by the shared helper. The part that is still
 manual on a fresh machine is building the instrumented Dynamo images when they
 do not already exist.
+
+Manual machine-aware runtime image check/build:
+
+```bash
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
+  --build-if-missing
+```
 
 Verify the patch:
 
@@ -1152,9 +1168,17 @@ live preflight after each Dynamo restart and model smoke test. If the running
 worker is missing the patched precise-attribution markers, the sweep stops
 before launching the expensive batch.
 
+It also now resolves the machine profile (`ec2` or `gh200`), prints the exact
+`FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and auto-builds them on
+fresh machines by default.
+
 Manual preflight command for the precise design-space path:
 
 ```bash
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
+  --build-if-missing
+
 ./runtime_instrumentation/check_precise_attribution_ready.sh transfer
 ```
 
@@ -1372,6 +1396,10 @@ starts and after the model smoke test passes. If the running worker does not
 actually contain the patched precise-attribution markers, the wrapper stops
 before launching the probe.
 
+Before that restart, it now also resolves the machine profile (`ec2` or
+`gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they
+exist, and auto-builds them on fresh machines by default.
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1487,6 +1515,10 @@ not need to manually run `./run_dynamo_single_host.sh start` first.
 Manual preflight command for retention runs:
 
 ```bash
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
+  --build-if-missing
+
 ./runtime_instrumentation/check_precise_attribution_ready.sh transfer
 ```
 
@@ -2285,6 +2317,10 @@ starts and after the model smoke test passes. If the running worker does not
 actually contain the patched precise-attribution markers, the wrapper stops
 before launching the scheduling probe.
 
+Before that restart, it now also resolves the machine profile (`ec2` or
+`gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they
+exist, and auto-builds them on fresh machines by default.
+
 If the current SGLang version does not expose the exact priority-path patch
 points our helper expects, the wrapper now warns and continues instead of
 aborting the run. In that case, you still get precise worker/runtime
@@ -2314,6 +2350,10 @@ Interpret them like this:
 Manual preflight command for precise priority runs:
 
 ```bash
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
+  --build-if-missing
+
 ./runtime_instrumentation/check_precise_attribution_ready.sh priority
 ```
 

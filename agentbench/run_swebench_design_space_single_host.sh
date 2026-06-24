@@ -39,6 +39,7 @@ MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
 REQUIRE_PRECISE_KV="${REQUIRE_PRECISE_KV:-1}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
+AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES:-1}"
 FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
 CLI_MODELS=("$@")
@@ -172,6 +173,17 @@ require_precise_kv_ready() {
   fi
   prepare_precise_sglang_for_run "precise KV attribution" "" "transfer"
   RESOLVED_SGLANG_ROOT="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
+}
+
+ensure_precise_runtime_images() {
+  if [[ "${REQUIRE_PRECISE_KV}" != "1" ]]; then
+    return 0
+  fi
+  echo "Ensuring machine-specific precise runtime images..." | tee -a "${DESIGN_SPACE_LOG}"
+  AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+    ./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}" \
+    --build-if-missing | tee -a "${DESIGN_SPACE_LOG}"
 }
 
 check_precise_kv_runtime_ready() {
@@ -588,6 +600,7 @@ if [[ "${#MODELS_TO_RUN[@]}" -eq 0 ]]; then
 fi
 
 RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
+ensure_precise_runtime_images
 require_precise_kv_ready
 
 GPU_HBM_GB="${GPU_HBM_GB:-$(auto_gpu_hbm_gb || true)}"

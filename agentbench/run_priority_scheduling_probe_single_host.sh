@@ -4,6 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 source agentbench/model_config.sh
+if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
+  # shellcheck disable=SC1091
+  source runtime_instrumentation/dynamo_machine_profile.sh
+fi
 source runtime_instrumentation/precise_sglang_helper.sh
 
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
@@ -30,6 +34,9 @@ STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
 WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority}"
 SGLANG_ROOT="${SGLANG_ROOT:-}"
 IGNORE_EOS="${IGNORE_EOS:-0}"
+AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES:-1}"
+FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
+WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
 
 RUN_DIR="experiments/reports/priority_scheduling/${PRIORITY_SCHEDULING_ID}"
 DRIVER_LOG="${RUN_DIR}/priority_scheduling_driver.log"
@@ -42,6 +49,17 @@ prepare_precise_priority_sglang() {
     return 0
   fi
   prepare_precise_sglang_for_run "precise priority attribution" "${DRIVER_LOG}" "priority"
+}
+
+ensure_precise_priority_runtime_images() {
+  if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  echo "Ensuring machine-specific precise runtime images..." | tee -a "${DRIVER_LOG}"
+  AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+    ./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+    --machine-profile "${DYNAMO_MACHINE_PROFILE:-}" \
+    --build-if-missing | tee -a "${DRIVER_LOG}"
 }
 
 check_precise_priority_runtime_ready() {
@@ -92,6 +110,7 @@ if [[ -z "${MODEL}" ]]; then
 fi
 
 prepare_precise_priority_sglang
+ensure_precise_priority_runtime_images
 
 worker_stopped() {
   if ! command -v docker >/dev/null 2>&1; then
