@@ -1402,16 +1402,6 @@ did A appear to stay in GPU KV cache after the distractors?
 - Does `high-priority` preserve A better than `none`?
 - At what point do distractors wipe out the replay speedup?
 
-### Modes
-
-- `RETENTION_ATTRIBUTION_MODE=light`
-  - fastest path
-  - retention judged mainly from replay latency / speedup
-- `RETENTION_ATTRIBUTION_MODE=precise`
-  - slower path
-  - adds worker/runtime/transfer attribution when available
-  - runs the 6 readiness checks before requests begin
-
 For precise runs, the wrapper now prints:
 
 - `(1/6) PRECISE RUNTIME IMAGE READY`
@@ -1482,9 +1472,7 @@ MAX_CONTEXT_TOKENS            Effective worker context limit.
 SGLANG_TRANSFER_LOG_PROFILE   off, light, timing, or full. Precise mode only.
 ```
 
-Run the same sweep in the background with `nohup`:
-
-Run this when using a smaller machine like g5.2xlarge with limited GPU capacity (this has proved to work)
+Run the same sweep in the background with `nohup`: This has proved to work with g5.2xlarge with limited GPU capacity
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1509,7 +1497,7 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-This has proved to work in GH200, showing KV cache retention from provided priority hints
+Run the same sweep in the background with `nohup`: This has proved to work with GH200 with larger GPU capacity
 
 ```bash
 cd ~/kv_cache_offloading-v5
@@ -1603,24 +1591,6 @@ python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_lo
   --sglang-root "$SGLANG_ROOT"
 ```
 
-If you only want the lightweight scheduling check, you can skip this step and
-run the `light` version below.
-
-The precise priority wrapper now refreshes the extracted SGLang patch
-automatically before it launches Dynamo. So this step is no longer required
-before every precise priority run. It is mainly for first-time setup,
-instrumented-image rebuilds, and recovery.
-
-When a machine-specific worker image already exists, the wrapper now prefers
-that built worker image as the SGLang extraction source. This keeps the
-mounted SGLang overlay aligned with the worker package layout and avoids
-version-drift failures from older source images.
-
-The precise priority wrapper now also runs a live preflight after Dynamo
-starts and after the model smoke test passes. If the running worker does not
-actually contain the patched precise-attribution markers, the wrapper stops
-before launching the scheduling probe.
-
 For a healthy precise scheduling run, you should now see this readiness chain
 before the synthetic requests are sent:
 
@@ -1630,83 +1600,6 @@ before the synthetic requests are sent:
 - `(4/6) PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
 - `(5/6) MODEL READINESS GO (model registration and smoke test both passed)`
 - `(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
-
-Before that restart, it now also resolves the machine profile (`ec2` or
-`gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they
-exist, and auto-builds them on fresh machines by default.
-
-If the current SGLang version does not expose the exact priority-path patch
-points our helper expects, the wrapper now warns and continues instead of
-aborting the run. In that case, you still get precise worker/runtime
-attribution, but the report may not include direct SGLang priority-path proof.
-
-That same rule now applies to the live preflight too: if transfer attribution
-is healthy but direct SGLang priority-path markers are unavailable on the
-pinned/extracted SGLang version, the preflight continues with precise
-worker/runtime attribution instead of failing the whole run.
-
-If the driver log later warns that the worker log contains no `[RUNTIME_JSON]`
-lines, stop there and rebuild the local runtime-json images from the prepared
-Dynamo source before trusting the result.
-
-Also check these fields in `priority_scheduling_summary.csv`:
-
-- `worker_runtime_event_coverage`
-- `worker_attached_event_coverage`
-- `worker_completed_event_coverage`
-- `worker_runtime_event_types_seen`
-
-Interpret them like this:
-
-- if coverage is `12 / 12`, the worker saw all probe requests
-- if attached/completed coverage is `0 / 12`, the worker image is only emitting
-  `request_received` events, so queue-order metrics will stay blank
-- if `worker_runtime_event_types_seen=received`, you can trust hint-delivery
-  evidence but not attach/completion ordering yet
-- if you want true queue-order proof, rebuild the instrumented runtime images
-  until attached/completed events also show up
-
-Manual preflight command for precise priority runs:
-
-```bash
-./runtime_instrumentation/ensure_precise_runtime_ready.sh \
-  --machine-profile "${DYNAMO_MACHINE_PROFILE:-ec2}" \
-  --build-if-missing
-
-./runtime_instrumentation/check_precise_attribution_ready.sh priority
-```
-
-Manual debug signals for fresh machines:
-
-```bash
-docker exec -i dynamo-sglang-worker python3 - <<'PY'
-import inspect
-from dynamo.sglang.request_handlers.llm import decode_handler
-src = inspect.getsource(decode_handler.DecodeWorkerHandler._process_token_stream)
-print("attach_logged = False" in src)
-print("worker.decode.request_attached" in src)
-print("request: Dict[str, Any]" in src)
-PY
-
-docker exec -i dynamo-sglang-worker python3 - <<'PY'
-import importlib.util
-from pathlib import Path
-
-root_spec = importlib.util.find_spec("sglang")
-root = Path(root_spec.origin).resolve().parent
-combined = ""
-for path in (
-    root / "srt" / "mem_cache" / "transfer_logging.py",
-    root / "srt" / "managers" / "cache_controller.py",
-    root / "srt" / "mem_cache" / "hiradix_cache.py",
-):
-    if path.exists():
-        combined += path.read_text() + "\\n"
-print("_sgl_log_priority_event" in combined)
-print("priority_hint_seen" in combined)
-print("scheduler_priority_applied" in combined)
-PY
-```
 
 ### Step 1: Run The Precise Scheduling Probe
 
@@ -1730,83 +1623,6 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-This `precise` path gives you:
-
-- worker runtime ordering evidence
-- worker-side hint-received evidence
-- patched SGLang priority-path evidence
-- automatic retry without top-level `priority` if the frontend rejects that field
-- automatic retry without `nvext.request_context` if that field is unsupported
-
-For portability, the synthetic scheduling probe also keeps
-`nvext.agent_hints` minimal and Dynamo-safe:
-
-- runtime control sent in `agent_hints`: `priority`
-- request identity and experiment metadata sent separately in:
-  - `nvext.request_context`
-  - `nvext.agent_context`
-  - `nvext.annotations`
-
-Canonical-hint-only variant for machines that reject top-level `priority`:
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
-PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
-PRIORITY_REQUEST_CONTEXT_MODE=auto \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-PRIORITY_ARRIVAL_GAP_MS=200 \
-PRIORITY_INTER_REQUEST_GAP_MS=20 \
-PRIORITY_TOP_LEVEL_PRIORITY_MODE=disable \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_priority_scheduling_probe_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-How the two priority modes differ:
-
-- `PRIORITY_TOP_LEVEL_PRIORITY_MODE=auto`
-  - tries top-level `priority` first
-  - if the frontend returns `Unsupported parameter(s): priority`, the probe retries without it
-  - this is the safest default when moving between machines
-- `PRIORITY_TOP_LEVEL_PRIORITY_MODE=disable`
-  - never sends top-level `priority`
-  - only uses the canonical `nvext.agent_hints.priority` path
-  - use this when you already know the frontend rejects top-level `priority`
-
-### Step 2: Run The Fast/Light Version
-
-Fast/light version:
-
-```bash
-cd ~/kv_cache_offloading
-
-PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
-PRIORITY_SCHEDULING_ATTRIBUTION_MODE=light \
-PRIORITY_REQUEST_CONTEXT_MODE=auto \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-PRIORITY_ARRIVAL_GAP_MS=200 \
-PRIORITY_INTER_REQUEST_GAP_MS=20 \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_priority_scheduling_probe_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-This `light` path is simpler:
-
-- no patched-SGLang requirement
-- no transfer-log dependency
-- still useful for checking whether high-priority requests jumped ahead
-
 ### Step 3: Watch The Worker
 
 To watch the worker:
@@ -1818,17 +1634,6 @@ docker logs -f dynamo-sglang-worker
 ### Step 4: Inspect Outputs
 
 Outputs:
-
-```bash
-LATEST_PRIORITY="$(ls -td experiments/reports/priority_scheduling/* | head -1)"
-echo "$LATEST_PRIORITY"
-
-cat "$LATEST_PRIORITY/priority_scheduling_readable.csv"
-cat "$LATEST_PRIORITY/priority_scheduling_requests.csv"
-cat "$LATEST_PRIORITY/priority_scheduling_proof.csv"
-cat "$LATEST_PRIORITY/priority_scheduling_summary.csv"
-cat "$LATEST_PRIORITY/priority_scheduling_summary.md"
-```
 
 Top-level latest copies:
 
@@ -1845,66 +1650,6 @@ cat experiments/reports/latest_priority_scheduling_proof.csv
 cat experiments/reports/latest_priority_scheduling_summary.csv
 cat experiments/reports/latest_priority_scheduling_summary.md
 cat experiments/reports/latest_priority_scheduling_run.txt
-```
-
-What the files mean:
-
-```text
-priority_scheduling_readable.csv
-  One row per synthetic request, arranged for quick interpretation:
-  send order, attach order, completion order, leapfrogs, queue wait, and a
-  compact scheduling success signal.
-
-priority_scheduling_requests.csv
-  One row per synthetic request, with the full raw/debug fields preserved,
-  but with the key scheduling-proof columns moved near the front so they can
-  be read side by side more easily.
-
-priority_scheduling_proof.csv
-  Compact proof table showing the exact columns that make the scheduling effect
-  easy to read without horizontal scrolling.
-
-priority_scheduling_summary.csv
-  One compact row with the main queue-order metrics.
-
-priority_scheduling_summary.md
-  Short interpretation of whether high-priority actually jumped ahead.
-
-latest_priority_scheduling_*
-  Stable root-level copies of the newest core priority-scheduling reports.
-
-latest_priority_scheduling_run.txt
-  Small pointer file showing which run produced the current latest copies.
-```
-
-Important failure signal:
-
-```text
-If priority_scheduling_summary.csv shows:
-
-  frontend_top_level_priority_compatibility=unsupported
-  worker_runtime_event_coverage=0 / N
-  worker_priority_path_status=not_seen
-
-then the probe did not really reach the worker scheduling path.
-That run should be treated as a frontend-validation failure, not as evidence
-that priority scheduling had no effect.
-```
-
-How to read the result:
-
-```text
-If high_priority_attached_leapfrogs > 0, later high-priority requests were
-attached before earlier low-priority requests.
-
-If high_priority_completed_leapfrogs > 0, later high-priority requests also
-finished ahead of earlier low-priority requests.
-
-If mean_high_queue_wait_ms is clearly lower than mean_low_queue_wait_ms, that
-is extra evidence that priority affected scheduling.
-
-If leapfrogs stay at 0 and queue waits look similar, the runtime likely did
-not reorder based on the supplied priority path.
 ```
 
 Most important request-level columns:
