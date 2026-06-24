@@ -1356,32 +1356,6 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-Override pressure knobs when needed:
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=precise \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES=none \
-CONTROL_CACHE_CONTROL_PROFILE=off \
-PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
-DISTRACTOR_COUNTS="4 8 12 16 20" \
-PROTECTED_INPUT_LEN=3000 \
-DISTRACTOR_INPUT_LEN=3000 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.58 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_cache_control_retention_threshold_sweep_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
 Main knobs:
 
 ```text
