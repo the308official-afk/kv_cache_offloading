@@ -1173,10 +1173,10 @@ before launching the expensive batch.
 For each precise restart, you should now see this readiness chain before the
 batch starts:
 
-- `PRECISE RUNTIME IMAGE READY`
-- `PRECISE LOCAL READY`
-- `PRECISE ATTRIBUTION READY`
-- `PRECISE EXPERIMENT GO`
+- `PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)`
+- `PRECISE LOCAL READY (the local extracted/patched SGLang source is good)`
+- `PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
+- `PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
 
 It also now resolves the machine profile (`ec2` or `gh200`), prints the exact
 `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and auto-builds them on
@@ -1487,10 +1487,10 @@ Use `precise` when you also want:
 For any `precise` run, the wrapper now prints a visible readiness chain before
 requests begin:
 
-- `PRECISE RUNTIME IMAGE READY`
-- `PRECISE LOCAL READY`
-- `PRECISE ATTRIBUTION READY`
-- `PRECISE EXPERIMENT GO`
+- `PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)`
+- `PRECISE LOCAL READY (the local extracted/patched SGLang source is good)`
+- `PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
+- `PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
 
 If one of those checks fails, the wrapper stops before launching the real
 workload.
@@ -2352,10 +2352,10 @@ before launching the scheduling probe.
 For a healthy precise scheduling run, you should now see this readiness chain
 before the synthetic requests are sent:
 
-- `PRECISE RUNTIME IMAGE READY`
-- `PRECISE LOCAL READY`
-- `PRECISE ATTRIBUTION READY`
-- `PRECISE EXPERIMENT GO`
+- `PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)`
+- `PRECISE LOCAL READY (the local extracted/patched SGLang source is good)`
+- `PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
+- `PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
 
 Before that restart, it now also resolves the machine profile (`ec2` or
 `gh200`), prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they

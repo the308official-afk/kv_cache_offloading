@@ -209,7 +209,7 @@ precise_print_local_ready_summary() {
     fi
   fi
 
-  precise_banner "PRECISE LOCAL READY" "${log_file}"
+  precise_banner "PRECISE LOCAL READY (the local extracted/patched SGLang source is good)" "${log_file}"
   _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
   _precise_sglang_log "Frontend image: ${FRONTEND_IMAGE:-<unset>}" "${log_file}"
   _precise_sglang_log "Worker image: ${WORKER_IMAGE:-<unset>}" "${log_file}"
@@ -225,7 +225,7 @@ precise_print_local_ready_summary() {
 precise_print_go_summary() {
   local mode="${1:-transfer}"
   local log_file="${2:-}"
-  precise_banner "PRECISE EXPERIMENT GO" "${log_file}"
+  precise_banner "PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)" "${log_file}"
   _precise_sglang_log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-<unset>}" "${log_file}"
   _precise_sglang_log "Attribution mode: ${mode}" "${log_file}"
   _precise_sglang_log "Smoke test: ok" "${log_file}"

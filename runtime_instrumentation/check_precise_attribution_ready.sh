@@ -54,7 +54,7 @@ log() {
 
 fail() {
   log "========================================"
-  log "PRECISE ATTRIBUTION CHECK FAILED"
+  log "PRECISE ATTRIBUTION CHECK FAILED (the live running worker is missing required instrumentation)"
   log "========================================"
   log "FAIL: $1"
   exit 1
@@ -192,6 +192,6 @@ PY
 fi
 
 log "========================================"
-log "PRECISE ATTRIBUTION READY"
+log "PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)"
 log "========================================"
 log "PASS: precise ${MODE} attribution is ready"
