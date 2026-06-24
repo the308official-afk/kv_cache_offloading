@@ -195,6 +195,36 @@ def request_context_from_record(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def cache_control_from_record(record: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    cache_control = record.get("cache_control")
+    if isinstance(cache_control, dict):
+        source = record.get("cache_control_source")
+        return cache_control, str(source) if isinstance(source, str) else "record.cache_control"
+
+    runtime_observability = record.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        cache_control = runtime_observability.get("cache_control")
+        if isinstance(cache_control, dict):
+            source = runtime_observability.get("cache_control_source")
+            return (
+                cache_control,
+                str(source) if isinstance(source, str) else "runtime_observability.cache_control",
+            )
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict):
+            cache_control = nested_nvext.get("cache_control")
+            if isinstance(cache_control, dict):
+                return cache_control, "runtime_observability.nvext.cache_control"
+
+    nvext = record.get("nvext")
+    if isinstance(nvext, dict):
+        cache_control = nvext.get("cache_control")
+        if isinstance(cache_control, dict):
+            return cache_control, "nvext.cache_control"
+
+    return None, "missing"
+
+
 def request_rows_by_role(path: Path) -> dict[str, dict[str, str]]:
     if not path.exists():
         return {}
@@ -356,20 +386,30 @@ def parse_worker_hint_evidence(
             "worker_hint_status": "missing_runtime_json",
             "worker_hint_keys": "",
             "worker_hint_profile_seen": "",
+            "worker_cache_control_status": "missing_runtime_json",
+            "worker_cache_control_values": "",
+            "worker_top_level_priority_status": "missing_runtime_json",
+            "worker_top_level_priority_values": "",
         }
     if not worker_runtime_log.exists():
         return {
             "worker_hint_status": "missing_runtime_json",
             "worker_hint_keys": "",
             "worker_hint_profile_seen": "",
+            "worker_cache_control_status": "missing_runtime_json",
+            "worker_cache_control_values": "",
+            "worker_top_level_priority_status": "missing_runtime_json",
+            "worker_top_level_priority_values": "",
         }
 
     seen_request_ids: set[str] = set()
     received_hint_request_ids: set[str] = set()
+    received_cache_control_request_ids: set[str] = set()
     top_level_priority_request_ids: set[str] = set()
     union_keys: set[str] = set()
     profiles_seen: set[str] = set()
     top_level_priority_values: dict[str, str] = {}
+    cache_control_values: dict[str, str] = {}
     missing_expected_keys = False
 
     for raw_line in worker_runtime_log.read_text(encoding="utf-8", errors="replace").splitlines():
@@ -395,6 +435,17 @@ def parse_worker_hint_evidence(
             if isinstance(hint_profile, str) and hint_profile:
                 profiles_seen.add(hint_profile)
 
+        cache_control, _cache_control_source = cache_control_from_record(record)
+        if isinstance(cache_control, dict):
+            received_cache_control_request_ids.add(request_id)
+            cache_type = cache_control.get("type")
+            cache_ttl = cache_control.get("ttl")
+            if isinstance(cache_type, str) and cache_type:
+                normalized = cache_type
+                if isinstance(cache_ttl, str) and cache_ttl:
+                    normalized = f"{cache_type}:{cache_ttl}"
+                cache_control_values.setdefault(request_id, normalized)
+
         priority = record.get("priority")
         parsed_priority = as_int(priority)
         if parsed_priority is not None:
@@ -419,10 +470,26 @@ def parse_worker_hint_evidence(
     else:
         priority_status = "partial"
 
+    if not seen_request_ids:
+        cache_control_status = "missing_runtime_json"
+    elif not received_cache_control_request_ids:
+        cache_control_status = "none"
+    elif received_cache_control_request_ids == protected_request_ids:
+        cache_control_status = "full"
+    else:
+        cache_control_status = "partial"
+
     return {
         "worker_hint_status": status,
         "worker_hint_keys": "|".join(sorted(union_keys)),
         "worker_hint_profile_seen": "|".join(sorted(profiles_seen)),
+        "worker_cache_control_status": cache_control_status,
+        "worker_cache_control_values": "|".join(
+            f"{role}:{cache_control_values[request_rows[role]['request_id']]}"
+            for role in ("a_first", "a_replay")
+            if role in request_rows
+            and request_rows[role].get("request_id") in cache_control_values
+        ),
         "worker_top_level_priority_status": priority_status,
         "worker_top_level_priority_values": "|".join(
             f"{role}:{top_level_priority_values[request_rows[role]['request_id']]}"
@@ -630,6 +697,8 @@ def derived_row(
         "worker_hint_status": worker_hint_evidence["worker_hint_status"],
         "worker_hint_keys": worker_hint_evidence["worker_hint_keys"],
         "worker_hint_profile_seen": worker_hint_evidence["worker_hint_profile_seen"],
+        "worker_cache_control_status": worker_hint_evidence["worker_cache_control_status"],
+        "worker_cache_control_values": worker_hint_evidence["worker_cache_control_values"],
         "request_agent_hints_priority_status": hint_priority["status"],
         "request_agent_hints_priority_values": hint_priority["values"],
         "request_top_level_priority_attempt_status": attempted_priority["status"],
@@ -795,6 +864,7 @@ def build_comparison_rows(
                 interpretation = "protected_hint_evicts_earlier"
 
             worker_hint_statuses = sorted({str(row.get("worker_hint_status", "")) for row in profile_rows if str(row.get("worker_hint_status", ""))})
+            worker_cache_control_statuses = sorted({str(row.get("worker_cache_control_status", "")) for row in profile_rows if str(row.get("worker_cache_control_status", ""))})
             mechanism_states = sorted({str(row.get("worker_priority_mechanism_ready", "")) for row in profile_rows if str(row.get("worker_priority_mechanism_ready", ""))})
             effect_states = sorted({str(row.get("hint_runtime_effect_status", "")) for row in profile_rows if str(row.get("hint_runtime_effect_status", ""))})
             priority_path_states = sorted({str(row.get("worker_priority_path_status", "")) for row in profile_rows if str(row.get("worker_priority_path_status", ""))})
@@ -815,6 +885,7 @@ def build_comparison_rows(
                     "protected_first_evicted_distractor_count": protected_first_evict or "",
                     "threshold_gap_distractors": threshold_gap if threshold_gap is not None else "",
                     "worker_hint_status": "|".join(worker_hint_statuses),
+                    "worker_cache_control_status": "|".join(worker_cache_control_statuses),
                     "frontend_top_level_priority_compatibility": "|".join(frontend_compat_states),
                     "worker_priority_mechanism_ready": "|".join(mechanism_states),
                     "worker_priority_path_status": "|".join(priority_path_states),
@@ -879,6 +950,7 @@ def write_summary_md(
                     f"frontend top-level priority: `{row['frontend_top_level_priority_compatibility'] or 'unknown'}`, "
                     f"mechanism ready: `{row['worker_priority_mechanism_ready'] or 'unknown'}`, "
                     f"hint status: `{row['worker_hint_status'] or 'unknown'}`, "
+                    f"cache-control status: `{row['worker_cache_control_status'] or 'unknown'}`, "
                     f"priority path: `{row['worker_priority_path_status'] or 'unknown'}`, "
                     f"effect status: `{row['hint_runtime_effect_status'] or 'unknown'}`, "
                     f"interpretation: `{row['interpretation']}`",
@@ -959,6 +1031,8 @@ def main() -> int:
         "worker_hint_profile_seen",
         "request_cache_control_status",
         "request_cache_control_values",
+        "worker_cache_control_status",
+        "worker_cache_control_values",
         "request_agent_hints_priority_status",
         "request_agent_hints_priority_values",
         "request_top_level_priority_attempt_status",
@@ -1013,6 +1087,7 @@ def main() -> int:
         "protected_first_evicted_distractor_count",
         "threshold_gap_distractors",
         "worker_hint_status",
+        "worker_cache_control_status",
         "frontend_top_level_priority_compatibility",
         "worker_priority_mechanism_ready",
         "worker_priority_path_status",

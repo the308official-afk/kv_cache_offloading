@@ -1142,18 +1142,6 @@ MODEL_COOLDOWN_SECS=60           Extra wait after smoke-test success.
 STOP_DYNAMO_WHEN_DONE=1          Stop Dynamo after the final model.
 ```
 
-These wider readiness values are now the shared default for all experiment
-wrappers and for `run_dynamo_single_host.sh` itself:
-
-```bash
-MODEL_READY_RETRIES=900
-MODEL_READY_DELAY_SECS=3
-MODEL_READY_STABLE_HITS=2
-MODEL_SMOKE_RETRIES=180
-MODEL_SMOKE_DELAY_SECS=15
-MODEL_COOLDOWN_SECS=60
-```
-
 ## Experiment 8: Full Design-Space Sweep
 
 Use this when you want one automated sweep across:
@@ -1205,47 +1193,6 @@ Manual preflight command for the precise design-space path:
 ./runtime_instrumentation/check_precise_attribution_ready.sh transfer
 ```
 
-### Pilot Sweep
-
-Use this first. It is small enough to catch setup issues before a long run.
-
-```bash
-cd ~/kv_cache_offloading
-
-export AGENTBENCH_EXECUTION_LOOP=0
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=1
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-DESIGN_SPACE_ID="pilot_design_space_$(date +%Y%m%d_%H%M%S)" \
-START_INDEX=0 \
-END_INDEX=1 \
-HINT_PROFILES="baseline high-reuse" \
-HINT_PROVIDER=agentbench \
-LLM_STAGES="prefill decode" \
-LLM_OPERATIONS="attention_kv ffn_mlp" \
-KV_TIER_MODES="gpu_only gpu_cpu gpu_cpu_storage" \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-MEM_FRACTION_STATIC=0.7 \
-HICACHE_RATIO=1 \
-HICACHE_STORAGE_BACKEND=file \
-HICACHE_STORAGE_PREFETCH_POLICY=wait_complete \
-FILE_STORAGE_PATH=/hicache-storage \
-HOST_FILE_STORAGE_PATH=/mnt/docker-data/hicache_storage \
-STORAGE_MEDIA=local_nvme_or_ebs \
-CPU_GPU_INTERCONNECT="PCIe" \
-./agentbench/run_swebench_design_space_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct \
-  Qwen/Qwen2.5-7B-Instruct
-```
-
-To watch the SGLang worker while each model starts:
-
-```bash
-docker logs -f dynamo-sglang-worker
-```
-
 ### Larger Sweep
 
 ```bash
@@ -1290,49 +1237,6 @@ cat experiments/reports/prompt_evolution_task_summary.csv
 cat experiments/reports/prompt_evolution_run_overview.csv
 ```
 
-Important matrix columns:
-
-```text
-model
-hint_profile
-hint_provider
-llm_stage
-llm_operation
-kv_tier_mode
-sglang_transfer_log_profile
-gpu_hbm_gb
-host_ram_gb
-cpu_gpu_interconnect
-mem_fraction_static
-hicache_ratio
-storage_backend
-storage_prefetch_policy
-file_storage_path
-host_file_storage_path
-storage_media
-storage_capacity_gb
-avg_ttft_ms
-avg_latency_ms
-avg_cache_reuse_ratio
-host_to_device_transfer_count
-host_to_device_mb
-device_to_host_transfer_count
-device_to_host_mb
-direct_attribution_rate
-patch_rate
-```
-
-Notes:
-
-```text
-llm_stage and llm_operation are design-space labels in this script.
-kv_tier_mode changes actual SGLang worker startup args.
-Precise KV attribution still comes from SGLang transfer logs and Dynamo runtime JSON logs.
-gpu_cpu_storage enables SGLang's storage backend flags, but storage-specific
-read/write timing needs direct `hicache_storage.py` instrumentation.
-For kernel-level attention/MLP measurements, run a separate profiler experiment and join by run/model/profile.
-```
-
 Useful knobs:
 
 ```text
@@ -1362,17 +1266,6 @@ MODEL_COOLDOWN_SECS             Default 60.
 STOP_DYNAMO_WHEN_DONE=1         Stop Dynamo after the final model.
 ```
 
-Those are now the default shared values:
-
-```text
-MODEL_READY_RETRIES=900
-MODEL_READY_DELAY_SECS=3
-MODEL_READY_STABLE_HITS=2
-MODEL_SMOKE_RETRIES=180
-MODEL_SMOKE_DELAY_SECS=15
-MODEL_COOLDOWN_SECS=60
-```
-
 KV tier mode mapping:
 
 ```text
@@ -1400,6 +1293,7 @@ did A appear to stay in GPU KV cache after the distractors?
 
 - Does replay A stay faster than first A?
 - Does `high-priority` preserve A better than `none`?
+- Does `nvext.cache_control` (for example `ephemeral:1h`) preserve A better than `off`?
 - At what point do distractors wipe out the replay speedup?
 
 For precise runs, the wrapper now prints:
@@ -1457,6 +1351,33 @@ MAX_CONTEXT_TOKENS=17146 \
   Qwen/Qwen2.5-7B-Instruct
 ```
 
+### Cache-Control Variant
+
+Use this when you want to test cache policy directly instead of priority.
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
+DISTRACTOR_COUNT=2 \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=500 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
 ### Important Knobs
 
 ```text
@@ -1470,6 +1391,16 @@ DISTRACTOR_INPUT_LEN          Each distractor approximate input length.
 RANDOM_OUTPUT_LEN             Keep at 1 for latency-focused retention probes.
 MAX_CONTEXT_TOKENS            Effective worker context limit.
 SGLANG_TRANSFER_LOG_PROFILE   off, light, timing, or full. Precise mode only.
+```
+
+Key proof fields in `retention_threshold_matrix.csv` and the per-run retention
+reports:
+
+```text
+request_cache_control_status   The harness sent a cache-control policy.
+request_cache_control_values   The exact policy sent, e.g. a_first:ephemeral:1h.
+worker_cache_control_status    The live worker/runtime logs saw cache_control.
+worker_cache_control_values    The exact cache-control value seen by the worker.
 ```
 
 Run the same sweep in the background with `nohup`: This has proved to work with g5.2xlarge with limited GPU capacity
@@ -1694,4 +1625,3 @@ high_priority_attached_leapfrogs
 scheduling_effect_observed
   Simple yes/no summary of whether leapfrogging happened
 ```
-

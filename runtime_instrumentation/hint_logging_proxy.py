@@ -154,14 +154,45 @@ def extract_agent_hints_with_source(payload: dict[str, Any]) -> tuple[dict[str, 
     return None, "missing"
 
 
+def extract_cache_control_with_source(payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str]:
+    nvext = payload.get("nvext")
+    if isinstance(nvext, dict):
+        cache_control = nvext.get("cache_control")
+        if isinstance(cache_control, dict):
+            return sanitize(cache_control), "nvext.cache_control"
+
+    extra_args = payload.get("extra_args")
+    if isinstance(extra_args, dict):
+        runtime_observability = extra_args.get("runtime_observability")
+        if isinstance(runtime_observability, dict):
+            cache_control = runtime_observability.get("cache_control")
+            if isinstance(cache_control, dict):
+                return sanitize(cache_control), "extra_args.runtime_observability.cache_control"
+            nested_nvext = runtime_observability.get("nvext")
+            if isinstance(nested_nvext, dict):
+                cache_control = nested_nvext.get("cache_control")
+                if isinstance(cache_control, dict):
+                    return (
+                        sanitize(cache_control),
+                        "extra_args.runtime_observability.nvext.cache_control",
+                    )
+
+    return None, "missing"
+
+
 def agent_hint_log_fields(payload: dict[str, Any]) -> dict[str, Any]:
     agent_hints, source = extract_agent_hints_with_source(payload)
+    cache_control, cache_control_source = extract_cache_control_with_source(payload)
     if not isinstance(agent_hints, dict):
         return {
             "agent_hints": None,
             "agent_hints_source": source,
             "agent_hints_keys": [],
             "hint_probe_id": None,
+            "cache_control": cache_control,
+            "cache_control_source": cache_control_source,
+            "cache_control_type": cache_control.get("type") if isinstance(cache_control, dict) else None,
+            "cache_control_ttl": cache_control.get("ttl") if isinstance(cache_control, dict) else None,
             "agent_context": extract_agent_context(payload),
             "annotations": extract_annotations(payload),
             "request_context": extract_request_context(payload),
@@ -171,6 +202,10 @@ def agent_hint_log_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "agent_hints_source": source,
         "agent_hints_keys": sorted(str(key) for key in agent_hints),
         "hint_probe_id": agent_hints.get("hint_probe_id"),
+        "cache_control": cache_control,
+        "cache_control_source": cache_control_source,
+        "cache_control_type": cache_control.get("type") if isinstance(cache_control, dict) else None,
+        "cache_control_ttl": cache_control.get("ttl") if isinstance(cache_control, dict) else None,
         "agent_context": extract_agent_context(payload),
         "annotations": extract_annotations(payload),
         "request_context": extract_request_context(payload),

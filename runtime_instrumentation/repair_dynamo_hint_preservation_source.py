@@ -140,6 +140,15 @@ def repair_preprocessor() -> None:
             nested_nvext.insert("request_context".to_string(), request_context.clone());
         }
 
+        if let Some(cache_control) = nvext.extra.get("cache_control") {
+            runtime_observability.insert("cache_control".to_string(), cache_control.clone());
+            runtime_observability.insert(
+                "cache_control_source".to_string(),
+                serde_json::Value::String("nvext.cache_control".to_string()),
+            );
+            nested_nvext.insert("cache_control".to_string(), cache_control.clone());
+        }
+
         if runtime_observability.is_empty() {
             return None;
         }
@@ -160,6 +169,33 @@ def repair_preprocessor() -> None:
         if anchor not in text:
             raise SystemExit(f"Could not find insertion anchor in {path}")
         text = text.replace(anchor, insertion + anchor, 1)
+    elif 'runtime_observability.insert("cache_control".to_string(), cache_control.clone());' not in text:
+        old_block = """        if let Some(request_context) = nvext.extra.get("request_context") {
+            runtime_observability.insert("request_context".to_string(), request_context.clone());
+            nested_nvext.insert("request_context".to_string(), request_context.clone());
+        }
+
+        if runtime_observability.is_empty() {
+"""
+        new_block = """        if let Some(request_context) = nvext.extra.get("request_context") {
+            runtime_observability.insert("request_context".to_string(), request_context.clone());
+            nested_nvext.insert("request_context".to_string(), request_context.clone());
+        }
+
+        if let Some(cache_control) = nvext.extra.get("cache_control") {
+            runtime_observability.insert("cache_control".to_string(), cache_control.clone());
+            runtime_observability.insert(
+                "cache_control_source".to_string(),
+                serde_json::Value::String("nvext.cache_control".to_string()),
+            );
+            nested_nvext.insert("cache_control".to_string(), cache_control.clone());
+        }
+
+        if runtime_observability.is_empty() {
+"""
+        if old_block not in text:
+            raise SystemExit(f"Could not add cache_control preservation block in {path}")
+        text = text.replace(old_block, new_block, 1)
 
     old_builder = "            let hints = nvext.agent_hints.as_ref();\n"
     new_builder = """            let hints = nvext.agent_hints.as_ref();

@@ -134,20 +134,57 @@ RUNTIME_LOGGING_TEMPLATE = textwrap.dedent(
         return agent_hints
 
 
+    def extract_cache_control_with_source(
+        request: dict[str, Any],
+    ) -> tuple[dict[str, Any] | None, str]:
+        nvext = request.get("nvext")
+        if isinstance(nvext, dict):
+            cache_control = nvext.get("cache_control")
+            if isinstance(cache_control, dict):
+                return _sanitize(cache_control), "nvext.cache_control"
+
+        runtime_observability = extract_runtime_observability(request)
+        cache_control = runtime_observability.get("cache_control")
+        if isinstance(cache_control, dict):
+            return _sanitize(cache_control), "runtime_observability.cache_control"
+
+        nested_nvext = runtime_observability.get("nvext")
+        if isinstance(nested_nvext, dict):
+            cache_control = nested_nvext.get("cache_control")
+            if isinstance(cache_control, dict):
+                return _sanitize(cache_control), "runtime_observability.nvext.cache_control"
+
+        return None, "missing"
+
+
+    def extract_cache_control(request: dict[str, Any]) -> dict[str, Any] | None:
+        cache_control, _source = extract_cache_control_with_source(request)
+        return cache_control
+
+
     def agent_hint_log_fields(request: dict[str, Any]) -> dict[str, Any]:
         agent_hints, source = extract_agent_hints_with_source(request)
+        cache_control, cache_control_source = extract_cache_control_with_source(request)
         if not isinstance(agent_hints, dict):
             return {
                 "agent_hints": None,
                 "agent_hints_source": source,
                 "agent_hints_keys": [],
                 "hint_probe_id": None,
+                "cache_control": cache_control,
+                "cache_control_source": cache_control_source,
+                "cache_control_type": cache_control.get("type") if isinstance(cache_control, dict) else None,
+                "cache_control_ttl": cache_control.get("ttl") if isinstance(cache_control, dict) else None,
             }
         return {
             "agent_hints": agent_hints,
             "agent_hints_source": source,
             "agent_hints_keys": sorted(str(key) for key in agent_hints),
             "hint_probe_id": agent_hints.get("hint_probe_id"),
+            "cache_control": cache_control,
+            "cache_control_source": cache_control_source,
+            "cache_control_type": cache_control.get("type") if isinstance(cache_control, dict) else None,
+            "cache_control_ttl": cache_control.get("ttl") if isinstance(cache_control, dict) else None,
         }
 
 
@@ -194,12 +231,19 @@ RUNTIME_LOGGING_TEMPLATE = textwrap.dedent(
             runtime_observability["agent_hints_keys"] = sorted(str(key) for key in agent_hints)
             runtime_observability["hint_probe_id"] = agent_hints.get("hint_probe_id")
 
-        if request_context or agent_hints:
+        cache_control, cache_control_source = extract_cache_control_with_source(request)
+        if cache_control:
+            runtime_observability["cache_control"] = cache_control
+            runtime_observability["cache_control_source"] = cache_control_source
+
+        if request_context or agent_hints or cache_control:
             runtime_observability["nvext"] = {}
             if request_context:
                 runtime_observability["nvext"]["request_context"] = request_context
             if agent_hints:
                 runtime_observability["nvext"]["agent_hints"] = agent_hints
+            if cache_control:
+                runtime_observability["nvext"]["cache_control"] = cache_control
 
         extra_args[_OBSERVABILITY_KEY] = runtime_observability
         return extra_args
@@ -258,142 +302,13 @@ def replace_method_block(text: str, method_name: str, replacement: str) -> str:
 
 def repair_runtime_logging() -> None:
     path = SOURCE_DIR / "components/src/dynamo/common/runtime_logging.py"
-    if not path.exists():
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(RUNTIME_LOGGING_TEMPLATE)
-        print(f"created: {path}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existed = path.exists()
+    if existed and path.read_text() == RUNTIME_LOGGING_TEMPLATE:
+        print(f"unchanged: {path}")
         return
-
-    text = path.read_text()
-
-    marker = '_OBSERVABILITY_KEY = "runtime_observability"\n'
-    if "def _maybe_register_transfer_runtime_event" not in text:
-        insertion = '''
-
-def _maybe_register_transfer_runtime_event(event: dict[str, Any]) -> None:
-    try:
-        from sglang.srt.mem_cache.transfer_logging import register_runtime_event_metadata
-    except Exception:
-        return
-
-    try:
-        register_runtime_event_metadata(event)
-    except Exception:
-        return
-'''
-        if marker not in text:
-            raise SystemExit(f"Could not find observability key marker in {path}")
-        text = text.replace(marker, marker + insertion, 1)
-
-    if "def extract_agent_hints_with_source" not in text:
-        old = '''def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
-    nvext = request.get("nvext")
-    if isinstance(nvext, dict):
-        agent_hints = nvext.get("agent_hints")
-        if isinstance(agent_hints, dict):
-            return _sanitize(agent_hints)
-
-    runtime_observability = extract_runtime_observability(request)
-    agent_hints = runtime_observability.get("agent_hints")
-    if isinstance(agent_hints, dict):
-        return _sanitize(agent_hints)
-
-    nested_nvext = runtime_observability.get("nvext")
-    if isinstance(nested_nvext, dict):
-        agent_hints = nested_nvext.get("agent_hints")
-        if isinstance(agent_hints, dict):
-            return _sanitize(agent_hints)
-
-    return None
-
-
-'''
-        new = '''def extract_agent_hints_with_source(
-    request: dict[str, Any],
-) -> tuple[dict[str, Any] | None, str]:
-    nvext = request.get("nvext")
-    if isinstance(nvext, dict):
-        agent_hints = nvext.get("agent_hints")
-        if isinstance(agent_hints, dict):
-            return _sanitize(agent_hints), "nvext.agent_hints"
-
-    runtime_observability = extract_runtime_observability(request)
-    agent_hints = runtime_observability.get("agent_hints")
-    if isinstance(agent_hints, dict):
-        return _sanitize(agent_hints), "runtime_observability.agent_hints"
-
-    nested_nvext = runtime_observability.get("nvext")
-    if isinstance(nested_nvext, dict):
-        agent_hints = nested_nvext.get("agent_hints")
-        if isinstance(agent_hints, dict):
-            return _sanitize(agent_hints), "runtime_observability.nvext.agent_hints"
-
-    return None, "missing"
-
-
-def extract_agent_hints(request: dict[str, Any]) -> dict[str, Any] | None:
-    agent_hints, _source = extract_agent_hints_with_source(request)
-    return agent_hints
-
-
-def agent_hint_log_fields(request: dict[str, Any]) -> dict[str, Any]:
-    agent_hints, source = extract_agent_hints_with_source(request)
-    if not isinstance(agent_hints, dict):
-        return {
-            "agent_hints": None,
-            "agent_hints_source": source,
-            "agent_hints_keys": [],
-            "hint_probe_id": None,
-        }
-    return {
-        "agent_hints": agent_hints,
-        "agent_hints_source": source,
-        "agent_hints_keys": sorted(str(key) for key in agent_hints),
-        "hint_probe_id": agent_hints.get("hint_probe_id"),
-    }
-
-
-'''
-        if old not in text:
-            raise SystemExit(f"Could not find extract_agent_hints block in {path}")
-        text = text.replace(old, new)
-
-    old = '''    agent_hints = extract_agent_hints(request)
-    if agent_hints:
-        runtime_observability["agent_hints"] = agent_hints
-
-    if request_context or agent_hints:
-'''
-    new = '''    agent_hints, agent_hints_source = extract_agent_hints_with_source(request)
-    if agent_hints:
-        runtime_observability["agent_hints"] = agent_hints
-        runtime_observability["agent_hints_source"] = agent_hints_source
-        runtime_observability["agent_hints_keys"] = sorted(str(key) for key in agent_hints)
-        runtime_observability["hint_probe_id"] = agent_hints.get("hint_probe_id")
-
-    if request_context or agent_hints:
-'''
-    if old in text:
-        text = text.replace(old, new)
-
-    emit_marker = '''    for key, value in payload.items():
-        event[key] = _sanitize(value)
-
-    logger.info(
-'''
-    emit_replacement = '''    for key, value in payload.items():
-        event[key] = _sanitize(value)
-
-    _maybe_register_transfer_runtime_event(event)
-
-    logger.info(
-'''
-    if "_maybe_register_transfer_runtime_event(event)" not in text:
-        if emit_marker not in text:
-            raise SystemExit(f"Could not patch emit_runtime_event in {path}")
-        text = text.replace(emit_marker, emit_replacement, 1)
-
-    write_if_changed(path, text)
+    path.write_text(RUNTIME_LOGGING_TEMPLATE)
+    print(f"{'updated' if existed else 'created'}: {path}")
 
 
 def repair_handler(path: Path, helper_name: str) -> None:

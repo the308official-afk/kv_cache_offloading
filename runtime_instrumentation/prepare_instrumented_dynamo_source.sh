@@ -61,6 +61,8 @@ required_markers=(
   "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_attached"
   "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py:worker.prefill.request_completed"
   "lib/llm/src/preprocessor.rs:runtime_observability_extra_args_from_nvext"
+  "lib/llm/src/preprocessor.rs:cache_control_source"
+  "components/src/dynamo/common/runtime_logging.py:cache_control_source"
   "lib/llm/src/protocols/openai/nvext.rs:expected_output_tokens"
 )
 
