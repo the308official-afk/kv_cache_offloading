@@ -241,6 +241,21 @@ def write_if_changed(path: Path, text: str) -> None:
     print(f"updated: {path}")
 
 
+def replace_method_block(text: str, method_name: str, replacement: str) -> str:
+    marker = f"    async def {method_name}("
+    start = text.find(marker)
+    if start == -1:
+        raise SystemExit(f"Could not find method {method_name}")
+
+    next_method = text.find("\n    async def ", start + len(marker))
+    if next_method == -1:
+        next_method = text.find("\nclass ", start + len(marker))
+    if next_method == -1:
+        next_method = len(text)
+
+    return text[:start] + textwrap.indent(textwrap.dedent(replacement).strip("\n") + "\n", "    ") + text[next_method:]
+
+
 def repair_runtime_logging() -> None:
     path = SOURCE_DIR / "components/src/dynamo/common/runtime_logging.py"
     if not path.exists():
@@ -426,6 +441,35 @@ def _decode_request_payload(
                 raise SystemExit(f"Could not insert decode payload helper in {path}")
             text = text.replace(end_marker, ')\n' + helper_block + '\n\ndef _top_logprobs_allowed()', 1)
 
+        normalize_helper = '''
+def _normalize_output_ids_delta(
+    previous_output_ids: list[int],
+    current_output_ids: list[int],
+) -> tuple[list[int], list[int]]:
+    """Normalize cumulative SGLang ``output_ids`` into per-chunk deltas."""
+    if not current_output_ids:
+        return [], previous_output_ids
+
+    if not previous_output_ids:
+        return current_output_ids, current_output_ids
+
+    prev_len = len(previous_output_ids)
+    current_len = len(current_output_ids)
+
+    if current_len >= prev_len and current_output_ids[:prev_len] == previous_output_ids:
+        return current_output_ids[prev_len:], current_output_ids
+
+    if current_len < prev_len and previous_output_ids[:current_len] == current_output_ids:
+        return current_output_ids, current_output_ids
+
+    return current_output_ids, previous_output_ids + current_output_ids
+'''
+        if "def _normalize_output_ids_delta(" not in text:
+            end_marker = "\n\ndef _openai_stop_sampling_params(request: Dict[str, Any]) -> Dict[str, Any]:"
+            if end_marker not in text:
+                raise SystemExit(f"Could not insert output-id normalization helper in {path}")
+            text = text.replace(end_marker, "\n\n" + normalize_helper + end_marker, 1)
+
         old_generate = '''        logging.debug(f"New Request ID: {context.id()}")
         trace_id = context.trace_id
 '''
@@ -445,6 +489,161 @@ def _decode_request_payload(
             if old_generate not in text:
                 raise SystemExit(f"Could not patch decode generate() runtime event in {path}")
             text = text.replace(old_generate, new_generate, 1)
+
+        old_token_call = '''                async for out in self._process_token_stream(
+                    decode,
+                    context,
+                    return_tokens_as_token_ids,
+                    user_stop_token_ids=user_stop_token_ids,
+                ):
+'''
+        new_token_call = '''                async for out in self._process_token_stream(
+                    decode,
+                    context,
+                    request,
+                    return_tokens_as_token_ids,
+                    user_stop_token_ids=user_stop_token_ids,
+                ):
+'''
+        if old_token_call in text:
+            text = text.replace(old_token_call, new_token_call)
+
+        old_agg_call = '''                async for out in self._process_token_stream(
+                    agg,
+                    context,
+                    return_tokens_as_token_ids,
+                    user_stop_token_ids=user_stop_token_ids,
+                ):
+'''
+        new_agg_call = '''                async for out in self._process_token_stream(
+                    agg,
+                    context,
+                    request,
+                    return_tokens_as_token_ids,
+                    user_stop_token_ids=user_stop_token_ids,
+                ):
+'''
+        if old_agg_call in text:
+            text = text.replace(old_agg_call, new_agg_call)
+
+        token_stream_replacement = '''
+async def _process_token_stream(
+    self,
+    stream_source: AsyncGenerator[Dict[str, Any], None],
+    context: Context,
+    request: Dict[str, Any],
+    return_tokens_as_token_ids: bool = False,
+    user_stop_token_ids: set[int] | None = None,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """Process token-based stream output.
+
+    With stream_output=True (enforced by Dynamo), SGLang sends disjoint segments
+    containing only new tokens since the last output. We pass these through directly.
+    """
+    request_id_future: asyncio.Future[str] = asyncio.Future()
+    output_logprobs_per_choice: dict[int, int] = {}
+    output_ids_per_choice: dict[int, list[int]] = {}
+    attach_logged = False
+    async with self._cancellation_monitor(request_id_future, context):
+        async for res in stream_source:
+            if not request_id_future.done():
+                meta_info = res.get("meta_info", {})
+                sglang_request_id = meta_info.get("id")
+                if sglang_request_id:
+                    request_id_future.set_result(sglang_request_id)
+                    logging.debug(f"New SGLang Request ID: {sglang_request_id}")
+                    if not attach_logged:
+                        emit_runtime_event(
+                            logging.getLogger(__name__),
+                            "worker.decode.request_attached",
+                            "worker.decode",
+                            sglang_request_id=sglang_request_id,
+                            model=self.config.server_args.served_model_name,
+                            **_decode_request_payload(request, context.id()),
+                        )
+                        attach_logged = True
+
+            output_idx = res.get("index") or 0
+            out: dict[str, Any] = {"index": output_idx}
+            finish_reason = res["meta_info"]["finish_reason"]
+            if finish_reason:
+                out["finish_reason"] = normalize_finish_reason(finish_reason["type"])
+                stop_reason = _extract_sglang_stop_reason(
+                    finish_reason, user_stop_token_ids
+                )
+                if stop_reason is not None:
+                    out["stop_reason"] = stop_reason
+
+            raw_output_ids = res.get("output_ids", [])
+            output_ids, next_output_ids = _normalize_output_ids_delta(
+                output_ids_per_choice.get(output_idx, []),
+                raw_output_ids,
+            )
+            if raw_output_ids:
+                output_ids_per_choice[output_idx] = next_output_ids
+            if not output_ids and not finish_reason:
+                if context.is_stopped():
+                    break
+                continue
+
+            out["token_ids"] = output_ids
+
+            (
+                log_probs,
+                top_logprobs,
+                next_logprobs_total,
+            ) = self._extract_logprobs(
+                res["meta_info"],
+                output_logprobs_per_choice.get(output_idx, 0),
+                return_tokens_as_token_ids=return_tokens_as_token_ids,
+            )
+            output_logprobs_per_choice[output_idx] = next_logprobs_total
+            if log_probs is not None:
+                out["log_probs"] = log_probs
+            if top_logprobs is not None:
+                out["top_logprobs"] = top_logprobs
+
+            routed_experts = res["meta_info"].get("routed_experts")
+            if routed_experts is not None:
+                routed_experts = pybase64.b64encode(
+                    routed_experts.numpy().tobytes()
+                ).decode("utf-8")
+                out["disaggregated_params"] = {"routed_experts": routed_experts}
+            if finish_reason:
+                input_tokens = res["meta_info"]["prompt_tokens"]
+                completion_tokens = res["meta_info"]["completion_tokens"]
+                cached_tokens = res["meta_info"]["cached_tokens"]
+                prefill_prompt_tokens_details = None
+                if cached_tokens is not None and cached_tokens > 0:
+                    prefill_prompt_tokens_details = {"cached_tokens": cached_tokens}
+                out["completion_usage"] = {
+                    "prompt_tokens": input_tokens,
+                    "completion_tokens": completion_tokens,
+                    "total_tokens": input_tokens + completion_tokens,
+                    "prompt_tokens_details": prefill_prompt_tokens_details,
+                }
+                emit_runtime_event(
+                    logging.getLogger(__name__),
+                    "worker.decode.request_completed",
+                    "worker.decode",
+                    sglang_request_id=res["meta_info"].get("id"),
+                    finish_reason=out.get("finish_reason"),
+                    stop_reason=out.get("stop_reason"),
+                    completion_usage=out["completion_usage"],
+                    model=self.config.server_args.served_model_name,
+                    serving_mode=str(self.serving_mode),
+                    **_decode_request_payload(request, context.id()),
+                )
+            if not context.is_stopped():
+                yield out
+'''
+        token_fn_start = text.find("    async def _process_token_stream(")
+        token_fn_end = text.find("\n    async def _process_text_stream(", token_fn_start)
+        if token_fn_start == -1 or token_fn_end == -1:
+            raise SystemExit(f"Could not locate decode token/text stream functions in {path}")
+        token_fn = text[token_fn_start:token_fn_end]
+        if "request: Dict[str, Any]," not in token_fn or "attach_logged = False" not in token_fn or "_normalize_output_ids_delta(" not in token_fn:
+            text = replace_method_block(text, "_process_token_stream", token_stream_replacement)
 
         if 'worker.decode.request_attached' not in text:
             attach_old = '''                        request_id_future.set_result(sglang_request_id)

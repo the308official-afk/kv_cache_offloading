@@ -228,6 +228,669 @@ not just:
 
 This mechanism may be one of the keys to making the whole proposal work.
 
+## The Shift From Token Influence To Meaning Placement
+
+For your "new shift in thinking," I'd phrase it like this:
+
+Traditional attention organizes computation around tokens. HSMA extends the attention idea upward: memory should also be organized around meanings. Instead of only asking which tokens should influence the next prediction, the system asks which meanings support future reasoning, and uses that to decide where KV blocks, summaries, evidence, and concept nodes should live across GPU, CPU, storage, and graph memory.
+
+The key distinction:
+
+Token-to-token attention:
+which tokens matter for the next output?
+
+Meaning-to-Meaning Attention:
+which meanings matter enough to preserve, promote, demote, or recover?
+
+## How Traditional Attention Organizes Computation Around Tokens
+
+Traditional attention organizes computation around tokens because the model's basic working unit is the **token**.
+
+A token can be a word, part of a word, punctuation, or a symbol.
+
+Example:
+
+```text
+"The stylist is available today"
+```
+
+The model may see this as tokens like:
+
+```text
+"The" "stylist" "is" "available" "today"
+```
+
+When the model generates the next token, it asks:
+
+```text
+Which earlier tokens should influence what I say next?
+```
+
+So if the prompt is:
+
+```text
+The stylist is available today, so the customer can book
+```
+
+the model may pay more attention to:
+
+```text
+stylist
+available
+today
+book
+```
+
+because those tokens help predict the next word.
+
+In transformer attention, each token creates three things:
+
+```text
+Query: what am I looking for?
+Key: what information do I contain?
+Value: what information should I pass forward?
+```
+
+Then each token compares itself against other tokens.
+
+In simple words:
+
+```text
+this token looks at the other tokens
+decides which ones matter
+pulls information from them
+updates its own representation
+```
+
+That is what I mean by:
+
+> traditional attention organizes computation around tokens
+
+The model's reasoning work is arranged around token positions:
+
+```text
+token 1 attends to token 2
+token 7 attends to token 3
+token 20 attends to tokens 4, 9, and 15
+```
+
+The KV cache also follows this structure. It stores key/value states for tokens, usually by token position.
+
+So traditional attention is asking:
+
+```text
+Which token states should affect the next computation?
+```
+
+Your HSMA idea shifts the question upward:
+
+```text
+Which meanings should affect long-term memory placement and recovery?
+```
+
+So the contrast is:
+
+```text
+Traditional attention:
+organize model computation around token influence.
+
+HSMA Meaning-to-Meaning Attention:
+organize memory management around meaning dependency.
+```
+
+## How To Infer Meaning Dependencies
+
+In simple words: we know `B depends on A` by looking for evidence that **B would become weaker, incomplete, or wrong if A were removed**.
+
+You do not need one magic method. You combine several signals.
+
+**1. Direct Reference**
+Sometimes B literally points back to A.
+
+Example:
+
+```text
+A: "Same-day ranking should prioritize availability first."
+B: "Based on the same-day ranking rule, update stylist discovery."
+```
+
+Here B depends on A because it says "based on." Easy case.
+
+**2. Shared Entities Plus Role**
+If B uses the same entity as A, and A defines a rule/constraint about that entity, B may depend on A.
+
+Example:
+
+```text
+A: "For same-day bookings, availability beats distance."
+B: "Improve same-day stylist discovery."
+```
+
+B talks about same-day stylist discovery. A defines a rule for same-day bookings. So A may support B.
+
+But shared topic alone is not enough. The system should ask:
+
+> does A define something B needs?
+
+**3. Decision / Constraint Tracking**
+Some memory types are naturally foundational.
+
+Usually foundational:
+
+- decisions
+- constraints
+- definitions
+- user preferences
+- experiment results
+- API contracts
+- metric definitions
+
+If B is a plan or answer, and A is a constraint that applies to it, then B depends on A.
+
+Example:
+
+```text
+A: "Do not use destructive git commands."
+B: "Plan for cleaning the repo."
+```
+
+B depends on A because the plan must obey that constraint.
+
+**4. Derivation Trail**
+When the system creates B from A, it should record that at creation time.
+
+Example:
+
+```text
+A: raw experiment result
+B: summary of experiment result
+C: conclusion based on summary
+```
+
+The system should store:
+
+```text
+B derived_from A
+C depends_on B
+C indirectly depends_on A
+```
+
+This is the cleanest kind of dependency because the system creates the link as it reasons.
+
+**5. Question Test**
+Ask a verifier:
+
+> If A were removed, would B still be correct and complete?
+
+If yes, weak/no dependency.  
+If no, dependency.
+
+Example:
+
+```text
+A: "Availability first, then reviews, then distance."
+B: "Same-day search should rank by availability first."
+```
+
+Remove A, and B loses its evidence. So B depends on A.
+
+This can be done by a small model, rules, or both.
+
+**6. Contradiction / Tension Test**
+Check whether A and B conflict.
+
+Example:
+
+```text
+A: "Same-day ranking prioritizes availability."
+B: "Same-day ranking prioritizes distance."
+```
+
+This is not `depends_on`. It is more like:
+
+```text
+B contradicts A
+```
+
+That link is still useful, because contradiction should also prevent careless demotion.
+
+**7. Active Task Usage**
+If the current task uses B, then things B depends on become more important.
+
+Example:
+
+```text
+Current task: "Write final ranking policy."
+B: "Stylist discovery policy."
+A: "Availability-first rule."
+```
+
+If B is active and B depends on A, then A should get boosted too.
+
+That is the key performance idea.
+
+**A Practical First Algorithm**
+
+For every new memory item `B`, compare it against likely relevant older items `A`:
+
+1. Find candidate older memories using embeddings, topic match, entities, timestamps, and active task.
+2. Ask what type each item is: `decision`, `constraint`, `fact`, `tool_result`, `plan`, `summary`, etc.
+3. Run dependency checks:
+   - Does B cite A?
+   - Does B use a term/rule defined by A?
+   - Is B derived from A?
+   - Would B become wrong or incomplete without A?
+   - Does B contradict A?
+4. Store typed edges:
+   - `depends_on`
+   - `supports`
+   - `refines`
+   - `contradicts`
+   - `derived_from`
+   - `used_by_active_task`
+5. Give each edge a confidence score.
+
+Example record:
+
+```text
+B: "Same-day stylist discovery should rank available stylists first."
+
+Edges:
+- depends_on A: "For same-day bookings, availability beats distance." confidence=0.92
+- refines C: "General stylist discovery should balance reviews and distance." confidence=0.71
+- used_by_active_task D: "Build ranking policy proposal." confidence=0.88
+```
+
+**Important Point**
+
+This should not be treated as perfect truth. It should be treated as **probabilistic evidence**.
+
+So the system does not say:
+
+> B definitely depends on A forever.
+
+It says:
+
+> B probably depends on A with confidence 0.92.
+
+Then retention can use that confidence.
+
+The simplest version:
+
+```text
+dependency_importance(A) =
+sum(importance(B) * dependency_confidence(B depends_on A))
+```
+
+So if many important memories depend on A, A becomes important too.
+
+That is how the system knows to keep A in a stronger tier.
+
+**The Cleanest Answer**
+
+You achieve this dependency system by combining:
+
+- explicit provenance when one memory is created from another
+- LLM or classifier-based relation extraction
+- rule-based checks for decisions, constraints, definitions, and tool results
+- verifier tests that ask whether B still works without A
+- confidence scores instead of hard yes/no links
+
+In one sentence:
+
+> We know B depends on A when B uses A as evidence, constraint, definition, source, or reasoning support, and we store that relationship as a weighted edge in the memory graph.
+
+## Resource Utilization Impact Of Meaning-To-Meaning Attention
+
+Yes. The impact is mostly **better resource utilization through safer selectivity**.
+
+Meaning-to-Meaning Attention does not magically make one token cheaper. Its value is that it lets the system know **which old memories are foundations** and which old memories are safe to demote. That means the runtime can keep fewer things in expensive memory without causing bad forgetting.
+
+**Simple Scenario**
+
+Assume an 8B-ish model where KV cache costs roughly:
+
+```text
+KV per token ~= 0.5 MB
+```
+
+So:
+
+```text
+100k tokens full KV ~= 48.8 GB
+40k tokens full KV  ~= 19.5 GB
+18k tokens full KV  ~= 8.8 GB
+12k tokens full KV  ~= 5.9 GB
+```
+
+Without Meaning-to-Meaning Attention, the system may need to be conservative. It may keep `40k` tokens hot because it does not know which old details are foundational.
+
+With Meaning-to-Meaning Attention, it may keep only:
+
+```text
+12k active tokens
++ 6k foundational tokens
+= 18k hot tokens
+```
+
+That gives:
+
+```text
+19.5 GB -> 8.8 GB
+```
+
+About:
+
+```text
+2.2x less hot KV memory
+```
+
+Compared to keeping the whole `100k` history hot:
+
+```text
+48.8 GB -> 8.8 GB
+```
+
+About:
+
+```text
+5.6x less hot KV memory
+```
+
+**What does that mean for speed?**
+
+If decode is heavily memory-bound, reducing active KV reads helps.
+
+Using a rough Amdahl estimate:
+
+```text
+speedup = 1 / (non_memory_part + memory_part / KV_reduction)
+```
+
+If `70%` of latency is KV/memory movement:
+
+Against conservative `40k` hot tokens:
+
+```text
+KV reduction = 40k / 18k = 2.2x
+
+speedup = 1 / (0.3 + 0.7 / 2.2)
+        ~= 1.6x
+```
+
+Against full `100k` hot tokens:
+
+```text
+KV reduction = 100k / 18k = 5.6x
+
+speedup = 1 / (0.3 + 0.7 / 5.6)
+        ~= 2.35x
+```
+
+So a realistic impact from this idea could be:
+
+```text
+1.4x to 1.8x faster versus a conservative hot-memory policy
+2x to 3x faster versus full-history hot KV
+```
+
+depending on how memory-bound the workload is.
+
+**Concurrency impact**
+
+This may be the bigger win.
+
+If one long-running agent session needs:
+
+```text
+without M2M: 19.5 GB hot KV
+with M2M:     8.8 GB hot KV
+```
+
+Then the same GPU memory budget can support roughly:
+
+```text
+19.5 / 8.8 ~= 2.2x more active long-running sessions
+```
+
+Against full-history KV:
+
+```text
+48.8 / 8.8 ~= 5.6x more sessions
+```
+
+So resource utilization improves because expensive HBM is spent on the memories that actually matter.
+
+**Recovery impact**
+
+Without Meaning-to-Meaning Attention, the system may demote the wrong thing, then later recover slowly or answer badly.
+
+With it, the system keeps foundational memories stronger, so recovery should be less frequent and more targeted.
+
+Example:
+
+```text
+Fast path speedup vs full hot KV ~= 2.35x
+```
+
+If only `5%` of turns need expensive recovery:
+
+```text
+overall speedup ~= 2.1x
+```
+
+If `10%` need recovery:
+
+```text
+overall speedup ~= 1.9x
+```
+
+If `20%` need recovery:
+
+```text
+overall speedup ~= 1.6x
+```
+
+So the system wins most when Meaning-to-Meaning Attention reduces unnecessary recovery.
+
+**Metadata overhead**
+
+The dependency graph itself should be much cheaper than KV.
+
+Example:
+
+```text
+100k memory nodes
+embedding per node ~= 3 KB
+node embeddings ~= 300 MB
+edges / metadata maybe tens of MB
+```
+
+That is small compared with:
+
+```text
+100k full KV ~= 48.8 GB
+```
+
+So the graph overhead is likely acceptable if it lets you demote large amounts of KV safely.
+
+**Bottom line**
+
+The impact is:
+
+- lower HBM usage
+- lower KV bandwidth per generated token
+- more concurrent long-running agents
+- fewer expensive recovery events
+- fewer reasoning failures from demoting foundational context
+- better use of CPU/storage tiers because the system knows what is safe to move
+
+In one sentence:
+
+> Meaning-to-Meaning Attention improves resource utilization by letting the system spend expensive memory on foundational meanings, not just recent tokens.
+
+That is the practical value: it makes aggressive memory tiering safer.
+
+## How Meaning-To-Meaning Attention Improves Resource Utilization And Throughput
+
+Meaning-to-Meaning Attention improves resource utilization because it helps the system avoid treating all old context equally.
+
+The simple idea:
+
+> Keep the memories that future reasoning depends on in stronger memory, and push less important memories into cheaper forms.
+
+Traditional KV systems mostly care about things like:
+
+```text
+recently used
+currently active
+shared prefix
+memory pressure
+cheap to evict/reload
+```
+
+Your idea adds another question:
+
+```text
+Is this meaning foundational to future reasoning?
+```
+
+That changes resource usage in a few ways.
+
+**1. Less GPU Memory Waste**
+
+GPU memory is expensive. Full KV cache for long context can get huge fast.
+
+Rough example for an 8B-ish model:
+
+```text
+KV per token ≈ 0.5 MB
+100,000 tokens ≈ 50 GB of KV
+```
+
+If a normal system keeps too much old KV hot, GPU memory fills up quickly.
+
+HSMA might say:
+
+```text
+Keep 15k-20k tokens worth of important/foundational KV hot.
+Compress or demote the rest.
+Keep summaries, concept nodes, and pointers for the older material.
+```
+
+So instead of keeping 50 GB hot, maybe it keeps:
+
+```text
+20k tokens ≈ 10 GB hot KV
+```
+
+That is roughly a **5x reduction in hot KV footprint**.
+
+**2. Higher Throughput**
+
+If each active agent session uses less GPU KV memory, the same GPU can support more concurrent sessions.
+
+Example:
+
+```text
+Traditional:
+1 long-running agent needs 50 GB KV
+
+HSMA:
+1 long-running agent needs 10 GB hot KV
+```
+
+In a KV-limited setup, that could mean:
+
+```text
+same GPU memory budget supports about 5x more active long-context sessions
+```
+
+Real speedup will be lower because compute, scheduling, and recovery overhead still matter. But the memory-side capacity improvement can be large.
+
+**3. Lower Latency For Common Cases**
+
+Most prompts do not need every old detail. They need the right few details.
+
+So HSMA can run the cheap path most of the time:
+
+```text
+use hot KV
+use summaries
+use concept graph
+use important recovered evidence only when needed
+```
+
+Instead of dragging a massive history through every request.
+
+That can reduce:
+
+```text
+attention work
+KV reads
+memory bandwidth pressure
+GPU cache pressure
+prefill cost
+```
+
+So the system may answer faster when abstract memory is enough.
+
+**4. Better Use Of Slow Memory**
+
+Slow memory is not bad. It is just bad when the system uses it blindly.
+
+HSMA gives slow memory a better role:
+
+```text
+GPU/HBM: hot, foundational, currently useful KV
+CPU RAM: recoverable compressed KV and recent-but-less-hot state
+SSD/storage: raw evidence, transcripts, old tool outputs
+Graph memory: meanings, summaries, dependency links
+```
+
+So instead of “slow memory = forgotten stuff,” slow memory becomes part of an organized recovery system.
+
+**5. Less Bad Eviction**
+
+This may be the biggest quality win.
+
+A traditional engine may evict an old KV block because it has not been used recently.
+
+But that block might contain:
+
+```text
+the original user constraint
+the ranking rule
+the evaluation definition
+the reason a design choice was made
+```
+
+Meaning-to-Meaning Attention can notice:
+
+```text
+many later memories depend on this one
+```
+
+and keep it stronger, or at least preserve better recovery pointers.
+
+That improves resource use because the system spends memory on what matters, not just what is recent.
+
+**Bottom Line**
+
+Meaning-to-Meaning Attention can improve:
+
+```text
+GPU memory utilization: less hot KV waste
+throughput: more concurrent long-running agents
+latency: less unnecessary context processing
+recovery quality: fetch the right details when needed
+reasoning reliability: fewer failures from losing foundational context
+```
+
+The one-line version:
+
+> It makes memory placement depend on meaning importance, not just token recency or cache mechanics. That lets the system use expensive memory for the context that actually protects future reasoning.
+
 ## Pillar 2: Semantic Demotion Policy
 
 The system continuously decides what should stay exact and what can be abstracted.
@@ -972,6 +1635,63 @@ If there is a single biggest underexplored angle right now, it is:
 That is where the gains can move from nice memory optimization to the whole system working
 differently.
 
+## How HSMA Can Work Side By Side With Traditional KV Engines
+
+Yes. They should work side by side.
+
+Your idea does not replace traditional KV management. It adds a smarter decision layer on top of it.
+
+Think of it like two levels:
+
+```text
+Traditional KV engine:
+How do we store, page, reuse, evict, and reload KV blocks efficiently?
+
+HSMA semantic layer:
+Which blocks are actually important for future reasoning?
+```
+
+The traditional engine handles the low-level mechanics:
+
+```text
+GPU memory pressure
+KV paging
+prefix caching
+radix tree reuse
+CPU offload
+batch scheduling
+block eviction
+block reload
+```
+
+HSMA gives it better priorities:
+
+```text
+this block is foundational
+this block is safe to summarize
+this block has many dependent meanings
+this block is cheap to recover
+this block should be demoted but keep pointers
+this block should stay hot even though it is old
+```
+
+So the combined system could work like this:
+
+```text
+1. The normal engine tracks KV blocks, recency, reuse, and memory pressure.
+2. HSMA attaches semantic metadata to some KV blocks.
+3. Meaning-to-Meaning Attention scores which meanings are important.
+4. The engine uses those scores when deciding what to keep in GPU, move to CPU, compress, summarize, or archive.
+5. If detail is needed later, HSMA follows pointers back to the exact evidence or KV block.
+```
+
+In simple words:
+
+> The traditional KV system is the memory manager.  
+> HSMA is the judgment layer that tells it what is worth protecting.
+
+That is actually the strongest version of the idea. You do not need to rebuild everything from scratch. You can plug semantic priority into existing KV-cache systems.
+
 ## Comparison With SGLang Radix Tree Prompt Reuse
 
 SGLang’s radix tree and your idea are related, but they operate at **different levels**.
@@ -1044,6 +1764,12 @@ The current order of attack should stay conservative:
 6. Add weak-answer detection and retry.
 7. Measure memory saved, latency added, and answer quality retained.
 8. Only then ask what deserves hardware acceleration.
+
+## Manager-Friendly Hardware Pitch
+
+The Manager-Friendly Pitch
+I would frame it like this:
+Today, GPU memory systems mostly manage KV cache as token blocks. They are good at paging, reuse, and eviction, but they do not know which blocks are semantically important. HSMA proposes adding a semantic-priority layer so memory hardware can protect the KV blocks that future reasoning depends on, while aggressively demoting less important context.
 
 ## What Would Need To Be Measured
 

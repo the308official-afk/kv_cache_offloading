@@ -17,6 +17,7 @@ SKIP_WORKER="${SKIP_WORKER:-0}"
 LEAN_FRONTEND="${LEAN_FRONTEND:-0}"
 DOCKER_BUILD_PLATFORM="${DOCKER_BUILD_PLATFORM:-${TARGET_PLATFORM:-}}"
 DOCKER_BUILD_LOAD="${DOCKER_BUILD_LOAD:-1}"
+DOCKER_BUILD_NO_CACHE="${DOCKER_BUILD_NO_CACHE:-0}"
 
 require_valid_source_repo() {
   if [[ ! -d "${SOURCE_DIR}" ]]; then
@@ -192,6 +193,9 @@ build_image() {
       if [[ "${DOCKER_BUILD_LOAD}" == "1" ]]; then
         cmd+=(--load)
       fi
+      if [[ "${DOCKER_BUILD_NO_CACHE}" == "1" ]]; then
+        cmd+=(--no-cache)
+      fi
       cmd+=(--platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .)
       echo "Building ${tag} for platform ${DOCKER_BUILD_PLATFORM} via docker buildx"
       "${cmd[@]}"
@@ -199,12 +203,20 @@ build_image() {
     fi
 
     echo "Building ${tag} for platform ${DOCKER_BUILD_PLATFORM} via docker build"
-    docker build --platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .
+    if [[ "${DOCKER_BUILD_NO_CACHE}" == "1" ]]; then
+      docker build --no-cache --platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .
+    else
+      docker build --platform "${DOCKER_BUILD_PLATFORM}" -f "${dockerfile}" -t "${tag}" .
+    fi
     return
   fi
 
   echo "Building ${tag}"
-  docker build -f "${dockerfile}" -t "${tag}" .
+  if [[ "${DOCKER_BUILD_NO_CACHE}" == "1" ]]; then
+    docker build --no-cache -f "${dockerfile}" -t "${tag}" .
+  else
+    docker build -f "${dockerfile}" -t "${tag}" .
+  fi
 }
 
 render_platform_args() {

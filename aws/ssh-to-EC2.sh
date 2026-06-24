@@ -5,7 +5,7 @@
 # Define your public IPs in an array
 IPS=(
   ""   
-  "44.211.153.70"
+  "18.207.246.100"
   ""
 )
 

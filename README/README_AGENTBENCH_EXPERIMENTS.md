@@ -217,6 +217,36 @@ docker image inspect "$WORKER_IMAGE" >/dev/null
 echo "instrumented images ok"
 ```
 
+If you suspect Docker reused a stale worker-image layer after a source repair,
+force a no-cache rebuild:
+
+```bash
+cd ~/kv_cache_offloading
+
+export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+./run_dynamo_single_host.sh stop || true
+docker rm -f dynamo-sglang-worker dynamo-frontend dynamo-etcd dynamo-nats 2>/dev/null || true
+docker rmi "$WORKER_IMAGE" || true
+
+SKIP_FRONTEND=1 DOCKER_BUILD_NO_CACHE=1 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+This is slower, but it prevents Docker from quietly reusing an older broken
+worker layer after the Dynamo source patch changed.
+
+If a running worker shows a half-patched decode path, for example:
+
+- `worker.decode.request_attached` exists
+- but `attach_logged = False` is still missing inside
+  `DecodeWorkerHandler._process_token_stream(...)`
+
+then use the same no-cache rebuild path above. That specific symptom means the
+older decode-handler layout was only partially rewritten, and the fresh worker
+image must be rebuilt from the updated repair script.
+
 The build script now refuses to produce `runtime-json-logs` images from an
 unprepared Dynamo source tree. If it fails, rerun:
 
@@ -1378,6 +1408,25 @@ Use `precise` when you also want:
 - direct cache-event evidence
 - request-level attribution
 - transfer logging / richer proof
+
+If the worker crashes with an error like:
+
+```text
+UnboundLocalError: cannot access local variable 'attach_logged'
+```
+
+that means the runtime images were built from an older partially repaired
+Dynamo source tree. The recovery is:
+
+```bash
+cd ~/kv_cache_offloading
+rm -rf upstream/dynamo
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+Then restart Dynamo and rerun the experiment.
 
 For cross-machine attribution safety, use:
 
