@@ -60,9 +60,10 @@ Check progress:
   cat ${SWEEP_DIR}/retention_threshold_summary.md
 
 Top-level latest reports:
-  cat experiments/reports/latest_retention_probe_matrix.csv
-  cat experiments/reports/latest_retention_probe_requests.csv
-  cat experiments/reports/latest_retention_probe_summary.md
+  cat experiments/reports/latest_cache_control_retention_threshold_progress.csv
+  cat experiments/reports/latest_cache_control_retention_threshold_matrix.csv
+  cat experiments/reports/latest_cache_control_retention_threshold_comparison.csv
+  cat experiments/reports/latest_cache_control_retention_threshold_summary.md
 
 Stop it if needed:
   kill ${PID}

@@ -115,6 +115,7 @@ top_level_report_patterns=(
   "experiments/reports/sglang_logging_profile_walltime.csv"
   "experiments/reports/design_space_matrix.csv"
   "experiments/reports/design_space_retention_matrix.csv"
+  "experiments/reports/latest_cache_control_retention_threshold_*"
 )
 
 targets=()

@@ -1436,6 +1436,10 @@ cat experiments/reports/latest_retention_probe_matrix.csv
 cat experiments/reports/retention_threshold_matrix.csv
 cat experiments/reports/retention_threshold_comparison.csv
 cat experiments/reports/retention_threshold_summary.md
+cat experiments/reports/latest_cache_control_retention_threshold_progress.csv
+cat experiments/reports/latest_cache_control_retention_threshold_matrix.csv
+cat experiments/reports/latest_cache_control_retention_threshold_comparison.csv
+cat experiments/reports/latest_cache_control_retention_threshold_summary.md
 ```
 
 ## Experiment 11: Priority Scheduling Probe

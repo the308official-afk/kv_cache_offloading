@@ -61,6 +61,10 @@ LATEST_RETENTION_PROBE_PROGRESS_REPORT="latest_retention_probe_progress.csv"
 LATEST_RETENTION_PROBE_MATRIX_REPORT="latest_retention_probe_matrix.csv"
 LATEST_RETENTION_PROBE_REQUESTS_REPORT="latest_retention_probe_requests.csv"
 LATEST_RETENTION_PROBE_SUMMARY_REPORT="latest_retention_probe_summary.md"
+LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_PROGRESS_REPORT="latest_cache_control_retention_threshold_progress.csv"
+LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_MATRIX_REPORT="latest_cache_control_retention_threshold_matrix.csv"
+LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_COMPARISON_REPORT="latest_cache_control_retention_threshold_comparison.csv"
+LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_SUMMARY_REPORT="latest_cache_control_retention_threshold_summary.md"
 RETENTION_THRESHOLD_PROGRESS_REPORT="retention_threshold_sweep_progress.csv"
 RETENTION_THRESHOLD_MATRIX_REPORT="retention_threshold_matrix.csv"
 RETENTION_THRESHOLD_COMPARISON_REPORT="retention_threshold_comparison.csv"
@@ -285,6 +289,24 @@ for report in \
       "${LOCAL_REPORTS_DIR}/"
   else
     echo "Remote latest retention probe report not found (${report}); skipping." >&2
+  fi
+done
+
+for report in \
+  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_PROGRESS_REPORT}" \
+  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_MATRIX_REPORT}" \
+  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_COMPARISON_REPORT}" \
+  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_SUMMARY_REPORT}"; do
+  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
+  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
+  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
+    rsync \
+      "${RSYNC_COMMON_OPTS[@]}" \
+      -e "$SSH_CMD" \
+      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
+      "${LOCAL_REPORTS_DIR}/"
+  else
+    echo "Remote latest cache-control retention-threshold report not found (${report}); skipping." >&2
   fi
 done
 

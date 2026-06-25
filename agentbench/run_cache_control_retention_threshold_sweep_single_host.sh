@@ -80,6 +80,10 @@ exec env \
   RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID}" \
   RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE}" \
   RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE}" \
+  LATEST_RETENTION_THRESHOLD_PROGRESS="experiments/reports/latest_cache_control_retention_threshold_progress.csv" \
+  LATEST_RETENTION_THRESHOLD_MATRIX="experiments/reports/latest_cache_control_retention_threshold_matrix.csv" \
+  LATEST_RETENTION_THRESHOLD_COMPARISON="experiments/reports/latest_cache_control_retention_threshold_comparison.csv" \
+  LATEST_RETENTION_THRESHOLD_SUMMARY="experiments/reports/latest_cache_control_retention_threshold_summary.md" \
   KV_TIER_MODES="${KV_TIER_MODES}" \
   CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE}" \
   PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES}" \
