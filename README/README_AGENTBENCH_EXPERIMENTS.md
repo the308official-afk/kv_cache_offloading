@@ -1501,6 +1501,55 @@ replay_evict_status
 effect_status
 ```
 
+### Where The Signal Is Handled
+
+Use these as the main entry points when you want to trace where
+`nvext.cache_control` is attached, forwarded, observed, and summarized for the
+cache-control experiments.
+
+Sweep / wrapper entry points:
+
+- [run_cache_control_retention_threshold_sweep_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:12) control / protected cache-control profiles
+- [run_cache_control_retention_threshold_sweep_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:83) top-level latest cache-control sweep outputs
+- [run_kv_retention_probe_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh:469) probe invocation with `--protected-cache-control-profile`
+
+Request construction:
+
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:430) `build_cache_control(...)`
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:568) `payload["nvext"]["cache_control"] = cache_control`
+
+Dynamo translation / forwarding:
+
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`
+- [repair_dynamo_hint_preservation_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) preserves `nvext.extra["cache_control"]` into `runtime_observability`
+
+Worker-side consumption / visibility:
+
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:44) `_decode_request_payload(...)`
+- [hint_logging_proxy.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/hint_logging_proxy.py:157) `extract_cache_control_with_source(...)`
+
+Patched SGLang cache / eviction instrumentation:
+
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:1885) `CACHE_EVENT_FUNCTIONS`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2263) `wrap_request_context_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2201) `wrap_cache_event_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2689) `for function_name in ("cache_finished_req", "cache_unfinished_req")`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2693) `for function_name in CACHE_EVENT_FUNCTIONS`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697) `wrap_cache_event_function(text, "evict")`
+
+Report derivation:
+
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:930) `cache_control_label_from_event(...)`
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1110) collects replay-side eviction cache-control labels
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1314) computes replay eviction identity evidence
+- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:703) builds matrix rows
+- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:910) builds the compact comparison rows
+
+Note: these paths prove cache-control attachment, preservation, worker
+visibility, and eviction-side evidence extraction. They do not yet prove a
+single confirmed live TTL pin decision branch in pinned SGLang.
+
 Top-level outputs:
 
 ```bash
