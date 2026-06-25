@@ -131,10 +131,16 @@ Precise-attribution note:
 - and the runtime-image helper now resolves the machine profile (`ec2` or `gh200`),
   prints the exact `FRONTEND_IMAGE` / `WORKER_IMAGE`, checks they exist, and
   auto-builds them on fresh machines by default inside the precise wrappers
+- the runtime-image helper also records a small source-signature stamp when
+  images are built, so precise wrappers can now notice when the local
+  instrumented Dynamo source changed and rebuild automatically instead of
+  making you guess whether a rebuild is needed
 - if you want check-only behavior instead, set:
   `AUTO_BUILD_PRECISE_IMAGES=0`
 - so you should not need to manually re-run the SGLang extract/patch steps for
   every precise experiment anymore
+- and you should not need to manually decide whether Dynamo needs a rebuild for
+  precise experiments anymore; the wrappers now make that decision for you
 - you may still want to run the helper manually when debugging a fresh machine:
   `./runtime_instrumentation/ensure_precise_runtime_ready.sh --machine-profile ec2 --build-if-missing`
 - if you intentionally want a different SGLang source, override it explicitly:
@@ -269,6 +275,11 @@ docker image inspect "$FRONTEND_IMAGE" >/dev/null
 docker image inspect "$WORKER_IMAGE" >/dev/null
 echo "instrumented images ok"
 ```
+
+Manual rebuild is now mainly a first-time or recovery path. The precise
+experiment wrappers will normally auto-check the machine profile, local
+instrumented source, image freshness, live worker instrumentation, and rebuild
+when needed.
 
 If you suspect Docker reused a stale worker-image layer after a source repair,
 force a no-cache rebuild:
@@ -1348,6 +1359,9 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This precise wrapper now decides the Dynamo rebuild question for you. Use the
+manual rebuild path only for first-time setup or recovery.
+
 ### Outputs
 
 Quick-look outputs:
@@ -1393,48 +1407,51 @@ GPU_ONLY_MEM_FRACTION_STATIC
 PROTECTED_HINT_PROFILES
 ```
 
-### Where The Signal Is Handled
+### Decision Proof
 
-Use these as the main entry points when you want to trace where the retention
-signal is attached, forwarded, observed, and summarized.
+Use these as the exact places to inspect when you want to prove that priority
+retention signals were attached, read, applied, and summarized.
 
-Request construction:
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:523`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`  
+  Script layer. Builds the probe request and attaches the hint payload for
+  `a_first`, distractors, and `a_replay`.
 
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:430) `build_cache_control(...)`
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:667`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:667) `payload["priority"] = priority if priority is not None else ""`  
+  Script layer. Records whether top-level priority was actually sent on the
+  request path.
 
-Dynamo translation / forwarding:
+- [`upstream/dynamo/lib/llm/src/preprocessor.rs:174`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`  
+  Dynamo. Preserves `nvext.agent_hints` and request metadata into runtime
+  observability so later logs can still identify the request.
 
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... }`
+- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`  
+  Dynamo. Reads the routed priority value inside the live worker handler.
 
-Worker-side consumption:
+- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528) `async_generate(..., **self._priority_kwargs(priority))`  
+  Dynamo. Applies the priority by forwarding it into the live generation call.
 
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:44) `_decode_request_payload(...)`
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528) `async_generate(..., **self._priority_kwargs(priority))`
+- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`  
+  SGLang instrumentation patcher. Inserts the logging hooks that watch the
+  priority path inside patched SGLang code.
 
-Patched SGLang cache / eviction instrumentation:
+- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`  
+  SGLang instrumentation patcher. Hooks the eviction path so we can see whether
+  priority-related evidence shows up when cache entries are removed.
 
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:1885) `CACHE_EVENT_FUNCTIONS`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2263) `wrap_request_context_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2201) `wrap_cache_event_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2689) `for function_name in ("cache_finished_req", "cache_unfinished_req")`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2693) `for function_name in CACHE_EVENT_FUNCTIONS`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697) `wrap_cache_event_function(text, "evict")`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1085`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1085) `if action == "priority_hint_seen":`  
+  Report builder. Interprets raw `sglang.priority` events as “SGLang saw the
+  priority hint.”
 
-Report derivation:
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1087`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1087) `if action == "scheduler_priority_applied":`  
+  Report builder. Interprets raw `sglang.priority` events as “SGLang says it
+  actually applied scheduling priority.”
 
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1044) parses `sglang.cache` / `sglang.priority`
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1314) computes replay eviction identity evidence
-- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:703) builds the compact matrix rows
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1197`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1197) `worker_priority_status(...)`  
+  Report builder. Collapses the raw worker/SGLang evidence into the compact
+  `worker_prio_status` field in the matrix.
 
-Note: for cache-control specifically, these paths prove attachment,
-preservation, worker visibility, and eviction-side evidence extraction. They do
-not yet prove a single confirmed live TTL pin decision branch in pinned
-SGLang.
+Strongest proof in this setup: `scheduler_priority_applied` in the raw
+`sglang.priority` event stream.
 
 ## Experiment 10: Cache-Control Retention
 
@@ -1457,6 +1474,10 @@ a GPU-only counterfactual, set:
 ```bash
 CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE=0
 ```
+
+The precise cache-control wrappers now use the same automatic source/image
+freshness checks, so they will rebuild Dynamo when the local instrumented
+source has changed.
 
 ### Run
 
@@ -1565,54 +1586,53 @@ replay_evict_status
 effect_status
 ```
 
-### Where The Signal Is Handled
+### Decision Proof
 
-Use these as the main entry points when you want to trace where
-`nvext.cache_control` is attached, forwarded, observed, and summarized for the
-cache-control experiments.
+Use these as the exact places to inspect when you want to prove what
+`cache_control` does in this setup.
 
-Sweep / wrapper entry points:
+- [`agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:12`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:12) `CONTROL_CACHE_CONTROL_PROFILE` / `PROTECTED_CACHE_CONTROL_PROFILES`  
+  Wrapper layer. Defines which cache-control arm is the control and which is
+  the protected arm.
 
-- [run_cache_control_retention_threshold_sweep_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:12) control / protected cache-control profiles
-- [run_cache_control_retention_threshold_sweep_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_control_retention_threshold_sweep_single_host.sh:83) top-level latest cache-control sweep outputs
-- [run_kv_retention_probe_single_host.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh:469) probe invocation with `--protected-cache-control-profile`
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:430`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:430) `build_cache_control(...)`  
+  Script layer. Converts profile names like `off` and `ephemeral:1h` into the
+  exact request payload dictionary.
 
-Request construction:
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:568`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:568) `payload["nvext"]["cache_control"] = cache_control`  
+  Script layer. Actually attaches `nvext.cache_control` to the request.
 
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:430) `build_cache_control(...)`
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:568) `payload["nvext"]["cache_control"] = cache_control`
+- [`upstream/dynamo/lib/llm/src/preprocessor.rs:174`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`  
+  Dynamo. Preserves extra request metadata into runtime observability so the
+  worker/report path can still identify the request later.
 
-Dynamo translation / forwarding:
+- [`runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) preserves `nvext.extra["cache_control"]` into `runtime_observability`  
+  Dynamo repair helper. This is the code we added so cache-control survives
+  long enough to be visible in worker/runtime logs.
 
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`
-- [repair_dynamo_hint_preservation_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) preserves `nvext.extra["cache_control"]` into `runtime_observability`
+- [`runtime_instrumentation/hint_logging_proxy.py:157`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/hint_logging_proxy.py:157) `extract_cache_control_with_source(...)`  
+  Worker/logging helper. Reads cache-control back out of the live payload and
+  records where it came from.
 
-Worker-side consumption / visibility:
+- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697) `wrap_cache_event_function(text, "evict")`  
+  SGLang instrumentation patcher. Hooks the eviction path so we can see which
+  cache-control labels are present when entries are thrown out.
 
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:44) `_decode_request_payload(...)`
-- [hint_logging_proxy.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/hint_logging_proxy.py:157) `extract_cache_control_with_source(...)`
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:930`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:930) `cache_control_label_from_event(...)`  
+  Report builder. Turns raw cache-control fields from events into compact
+  labels like `ephemeral:1h`.
 
-Patched SGLang cache / eviction instrumentation:
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1110`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1110) `cache_control_label = cache_control_label_from_event(event)`  
+  Report builder. Collects replay-side eviction labels for the exact request
+  being analyzed.
 
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:1885) `CACHE_EVENT_FUNCTIONS`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2263) `wrap_request_context_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2201) `wrap_cache_event_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2689) `for function_name in ("cache_finished_req", "cache_unfinished_req")`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2693) `for function_name in CACHE_EVENT_FUNCTIONS`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697) `wrap_cache_event_function(text, "evict")`
+- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1314`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1314) `evict_identity_evidence(...)`  
+  Report builder. Decides whether the replay-side eviction evidence matches the
+  protected cache-control identity.
 
-Report derivation:
-
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:930) `cache_control_label_from_event(...)`
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1110) collects replay-side eviction cache-control labels
-- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1314) computes replay eviction identity evidence
-- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:703) builds matrix rows
-- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:910) builds the compact comparison rows
-
-Note: these paths prove cache-control attachment, preservation, worker
-visibility, and eviction-side evidence extraction. They do not yet prove a
-single confirmed live TTL pin decision branch in pinned SGLang.
+Strongest proof in this setup: `req_cache_status` / `worker_cache_status` prove
+receipt; `replay_evict_cache_match` proves eviction-side identity evidence when
+present.
 
 ### Pinned-Code Verdict
 
@@ -1672,6 +1692,10 @@ What it measures:
 
 The wrapper handles precise setup automatically. On a healthy run, you should
 see the 6 readiness signals before requests are sent.
+
+That automatic setup now includes image selection, local source checks, local
+patch refresh, and an automatic Dynamo image rebuild when the current
+instrumented source no longer matches the already-built precise runtime images.
 
 For a healthy precise scheduling run, you should now see this readiness chain
 before the synthetic requests are sent:
@@ -1734,36 +1758,50 @@ cat experiments/reports/latest_priority_scheduling_summary.md
 cat experiments/reports/latest_priority_scheduling_run.txt
 ```
 
-### Where The Decision Is Made
+### Decision Proof
 
-Use these as the main entry points when you want to trace where priority is
-attached, translated, applied, and proven in reports.
+Use these as the exact places to inspect when you want to prove that queue
+priority was attached, read, applied, and observed.
 
-Synthetic request construction:
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350) `build_hint_payload(...)`  
+  Script layer. Builds `agent_hints.priority`.
 
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350) builds `agent_hints.priority`
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:360) `request_context(...)`
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608) top-level `priority` send / fallback logic
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:356`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:356) `payload["priority"] = priority_value`  
+  Script layer. Adds top-level request priority when the frontend supports it.
 
-Dynamo translation / forwarding:
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608) `priority = top_level_priority_from_hints(hints)`  
+  Script layer. Decides what priority value should be attempted for the live
+  request.
 
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... priority_jump, priority ... }`
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) reads routed `priority`
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542) forwards it through `_priority_kwargs(...)`
+- [`upstream/dynamo/lib/llm/src/preprocessor.rs:408`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... priority_jump, priority ... }`  
+  Dynamo. Carries priority through the routed request structure.
 
-Patched SGLang priority instrumentation:
+- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`  
+  Dynamo. Reads the routed priority inside the live worker handler.
 
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`
-- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`
+- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542) `_priority_kwargs(...)`  
+  Dynamo. Applies the priority by forwarding it to generation.
 
-Priority-proof report derivation:
+- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`  
+  SGLang instrumentation patcher. Injects priority-path logging into patched
+  SGLang code.
 
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052) interprets `sglang.priority` events
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166) `worker_priority_path_status(...)`
-- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212) computes leapfrogs and wait-time comparison
+- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`  
+  SGLang instrumentation patcher. Hooks eviction-time priority evidence too.
 
-`experiments/reports/priority_scheduling_requests.csv` is the compact readable
-view. The raw per-request file is still kept under the run directory.
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052) parses `sglang.priority` events  
+  Report builder. Turns raw SGLang priority logs into structured report fields.
+
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166) `worker_priority_path_status(...)`  
+  Report builder. Decides whether the worker-side priority proof is strong,
+  partial, or missing.
+
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212) computes leapfrogs and wait-time comparison  
+  Report builder. Converts raw timing/order into the user-facing scheduling
+  proof columns.
+
+Strongest proof in this setup: `sglang_scheduler_priority_applied=true` plus a
+positive `attach_gain` / `beat_low_attach`.
 
 ### Key Columns
 
@@ -1841,6 +1879,13 @@ What it measures:
 The wrapper handles precise setup automatically. On a healthy precise run, you
 should see the same 6 readiness signals before requests are sent.
 
+If the local Dynamo source is missing the speculative-prefill markers, the
+wrapper now prepares the instrumented Dynamo source and rebuilds the precise
+runtime images automatically before the run continues.
+
+It also uses the same image-freshness check as the other precise experiments,
+so you should not have to manually decide whether Dynamo needs a rebuild first.
+
 ### Run
 
 ```bash
@@ -1883,31 +1928,50 @@ cat experiments/reports/latest_speculative_prefill_summary.md
 cat experiments/reports/latest_speculative_prefill_run.txt
 ```
 
-### Where The Signal Is Handled
+### Decision Proof
 
-Synthetic request construction:
+Use these as the exact places to inspect when you want to prove that Dynamo
+made a speculative-prefill decision.
 
-- [run_speculative_prefill_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py) builds `agent_hints.speculative_prefill`, target IDs, and the two-turn probe
+- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413) `"speculative_prefill": spec_prefill`  
+  Script layer. Attaches the `speculative_prefill` hint to the protected arm.
 
-Dynamo decision path:
+- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:415`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:415) `"spec_prefill_target_request_id": target_request_id`  
+  Script layer. Attaches the exact turn-B request identity that the warmup is
+  supposed to target.
 
-- [nvext.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs) declares `AgentHints.speculative_prefill`
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs) calls `speculative_prefill::maybe_wrap_stream(...)`
-- [speculative_prefill.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs) is the real decision path that emits:
-  - `worker.spec_prefill.wrap_checked`
-  - `worker.spec_prefill.task_spawned`
-  - `worker.spec_prefill.prefill_sent`
-  - `worker.spec_prefill.prefill_completed`
+- [`upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426) `pub speculative_prefill: Option<bool>`  
+  Dynamo. Declares the typed hint field on `AgentHints`.
 
-Instrumentation / preflight:
+- [`upstream/dynamo/lib/llm/src/preprocessor.rs:1810`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:1810) `speculative_prefill::maybe_wrap_stream(...)`  
+  Dynamo. Calls into the real speculative-prefill decision path.
 
-- [repair_dynamo_speculative_prefill_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_speculative_prefill_source.py) repairs fresh Dynamo clones with the speculative-prefill runtime events
-- [prepare_instrumented_dynamo_source.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/prepare_instrumented_dynamo_source.sh) verifies the required `worker.spec_prefill.*` markers
-- [check_precise_attribution_ready.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/check_precise_attribution_ready.sh) validates the precise speculative-prefill setup before requests start
+- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198) reads `hints.speculative_prefill`  
+  Dynamo. This is the exact line that reads the hint.
 
-Report derivation:
+- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:202`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:202) emits `worker.spec_prefill.wrap_checked`  
+  Dynamo. Proof that Dynamo reached the decision gate and recorded whether the
+  hint was enabled.
 
-- [run_speculative_prefill_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py) parses worker runtime JSON and builds the compact request/matrix/summary reports
+- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:219`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:219) emits `worker.spec_prefill.task_spawned`  
+  Dynamo. Proof that it decided to launch the background speculative-prefill
+  task.
+
+- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:355`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:355) emits `worker.spec_prefill.prefill_sent`  
+  Dynamo. Strong proof that the synthetic warmup request was actually sent.
+
+- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:373`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:373) emits `worker.spec_prefill.prefill_completed`  
+  Dynamo. Strong proof that the synthetic warmup request completed.
+
+- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:669`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:669) matches `worker.spec_prefill.wrap_checked`  
+  Report builder. Pulls the decision-path runtime events back into the report.
+
+- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:677`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:677) `prefill_spawned`, `prefill_sent`, `prefill_done`  
+  Report builder. Converts those raw runtime events into the compact proof
+  columns in the matrix.
+
+Strongest proof in this setup: `worker.spec_prefill.prefill_sent` followed by
+`worker.spec_prefill.prefill_completed`.
 
 ### Key Columns
 

@@ -64,6 +64,21 @@ fi
 source runtime_instrumentation/dynamo_machine_profile.sh
 source runtime_instrumentation/precise_sglang_helper.sh
 
+SOURCE_READY=0
+if [[ "${BUILD_IF_MISSING}" = "1" ]]; then
+  DYNAMO_ROOT="$(resolve_precise_dynamo_root || true)"
+  if [[ -n "${DYNAMO_ROOT}" ]] && _precise_dynamo_require_markers "${DYNAMO_ROOT}" runtime; then
+    SOURCE_READY=1
+  else
+    echo "Preparing instrumented Dynamo source..."
+    ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+    DYNAMO_ROOT="$(resolve_precise_dynamo_root || true)"
+    if [[ -n "${DYNAMO_ROOT}" ]] && _precise_dynamo_require_markers "${DYNAMO_ROOT}" runtime; then
+      SOURCE_READY=1
+    fi
+  fi
+fi
+
 if [[ -z "${FRONTEND_IMAGE:-}" || -z "${WORKER_IMAGE:-}" ]]; then
   cat >&2 <<EOF
 Could not resolve FRONTEND_IMAGE / WORKER_IMAGE.
@@ -93,7 +108,21 @@ if docker image inspect "${WORKER_IMAGE}" >/dev/null 2>&1; then
   echo "worker image ok"
 fi
 
-if [[ "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 ]]; then
+STAMP_PATH="$(precise_runtime_stamp_path "${DYNAMO_MACHINE_PROFILE:-default}")"
+STAMP_OK=0
+CURRENT_SOURCE_SIGNATURE=""
+STAMP_SOURCE_SIGNATURE=""
+if [[ "${SOURCE_READY}" -eq 1 ]]; then
+  CURRENT_SOURCE_SIGNATURE="$(precise_dynamo_source_signature "${DYNAMO_ROOT}")"
+  if [[ -f "${STAMP_PATH}" ]]; then
+    STAMP_SOURCE_SIGNATURE="$(grep '^source_signature=' "${STAMP_PATH}" | head -1 | cut -d= -f2- || true)"
+    if [[ -n "${STAMP_SOURCE_SIGNATURE}" && "${STAMP_SOURCE_SIGNATURE}" = "${CURRENT_SOURCE_SIGNATURE}" ]]; then
+      STAMP_OK=1
+    fi
+  fi
+fi
+
+if [[ "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 && ( "${SOURCE_READY}" -eq 0 || "${STAMP_OK}" -eq 1 ) ]]; then
   precise_banner_numbered 1 6 "PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)"
   exit 0
 fi
@@ -106,6 +135,12 @@ Expected:
   FRONTEND_IMAGE=${FRONTEND_IMAGE}
   WORKER_IMAGE=${WORKER_IMAGE}
 
+Machine profile:
+  ${DYNAMO_MACHINE_PROFILE:-default}
+
+Runtime stamp:
+  ${STAMP_PATH}
+
 Either build them manually:
   ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
   LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
@@ -116,8 +151,11 @@ EOF
   exit 1
 fi
 
-echo "Missing precise runtime images; preparing instrumented Dynamo source..."
-./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+if [[ "${SOURCE_READY}" -eq 1 && "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 && "${STAMP_OK}" -ne 1 ]]; then
+  echo "Existing precise runtime images were not built from the current instrumented Dynamo source."
+  echo "Current source signature: ${CURRENT_SOURCE_SIGNATURE}"
+  echo "Stamped source signature: ${STAMP_SOURCE_SIGNATURE:-<missing>}"
+fi
 
 echo "Building machine-specific instrumented Dynamo images..."
 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \

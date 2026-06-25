@@ -131,8 +131,16 @@ resolve_precise_dynamo_root() {
 
 _precise_dynamo_require_markers() {
   local root="$1"
-  local require_mode="${2:-specprefill}"
+  local require_mode="${2:-runtime}"
   case "${require_mode}" in
+    runtime)
+      grep -q "agent_hint_log_fields" "${root}/components/src/dynamo/common/runtime_logging.py" 2>/dev/null && \
+      grep -q "worker.decode.request_attached" "${root}/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py" 2>/dev/null && \
+      grep -q "worker.decode.request_completed" "${root}/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py" 2>/dev/null && \
+      grep -q "worker.prefill.request_attached" "${root}/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py" 2>/dev/null && \
+      grep -q "worker.prefill.request_completed" "${root}/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py" 2>/dev/null && \
+      grep -q "cache_control_source" "${root}/lib/llm/src/preprocessor.rs" 2>/dev/null
+      ;;
     specprefill)
       grep -q "worker.spec_prefill.wrap_checked" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null && \
       grep -q "worker.spec_prefill.prefill_sent" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null && \
@@ -143,6 +151,27 @@ _precise_dynamo_require_markers() {
       return 2
       ;;
   esac
+}
+
+precise_runtime_stamp_path() {
+  local machine_profile="${1:-${DYNAMO_MACHINE_PROFILE:-default}}"
+  printf '%s\n' "${REPO_ROOT_FOR_PRECISE_SGLANG_HELPER}/runtime_instrumentation/.precise_runtime_${machine_profile}.sha256"
+}
+
+precise_dynamo_source_signature() {
+  local root="$1"
+  local files=(
+    "components/src/dynamo/common/runtime_logging.py"
+    "components/src/dynamo/sglang/request_handlers/llm/decode_handler.py"
+    "components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py"
+    "lib/llm/src/preprocessor.rs"
+    "lib/llm/src/protocols/openai/nvext.rs"
+    "lib/llm/src/preprocessor/speculative_prefill.rs"
+  )
+  (
+    cd "${root}"
+    sha256sum "${files[@]}"
+  ) | sha256sum | awk '{print $1}'
 }
 
 _precise_sglang_warn_missing_priority_markers() {

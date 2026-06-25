@@ -10,6 +10,7 @@ if [[ -f "${PROFILE_SCRIPT}" ]]; then
   # shellcheck disable=SC1090
   source "${PROFILE_SCRIPT}"
 fi
+source "${SCRIPT_DIR}/precise_sglang_helper.sh"
 FRONTEND_IMAGE_TAG="${FRONTEND_IMAGE_TAG:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE_TAG="${WORKER_IMAGE_TAG:-local/dynamo-sglang:runtime-json-logs}"
 SKIP_FRONTEND="${SKIP_FRONTEND:-0}"
@@ -276,6 +277,17 @@ if [[ "${SKIP_WORKER}" != "1" ]]; then
   build_image "${WORKER_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 
+STAMP_PATH="$(precise_runtime_stamp_path "${DYNAMO_MACHINE_PROFILE:-default}")"
+mkdir -p "$(dirname "${STAMP_PATH}")"
+{
+  echo "machine_profile=${DYNAMO_MACHINE_PROFILE:-default}"
+  echo "frontend_image=${FRONTEND_IMAGE_TAG}"
+  echo "worker_image=${WORKER_IMAGE_TAG}"
+  echo "source_dir=${SOURCE_DIR}"
+  echo "source_signature=$(precise_dynamo_source_signature "${SOURCE_DIR}")"
+  echo "built_at_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "${STAMP_PATH}"
+
 cat <<EOF
 
 Instrumented images are ready.
@@ -284,6 +296,7 @@ Frontend image: ${FRONTEND_IMAGE_TAG}
 Worker image:   ${WORKER_IMAGE_TAG}
 Build platform: ${DOCKER_BUILD_PLATFORM:-host default}
 Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}
+Runtime stamp:  ${STAMP_PATH}
 
 Example single-host run:
   cd ${ROOT_DIR}

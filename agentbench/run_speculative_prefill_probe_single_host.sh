@@ -61,6 +61,31 @@ ensure_precise_specprefill_runtime_images() {
     "${cmd[@]}" | tee -a "${DRIVER_LOG}"
 }
 
+ensure_precise_specprefill_dynamo_source() {
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  local dynamo_root="${SOURCE_DIR:-$(resolve_precise_dynamo_root || true)}"
+  if [[ -n "${dynamo_root}" ]] && _precise_dynamo_require_markers "${dynamo_root}" specprefill; then
+    return 0
+  fi
+
+  echo "Preparing instrumented Dynamo source for speculative-prefill attribution..." | tee -a "${DRIVER_LOG}"
+  ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh | tee -a "${DRIVER_LOG}"
+
+  dynamo_root="${SOURCE_DIR:-$(resolve_precise_dynamo_root || true)}"
+  if [[ -z "${dynamo_root}" ]] || ! _precise_dynamo_require_markers "${dynamo_root}" specprefill; then
+    echo "Speculative-prefill markers are still missing after Dynamo source preparation." | tee -a "${DRIVER_LOG}" >&2
+    return 1
+  fi
+
+  if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
+    echo "Rebuilding machine-specific precise runtime images to include speculative-prefill markers..." | tee -a "${DRIVER_LOG}"
+    LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+      ./runtime_instrumentation/build_instrumented_dynamo_images.sh | tee -a "${DRIVER_LOG}"
+  fi
+}
+
 check_precise_specprefill_runtime_ready() {
   if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" != "precise" ]]; then
     return 0
@@ -228,6 +253,7 @@ warn_if_worker_runtime_missing() {
   fi
 }
 
+ensure_precise_specprefill_dynamo_source
 ensure_precise_specprefill_runtime_images
 prepare_precise_specprefill_sglang
 if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
