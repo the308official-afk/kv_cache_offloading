@@ -1308,13 +1308,13 @@ gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
 
 ## Experiment 9: KV Retention Probe
 
-Use this for hint-based KV retention:
+Use this for hint-based KV retention.
 
 ```text
 A first -> distractors -> A replay
 ```
 
-Primary supported control under test:
+Supported control under test:
 
 - `priority`
 
@@ -1322,6 +1322,8 @@ Common pattern:
 
 - control arm: `CONTROL_HINT_PROFILE=none`
 - protected arm: `PROTECTED_HINT_PROFILES="high-priority"`
+
+### Run
 
 Best first run:
 
@@ -1346,6 +1348,8 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+### Outputs
+
 Quick-look outputs:
 
 ```bash
@@ -1354,6 +1358,8 @@ cat experiments/reports/latest_retention_probe_matrix.csv
 cat experiments/reports/latest_retention_probe_requests.csv
 cat experiments/reports/latest_retention_probe_summary.md
 ```
+
+### Key Columns
 
 Main matrix fields:
 
@@ -1374,6 +1380,8 @@ replay_evict_cache
 replay_evict_status
 effect_status
 ```
+
+### Main Knobs
 
 Main knobs:
 
@@ -1432,7 +1440,7 @@ SGLang.
 
 Use this to test `nvext.cache_control` directly.
 
-Primary control under test:
+Supported control under test:
 
 - `cache_control`
 
@@ -1449,6 +1457,8 @@ a GPU-only counterfactual, set:
 ```bash
 CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE=0
 ```
+
+### Run
 
 Simple probe:
 
@@ -1522,6 +1532,8 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+### Main Knobs
+
 Main knobs:
 
 ```text
@@ -1532,6 +1544,8 @@ KV_TIER_MODES
 CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE
 PROTECTED_CACHE_CONTROL_PROFILES
 ```
+
+### Key Columns
 
 Compact matrix fields:
 
@@ -1643,7 +1657,7 @@ Use this when you want to test queue ordering directly:
 - send a burst of high-priority requests slightly later
 - check whether the later high-priority requests get attached first anyway
 
-Primary supported control under test:
+Supported control under test:
 
 - `priority`
 
@@ -1656,38 +1670,8 @@ What it measures:
 - did the worker actually receive the priority hints?
 - if patched SGLang is active, did the SGLang priority path say it applied priority?
 
-### Step 0: Optional First-Time Setup Or Recovery
-
-Do this on a fresh machine, after rebuilding images, or when recovering a
-broken instrumented runtime. It gives you the strongest proof:
-
-- worker runtime JSON from Dynamo
-- patched SGLang priority-path events
-
-```bash
-cd ~/kv_cache_offloading
-
-source runtime_instrumentation/dynamo_machine_profile.sh
-source runtime_instrumentation/sglang_source_profile.sh
-
-docker image inspect "$FRONTEND_IMAGE" >/dev/null 2>&1 || \
-docker image inspect "$WORKER_IMAGE" >/dev/null 2>&1 || \
-  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 ./runtime_instrumentation/build_instrumented_dynamo_images.sh
-
-./runtime_instrumentation/sglang_transfer_logging/extract_sglang_source.sh
-
-if [ -d upstream/sglang/python/sglang ]; then
-  export SGLANG_ROOT="$PWD/upstream/sglang/python/sglang"
-elif [ -d runtime_upstream/sglang/python/sglang ]; then
-  export SGLANG_ROOT="$PWD/runtime_upstream/sglang/python/sglang"
-else
-  echo "Could not find extracted SGLang source" >&2
-  exit 1
-fi
-
-python3 runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py \
-  --sglang-root "$SGLANG_ROOT"
-```
+The wrapper handles precise setup automatically. On a healthy run, you should
+see the 6 readiness signals before requests are sent.
 
 For a healthy precise scheduling run, you should now see this readiness chain
 before the synthetic requests are sent:
@@ -1703,7 +1687,7 @@ The precise SGLang patcher now removes older fragile `schedule_policy.py`
 wrappers before the run, so syncing the latest repo should also prevent the
 old `too many statically nested blocks` startup error.
 
-### Step 1: Run The Precise Scheduling Probe
+### Run
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1725,17 +1709,13 @@ WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-evi
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Step 3: Watch The Worker
+### Outputs
 
 To watch the worker:
 
 ```bash
 docker logs -f dynamo-sglang-worker
 ```
-
-### Step 4: Inspect Outputs
-
-Outputs:
 
 Top-level latest copies:
 
@@ -1785,6 +1765,8 @@ Priority-proof report derivation:
 `experiments/reports/priority_scheduling_requests.csv` is the compact readable
 view. The raw per-request file is still kept under the run directory.
 
+### Key Columns
+
 Most important request-level columns:
 
 ```text
@@ -1801,6 +1783,18 @@ worker_hint_prio   Priority value seen by worker
 worker_top_prio    Top-level priority seen by worker
 sglang_prio        Whether SGLang said priority was applied
 effect             yes_strong / yes_partial / no / baseline_low / unknown
+```
+
+### Main Knobs
+
+```text
+LOW_PRIORITY_COUNT
+HIGH_PRIORITY_COUNT
+PRIORITY_INPUT_LEN
+PRIORITY_OUTPUT_LEN
+PRIORITY_ARRIVAL_GAP_MS
+PRIORITY_INTER_REQUEST_GAP_MS
+PRIORITY_TOP_LEVEL_PRIORITY_MODE
 ```
 
 Most important summary columns:
