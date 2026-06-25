@@ -28,6 +28,36 @@ For transfer-logging internals, see
 For tool-call diagnostics, see
 [README_TOOL_CALL_DIAGNOSTICS.md](README_TOOL_CALL_DIAGNOSTICS.md).
 
+## Supported Hints At A Glance
+
+These are the main Dynamo-facing knobs that are worth treating as real runtime
+controls in this setup.
+
+| Hint | Status | What it does |
+|---|---|---|
+| `priority` | supported | Main scheduling hint. Affects router ordering and backend priority behavior. |
+| `osl` | supported | Expected output length. Used for routing/resource estimation. |
+| `expected_output_tokens` | supported alias | Same role as `osl`; Dynamo maps either one into routing. |
+| `speculative_prefill` | supported | Warms likely next-turn KV cache after the current response finishes. |
+| `latency_sensitivity` | deprecated fallback | Older priority-like fallback that feeds routing `priority_jump`. |
+
+Nearby supported control:
+
+| Control | Status | What it does |
+|---|---|---|
+| `session_control` | supported | Sticky routing / subagent session affinity. Not a scheduling hint. |
+
+Observed in logs, but not automatically treated as live runtime controls in the
+pinned setup unless we wire them in ourselves:
+
+- `reuse_likelihood`
+- `hint_profile`
+- `hint_probe_id`
+- `agent_phase`
+- `program_id`
+- `context_type`
+- `cache_control` as a true TTL pinning control
+
 ## Common Setup
 
 Run this once per shell before an experiment.
@@ -837,34 +867,8 @@ none         Send request context only, without nvext.agent_hints.
 ```
 
 For portability, the broader AgentBench / Deep Agents path now sends only the
-Dynamo-safe runtime-control subset in `nvext.agent_hints`:
-
-| Hint | Status | What it does |
-|---|---|---|
-| `priority` | supported | Main scheduling hint. Affects router ordering and backend priority behavior. |
-| `osl` | supported | Expected output length. Used for routing/resource estimation. |
-| `expected_output_tokens` | supported alias | Same role as `osl`; Dynamo maps either one into routing. |
-| `speculative_prefill` | supported | Warms likely next-turn KV cache after the current response finishes. |
-| `latency_sensitivity` | deprecated fallback | Older priority-like fallback that feeds routing `priority_jump`. |
-
-Nearby supported control:
-
-| Control | Status | What it does |
-|---|---|---|
-| `session_control` | supported | Sticky routing / subagent session affinity. Not a scheduling hint. |
-
-Observability-only in this setup unless we explicitly wire them into runtime
-behavior:
-
-- `reuse_likelihood`
-- `hint_profile`
-- `hint_probe_id`
-- `agent_phase`
-- `program_id`
-- `context_type`
-
-These may still appear in logs and reports, but they are not automatically
-treated as live scheduling or retention controls by pinned Dynamo/SGLang.
+Dynamo-safe runtime-control subset in `nvext.agent_hints`. See
+[Supported Hints At A Glance](#supported-hints-at-a-glance) above.
 
 Experiment metadata such as `hint_profile`, `hint_probe_id`, `agent_phase`,
 and `program_id` is carried separately through `nvext.request_context`,
@@ -1310,6 +1314,15 @@ Use this for hint-based KV retention:
 A first -> distractors -> A replay
 ```
 
+Primary supported control under test:
+
+- `priority`
+
+Common pattern:
+
+- control arm: `CONTROL_HINT_PROFILE=none`
+- protected arm: `PROTECTED_HINT_PROFILES="high-priority"`
+
 Best first run:
 
 ```bash
@@ -1418,6 +1431,15 @@ SGLang.
 ## Experiment 10: Cache-Control Retention
 
 Use this to test `nvext.cache_control` directly.
+
+Primary control under test:
+
+- `cache_control`
+
+Important boundary:
+
+- this is currently an observability / behavior experiment
+- it is not yet a proven supported TTL-pinning control path in pinned Dynamo
 
 This experiment now defaults to `gpu_cpu`, not `gpu_only`, so the run includes
 the host-backed cache tier where retention effects would be most likely to show
@@ -1620,6 +1642,10 @@ Use this when you want to test queue ordering directly:
 - send a burst of low-priority requests first
 - send a burst of high-priority requests slightly later
 - check whether the later high-priority requests get attached first anyway
+
+Primary supported control under test:
+
+- `priority`
 
 This is a synthetic scheduling experiment. It does **not** use SWE-bench.
 
