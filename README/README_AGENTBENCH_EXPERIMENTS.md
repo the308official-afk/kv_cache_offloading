@@ -839,11 +839,32 @@ none         Send request context only, without nvext.agent_hints.
 For portability, the broader AgentBench / Deep Agents path now sends only the
 Dynamo-safe runtime-control subset in `nvext.agent_hints`:
 
-- `priority`
-- `osl`
-- `expected_output_tokens`
-- `speculative_prefill`
-- `latency_sensitivity`
+| Hint | Status | What it does |
+|---|---|---|
+| `priority` | supported | Main scheduling hint. Affects router ordering and backend priority behavior. |
+| `osl` | supported | Expected output length. Used for routing/resource estimation. |
+| `expected_output_tokens` | supported alias | Same role as `osl`; Dynamo maps either one into routing. |
+| `speculative_prefill` | supported | Warms likely next-turn KV cache after the current response finishes. |
+| `latency_sensitivity` | deprecated fallback | Older priority-like fallback that feeds routing `priority_jump`. |
+
+Nearby supported control:
+
+| Control | Status | What it does |
+|---|---|---|
+| `session_control` | supported | Sticky routing / subagent session affinity. Not a scheduling hint. |
+
+Observability-only in this setup unless we explicitly wire them into runtime
+behavior:
+
+- `reuse_likelihood`
+- `hint_profile`
+- `hint_probe_id`
+- `agent_phase`
+- `program_id`
+- `context_type`
+
+These may still appear in logs and reports, but they are not automatically
+treated as live scheduling or retention controls by pinned Dynamo/SGLang.
 
 Experiment metadata such as `hint_profile`, `hint_probe_id`, `agent_phase`,
 and `program_id` is carried separately through `nvext.request_context`,
@@ -1398,6 +1419,15 @@ SGLang.
 
 Use this to test `nvext.cache_control` directly.
 
+This experiment now defaults to `gpu_cpu`, not `gpu_only`, so the run includes
+the host-backed cache tier where retention effects would be most likely to show
+up if a future/runtime-specific cache-control path exists. If you want to force
+a GPU-only counterfactual, set:
+
+```bash
+CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE=0
+```
+
 Simple probe:
 
 ```bash
@@ -1407,7 +1437,7 @@ DYNAMO_MACHINE_PROFILE=ec2 \
 RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
-KV_TIER_MODES="gpu_only" \
+KV_TIER_MODES="gpu_cpu" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES=none \
 CONTROL_CACHE_CONTROL_PROFILE=off \
@@ -1415,7 +1445,6 @@ PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
 DISTRACTOR_COUNT=200 \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=500 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1433,14 +1462,13 @@ RETENTION_SWEEP_ID="cache_control_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
 DISTRACTOR_COUNTS="40 80 120 160" \
-KV_TIER_MODES="gpu_only" \
+KV_TIER_MODES="gpu_cpu" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES=none \
 CONTROL_CACHE_CONTROL_PROFILE=off \
 PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1458,14 +1486,13 @@ RETENTION_SWEEP_ID="cache_control_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
 RETENTION_ATTRIBUTION_MODE=precise \
 RETENTION_REQUEST_CONTEXT_MODE=auto \
 DISTRACTOR_COUNTS="40 80 120 160" \
-KV_TIER_MODES="gpu_only" \
+KV_TIER_MODES="gpu_cpu" \
 CONTROL_HINT_PROFILE=none \
 PROTECTED_HINT_PROFILES=none \
 CONTROL_CACHE_CONTROL_PROFILE=off \
 PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
 RANDOM_OUTPUT_LEN=1 \
 MAX_CONTEXT_TOKENS=17146 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
@@ -1479,7 +1506,8 @@ Main knobs:
 DISTRACTOR_COUNTS
 PROTECTED_INPUT_LEN
 DISTRACTOR_INPUT_LEN
-GPU_ONLY_MEM_FRACTION_STATIC
+KV_TIER_MODES
+CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE
 PROTECTED_CACHE_CONTROL_PROFILES
 ```
 
@@ -1549,6 +1577,28 @@ Report derivation:
 Note: these paths prove cache-control attachment, preservation, worker
 visibility, and eviction-side evidence extraction. They do not yet prove a
 single confirmed live TTL pin decision branch in pinned SGLang.
+
+### Pinned-Code Verdict
+
+These are the exact pinned-code signals behind the current conclusion.
+
+- [nvext.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:290) does not define a typed `cache_control` field on `NvExt`; unknown fields fall into `NvExt.extra`
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) builds `runtime_observability`, but pinned source does not show a first-class `cache_control -> routing -> worker retention` branch there
+- [repair_dynamo_hint_preservation_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) is what preserves `cache_control` into runtime observability for logs in our setup
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) has a direct live read of `routing.priority`, but there is no comparable live `cache_control` branch in the pinned worker handler
+- [nvext.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/docs/components/frontend/nvext.md:1) documents `agent_hints` and `session_control`, but pinned frontend docs do not expose a first-class `cache_control` launch flag or request-field section
+
+Simple reading:
+
+- `priority` has a clear execution path
+- `cache_control` has a clear observability path
+- in this pinned revision, we have not found a comparably clear live
+  `cache_control -> pin_prefix / TTL retention` execution path yet
+
+Current upstream Dynamo `origin/main` docs also explicitly say that
+`nvext.cache_control` is not currently a supported self-hosted TTL pinning API,
+and that the supported production controls are `agent_hints.priority` and
+`session_control`.
 
 Top-level outputs:
 

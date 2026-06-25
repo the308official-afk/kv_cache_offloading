@@ -17,7 +17,7 @@ Useful tuning knobs:
   RETENTION_SWEEP_ID                 run id
   RETENTION_ATTRIBUTION_MODE         precise or light
   RETENTION_REQUEST_CONTEXT_MODE     auto or disable
-  KV_TIER_MODES                      gpu_only, gpu_cpu, gpu_cpu_storage
+  KV_TIER_MODES                      gpu_cpu, gpu_only, gpu_cpu_storage
   CONTROL_HINT_PROFILE               usually none
   PROTECTED_HINT_PROFILES            usually none for cache-control experiments
   CONTROL_CACHE_CONTROL_PROFILE      usually off
@@ -42,11 +42,12 @@ RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID:-retention_threshold_sweep_$(date +%Y%m
 DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"
 RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE:-precise}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
-KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
+KV_TIER_MODES="${KV_TIER_MODES:-gpu_cpu}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-none}"
 CONTROL_CACHE_CONTROL_PROFILE="${CONTROL_CACHE_CONTROL_PROFILE:-off}"
 PROTECTED_CACHE_CONTROL_PROFILES="${PROTECTED_CACHE_CONTROL_PROFILES:-ephemeral:1h}"
+CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE="${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE:-1}"
 DISTRACTOR_COUNTS="${DISTRACTOR_COUNTS:-2 4 6 8 10 12}"
 PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN:-2000}"
 DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN:-2000}"
@@ -68,11 +69,24 @@ Cache-control retention threshold sweep
   protected_input_len: ${PROTECTED_INPUT_LEN}
   distractor_input_len: ${DISTRACTOR_INPUT_LEN}
   gpu_only_mem_fraction_static: ${GPU_ONLY_MEM_FRACTION_STATIC}
+  cache_control_require_hierarchical_cache: ${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE}
   request_context_mode: ${RETENTION_REQUEST_CONTEXT_MODE}
   random_output_len: ${RANDOM_OUTPUT_LEN}
   max_context_tokens: ${MAX_CONTEXT_TOKENS}
   transfer_log_profile: ${SGLANG_TRANSFER_LOG_PROFILE}
   worker_base_args: ${WORKER_BASE_ARGS}
+EOF
+
+cat <<'EOF'
+Note:
+  In current upstream Dynamo mainline, nvext.cache_control is documented as
+  not being a supported self-hosted TTL pinning API.
+  This experiment is still useful for:
+    - proving the metadata arrived
+    - checking worker-side observability
+    - checking empirical retention behavior
+  But it should not be treated as confirmed proof of a live TTL pin path unless
+  you independently verify such a path in the runtime you are testing.
 EOF
 
 exec env \
@@ -89,6 +103,7 @@ exec env \
   PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES}" \
   CONTROL_CACHE_CONTROL_PROFILE="${CONTROL_CACHE_CONTROL_PROFILE}" \
   PROTECTED_CACHE_CONTROL_PROFILES="${PROTECTED_CACHE_CONTROL_PROFILES}" \
+  CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE="${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE}" \
   DISTRACTOR_COUNTS="${DISTRACTOR_COUNTS}" \
   PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN}" \
   DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN}" \

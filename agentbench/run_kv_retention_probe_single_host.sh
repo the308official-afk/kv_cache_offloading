@@ -18,6 +18,8 @@ CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
 CONTROL_CACHE_CONTROL_PROFILE="${CONTROL_CACHE_CONTROL_PROFILE:-off}"
 PROTECTED_CACHE_CONTROL_PROFILES="${PROTECTED_CACHE_CONTROL_PROFILES:-off}"
+DISTRACTOR_CACHE_CONTROL_PROFILE="${DISTRACTOR_CACHE_CONTROL_PROFILE:-off}"
+CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE="${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE:-1}"
 PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN:-14000}"
 DISTRACTOR_INPUT_LEN="${DISTRACTOR_INPUT_LEN:-14000}"
 DISTRACTOR_COUNT="${DISTRACTOR_COUNT:-100}"
@@ -118,6 +120,73 @@ case "${RETENTION_ATTRIBUTION_MODE}" in
     ;;
 esac
 
+cache_control_profile_enabled() {
+  local profile="${1:-}"
+  local lowered
+  lowered="$(printf '%s' "${profile}" | tr '[:upper:]' '[:lower:]')"
+  case "${lowered}" in
+    ""|none|off|disable|disabled|no-cache-control|no_cache_control)
+      return 1
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+}
+
+cache_control_requested() {
+  if cache_control_profile_enabled "${CONTROL_CACHE_CONTROL_PROFILE}"; then
+    return 0
+  fi
+  if cache_control_profile_enabled "${DISTRACTOR_CACHE_CONTROL_PROFILE}"; then
+    return 0
+  fi
+  local profile
+  for profile in ${PROTECTED_CACHE_CONTROL_PROFILES}; do
+    if cache_control_profile_enabled "${profile}"; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+normalize_kv_tier_modes_for_cache_control() {
+  if [[ "${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE}" != "1" ]]; then
+    return
+  fi
+  if ! cache_control_requested; then
+    return
+  fi
+
+  local changed=0
+  local mode
+  local -a normalized_modes=()
+  local -A seen_modes=()
+  for mode in ${KV_TIER_MODES}; do
+    if [[ "${mode}" = "gpu_only" ]]; then
+      mode="gpu_cpu"
+      changed=1
+    fi
+    if [[ -z "${seen_modes[${mode}]:-}" ]]; then
+      normalized_modes+=("${mode}")
+      seen_modes["${mode}"]=1
+    fi
+  done
+
+  if [[ "${#normalized_modes[@]}" -gt 0 ]]; then
+    KV_TIER_MODES="${normalized_modes[*]}"
+  fi
+
+  if [[ "${changed}" = "1" ]]; then
+    cat <<EOF
+Cache-control retention note:
+  cache_control is enabled for this run, so gpu_only was promoted to gpu_cpu.
+  This keeps hierarchical cache on by default for cache-control experiments.
+  Set CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE=0 to force gpu_only anyway.
+EOF
+  fi
+}
+
 choose_python() {
   if [[ -n "${PYTHON_BIN}" ]]; then
     echo "${PYTHON_BIN}"
@@ -131,6 +200,7 @@ choose_python() {
 }
 
 PYTHON_BIN="$(choose_python)"
+normalize_kv_tier_modes_for_cache_control
 
 safe_name() {
   echo "$1" | tr '/:.' '___' | tr -cs 'A-Za-z0-9_-' '_'
@@ -482,7 +552,7 @@ run_probe() {
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
     --protected-cache-control-profile "${cache_control_profile}"
-    --distractor-cache-control-profile off
+    --distractor-cache-control-profile "${DISTRACTOR_CACHE_CONTROL_PROFILE}"
     --protected-input-len "${PROTECTED_INPUT_LEN}"
     --distractor-input-len "${DISTRACTOR_INPUT_LEN}"
     --distractor-count "${DISTRACTOR_COUNT}"
@@ -535,7 +605,7 @@ postprocess_probe() {
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
     --protected-cache-control-profile "${cache_control_profile}"
-    --distractor-cache-control-profile off
+    --distractor-cache-control-profile "${DISTRACTOR_CACHE_CONTROL_PROFILE}"
     --protected-input-len "${PROTECTED_INPUT_LEN}"
     --distractor-input-len "${DISTRACTOR_INPUT_LEN}"
     --distractor-count "${DISTRACTOR_COUNT}"
@@ -882,6 +952,7 @@ reset_latest_probe_reports
   echo "Protected hint profiles: ${PROTECTED_HINT_PROFILES}"
   echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
+  echo "Distractor cache-control profile: ${DISTRACTOR_CACHE_CONTROL_PROFILE}"
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"
@@ -902,6 +973,22 @@ reset_latest_probe_reports
   echo "Output dir: ${BATCH_DIR}"
   echo
 } | tee -a "${BATCH_LOG}"
+
+if cache_control_requested; then
+  cat <<'EOF' | tee -a "${BATCH_LOG}"
+Note:
+  cache_control is enabled in this run, but current upstream Dynamo mainline
+  documents nvext.cache_control as not being a supported self-hosted TTL
+  pinning API.
+  Treat this run as:
+    - metadata receipt / forwarding proof
+    - worker-side observability proof
+    - empirical behavior check
+  not as confirmed proof of a live TTL pin path unless that path is verified
+  directly in the runtime under test.
+
+EOF
+fi
 
 for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
   MODEL_SAFE_NAME="$(safe_name "${MODEL_NAME}")"
