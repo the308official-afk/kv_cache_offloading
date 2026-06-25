@@ -13,7 +13,7 @@ LOG_FILE="${LOG_FILE:-}"
 usage() {
   cat <<EOF
 Usage:
-  $0 [transfer|priority]
+  $0 [transfer|priority|specprefill]
 
 Checks whether the live Dynamo/SGLang worker container is actually running the
 expected precise-attribution patches.
@@ -22,6 +22,8 @@ Modes:
   transfer   Validate precise KV/transfer attribution markers.
   priority   Validate precise priority-attribution markers in addition to
              transfer markers.
+  specprefill  Validate speculative-prefill decision-path markers plus
+               transfer/runtime attribution markers.
 
 Examples:
   $0 transfer
@@ -35,7 +37,7 @@ if [[ "${MODE}" = "-h" || "${MODE}" = "--help" ]]; then
 fi
 
 case "${MODE}" in
-  transfer|priority) ;;
+  transfer|priority|specprefill) ;;
   *)
     echo "Unknown mode: ${MODE}" >&2
     usage >&2
@@ -84,6 +86,13 @@ if [[ "${MODE}" = "priority" ]]; then
   else
     log "Local SGLang priority markers: ok (${ROOT})"
   fi
+elif [[ "${MODE}" = "specprefill" ]]; then
+  DYNAMO_ROOT="${SOURCE_DIR:-$(resolve_precise_dynamo_root || true)}"
+  [[ -n "${DYNAMO_ROOT}" ]] || fail "could not resolve local Dynamo source root"
+  if ! _precise_dynamo_require_markers "${DYNAMO_ROOT}" specprefill; then
+    fail "local Dynamo source is missing speculative-prefill markers: ${DYNAMO_ROOT}"
+  fi
+  log "Local Dynamo speculative-prefill markers: ok (${DYNAMO_ROOT})"
 fi
 
 RUNNING="$(docker inspect "${WORKER_CONTAINER_NAME}" --format '{{.State.Running}}' 2>/dev/null || true)"
@@ -160,7 +169,7 @@ if not checks["_sgl_log_transfer_event"]:
 PY
   )" || fail "worker SGLang transfer markers are missing"
   log "SGLang transfer markers: ${TRANSFER_CHECK}"
-else
+elif [[ "${MODE}" = "priority" ]]; then
   if [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
     log "SGLang priority markers: unavailable on pinned/extracted SGLang source; skipping direct priority-path proof."
   else
@@ -199,6 +208,8 @@ PY
     )" || fail "worker SGLang priority markers are missing"
     log "SGLang priority markers: ${PRIORITY_CHECK}"
   fi
+else
+  log "Speculative-prefill decision-path proof will be validated from runtime events during the experiment."
 fi
 
 precise_banner_numbered 4 6 "PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)" "${LOG_FILE}"

@@ -41,6 +41,9 @@ python3 "${SCRIPT_DIR}/repair_dynamo_hint_logging_source.py"
 echo "Repairing hint-preservation source drift..."
 python3 "${SCRIPT_DIR}/repair_dynamo_hint_preservation_source.py"
 
+echo "Repairing speculative-prefill source drift..."
+python3 "${SCRIPT_DIR}/repair_dynamo_speculative_prefill_source.py"
+
 echo "Repairing known Dynamo router field rename mismatch..."
 python3 "${SCRIPT_DIR}/repair_dynamo_router_field_rename.py"
 
@@ -64,6 +67,9 @@ required_markers=(
   "lib/llm/src/preprocessor.rs:cache_control_source"
   "components/src/dynamo/common/runtime_logging.py:cache_control_source"
   "lib/llm/src/protocols/openai/nvext.rs:expected_output_tokens"
+  "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.wrap_checked"
+  "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.prefill_sent"
+  "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.prefill_completed"
 )
 
 for marker in "${required_markers[@]}"; do

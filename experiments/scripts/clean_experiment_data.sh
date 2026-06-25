@@ -97,6 +97,7 @@ empty_dirs=(
   "experiments/reports/retention_probe"
   "experiments/reports/retention_probe_batches"
   "experiments/reports/retention_threshold_sweeps"
+  "experiments/reports/speculative_prefill"
   "experiments/reports/deepagents_swebench_profile"
   "experiments/reports/lpx_decode_split"
   "experiments/reports/misc"
@@ -116,6 +117,8 @@ top_level_report_patterns=(
   "experiments/reports/design_space_matrix.csv"
   "experiments/reports/design_space_retention_matrix.csv"
   "experiments/reports/latest_cache_control_retention_threshold_*"
+  "experiments/reports/speculative_prefill_*"
+  "experiments/reports/latest_speculative_prefill_*"
 )
 
 targets=()

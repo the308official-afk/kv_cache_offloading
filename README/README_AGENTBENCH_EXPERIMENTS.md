@@ -1819,3 +1819,121 @@ high_attach_leapfrogs
 effect_status
   Simple yes/no summary of whether leapfrogging happened
 ```
+
+## Experiment 12: Speculative Prefill Probe
+
+Use this when you want to test whether Dynamo actually fires
+`speculative_prefill` after turn A, and whether turn B comes in warmer.
+
+Supported control under test:
+
+- `speculative_prefill`
+
+This is a synthetic two-turn experiment. It does **not** use SWE-bench.
+
+What it measures:
+
+- did the worker receive `speculative_prefill=true`?
+- did Dynamo’s real speculative-prefill branch emit `wrap_checked`, `prefill_sent`, and `prefill_completed`?
+- did the prefill event point at the exact turn B request we expected?
+- did turn B show more cached tokens or lower latency in the protected arm?
+
+The wrapper handles precise setup automatically. On a healthy precise run, you
+should see the same 6 readiness signals before requests are sent.
+
+### Run
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SPEC_PREFILL_ID="speculative_prefill_$(date +%Y%m%d_%H%M%S)" \
+SPEC_PREFILL_ATTRIBUTION_MODE=precise \
+SPEC_PREFILL_REQUEST_CONTEXT_MODE=auto \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=512 \
+SPEC_PREFILL_OUTPUT_TOKENS=64 \
+SPEC_PREFILL_WARMUP_WAIT_MS=500 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
+./agentbench/run_speculative_prefill_probe_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### Outputs
+
+To watch the worker:
+
+```bash
+docker logs -f dynamo-sglang-worker
+```
+
+Top-level latest copies:
+
+```bash
+cat experiments/reports/speculative_prefill_requests.csv
+cat experiments/reports/speculative_prefill_matrix.csv
+cat experiments/reports/speculative_prefill_summary.csv
+cat experiments/reports/speculative_prefill_summary.md
+
+cat experiments/reports/latest_speculative_prefill_requests.csv
+cat experiments/reports/latest_speculative_prefill_matrix.csv
+cat experiments/reports/latest_speculative_prefill_summary.csv
+cat experiments/reports/latest_speculative_prefill_summary.md
+cat experiments/reports/latest_speculative_prefill_run.txt
+```
+
+### Where The Signal Is Handled
+
+Synthetic request construction:
+
+- [run_speculative_prefill_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py) builds `agent_hints.speculative_prefill`, target IDs, and the two-turn probe
+
+Dynamo decision path:
+
+- [nvext.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs) declares `AgentHints.speculative_prefill`
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs) calls `speculative_prefill::maybe_wrap_stream(...)`
+- [speculative_prefill.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs) is the real decision path that emits:
+  - `worker.spec_prefill.wrap_checked`
+  - `worker.spec_prefill.task_spawned`
+  - `worker.spec_prefill.prefill_sent`
+  - `worker.spec_prefill.prefill_completed`
+
+Instrumentation / preflight:
+
+- [repair_dynamo_speculative_prefill_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_speculative_prefill_source.py) repairs fresh Dynamo clones with the speculative-prefill runtime events
+- [prepare_instrumented_dynamo_source.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/prepare_instrumented_dynamo_source.sh) verifies the required `worker.spec_prefill.*` markers
+- [check_precise_attribution_ready.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/check_precise_attribution_ready.sh) validates the precise speculative-prefill setup before requests start
+
+Report derivation:
+
+- [run_speculative_prefill_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py) parses worker runtime JSON and builds the compact request/matrix/summary reports
+
+### Key Columns
+
+Most important matrix columns:
+
+```text
+arm                 control or protected
+spec_prefill        false / true
+turn_b_ms           Turn B end-to-end latency
+turn_b_cached       Turn B cached tokens
+turn_b_reuse        Turn B cached-token ratio
+hint_status         Did the worker see speculative_prefill on/off?
+prefill_wrap        on / off / missing
+prefill_sent        Did Dynamo send the synthetic warmup request?
+prefill_done        Did that warmup request complete?
+prefill_target_seen Did the runtime event point at the exact turn B request?
+prefill_tokens      Tokens in the warmed next-turn prefix
+effect_status       warmed / sent_no_visible_gain / no_prefill_seen / baseline_off
+```
+
+### Main Knobs
+
+```text
+SPEC_PREFILL_TURN_A_WORDS
+SPEC_PREFILL_TURN_B_WORDS
+SPEC_PREFILL_OUTPUT_TOKENS
+SPEC_PREFILL_WARMUP_WAIT_MS
+SPEC_PREFILL_REQUEST_CONTEXT_MODE
+```

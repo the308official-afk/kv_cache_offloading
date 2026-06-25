@@ -108,8 +108,38 @@ _precise_sglang_require_markers() {
       _precise_sglang_require_markers "${root}" transfer && \
       _precise_sglang_require_markers "${root}" priority
       ;;
+    specprefill)
+      _precise_sglang_require_markers "${root}" transfer
+      ;;
     *)
       echo "Unknown precise SGLang marker mode: ${require_mode}" >&2
+      return 2
+      ;;
+  esac
+}
+
+resolve_precise_dynamo_root() {
+  if [[ -n "${SOURCE_DIR:-}" && -f "${SOURCE_DIR}/Cargo.toml" ]]; then
+    printf '%s\n' "${SOURCE_DIR}"
+    return
+  fi
+  if [[ -f "${PWD}/upstream/dynamo/Cargo.toml" ]]; then
+    printf '%s\n' "${PWD}/upstream/dynamo"
+    return
+  fi
+}
+
+_precise_dynamo_require_markers() {
+  local root="$1"
+  local require_mode="${2:-specprefill}"
+  case "${require_mode}" in
+    specprefill)
+      grep -q "worker.spec_prefill.wrap_checked" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null && \
+      grep -q "worker.spec_prefill.prefill_sent" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null && \
+      grep -q "worker.spec_prefill.prefill_completed" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null
+      ;;
+    *)
+      echo "Unknown precise Dynamo marker mode: ${require_mode}" >&2
       return 2
       ;;
   esac
@@ -234,8 +264,10 @@ precise_print_local_ready_summary() {
   local mode="${1:-transfer}"
   local log_file="${2:-}"
   local root="${PREPARED_SGLANG_ROOT:-$(resolve_precise_sglang_root || true)}"
+  local dynamo_root="${SOURCE_DIR:-$(resolve_precise_dynamo_root || true)}"
   local transfer_status="missing"
   local priority_status="n/a"
+  local specprefill_status="n/a"
 
   if [[ -n "${root}" ]] && _precise_sglang_require_markers "${root}" transfer; then
     transfer_status="ok"
@@ -249,6 +281,12 @@ precise_print_local_ready_summary() {
     else
       priority_status="missing"
     fi
+  elif [[ "${mode}" = "specprefill" ]]; then
+    if [[ -n "${dynamo_root}" ]] && _precise_dynamo_require_markers "${dynamo_root}" specprefill; then
+      specprefill_status="ok"
+    else
+      specprefill_status="missing"
+    fi
   fi
 
   precise_banner_numbered 2 6 "PRECISE LOCAL READY (the local extracted/patched SGLang source is good)" "${log_file}"
@@ -260,6 +298,9 @@ precise_print_local_ready_summary() {
   _precise_sglang_log "Local transfer markers: ${transfer_status}" "${log_file}"
   if [[ "${mode}" = "priority" ]]; then
     _precise_sglang_log "Local priority markers: ${priority_status}" "${log_file}"
+  elif [[ "${mode}" = "specprefill" ]]; then
+    _precise_sglang_log "Dynamo root: ${dynamo_root:-<unresolved>}" "${log_file}"
+    _precise_sglang_log "Local speculative-prefill markers: ${specprefill_status}" "${log_file}"
   fi
   _precise_sglang_log "Ready to start Dynamo: yes" "${log_file}"
 }
