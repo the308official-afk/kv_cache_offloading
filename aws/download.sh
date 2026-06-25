@@ -11,7 +11,7 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 SERVERS=(
   ""
-  "54.209.134.108"
+  "34.207.66.161"
   ""
 )
 LABELS=("S0" "S1" "S2")

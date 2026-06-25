@@ -1360,6 +1360,56 @@ SGLANG_TRANSFER_LOG_PROFILE=full \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+Threshold sweep:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+RETENTION_SWEEP_ID="cache_control_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+DISTRACTOR_COUNTS="40 80 120 160" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_cache_control_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Background sweep:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+RETENTION_SWEEP_ID="cache_control_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=precise \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+DISTRACTOR_COUNTS="40 80 120 160" \
+KV_TIER_MODES="gpu_only" \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES="ephemeral:1h" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
+GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
+RANDOM_OUTPUT_LEN=1 \
+MAX_CONTEXT_TOKENS=17146 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+./agentbench/run_cache_control_retention_threshold_sweep_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
 Main knobs:
 
 ```text
