@@ -1351,6 +1351,49 @@ GPU_ONLY_MEM_FRACTION_STATIC
 PROTECTED_HINT_PROFILES
 ```
 
+### Where The Signal Is Handled
+
+Use these as the main entry points when you want to trace where the retention
+signal is attached, forwarded, observed, and summarized.
+
+Request construction:
+
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:430) `build_cache_control(...)`
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`
+
+Dynamo translation / forwarding:
+
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... }`
+
+Worker-side consumption:
+
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:44) `_decode_request_payload(...)`
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528) `async_generate(..., **self._priority_kwargs(priority))`
+
+Patched SGLang cache / eviction instrumentation:
+
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:1885) `CACHE_EVENT_FUNCTIONS`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2263) `wrap_request_context_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2201) `wrap_cache_event_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2689) `for function_name in ("cache_finished_req", "cache_unfinished_req")`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2693) `for function_name in CACHE_EVENT_FUNCTIONS`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2697) `wrap_cache_event_function(text, "evict")`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`
+
+Report derivation:
+
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1044) parses `sglang.cache` / `sglang.priority`
+- [run_kv_retention_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1314) computes replay eviction identity evidence
+- [build_retention_threshold_report.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py:703) builds the compact matrix rows
+
+Note: for cache-control specifically, these paths prove attachment,
+preservation, worker visibility, and eviction-side evidence extraction. They do
+not yet prove a single confirmed live TTL pin decision branch in pinned
+SGLang.
+
 ## Experiment 10: Cache-Control Retention
 
 Use this to test `nvext.cache_control` directly.
@@ -1585,6 +1628,34 @@ cat experiments/reports/latest_priority_scheduling_summary.csv
 cat experiments/reports/latest_priority_scheduling_summary.md
 cat experiments/reports/latest_priority_scheduling_run.txt
 ```
+
+### Where The Decision Is Made
+
+Use these as the main entry points when you want to trace where priority is
+attached, translated, applied, and proven in reports.
+
+Synthetic request construction:
+
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350) builds `agent_hints.priority`
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:360) `request_context(...)`
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608) top-level `priority` send / fallback logic
+
+Dynamo translation / forwarding:
+
+- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... priority_jump, priority ... }`
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) reads routed `priority`
+- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542) forwards it through `_priority_kwargs(...)`
+
+Patched SGLang priority instrumentation:
+
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`
+- [patch_sglang_transfer_logging.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`
+
+Priority-proof report derivation:
+
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052) interprets `sglang.priority` events
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166) `worker_priority_path_status(...)`
+- [run_priority_scheduling_probe.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212) computes leapfrogs and wait-time comparison
 
 `experiments/reports/priority_scheduling_requests.csv` is the compact readable
 view. The raw per-request file is still kept under the run directory.
