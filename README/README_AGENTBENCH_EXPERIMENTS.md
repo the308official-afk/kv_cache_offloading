@@ -1321,6 +1321,26 @@ cat experiments/reports/latest_retention_probe_requests.csv
 cat experiments/reports/latest_retention_probe_summary.md
 ```
 
+Main matrix fields:
+
+```text
+arm
+hint_profile
+protected_cache
+distractors
+first_ms
+replay_ms
+replay_cached
+replay_reuse
+survived
+req_prio_status
+worker_prio_status
+replay_evicts
+replay_evict_cache
+replay_evict_status
+effect_status
+```
+
 Main knobs:
 
 ```text
@@ -1420,13 +1440,22 @@ GPU_ONLY_MEM_FRACTION_STATIC
 PROTECTED_CACHE_CONTROL_PROFILES
 ```
 
-Proof fields:
+Compact matrix fields:
 
 ```text
-request_cache_control_status
-request_cache_control_values
-worker_cache_control_status
-worker_cache_control_values
+arm
+protected_cache
+first_ms
+replay_ms
+replay_cached
+replay_reuse
+req_cache_status
+worker_cache_status
+replay_evicts
+replay_evict_cache
+replay_evict_cache_match
+replay_evict_status
+effect_status
 ```
 
 Top-level outputs:
@@ -1557,45 +1586,46 @@ cat experiments/reports/latest_priority_scheduling_summary.md
 cat experiments/reports/latest_priority_scheduling_run.txt
 ```
 
+`experiments/reports/priority_scheduling_requests.csv` is the compact readable
+view. The raw per-request file is still kept under the run directory.
+
 Most important request-level columns:
 
 ```text
-priority_class                      low-priority or high-priority
-arrival_index                       Planned client arrival order
-client_latency_ms                   End-to-end client wall-clock latency
-worker_request_received_timestamp   When the worker first saw the request
-worker_request_attached_timestamp   When the worker attached/scheduled it
-worker_queue_wait_ms                Worker-side wait before attach
-attached_rank                       Order in which requests were attached
-completed_rank                      Order in which requests finished
-overtook_earlier_low_attached_count For each high-priority row, how many earlier
-                                    low-priority rows it beat in attach order
-worker_agent_hints_priority         Priority value seen in worker-side hint payload
-worker_top_level_priority           Top-level priority value seen by worker path,
-                                    when available
-sglang_scheduler_priority_applied   Whether the SGLang priority-path log said
-                                    scheduler priority was applied
+request            Request label
+prio_class         low-priority or high-priority
+arrival            Planned arrival order
+attach             Actual attach order
+complete           Actual finish order
+attach_gain        How far a request moved forward at attach time
+beat_low_attach    Earlier low-priority requests it beat in attach order
+queue_ms           Worker-side queue wait
+latency_ms         End-to-end latency
+worker_hint_prio   Priority value seen by worker
+worker_top_prio    Top-level priority seen by worker
+sglang_prio        Whether SGLang said priority was applied
+effect             yes_strong / yes_partial / no / baseline_low / unknown
 ```
 
 Most important summary columns:
 
 ```text
-frontend_top_level_priority_compatibility
+top_prio_compat
   supported / unsupported / not_attempted
 
-worker_high_hint_received_status
+worker_hint_status
   Whether the worker actually received the expected high-priority hint values
 
-worker_high_top_level_priority_status
+worker_top_prio_status
   Whether the worker actually saw the top-level priority values
 
-worker_priority_path_status
+sglang_prio_status
   applied / seen_not_applied / worker_received_hint / not_seen
 
-high_priority_attached_leapfrogs
+high_attach_leapfrogs
   Total number of earlier low-priority requests that were beaten by later
   high-priority requests in attach order
 
-scheduling_effect_observed
+effect_status
   Simple yes/no summary of whether leapfrogging happened
 ```

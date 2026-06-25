@@ -696,14 +696,9 @@ start_dynamo_for_profile() {
 
 write_batch_summary() {
   rebuild_batch_matrix
-  if [[ -f "${BATCH_MATRIX}" ]]; then
-    mkdir -p "$(dirname "${GLOBAL_MATRIX}")"
-    cp "${BATCH_MATRIX}" "${GLOBAL_MATRIX}"
-    cp "${BATCH_MATRIX}" "${LATEST_PROBE_MATRIX}"
-  fi
   cp "${BATCH_PROGRESS}" "${LATEST_PROBE_PROGRESS}"
 
-  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_SUMMARY}" "${BATCH_MATRIX}" "${GLOBAL_MATRIX}" "${RETENTION_PROBE_ID}" "${BATCH_LOG}" "${LATEST_PROBE_REQUESTS}"
+  "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_SUMMARY}" "${BATCH_MATRIX}" "${GLOBAL_MATRIX}" "${LATEST_PROBE_MATRIX}" "${RETENTION_PROBE_ID}" "${BATCH_LOG}" "${LATEST_PROBE_REQUESTS}"
 import csv
 import sys
 from pathlib import Path
@@ -712,14 +707,52 @@ progress_path = Path(sys.argv[1])
 summary_path = Path(sys.argv[2])
 batch_matrix_path = Path(sys.argv[3])
 global_matrix_path = Path(sys.argv[4])
-probe_id = sys.argv[5]
-log_path = sys.argv[6]
-latest_requests_path = Path(sys.argv[7])
+latest_matrix_path = Path(sys.argv[5])
+probe_id = sys.argv[6]
+log_path = sys.argv[7]
+latest_requests_path = Path(sys.argv[8])
 
 progress_rows = []
 if progress_path.exists():
     with progress_path.open(encoding="utf-8", newline="") as handle:
         progress_rows = list(csv.DictReader(handle))
+
+public_rows = []
+public_fields = [
+    "status",
+    "probe_id",
+    "model",
+    "kv_tier",
+    "arm",
+    "hint_profile",
+    "protected_cache",
+    "distractors",
+    "first_status",
+    "replay_status",
+    "first_ms",
+    "replay_ms",
+    "replay_delta_ms",
+    "replay_speedup",
+    "kv_cap",
+    "ctx_len",
+    "a_tokens",
+    "d1_tokens",
+    "kv_left_after_a",
+    "replay_cached",
+    "replay_reuse",
+    "survived",
+    "survival_source",
+    "req_prio_status",
+    "req_prio_values",
+    "worker_prio_status",
+    "worker_prio_values",
+    "replay_evicts",
+    "replay_evict_cache",
+    "replay_evict_cache_match",
+    "replay_evict_hint_match",
+    "replay_evict_status",
+    "effect_status",
+]
 
 models = sorted({row.get("model", "") for row in progress_rows if row.get("model")})
 tiers = sorted({row.get("kv_tier_mode", "") for row in progress_rows if row.get("kv_tier_mode")})
@@ -751,6 +784,36 @@ if request_fieldnames:
         writer.writerows(request_rows)
 else:
     latest_requests_path.unlink(missing_ok=True)
+
+for progress_row in progress_rows:
+    summary_csv = Path(progress_row.get("summary_csv", ""))
+    public_summary = summary_csv.with_name("retention_probe_public_summary.csv")
+    if not public_summary.exists():
+        continue
+    with public_summary.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        continue
+    row = dict(rows[0])
+    row["status"] = progress_row.get("status", "")
+    row["probe_id"] = progress_row.get("retention_probe_id", "")
+    row["arm"] = progress_row.get("arm_role", "")
+    public_rows.append(row)
+
+if public_rows:
+    global_matrix_path.parent.mkdir(parents=True, exist_ok=True)
+    with global_matrix_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=public_fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(public_rows)
+    latest_matrix_path.parent.mkdir(parents=True, exist_ok=True)
+    with latest_matrix_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=public_fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(public_rows)
+else:
+    global_matrix_path.unlink(missing_ok=True)
+    latest_matrix_path.unlink(missing_ok=True)
 
 lines = [
     f"# KV Retention Probe Batch: {probe_id}",

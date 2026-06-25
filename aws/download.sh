@@ -11,7 +11,7 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 
 SERVERS=(
   ""
-  "34.207.66.161"
+  "3.94.109.36"
   ""
 )
 LABELS=("S0" "S1" "S2")
@@ -176,211 +176,19 @@ else
   fi
 fi
 
-echo "==== Downloading run-level reports from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_RUN_REPORTS_DIR}/"
-echo "Local dest:    ${LOCAL_RUN_REPORTS_DIR}/"
+echo "==== Downloading full reports tree from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_REPORTS_DIR}/"
+echo "Local dest:    ${LOCAL_REPORTS_DIR}/"
 
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_RUN_REPORTS_DIR}'"; then
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}'"; then
   rsync \
     "${RSYNC_COMMON_OPTS[@]}" \
     -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_RUN_REPORTS_DIR}/" \
-    "${LOCAL_RUN_REPORTS_DIR}/"
-else
-  echo "Remote run-level reports directory not found; local report builder can regenerate it." >&2
-fi
-
-echo "==== Downloading logging-profile wall-time report from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}'"; then
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/${LOGGING_PROFILE_WALLTIME_REPORT}" \
+    "${remote_host}:${REMOTE_REPORTS_DIR}/" \
     "${LOCAL_REPORTS_DIR}/"
 else
-  echo "Remote logging-profile wall-time report not found; skipping." >&2
+  echo "Remote reports directory not found; skipping full reports sync." >&2
 fi
-
-echo "==== Downloading design-space reports from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_REPORTS_DIR}/design_space/"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/design_space/"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/design_space'"; then
-  mkdir -p "${LOCAL_REPORTS_DIR}/design_space"
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/design_space/" \
-    "${LOCAL_REPORTS_DIR}/design_space/"
-else
-  echo "Remote design-space report directory not found; skipping." >&2
-fi
-
-echo "Remote source: ${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}'"; then
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_MATRIX_REPORT}" \
-    "${LOCAL_REPORTS_DIR}/"
-else
-  echo "Remote design-space matrix report not found; skipping." >&2
-fi
-
-echo "==== Downloading KV retention probe reports from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_probe/"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_probe/"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_probe'"; then
-  mkdir -p "${LOCAL_REPORTS_DIR}/retention_probe"
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_probe/" \
-    "${LOCAL_REPORTS_DIR}/retention_probe/"
-else
-  echo "Remote KV retention probe report directory not found; skipping." >&2
-fi
-
-echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_probe_batches/"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_probe_batches/"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_probe_batches'"; then
-  mkdir -p "${LOCAL_REPORTS_DIR}/retention_probe_batches"
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_probe_batches/" \
-    "${LOCAL_REPORTS_DIR}/retention_probe_batches/"
-else
-  echo "Remote KV retention probe batch directory not found; skipping." >&2
-fi
-
-echo "Remote source: ${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}'"; then
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/${DESIGN_SPACE_RETENTION_MATRIX_REPORT}" \
-    "${LOCAL_REPORTS_DIR}/"
-else
-  echo "Remote design-space retention matrix report not found; skipping." >&2
-fi
-
-for report in \
-  "${LATEST_RETENTION_PROBE_PROGRESS_REPORT}" \
-  "${LATEST_RETENTION_PROBE_MATRIX_REPORT}" \
-  "${LATEST_RETENTION_PROBE_REQUESTS_REPORT}" \
-  "${LATEST_RETENTION_PROBE_SUMMARY_REPORT}"; do
-  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
-  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
-  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
-    rsync \
-      "${RSYNC_COMMON_OPTS[@]}" \
-      -e "$SSH_CMD" \
-      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
-      "${LOCAL_REPORTS_DIR}/"
-  else
-    echo "Remote latest retention probe report not found (${report}); skipping." >&2
-  fi
-done
-
-for report in \
-  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_PROGRESS_REPORT}" \
-  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_MATRIX_REPORT}" \
-  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_COMPARISON_REPORT}" \
-  "${LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_SUMMARY_REPORT}"; do
-  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
-  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
-  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
-    rsync \
-      "${RSYNC_COMMON_OPTS[@]}" \
-      -e "$SSH_CMD" \
-      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
-      "${LOCAL_REPORTS_DIR}/"
-  else
-    echo "Remote latest cache-control retention-threshold report not found (${report}); skipping." >&2
-  fi
-done
-
-echo "==== Downloading retention-threshold sweep reports from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_REPORTS_DIR}/retention_threshold_sweeps/"
-echo "Local dest:    ${LOCAL_REPORTS_DIR}/retention_threshold_sweeps/"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_REPORTS_DIR}/retention_threshold_sweeps'"; then
-  mkdir -p "${LOCAL_REPORTS_DIR}/retention_threshold_sweeps"
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_REPORTS_DIR}/retention_threshold_sweeps/" \
-    "${LOCAL_REPORTS_DIR}/retention_threshold_sweeps/"
-else
-  echo "Remote retention-threshold sweep directory not found; skipping." >&2
-fi
-
-for report in \
-  "${RETENTION_THRESHOLD_PROGRESS_REPORT}" \
-  "${RETENTION_THRESHOLD_MATRIX_REPORT}" \
-  "${RETENTION_THRESHOLD_COMPARISON_REPORT}" \
-  "${RETENTION_THRESHOLD_SUMMARY_REPORT}"; do
-  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
-  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
-  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
-    rsync \
-      "${RSYNC_COMMON_OPTS[@]}" \
-      -e "$SSH_CMD" \
-      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
-      "${LOCAL_REPORTS_DIR}/"
-  else
-    echo "Remote retention-threshold report not found (${report}); skipping." >&2
-  fi
-done
-
-echo "==== Downloading priority-scheduling reports from ${label} (${ip}) ===="
-echo "Remote source: ${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}/"
-echo "Local dest:    ${LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR}/"
-
-if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}'"; then
-  rsync \
-    "${RSYNC_COMMON_OPTS[@]}" \
-    -e "$SSH_CMD" \
-    "${remote_host}:${REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR}/" \
-    "${LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR}/"
-else
-  echo "Remote priority-scheduling report directory not found; skipping." >&2
-fi
-
-for report in \
-  "${PRIORITY_SCHEDULING_READABLE_REPORT}" \
-  "${PRIORITY_SCHEDULING_REQUESTS_REPORT}" \
-  "${PRIORITY_SCHEDULING_PROOF_REPORT}" \
-  "${PRIORITY_SCHEDULING_SUMMARY_REPORT}" \
-  "${PRIORITY_SCHEDULING_SUMMARY_MD_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_READABLE_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_REQUESTS_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_PROOF_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_SUMMARY_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_SUMMARY_MD_REPORT}" \
-  "${LATEST_PRIORITY_SCHEDULING_RUN_REPORT}"; do
-  echo "Remote source: ${REMOTE_REPORTS_DIR}/${report}"
-  echo "Local dest:    ${LOCAL_REPORTS_DIR}/${report}"
-  if ssh "${SSH_OPTS[@]}" "$remote_host" "test -f '${REMOTE_REPORTS_DIR}/${report}'"; then
-    rsync \
-      "${RSYNC_COMMON_OPTS[@]}" \
-      -e "$SSH_CMD" \
-      "${remote_host}:${REMOTE_REPORTS_DIR}/${report}" \
-      "${LOCAL_REPORTS_DIR}/"
-  else
-    echo "Remote priority-scheduling top-level report not found (${report}); skipping." >&2
-  fi
-done
 
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then
   echo "==== Building local latest run report ===="

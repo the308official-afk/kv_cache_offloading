@@ -89,6 +89,9 @@ _REQUEST_METADATA_KEYS = (
     "priority_class",
     "prompt_hash",
     "hint_probe_id",
+    "cache_control_type",
+    "cache_control_ttl",
+    "cache_control_source",
 )
 _REQUEST_METADATA_ALIASES = {
     "rid": "sglang_request_id",
@@ -377,6 +380,17 @@ def _merge_request_metadata(target: dict[str, Any], source: dict[str, Any], sour
             if "phase" not in target and value.get("agent_phase") not in (None, ""):
                 target["phase"] = _sanitize_metadata(value["agent_phase"])
 
+    cache_control = source.get("cache_control")
+    if isinstance(cache_control, dict):
+        target.setdefault("cache_control", _sanitize_metadata(cache_control))
+        target.setdefault("cache_control_source", f"{source_name}.cache_control")
+        cache_control_type = cache_control.get("type")
+        cache_control_ttl = cache_control.get("ttl")
+        if cache_control_type not in (None, "") and "cache_control_type" not in target:
+            target["cache_control_type"] = _sanitize_metadata(cache_control_type)
+        if cache_control_ttl not in (None, "") and "cache_control_ttl" not in target:
+            target["cache_control_ttl"] = _sanitize_metadata(cache_control_ttl)
+
     request_context = source.get("request_context")
     if isinstance(request_context, dict):
         target.setdefault("request_context", _sanitize_metadata(request_context))
@@ -444,6 +458,7 @@ def _request_metadata_alias_values(metadata: dict[str, Any]) -> list[str]:
         "frontend_request_id",
         "sglang_request_id",
         "hint_probe_id",
+        "semantic_token_ids_sha256",
     ):
         value = metadata.get(key)
         if isinstance(value, str) and value and value not in aliases:
@@ -734,6 +749,155 @@ def _priority_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, A
         summary["worker_priority_seen"] = True
     else:
         summary["worker_priority_seen"] = False
+    return summary
+
+
+def _merge_cache_control_metadata(target: dict[str, Any], source: dict[str, Any], source_name: str) -> None:
+    cache_control = source.get("cache_control")
+    if isinstance(cache_control, dict):
+        target.setdefault("worker_cache_control", _sanitize_metadata(cache_control))
+        target.setdefault("worker_cache_control_source", f"{source_name}.cache_control")
+        cache_control_type = cache_control.get("type")
+        cache_control_ttl = cache_control.get("ttl")
+        if cache_control_type not in (None, "") and "worker_cache_control_type" not in target:
+            target["worker_cache_control_type"] = _sanitize_metadata(cache_control_type)
+        if cache_control_ttl not in (None, "") and "worker_cache_control_ttl" not in target:
+            target["worker_cache_control_ttl"] = _sanitize_metadata(cache_control_ttl)
+
+    cache_control_profile = source.get("cache_control_profile")
+    if (
+        isinstance(cache_control_profile, str)
+        and cache_control_profile
+        and "worker_cache_control_profile" not in target
+    ):
+        target["worker_cache_control_profile"] = cache_control_profile
+        target.setdefault("worker_cache_control_profile_source", f"{source_name}.cache_control_profile")
+
+    request_context = source.get("request_context")
+    if isinstance(request_context, dict):
+        _merge_cache_control_metadata(target, request_context, f"{source_name}.request_context")
+
+    runtime_observability = source.get("runtime_observability")
+    if isinstance(runtime_observability, dict):
+        _merge_cache_control_metadata(target, runtime_observability, f"{source_name}.runtime_observability")
+
+    nvext = source.get("nvext")
+    if isinstance(nvext, dict):
+        _merge_cache_control_metadata(target, nvext, f"{source_name}.nvext")
+
+
+def _cache_control_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
+    summary: dict[str, Any] = {}
+    context = current_transfer_context()
+    if isinstance(context, dict):
+        _merge_cache_control_metadata(summary, context, "current_transfer_context")
+    for name, value in locals_dict.items():
+        if name == "self" or name.startswith("__sgl_transfer"):
+            continue
+        lowered = name.lower()
+        if (
+            "cache" in lowered
+            or "ttl" in lowered
+            or "request" in lowered
+            or "context" in lowered
+            or isinstance(value, dict)
+        ):
+            nested = _request_metadata_candidates_from_value(name, value)
+            _merge_cache_control_metadata(summary, nested, name)
+    if summary:
+        summary["cache_control_context_function"] = function
+        summary["worker_cache_control_seen"] = True
+    else:
+        summary["worker_cache_control_seen"] = False
+    return summary
+
+
+def _cache_control_label(metadata: dict[str, Any]) -> str:
+    cache_control = metadata.get("cache_control")
+    cache_control_type = metadata.get("cache_control_type")
+    cache_control_ttl = metadata.get("cache_control_ttl")
+    cache_control_profile = metadata.get("cache_control_profile")
+    if isinstance(cache_control, dict):
+        if cache_control_type in (None, ""):
+            cache_control_type = cache_control.get("type")
+        if cache_control_ttl in (None, ""):
+            cache_control_ttl = cache_control.get("ttl")
+    if cache_control_type not in (None, "") and cache_control_ttl not in (None, ""):
+        return f"{cache_control_type}:{cache_control_ttl}"
+    if cache_control_type not in (None, ""):
+        return str(cache_control_type)
+    if cache_control_profile not in (None, ""):
+        return str(cache_control_profile)
+    return ""
+
+
+def _eviction_summary(function: str, locals_dict: dict[str, Any]) -> dict[str, Any]:
+    if function != "evict":
+        return {}
+
+    leaves = locals_dict.get("leaves")
+    if not isinstance(leaves, (list, tuple)):
+        return {}
+
+    summary: dict[str, Any] = {
+        "evict_leaf_count": len(leaves),
+    }
+    node_ids: list[str] = []
+    token_counts: list[int] = []
+    request_ids: list[str] = []
+    hint_profiles: list[str] = []
+    cache_controls: list[str] = []
+
+    for leaf in list(leaves)[:64]:
+        try:
+            node_id = getattr(leaf, "id", None)
+        except Exception:
+            node_id = None
+        if node_id not in (None, ""):
+            node_ids.append(str(node_id))
+
+        try:
+            value = getattr(leaf, "value", None)
+        except Exception:
+            value = None
+        count = _num_items(value)
+        if count:
+            token_counts.append(int(count))
+
+        leaf_metadata = _request_metadata_candidates_from_value("evict_leaf", leaf)
+        registered_metadata = _lookup_registered_request_metadata(leaf_metadata)
+        merged_metadata = _merge_transfer_context_pair(leaf_metadata, registered_metadata)
+        for key in ("request_id", "external_request_id", "sglang_request_id", "hint_probe_id"):
+            value = merged_metadata.get(key)
+            if isinstance(value, str) and value and value not in request_ids:
+                request_ids.append(value)
+        hint_profile = (
+            merged_metadata.get("hint_profile")
+            or merged_metadata.get("worker_hint_profile_seen")
+            or (merged_metadata.get("request_context") or {}).get("hint_profile")
+            if isinstance(merged_metadata.get("request_context"), dict)
+            else merged_metadata.get("hint_profile") or merged_metadata.get("worker_hint_profile_seen")
+        )
+        if isinstance(hint_profile, str) and hint_profile and hint_profile not in hint_profiles:
+            hint_profiles.append(hint_profile)
+        cache_control_label = _cache_control_label(merged_metadata)
+        if cache_control_label and cache_control_label not in cache_controls:
+            cache_controls.append(cache_control_label)
+
+    if node_ids:
+        summary["evict_leaf_ids_preview"] = node_ids[:16]
+        summary["evict_leaf_ids_preview_count"] = len(summary["evict_leaf_ids_preview"])
+    if token_counts:
+        summary["evict_leaf_token_counts_preview"] = token_counts[:16]
+        summary["evict_leaf_token_counts_preview_count"] = len(summary["evict_leaf_token_counts_preview"])
+        summary["evict_leaf_total_tokens_preview"] = sum(summary["evict_leaf_token_counts_preview"])
+    if request_ids:
+        summary["evict_registered_request_ids"] = request_ids[:16]
+        summary["evict_registered_request_count"] = len(request_ids)
+    if hint_profiles:
+        summary["evict_registered_hint_profiles"] = hint_profiles[:16]
+    if cache_controls:
+        summary["evict_registered_cache_controls"] = cache_controls[:16]
     return summary
 
 
@@ -1284,7 +1448,9 @@ def _log_cache_event_impl(
         )
     )
     payload.update(_priority_summary(function, locals_dict))
+    payload.update(_cache_control_summary(function, locals_dict))
     payload.update(_cache_scalar_summary(locals_dict))
+    payload.update(_eviction_summary(function, locals_dict))
     context = current_transfer_context()
     if context:
         payload.update(context)

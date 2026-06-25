@@ -158,8 +158,14 @@ SUMMARY_COLUMNS = [
     "a_first_sglang_cache_events",
     "a_replay_sglang_cache_events",
     "a_replay_sglang_cache_match_events",
+    "a_replay_sglang_cache_evict_events",
     "a_replay_sglang_cache_semantic_tokens",
     "a_replay_sglang_cache_direct",
+    "a_replay_sglang_evict_cache_control_values",
+    "a_replay_sglang_evict_hint_profiles",
+    "a_replay_sglang_evict_cache_control_match",
+    "a_replay_sglang_evict_hint_profile_match",
+    "a_replay_sglang_evict_identity_status",
     "a_first_sglang_priority_hint_seen",
     "a_replay_sglang_priority_hint_seen",
     "a_first_sglang_scheduler_priority_applied",
@@ -175,6 +181,40 @@ SUMMARY_COLUMNS = [
     "sglang_cache_event_log",
     "worker_runtime_log",
     "requests_csv",
+]
+
+PUBLIC_SUMMARY_COLUMNS = [
+    "run_id",
+    "model",
+    "kv_tier",
+    "hint_profile",
+    "protected_cache",
+    "distractors",
+    "first_status",
+    "replay_status",
+    "first_ms",
+    "replay_ms",
+    "replay_delta_ms",
+    "replay_speedup",
+    "kv_cap",
+    "ctx_len",
+    "a_tokens",
+    "d1_tokens",
+    "kv_left_after_a",
+    "replay_cached",
+    "replay_reuse",
+    "survived",
+    "survival_source",
+    "req_prio_status",
+    "req_prio_values",
+    "worker_prio_status",
+    "worker_prio_values",
+    "replay_evicts",
+    "replay_evict_cache",
+    "replay_evict_cache_match",
+    "replay_evict_hint_match",
+    "replay_evict_status",
+    "effect_status",
 ]
 
 
@@ -887,6 +927,84 @@ def event_request_id(event: dict[str, Any]) -> str:
     return ""
 
 
+def cache_control_label_from_event(event: dict[str, Any]) -> str:
+    cache_control = event.get("cache_control")
+    cache_type = event.get("cache_control_type")
+    cache_ttl = event.get("cache_control_ttl")
+    cache_profile = event.get("cache_control_profile")
+    if isinstance(cache_control, dict):
+        if cache_type in (None, ""):
+            cache_type = cache_control.get("type")
+        if cache_ttl in (None, ""):
+            cache_ttl = cache_control.get("ttl")
+    if cache_type not in (None, "") and cache_ttl not in (None, ""):
+        return f"{cache_type}:{cache_ttl}"
+    if cache_type not in (None, ""):
+        return str(cache_type)
+    if cache_profile not in (None, ""):
+        return str(cache_profile)
+    return ""
+
+
+def hint_profile_from_event(event: dict[str, Any]) -> str:
+    for key in ("worker_hint_profile_seen", "hint_profile"):
+        value = event.get(key)
+        if isinstance(value, str) and value:
+            return value
+    request_context = event.get("request_context")
+    if isinstance(request_context, dict):
+        value = request_context.get("hint_profile")
+        if isinstance(value, str) and value:
+            return value
+    return ""
+
+
+def split_pipe_values(value: Any) -> set[str]:
+    if value in (None, ""):
+        return set()
+    return {part.strip() for part in str(value).split("|") if part.strip()}
+
+
+def expected_hint_profile(value: Any) -> str:
+    normalized = str(value or "").strip()
+    return "" if normalized.lower() in NO_HINT_PROFILES else normalized
+
+
+def expected_cache_control_profile(value: Any) -> str:
+    normalized = str(value or "").strip()
+    return "" if normalized.lower() in CACHE_CONTROL_OFF_PROFILES else normalized
+
+
+def evict_identity_evidence(
+    *,
+    replay: dict[str, Any],
+    protected_hint_profile_value: Any,
+    protected_cache_control_profile_value: Any,
+) -> tuple[str, str, str]:
+    evict_events = maybe_int(replay.get("sglang_cache_evict_events")) or 0
+    observed_cache_controls = split_pipe_values(replay.get("sglang_evict_cache_control_values"))
+    observed_hint_profiles = split_pipe_values(replay.get("sglang_evict_hint_profiles"))
+    expected_cache_control = expected_cache_control_profile(protected_cache_control_profile_value)
+    expected_hint = expected_hint_profile(protected_hint_profile_value)
+    cache_control_match = bool(expected_cache_control) and expected_cache_control in observed_cache_controls
+    hint_profile_match = bool(expected_hint) and expected_hint in observed_hint_profiles
+
+    if evict_events <= 0:
+        status = "no_evict_seen"
+    elif not expected_cache_control and not expected_hint:
+        status = "no_expected_identity"
+    elif cache_control_match and hint_profile_match:
+        status = "matched_cache_control_and_hint"
+    elif cache_control_match:
+        status = "matched_cache_control_only"
+    elif hint_profile_match:
+        status = "matched_hint_only"
+    else:
+        status = "evict_seen_no_identity"
+
+    return status, str(cache_control_match).lower(), str(hint_profile_match).lower()
+
+
 def attach_cache_events(
     rows: list[dict[str, Any]],
     cache_event_log: Path,
@@ -920,6 +1038,8 @@ def attach_cache_events(
 
     max_semantic_tokens: dict[str, int] = {}
     token_hashes: dict[str, set[str]] = {}
+    evict_cache_controls: dict[str, set[str]] = {}
+    evict_hint_profiles: dict[str, set[str]] = {}
 
     with cache_event_log.open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
@@ -987,6 +1107,12 @@ def attach_cache_events(
                 row["sglang_cache_insert_events"] = int(row["sglang_cache_insert_events"]) + 1
             if "evict" in action:
                 row["sglang_cache_evict_events"] = int(row["sglang_cache_evict_events"]) + 1
+                cache_control_label = cache_control_label_from_event(event)
+                if cache_control_label:
+                    evict_cache_controls.setdefault(request_id, set()).add(cache_control_label)
+                hint_profile = hint_profile_from_event(event)
+                if hint_profile:
+                    evict_hint_profiles.setdefault(request_id, set()).add(hint_profile)
 
             semantic_count = maybe_int(event.get("semantic_token_count"))
             if semantic_count is not None:
@@ -1000,6 +1126,8 @@ def attach_cache_events(
             row["sglang_cache_semantic_tokens"] = max_semantic_tokens[request_id]
         if request_id in token_hashes:
             row["sglang_cache_token_sha256"] = ";".join(sorted(token_hashes[request_id]))
+        row["sglang_evict_cache_control_values"] = "|".join(sorted(evict_cache_controls.get(request_id, set())))
+        row["sglang_evict_hint_profiles"] = "|".join(sorted(evict_hint_profiles.get(request_id, set())))
 
 
 def display_path(path: Path) -> str:
@@ -1044,6 +1172,96 @@ def truthy(value: Any) -> bool:
     if value is None:
         return False
     return str(value).strip().lower() in {"1", "true", "yes", "y"}
+
+
+def compact_priority_values(*pairs: tuple[str, Any]) -> str:
+    parts: list[str] = []
+    for role, value in pairs:
+        parsed = maybe_int(value)
+        if parsed is None:
+            continue
+        parts.append(f"{role}:{parsed}")
+    return "|".join(parts)
+
+
+def compact_priority_status(*values: Any) -> str:
+    parsed_values = [maybe_int(value) for value in values]
+    present = [value for value in parsed_values if value is not None]
+    if not present:
+        return "none"
+    if len(present) == len(parsed_values):
+        return "full"
+    return "partial"
+
+
+def worker_priority_status(summary: dict[str, Any]) -> str:
+    if truthy(summary.get("a_first_sglang_scheduler_priority_applied")) or truthy(
+        summary.get("a_replay_sglang_scheduler_priority_applied")
+    ):
+        return "applied"
+    if truthy(summary.get("a_first_sglang_priority_hint_seen")) or truthy(
+        summary.get("a_replay_sglang_priority_hint_seen")
+    ):
+        return "seen"
+    if maybe_int(summary.get("a_first_sglang_worker_agent_hints_priority")) is not None or maybe_int(
+        summary.get("a_replay_sglang_worker_agent_hints_priority")
+    ) is not None:
+        return "worker_value_only"
+    return "none"
+
+
+def public_effect_status(summary: dict[str, Any]) -> str:
+    survived = str(summary.get("a_survived_cache_threshold", "")).strip().lower()
+    if survived == "true":
+        return "survived"
+    if survived == "false":
+        return "not_survived"
+    return "unknown"
+
+
+def build_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run_id": summary.get("run_id", ""),
+        "model": summary.get("model", ""),
+        "kv_tier": summary.get("kv_tier_mode", ""),
+        "hint_profile": summary.get("protected_hint_profile", ""),
+        "protected_cache": summary.get("protected_cache_control_profile", ""),
+        "distractors": summary.get("distractor_count", ""),
+        "first_status": summary.get("a_first_status", ""),
+        "replay_status": summary.get("a_replay_status", ""),
+        "first_ms": summary.get("a_first_latency_ms", ""),
+        "replay_ms": summary.get("a_replay_latency_ms", ""),
+        "replay_delta_ms": summary.get("a_replay_latency_delta_ms", ""),
+        "replay_speedup": summary.get("a_replay_speedup_ratio", ""),
+        "kv_cap": summary.get("worker_kv_capacity_tokens", ""),
+        "ctx_len": summary.get("worker_context_len", ""),
+        "a_tokens": summary.get("a_first_prompt_tokens", ""),
+        "d1_tokens": summary.get("first_distractor_prompt_tokens", ""),
+        "kv_left_after_a": summary.get("kv_tokens_left_after_a", ""),
+        "replay_cached": summary.get("a_replay_cached_tokens", ""),
+        "replay_reuse": summary.get("a_replay_cache_reuse_ratio", ""),
+        "survived": summary.get("a_survived_cache_threshold", ""),
+        "survival_source": summary.get("cache_survival_source", ""),
+        "req_prio_status": compact_priority_status(
+            summary.get("a_first_agent_hints_priority"),
+            summary.get("a_replay_agent_hints_priority"),
+        ),
+        "req_prio_values": compact_priority_values(
+            ("a_first", summary.get("a_first_agent_hints_priority")),
+            ("a_replay", summary.get("a_replay_agent_hints_priority")),
+        ),
+        "worker_prio_status": worker_priority_status(summary),
+        "worker_prio_values": compact_priority_values(
+            ("a_first", summary.get("a_first_sglang_worker_agent_hints_priority")),
+            ("a_replay", summary.get("a_replay_sglang_worker_agent_hints_priority")),
+        ),
+        "replay_evicts": summary.get("a_replay_sglang_cache_evict_events", ""),
+        "replay_evict_cache": summary.get("a_replay_sglang_evict_cache_control_values", ""),
+        "replay_evict_cache_match": summary.get("a_replay_sglang_evict_cache_control_match", ""),
+        "replay_evict_hint_match": summary.get("a_replay_sglang_evict_hint_profile_match", ""),
+        "replay_evict_status": summary.get("a_replay_sglang_evict_identity_status", ""),
+        "effect_status": public_effect_status(summary),
+    }
 
 
 def build_summary(
@@ -1093,6 +1311,11 @@ def build_summary(
         and first_distractor_prompt_tokens is not None
         else None
     )
+    evict_identity_status, evict_cache_control_match, evict_hint_profile_match = evict_identity_evidence(
+        replay=replay,
+        protected_hint_profile_value=first.get("hint_profile", args.protected_hint_profile),
+        protected_cache_control_profile_value=first.get("cache_control_profile", args.protected_cache_control_profile),
+    )
 
     failed = [row for row in rows if str(row.get("status")) not in {"200", "201"}]
     summary = {
@@ -1141,8 +1364,14 @@ def build_summary(
         "a_first_sglang_cache_events": int_or_empty(first.get("sglang_cache_events")),
         "a_replay_sglang_cache_events": int_or_empty(replay.get("sglang_cache_events")),
         "a_replay_sglang_cache_match_events": int_or_empty(replay.get("sglang_cache_match_events")),
+        "a_replay_sglang_cache_evict_events": int_or_empty(replay.get("sglang_cache_evict_events")),
         "a_replay_sglang_cache_semantic_tokens": int_or_empty(replay.get("sglang_cache_semantic_tokens")),
         "a_replay_sglang_cache_direct": truthy(replay.get("sglang_cache_direct")),
+        "a_replay_sglang_evict_cache_control_values": replay.get("sglang_evict_cache_control_values", ""),
+        "a_replay_sglang_evict_hint_profiles": replay.get("sglang_evict_hint_profiles", ""),
+        "a_replay_sglang_evict_cache_control_match": evict_cache_control_match,
+        "a_replay_sglang_evict_hint_profile_match": evict_hint_profile_match,
+        "a_replay_sglang_evict_identity_status": evict_identity_status,
         "a_first_sglang_priority_hint_seen": truthy(first.get("sglang_priority_hint_seen")),
         "a_replay_sglang_priority_hint_seen": truthy(replay.get("sglang_priority_hint_seen")),
         "a_first_sglang_scheduler_priority_applied": truthy(first.get("sglang_scheduler_priority_applied")),
@@ -1198,7 +1427,13 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- replay cache reuse ratio: `{summary['a_replay_cache_reuse_ratio']}`",
         f"- replay SGLang cache events: `{summary['a_replay_sglang_cache_events']}`",
         f"- replay SGLang cache match events: `{summary['a_replay_sglang_cache_match_events']}`",
+        f"- replay SGLang evict events: `{summary['a_replay_sglang_cache_evict_events']}`",
         f"- replay SGLang cache direct attribution: `{summary['a_replay_sglang_cache_direct']}`",
+        f"- replay SGLang evict cache-control values: `{summary['a_replay_sglang_evict_cache_control_values']}`",
+        f"- replay SGLang evict hint profiles: `{summary['a_replay_sglang_evict_hint_profiles']}`",
+        f"- replay SGLang evict cache-control match: `{summary['a_replay_sglang_evict_cache_control_match']}`",
+        f"- replay SGLang evict hint-profile match: `{summary['a_replay_sglang_evict_hint_profile_match']}`",
+        f"- replay SGLang evict identity status: `{summary['a_replay_sglang_evict_identity_status']}`",
         f"- replay SGLang priority hint seen: `{summary['a_replay_sglang_priority_hint_seen']}`",
         f"- replay SGLang scheduler priority applied: `{summary['a_replay_sglang_scheduler_priority_applied']}`",
         f"- replay SGLang top-level priority: `{summary['a_replay_sglang_worker_top_level_priority']}`",
@@ -1223,6 +1458,7 @@ def main() -> int:
     run_dir = out_root / run_id
     requests_csv = run_dir / "retention_probe_requests.csv"
     summary_csv = run_dir / "retention_probe_summary.csv"
+    public_summary_csv = run_dir / "retention_probe_public_summary.csv"
     summary_md = run_dir / "retention_probe_summary.md"
     matrix_path = Path(args.matrix_path).expanduser()
     if not matrix_path.is_absolute():
@@ -1308,6 +1544,7 @@ def main() -> int:
         worker_runtime_log=worker_runtime_log,
     )
     write_csv(summary_csv, [summary], SUMMARY_COLUMNS)
+    write_csv(public_summary_csv, [build_public_summary(summary)], PUBLIC_SUMMARY_COLUMNS)
     if not args.skip_matrix_write:
         if args.append_matrix:
             append_matrix(matrix_path, summary, SUMMARY_COLUMNS)
@@ -1317,6 +1554,7 @@ def main() -> int:
 
     print(f"Request rows: {requests_csv}")
     print(f"Run summary:  {summary_csv}")
+    print(f"Public CSV:   {public_summary_csv}")
     print(f"Summary md:   {summary_md}")
     print(f"Matrix:       {matrix_path}")
     return 1 if summary["failed_requests"] else 0
