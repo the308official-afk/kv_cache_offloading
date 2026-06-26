@@ -36,7 +36,7 @@ $HOME/dlrm:/workspace/dlrm
 /data/ojaiyeob:/workspace/data
 ```
 
-After cloning or refreshing submodules, it checks:
+After cloning or refreshing submodules, it executes:
 
 ```text
 /workspace/dlrm/FAMBench/benchmarks/dlrm/ootb/bench/dlrm_s_benchmark.sh
@@ -57,4 +57,4 @@ The custom file is mounted read-only into the container, copied over:
 /workspace/dlrm/FAMBench/benchmarks/dlrm/ootb/bench/dlrm_s_benchmark.sh
 ```
 
-and marked executable before the check runs.
+and marked executable before the benchmark script runs.

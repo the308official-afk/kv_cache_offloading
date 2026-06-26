@@ -57,4 +57,5 @@ docker run -it --rm \
     fi
     pwd
     ls -l ./dlrm_s_benchmark.sh
+    ./dlrm_s_benchmark.sh
   '
