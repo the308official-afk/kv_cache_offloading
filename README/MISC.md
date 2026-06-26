@@ -660,3 +660,57 @@ python3 experiments/scripts/agentbench_report/build_run_report.py \
   --agentbench-result-dir "$LATEST" \
   --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
 ```
+
+
+
+
+
+
+Here’s a concise version you can use.
+What We Have Achieved
+Built a realistic agentic benchmark stack: SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo -> SGLang
+Automated 12 experiment types for:prompt evolution
+KV reuse / retention
+KV host-device transfer attribution
+priority scheduling
+speculative prefill
+multi-task / multi-model sweeps
+GPU-only, GPU+CPU, GPU+CPU+storage studies
+
+Added precise runtime instrumentation so we can separate:hint sent
+worker saw hint
+runtime behavior changed
+
+What We Can Measure
+TTFT / latency
+cached tokens / reuse ratio
+KV transfer activity
+retention / eviction boundary
+scheduling order under priority
+logging overhead
+cross-model and cross-hardware comparisons
+What Is Working
+priority works as a real control
+speculative_prefill works as a real control
+osl / expected_output_tokens work as routing/resource signals
+full design-space sweeps are working
+What Is Still Open
+prove whether cache_control is a true retention control in this stack
+strengthen direct proof inside SGLang decision paths
+expand support for more hint types beyond current live controls
+Why This Matters
+We are characterizing resource usage for a high-profile agentic workload
+We are recreating realistic agentic use cases on Nvidia systems
+We are using the results to guide roadmap decisions with:Storage
+AIG-SHARKS
+DESG
+GPU Architecture
+
+Core Research Value
+connects realistic agent behavior to memory/storage usage
+exposes where latency, KV movement, and retention bottlenecks come from
+gives concrete data to drive architectural enhancements
+If you want, I can compress this further into:
+one intro slide
+one achievements slide
+one open-questions slide.
