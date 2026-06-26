@@ -1873,6 +1873,8 @@ What it measures:
 
 - did the worker receive `speculative_prefill=true`?
 - did Dynamo’s real speculative-prefill branch emit `wrap_checked`, `prefill_sent`, and `prefill_completed`?
+- if those named events are missing, did we still see an anonymous warmup request
+  appear between protected turn A and protected turn B?
 - did the prefill event point at the exact turn B request we expected?
 - did turn B show more cached tokens or lower latency in the protected arm?
 
@@ -1981,16 +1983,28 @@ Most important matrix columns:
 arm                 control or protected
 spec_prefill        false / true
 turn_b_ms           Turn B end-to-end latency
+turn_b_latency_gain_ms Control turn B minus this arm's turn B
 turn_b_cached       Turn B cached tokens
 turn_b_reuse        Turn B cached-token ratio
 hint_status         Did the worker see speculative_prefill on/off?
+prefill_evidence_status baseline_off / direct_prefill_seen / inferred_prefill_seen / hint_seen_no_prefill_evidence / hint_missing
 prefill_wrap        on / off / missing
 prefill_sent        Did Dynamo send the synthetic warmup request?
 prefill_done        Did that warmup request complete?
 prefill_target_seen Did the runtime event point at the exact turn B request?
+anonymous_warmup_seen Did an unnamed in-between warmup request show up in runtime logs?
 prefill_tokens      Tokens in the warmed next-turn prefix
-effect_status       warmed / sent_no_visible_gain / no_prefill_seen / baseline_off
+effect_status       faster_direct / faster_inferred / direct_no_visible_gain / inferred_no_visible_gain / hint_seen_no_prefill_evidence / baseline_off
 ```
+
+Interpretation:
+
+- `direct_prefill_seen` means the named `worker.spec_prefill.*` events were present.
+- `inferred_prefill_seen` means the named events were missing, but the worker log
+  still showed an anonymous warmup request between protected turn A and protected
+  turn B, which is strong indirect evidence that speculative prefill ran.
+- `faster_direct` / `faster_inferred` mean protected turn B was faster than the
+  control turn B under direct or inferred prefill evidence.
 
 ### Main Knobs
 

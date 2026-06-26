@@ -53,15 +53,18 @@ MATRIX_COLUMNS = [
     "spec_prefill",
     "turn_a_ms",
     "turn_b_ms",
+    "turn_b_latency_gain_ms",
     "turn_b_cached",
     "turn_b_reuse",
     "hint_status",
+    "prefill_evidence_status",
     "prefill_wrap",
     "prefill_spawned",
     "prefill_sent",
     "prefill_done",
     "prefill_failed",
     "prefill_target_seen",
+    "anonymous_warmup_seen",
     "prefill_tokens",
     "effect_status",
 ]
@@ -80,8 +83,10 @@ SUMMARY_COLUMNS = [
     "control_turn_b_cached",
     "protected_turn_b_cached",
     "turn_b_cached_delta",
+    "protected_prefill_evidence_status",
     "protected_prefill_done",
     "protected_prefill_target_seen",
+    "protected_anonymous_warmup_seen",
     "effect_status",
 ]
 
@@ -607,10 +612,15 @@ def extract_runtime_records(worker_runtime_log: Path) -> tuple[dict[str, dict[st
             info = request_records.setdefault(
                 request_id,
                 {
+                    "request_id": request_id,
                     "received_dt": None,
                     "attached_dt": None,
                     "completed_dt": None,
                     "spec_prefill_hint": None,
+                    "hint_probe_id": "",
+                    "has_request_context": False,
+                    "prompt_tokens": None,
+                    "cached_tokens": None,
                 },
             )
             ts = parse_dt(str(record.get("timestamp") or line_ts or ""))
@@ -624,6 +634,20 @@ def extract_runtime_records(worker_runtime_log: Path) -> tuple[dict[str, dict[st
             hint_value = hints.get("speculative_prefill")
             if isinstance(hint_value, bool):
                 info["spec_prefill_hint"] = hint_value
+            hint_probe_id = record.get("hint_probe_id") or hints.get("hint_probe_id")
+            if isinstance(hint_probe_id, str) and hint_probe_id:
+                info["hint_probe_id"] = hint_probe_id
+            request_context_present = bool(runtime_request_context(record))
+            if request_context_present:
+                info["has_request_context"] = True
+            if event_type.endswith("request_completed"):
+                usage = record.get("completion_usage")
+                if isinstance(usage, dict):
+                    prompt_tokens, cached_tokens = usage_prompt_tokens(usage)
+                    if prompt_tokens is not None:
+                        info["prompt_tokens"] = prompt_tokens
+                    if cached_tokens is not None:
+                        info["cached_tokens"] = cached_tokens
         elif event_type.startswith("worker.spec_prefill."):
             if line_ts and "timestamp" not in record:
                 record["timestamp"] = line_ts
@@ -631,8 +655,7 @@ def extract_runtime_records(worker_runtime_log: Path) -> tuple[dict[str, dict[st
     return request_records, spec_events
 
 
-def attach_worker_runtime(rows: list[dict[str, Any]], worker_runtime_log: Path) -> list[dict[str, Any]]:
-    request_records, spec_events = extract_runtime_records(worker_runtime_log)
+def attach_worker_runtime(rows: list[dict[str, Any]], request_records: dict[str, dict[str, Any]]) -> None:
     for row in rows:
         info = request_records.get(str(row.get("request_id")))
         if not info:
@@ -648,10 +671,60 @@ def attach_worker_runtime(rows: list[dict[str, Any]], worker_runtime_log: Path) 
         row["worker_queue_ms"] = ms_between(received_dt, attached_dt)
         row["worker_service_ms"] = ms_between(attached_dt, completed_dt)
         row["worker_total_ms"] = ms_between(received_dt, completed_dt)
-    return spec_events
 
 
-def arm_prefill_status(events: list[dict[str, Any]], *, turn_a_id: str, turn_b_id: str) -> dict[str, Any]:
+def infer_anonymous_warmup(
+    request_records: dict[str, dict[str, Any]],
+    *,
+    turn_a: dict[str, Any],
+    turn_b: dict[str, Any],
+) -> dict[str, Any]:
+    turn_a_done = parse_dt(str(turn_a.get("worker_done_ts") or ""))
+    turn_b_req = parse_dt(str(turn_b.get("worker_req_ts") or ""))
+    turn_a_prompt_tokens = maybe_int(turn_a.get("prompt_tokens"))
+    turn_a_id = str(turn_a.get("request_id") or "")
+    turn_b_id = str(turn_b.get("request_id") or "")
+
+    if turn_a_done is None or turn_b_req is None:
+        return {"seen": False, "count": 0}
+
+    candidates: list[dict[str, Any]] = []
+    for info in request_records.values():
+        request_id = str(info.get("request_id") or "")
+        if not request_id or request_id in {turn_a_id, turn_b_id}:
+            continue
+        if info.get("has_request_context"):
+            continue
+        if info.get("hint_probe_id"):
+            continue
+        if info.get("spec_prefill_hint") is not None:
+            continue
+        received_dt = info.get("received_dt")
+        completed_dt = info.get("completed_dt")
+        if not isinstance(received_dt, datetime) or not isinstance(completed_dt, datetime):
+            continue
+        if received_dt < turn_a_done or completed_dt > turn_b_req:
+            continue
+        prompt_tokens = maybe_int(info.get("prompt_tokens"))
+        cached_tokens = maybe_int(info.get("cached_tokens"))
+        if prompt_tokens is None or cached_tokens is None or cached_tokens <= 0:
+            continue
+        if turn_a_prompt_tokens is not None and prompt_tokens + 256 < turn_a_prompt_tokens:
+            continue
+        candidates.append(info)
+
+    return {"seen": bool(candidates), "count": len(candidates)}
+
+
+def arm_prefill_status(
+    events: list[dict[str, Any]],
+    request_records: dict[str, dict[str, Any]],
+    *,
+    turn_a: dict[str, Any],
+    turn_b: dict[str, Any],
+) -> dict[str, Any]:
+    turn_a_id = str(turn_a.get("request_id") or "")
+    turn_b_id = str(turn_b.get("request_id") or "")
     matching = [
         event
         for event in events
@@ -672,7 +745,26 @@ def arm_prefill_status(events: list[dict[str, Any]], *, turn_a_id: str, turn_b_i
     wrap_status = "missing"
     if isinstance(wrap_event, dict):
         wrap_status = "on" if truthy(wrap_event.get("enabled")) else "off"
+    anonymous_warmup = infer_anonymous_warmup(
+        request_records,
+        turn_a=turn_a,
+        turn_b=turn_b,
+    )
+    evidence_status = "hint_missing"
+    if "worker.spec_prefill.prefill_failed" in event_types:
+        evidence_status = "prefill_failed"
+    elif (
+        "worker.spec_prefill.prefill_completed" in event_types
+        or "worker.spec_prefill.prefill_sent" in event_types
+        or "worker.spec_prefill.task_spawned" in event_types
+    ):
+        evidence_status = "direct_prefill_seen"
+    elif anonymous_warmup["seen"]:
+        evidence_status = "inferred_prefill_seen"
+    elif truthy(turn_a.get("worker_hint")) or truthy(turn_b.get("worker_hint")):
+        evidence_status = "hint_seen_no_prefill_evidence"
     return {
+        "prefill_evidence_status": evidence_status,
         "prefill_wrap": wrap_status,
         "prefill_spawned": "worker.spec_prefill.task_spawned" in event_types,
         "prefill_sent": "worker.spec_prefill.prefill_sent" in event_types,
@@ -681,20 +773,31 @@ def arm_prefill_status(events: list[dict[str, Any]], *, turn_a_id: str, turn_b_i
         "prefill_target_seen": any(
             str(event.get("spec_prefill_target_request_id") or "") == turn_b_id for event in matching
         ),
+        "anonymous_warmup_seen": anonymous_warmup["seen"],
         "prefill_tokens": prompt_tokens,
     }
 
 
-def build_matrix_rows(rows: list[dict[str, Any]], spec_events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_matrix_rows(
+    rows: list[dict[str, Any]],
+    request_records: dict[str, dict[str, Any]],
+    spec_events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     matrix_rows: list[dict[str, Any]] = []
+    control_turn_b = next(
+        (row for row in rows if row.get("arm") == "control" and row.get("request") == "turn_b"),
+        {},
+    )
+    control_turn_b_ms = maybe_int(control_turn_b.get("latency_ms"))
     for arm in ("control", "protected"):
         arm_rows = [row for row in rows if row.get("arm") == arm]
         turn_a = next((row for row in arm_rows if row.get("request") == "turn_a"), {})
         turn_b = next((row for row in arm_rows if row.get("request") == "turn_b"), {})
         prefill = arm_prefill_status(
             spec_events,
-            turn_a_id=str(turn_a.get("request_id") or ""),
-            turn_b_id=str(turn_b.get("request_id") or ""),
+            request_records,
+            turn_a=turn_a,
+            turn_b=turn_b,
         )
         hint_value = turn_a.get("worker_hint")
         if hint_value is True:
@@ -706,16 +809,39 @@ def build_matrix_rows(rows: list[dict[str, Any]], spec_events: list[dict[str, An
         else:
             hint_status = "no_runtime"
         turn_b_cached = maybe_int(turn_b.get("cached_tokens"))
+        turn_b_ms = maybe_int(turn_b.get("latency_ms"))
+        latency_gain_ms = (
+            control_turn_b_ms - turn_b_ms
+            if control_turn_b_ms is not None and turn_b_ms is not None
+            else None
+        )
         effect_status = "baseline_off"
+        prefill_evidence_status = prefill["prefill_evidence_status"]
         if arm == "protected":
-            if prefill["prefill_done"] and (turn_b_cached or 0) > 0:
-                effect_status = "warmed"
+            if prefill["prefill_evidence_status"] == "prefill_failed":
+                effect_status = "prefill_failed"
+            elif prefill["prefill_evidence_status"] == "direct_prefill_seen" and (latency_gain_ms or 0) > 0:
+                effect_status = "faster_direct"
+            elif prefill["prefill_evidence_status"] == "inferred_prefill_seen" and (latency_gain_ms or 0) > 0:
+                effect_status = "faster_inferred"
+            elif prefill["prefill_evidence_status"] == "direct_prefill_seen":
+                effect_status = "direct_no_visible_gain"
+            elif prefill["prefill_evidence_status"] == "inferred_prefill_seen":
+                effect_status = "inferred_no_visible_gain"
+            elif prefill["prefill_evidence_status"] == "hint_seen_no_prefill_evidence":
+                effect_status = "hint_seen_no_prefill_evidence"
+            elif hint_status == "missing":
+                effect_status = "hint_missing"
+            elif hint_status == "no_runtime":
+                effect_status = "no_runtime"
             elif prefill["prefill_sent"]:
                 effect_status = "sent_no_visible_gain"
             elif prefill["prefill_failed"]:
                 effect_status = "prefill_failed"
             else:
                 effect_status = "no_prefill_seen"
+        else:
+            prefill_evidence_status = "baseline_off"
         matrix_rows.append(
             {
                 "run_id": turn_a.get("run_id") or turn_b.get("run_id") or "",
@@ -723,15 +849,18 @@ def build_matrix_rows(rows: list[dict[str, Any]], spec_events: list[dict[str, An
                 "spec_prefill": turn_a.get("spec_prefill", turn_b.get("spec_prefill", "")),
                 "turn_a_ms": turn_a.get("latency_ms", ""),
                 "turn_b_ms": turn_b.get("latency_ms", ""),
+                "turn_b_latency_gain_ms": latency_gain_ms if latency_gain_ms is not None else "",
                 "turn_b_cached": turn_b.get("cached_tokens", ""),
                 "turn_b_reuse": turn_b.get("reuse_ratio", ""),
                 "hint_status": hint_status,
+                "prefill_evidence_status": prefill_evidence_status,
                 "prefill_wrap": prefill["prefill_wrap"],
                 "prefill_spawned": prefill["prefill_spawned"],
                 "prefill_sent": prefill["prefill_sent"],
                 "prefill_done": prefill["prefill_done"],
                 "prefill_failed": prefill["prefill_failed"],
                 "prefill_target_seen": prefill["prefill_target_seen"],
+                "anonymous_warmup_seen": prefill["anonymous_warmup_seen"],
                 "prefill_tokens": prefill["prefill_tokens"],
                 "effect_status": effect_status,
             }
@@ -757,13 +886,7 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         if control_turn_b_cached is not None and protected_turn_b_cached is not None
         else None
     )
-    effect_status = "no"
-    if truthy(protected.get("prefill_done")) and (protected_turn_b_cached or 0) > (control_turn_b_cached or 0):
-        effect_status = "yes"
-    elif truthy(protected.get("prefill_done")):
-        effect_status = "prefill_done_no_gain"
-    elif truthy(protected.get("prefill_sent")):
-        effect_status = "prefill_sent_no_gain"
+    effect_status = str(protected.get("effect_status") or "no")
     return {
         "run_id": run_id,
         "model": args.model,
@@ -778,8 +901,10 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "control_turn_b_cached": control.get("turn_b_cached", ""),
         "protected_turn_b_cached": protected.get("turn_b_cached", ""),
         "turn_b_cached_delta": cached_delta if cached_delta is not None else "",
+        "protected_prefill_evidence_status": protected.get("prefill_evidence_status", ""),
         "protected_prefill_done": protected.get("prefill_done", ""),
         "protected_prefill_target_seen": protected.get("prefill_target_seen", ""),
+        "protected_anonymous_warmup_seen": protected.get("anonymous_warmup_seen", ""),
         "effect_status": effect_status,
     }
 
@@ -803,9 +928,11 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Control turn B cached tokens: `{summary['control_turn_b_cached']}`",
         f"- Protected turn B cached tokens: `{summary['protected_turn_b_cached']}`",
         f"- Turn B cached-token delta (protected - control): `{summary['turn_b_cached_delta']}`",
+        f"- Protected prefill evidence status: `{summary['protected_prefill_evidence_status']}`",
         f"- Protected prefill completed: `{summary['protected_prefill_done']}`",
         f"- Protected target seen in prefill events: `{summary['protected_prefill_target_seen']}`",
-        f"- Overall effect: `{summary['effect_status']}`",
+        f"- Protected anonymous warmup seen: `{summary['protected_anonymous_warmup_seen']}`",
+        f"- Overall effect verdict: `{summary['effect_status']}`",
         "",
     ]
     return "\n".join(lines)
@@ -901,11 +1028,13 @@ def main() -> int:
         request_rows = run_probe(args, run_id)
         write_csv(paths["requests_csv"], request_rows, REQUEST_COLUMNS)
 
+    request_records: dict[str, dict[str, Any]] = {}
     spec_events: list[dict[str, Any]] = []
     if isinstance(worker_runtime_log, Path) and worker_runtime_log.exists():
-        spec_events = attach_worker_runtime(request_rows, worker_runtime_log)
+        request_records, spec_events = extract_runtime_records(worker_runtime_log)
+        attach_worker_runtime(request_rows, request_records)
 
-    matrix_rows = build_matrix_rows(request_rows, spec_events)
+    matrix_rows = build_matrix_rows(request_rows, request_records, spec_events)
     summary = build_summary(args, run_id, matrix_rows)
     save_outputs(paths, request_rows, matrix_rows, summary)
 

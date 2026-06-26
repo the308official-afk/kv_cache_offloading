@@ -14,7 +14,7 @@ REMOTE_PROJECT_DIR="/home/ec2-user/${REPO_NAME}"
 # SERVERS=("44.201.229.234" "44.202.2.239" "3.88.7.135")
 SERVERS=(
   ""   
-  "107.22.96.96"
+  "54.165.218.114"
   ""
 )
 LABELS=("S0" "S1" "S2")
@@ -46,6 +46,7 @@ RSYNC_COMMON_OPTS=(
   -az
   --human-readable
   --itemize-changes
+  --stats
   --omit-dir-times
   --no-perms
   --no-owner
@@ -133,6 +134,7 @@ for i in "${TARGET_INDICES[@]}"; do
   echo "==== Uploading ${REPO_NAME} to ${label} (${ip}) ===="
   echo "Local source: ${LOCAL_BASE}/"
   echo "Remote dest:  ${REMOTE_PROJECT_DIR}/"
+  echo "Excluded from upload: upstream/dynamo/, experiments/reports/, experiments/raw/, experiments/parsed/"
   echo "Creating remote directory..."
 
   ssh "${SSH_OPTS[@]}" "$remote_host" "mkdir -p '${REMOTE_PROJECT_DIR}'"

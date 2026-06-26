@@ -866,6 +866,79 @@
     </div>
   </section>
 
+  <section class="slide">
+    <div class="slide-number">07</div>
+    <h2 class="title">What We Can Measure Now</h2>
+    <p class="subtitle">
+      We now have a working measurement stack for agentic hint experiments, with direct runtime attribution rather than timestamp-only guessing.
+    </p>
+    <div class="content">
+      <div class="grid-2">
+        <div class="panel">
+          <div class="eyebrow">Achieved</div>
+          <ul>
+            <li>Built repeatable experiments for retention, scheduling, prompt evolution, cache control, and speculative prefill.</li>
+            <li>Instrumented Dynamo and SGLang so we can tie runtime behavior back to a specific run, request, and phase.</li>
+            <li>Automated startup, readiness, reporting, and machine-specific setup for EC2 and GH200-style environments.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Working Signals</div>
+          <ul>
+            <li><strong>Priority:</strong> worker receipt plus scheduling-order evidence.</li>
+            <li><strong>Speculative prefill:</strong> worker receipt plus measurable latency gain.</li>
+            <li><strong>Prompt evolution:</strong> per-task, per-phase, per-request runtime metrics.</li>
+            <li><strong>Retention:</strong> replay latency, cached tokens, reuse, and eviction threshold.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Still Open</div>
+        <ul>
+          <li>Cache-control metadata arrives, but we have not yet proven a real retention advantage from it.</li>
+          <li>Some hint families are still unsupported or not yet proven in the worker decision path.</li>
+          <li>We are still deepening direct proof at the exact SGLang decision branches for some behaviors.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-number">08</div>
+    <h2 class="title">Why This Matters</h2>
+    <p class="subtitle">
+      The goal is to characterize a realistic agentic workload, see where memory and storage pressure actually comes from, and use that evidence to guide hardware and runtime decisions.
+    </p>
+    <div class="content">
+      <div class="grid-2">
+        <div class="panel">
+          <div class="eyebrow">Research Purpose</div>
+          <ul>
+            <li>Recreate realistic agentic use cases on NVIDIA systems.</li>
+            <li>Measure GPU memory, host memory, storage, and scheduling pressure under controlled workloads.</li>
+            <li>Compare software knobs and hardware configurations under the same benchmark.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Roadmap Value</div>
+          <ul>
+            <li>Shows which runtime hints actually change behavior.</li>
+            <li>Shows where larger memory pools or storage tiers would help most.</li>
+            <li>Gives concrete evidence to discuss with Storage, AIG-SHARKS, DESG, and GPU Arch teams.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Next</div>
+        <ul>
+          <li>Expand proven hint support beyond priority and speculative prefill.</li>
+          <li>Strengthen direct proof for cache-control decision paths.</li>
+          <li>Run broader cross-model and cross-machine comparisons to inform hardware choices.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <script src="generated/retention_kv_hint_story/story_data.js"></script>
   <script>
     (function () {

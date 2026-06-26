@@ -322,6 +322,7 @@ def ensure_prefill_task_instrumentation(text: str, path: Path) -> str:
     new = """    let formatted_prompt = formatter.render(&prefill_request)?;
     let encoding = tokenizer.encode(&formatted_prompt)?;
     let token_ids = encoding.token_ids().to_vec();
+    let token_count = token_ids.len();
     let prefill_request_id = metadata
         .request_id
         .as_ref()
@@ -329,7 +330,7 @@ def ensure_prefill_task_instrumentation(text: str, path: Path) -> str:
         .unwrap_or_else(|| format!(\"spec_prefill::{}\", uuid::Uuid::new_v4()));
 
     tracing::info!(
-        num_tokens = token_ids.len(),
+        num_tokens = token_count,
         \"Speculative prefill: sending next-turn prefix\"
     );
     emit_spec_prefill_event(
@@ -342,7 +343,7 @@ def ensure_prefill_task_instrumentation(text: str, path: Path) -> str:
             ),
             (
                 \"prefill_prompt_tokens\".to_string(),
-                JsonValue::from(token_ids.len() as u64),
+                JsonValue::from(token_count as u64),
             ),
         ]),
     );
@@ -368,7 +369,7 @@ def ensure_prefill_task_instrumentation(text: str, path: Path) -> str:
             ),
             (
                 \"prefill_prompt_tokens\".to_string(),
-                JsonValue::from(token_ids.len() as u64),
+                JsonValue::from(token_count as u64),
             ),
         ]),
     );
