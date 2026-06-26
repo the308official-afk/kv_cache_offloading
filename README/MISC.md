@@ -714,3 +714,22 @@ If you want, I can compress this further into:
 one intro slide
 one achievements slide
 one open-questions slide.
+
+
+
+
+
+# salloc --nodelist=radha1 -t 3:59:00
+docker container rm pytorch-vllm -f	
+docker run -it \
+	--network=host --ipc=host --device=/dev/kfd --device=/dev/dri --group-add video  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v $HOME/dockerx:/dockerx --shm-size=64G \
+	-v /data/ojaiyeob:/workspace/data \
+	-w /var/lib/jenkins/dlrm/FAMBench/benchmarks/dlrm/ootb/bench \
+	--name pytorch-vllm \
+	--rm rocm/pytorch:latest \
+	-lc '
+			pwd
+			cd /workspace/dlrm/FAMBench/benchmarks/dlrm/ootb/bench
+			ls -l
+			./dlrm_s_benchmark.sh
+		'
