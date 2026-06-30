@@ -8,7 +8,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   # shellcheck disable=SC1091
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
-source runtime_instrumentation/cache_pinning_profile.sh
+source runtime_instrumentation/cache_pinning_runtime_helper.sh
 
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
@@ -36,116 +36,9 @@ LATEST_SUMMARY_CSV="experiments/reports/latest_cache_pinning_doc_validation_summ
 LATEST_REQUESTS_CSV="experiments/reports/latest_cache_pinning_doc_validation_requests.csv"
 LATEST_SUMMARY_MD="experiments/reports/latest_cache_pinning_doc_validation_summary.md"
 mkdir -p "${RUN_DIR}"
-CACHE_PINNING_SOURCES_PREPARED=0
-
-banner() {
-  cat <<EOF
-========================================
-$1
-========================================
-EOF
-}
-
-numbered_title() {
-  printf '(%s/%s) %s\n' "$1" "$2" "$3"
-}
-
-banner_numbered() {
-  banner "$(numbered_title "$1" "$2" "$3")"
-}
-
-detect_cache_pinning_frontend_flag() {
-  local root="$1"
-  local frontend_args="${root}/lib/llm/src/kv_router/config.rs"
-  local frontend_py="${root}/components/src/dynamo/frontend/frontend_args.py"
-  if grep -q -- "--enable-agentic-cache-control" "${frontend_args}" 2>/dev/null; then
-    printf '%s\n' "--enable-agentic-cache-control"
-    return 0
-  fi
-  if grep -q -- "--enable-cache-control" "${frontend_py}" 2>/dev/null; then
-    printf '%s\n' "--enable-cache-control"
-    return 0
-  fi
-  return 1
-}
-
-require_cache_pinning_source_markers() {
-  local dynamo_root="$1"
-  local sglang_root="$2"
-  grep -q "cache_control_ttl" "${dynamo_root}/lib/llm/src/preprocessor.rs" 2>/dev/null
-  grep -q "spawn_pin_prefix" "${dynamo_root}/lib/llm/src/kv_router/push_router.rs" 2>/dev/null
-  grep -q "pin_prefix" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
-  grep -q "pin_expiry" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
-}
-
-prepare_cache_pinning_sources() {
-  if [[ "${CACHE_PINNING_SOURCES_PREPARED}" = "1" ]]; then
-    return 0
-  fi
-  ./runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh | tee -a "${DRIVER_LOG}"
-  ./runtime_instrumentation/fetch_cache_pinning_sglang_source.sh | tee -a "${DRIVER_LOG}"
-
-  if ! require_cache_pinning_source_markers "${CACHE_PINNING_DYNAMO_SOURCE_DIR}" "${CACHE_PINNING_SGLANG_ROOT}"; then
-    echo "Cache-pinning source markers were not found in the isolated PR stack." | tee -a "${DRIVER_LOG}" >&2
-    exit 1
-  fi
-  CACHE_PINNING_SOURCES_PREPARED=1
-}
-
-ensure_cache_pinning_runtime_images() {
-  local need_build=0
-  local -a build_reasons=()
-  if [[ "${CACHE_PINNING_REBUILD_IMAGES}" = "1" ]]; then
-    need_build=1
-    build_reasons+=("CACHE_PINNING_REBUILD_IMAGES=1")
-  fi
-  if ! docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1; then
-    need_build=1
-    build_reasons+=("frontend image missing")
-  fi
-  if ! docker image inspect "${CACHE_PINNING_WORKER_IMAGE}" >/dev/null 2>&1; then
-    need_build=1
-    build_reasons+=("worker image missing")
-  fi
-
-  if [[ "${need_build}" = "0" ]]; then
-    echo "Reusing existing cache-pinning images; no isolated Dynamo rebuild needed for this run." | tee -a "${DRIVER_LOG}"
-    echo "Frontend image: ${CACHE_PINNING_FRONTEND_IMAGE}" | tee -a "${DRIVER_LOG}"
-    echo "Worker image: ${CACHE_PINNING_WORKER_IMAGE}" | tee -a "${DRIVER_LOG}"
-    echo "frontend image ok" | tee -a "${DRIVER_LOG}"
-    echo "worker image ok" | tee -a "${DRIVER_LOG}"
-    banner_numbered 1 6 "CACHE PINNING IMAGE READY (isolated cache-pinning images are there)" | tee -a "${DRIVER_LOG}"
-    return 0
-  fi
-
-  if [[ "${AUTO_BUILD_CACHE_PINNING_IMAGES}" != "1" ]]; then
-    echo "Missing cache-pinning runtime images and auto-build is disabled." >&2
-    exit 1
-  fi
-
-  echo "Preparing isolated cache-pinning sources..." | tee -a "${DRIVER_LOG}"
-  prepare_cache_pinning_sources
-
-  echo "Building isolated cache-pinning runtime images from the cache-pinning PR stack..." | tee -a "${DRIVER_LOG}"
-  if [[ "${#build_reasons[@]}" -gt 0 ]]; then
-    printf 'Build reason(s): %s\n' "${build_reasons[*]}" | tee -a "${DRIVER_LOG}"
-  fi
-  SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
-  FRONTEND_IMAGE_TAG="${CACHE_PINNING_FRONTEND_IMAGE}" \
-  WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
-  LEAN_FRONTEND=1 \
-    ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh | tee -a "${DRIVER_LOG}"
-
-  docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1
-  docker image inspect "${CACHE_PINNING_WORKER_IMAGE}" >/dev/null 2>&1
-  echo "frontend image ok" | tee -a "${DRIVER_LOG}"
-  echo "worker image ok" | tee -a "${DRIVER_LOG}"
-  banner_numbered 1 6 "CACHE PINNING IMAGE READY (isolated cache-pinning images are there)" | tee -a "${DRIVER_LOG}"
-}
-
 print_local_ready() {
   local frontend_flag="$1"
-  banner_numbered 2 6 "CACHE PINNING LOCAL READY (the isolated Dynamo and SGLang PR sources are selected)" | tee -a "${DRIVER_LOG}"
+  cache_pinning_banner_numbered 2 6 "CACHE PINNING LOCAL READY (the isolated Dynamo and SGLang PR sources are selected)" | tee -a "${DRIVER_LOG}"
   cat <<EOF | tee -a "${DRIVER_LOG}"
 Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}
 Dynamo source dir: ${CACHE_PINNING_DYNAMO_SOURCE_DIR}
@@ -252,11 +145,11 @@ PY
     echo "Live worker does not appear to be using the isolated cache-pinning SGLang overlay." | tee -a "${DRIVER_LOG}" >&2
     exit 1
   fi
-  banner_numbered 5 6 "CACHE PINNING LIVE READY (the live worker is using the isolated cache-pinning stack)" | tee -a "${DRIVER_LOG}"
+  cache_pinning_banner_numbered 5 6 "CACHE PINNING LIVE READY (the live worker is using the isolated cache-pinning stack)" | tee -a "${DRIVER_LOG}"
 }
 
 print_model_readiness_go() {
-  banner_numbered 4 6 "MODEL READINESS GO (model registration and smoke test both passed)" | tee -a "${DRIVER_LOG}"
+  cache_pinning_banner_numbered 4 6 "MODEL READINESS GO (model registration and smoke test both passed)" | tee -a "${DRIVER_LOG}"
 }
 
 copy_latest_reports() {
@@ -291,8 +184,8 @@ if [[ -z "${MODEL}" ]]; then
   exit 1
 fi
 
-ensure_cache_pinning_runtime_images
-prepare_cache_pinning_sources
+ensure_cache_pinning_runtime_images "${DRIVER_LOG}" "CACHE PINNING IMAGE READY (isolated cache-pinning images are there)" 6 1
+prepare_cache_pinning_sources "${DRIVER_LOG}"
 
 FRONTEND_FLAG="$(detect_cache_pinning_frontend_flag "${CACHE_PINNING_DYNAMO_SOURCE_DIR}" || true)"
 if [[ -z "${FRONTEND_FLAG}" ]]; then
@@ -337,7 +230,7 @@ fi
 print_model_readiness_go
 check_live_ready
 
-banner_numbered 6 6 "CACHE PINNING EXPERIMENT GO (doc-style validation requests are about to start)" | tee -a "${DRIVER_LOG}"
+cache_pinning_banner_numbered 6 6 "CACHE PINNING EXPERIMENT GO (doc-style validation requests are about to start)" | tee -a "${DRIVER_LOG}"
 
 "${PYTHON_BIN}" experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py \
   --run-id "${CACHE_PINNING_DOC_ID}" \

@@ -1833,6 +1833,99 @@ experiment.
   - `lib/llm/src/kv_router/config.rs`
     Defines the router-side cache-control enable flag
 
+## Experiment 10B: Cache-Pinning Retention Threshold Sweep
+
+Use this when you want a stronger behavioral test than the two-turn doc check:
+
+- control arm: `cache_control=off`
+- protected arm: `cache_control=ephemeral:1h`
+- increase distractor pressure
+- compare when replay A turns cold
+
+This also stays isolated from the rest of the README:
+
+- separate Dynamo source checkout
+- separate SGLang source checkout
+- separate cache-pinning-only Docker images
+
+### Run
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+RETENTION_SWEEP_ID="cache_pinning_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
+DISTRACTOR_COUNTS="40 80 120 160" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
+./agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### What It Does
+
+- reuses the isolated cache-pinning PR images
+- runs the existing retention-threshold report flow on that stack
+- compares `off` vs `ephemeral:1h`
+- writes the normal matrix/comparison style outputs, but with cache-pinning-only latest files
+
+### Main Knobs
+
+```text
+DYNAMO_MACHINE_PROFILE
+RETENTION_SWEEP_ID
+DISTRACTOR_COUNTS
+KV_TIER_MODES
+PROTECTED_INPUT_LEN
+DISTRACTOR_INPUT_LEN
+CACHE_PINNING_TTL
+CACHE_PINNING_PINNED_RATIO
+CACHE_PINNING_HICACHE_RATIO
+CACHE_PINNING_HICACHE_WRITE_POLICY
+CACHE_PINNING_MEM_FRACTION_STATIC
+AUTO_BUILD_CACHE_PINNING_IMAGES
+CACHE_PINNING_REBUILD_IMAGES
+```
+
+### Key Reports
+
+```bash
+cat experiments/reports/latest_cache_pinning_retention_threshold_progress.csv
+cat experiments/reports/latest_cache_pinning_retention_threshold_matrix.csv
+cat experiments/reports/latest_cache_pinning_retention_threshold_comparison.csv
+cat experiments/reports/latest_cache_pinning_retention_threshold_summary.md
+```
+
+### Key Columns
+
+```text
+protected_cache
+distractors
+replay_ms
+replay_cached
+replay_reuse
+survived
+```
+
+Simple reading:
+
+- if `ephemeral:1h` stays warm at higher distractor counts than `off`, that is stronger evidence that cache pinning is doing real work
+- if both arms go cold at the same point, pinning is not buying retention in that setup
+
+### Decision Proof
+
+- [`runtime_instrumentation/cache_pinning_runtime_helper.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/cache_pinning_runtime_helper.sh)  
+  Local setup. Ensures the isolated cache-pinning PR images and source refs are the ones used for the run.
+
+- [`agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh)  
+  Wrapper. Forces the retention-threshold sweep onto the isolated cache-pinning images, passes the cache-control frontend flag, and writes dedicated latest report files.
+
+- [`agentbench/run_kv_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_threshold_sweep_single_host.sh)  
+  Sweep runner. Repeats the probe across distractor counts and builds the threshold report.
+
+- [`experiments/scripts/retention_probe/build_retention_threshold_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py)  
+  Report builder. Produces the compact matrix, comparison table, and summary used to judge whether `ephemeral:1h` outlasts `off`.
+
 - SGLang PR `#18941`:
   - `python/sglang/srt/mem_cache/hiradix_cache.py`
     Implements `pin_prefix()` and TTL refresh-on-hit
