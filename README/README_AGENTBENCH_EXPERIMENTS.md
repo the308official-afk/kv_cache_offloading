@@ -1723,6 +1723,8 @@ This experiment is intentionally isolated from the rest of the README:
 - separate Docker image tags
 
 So changes here do not disturb the default stack used by the other experiments.
+This isolated validation uses the cache-pinning PR source directly. It does not
+force that older branch through the newer runtime-attribution repair pipeline.
 
 ### Run
 
@@ -1747,6 +1749,11 @@ CACHE_PINNING_HICACHE_RATIO=1 \
 - sends the minimal two-turn doc-style `nvext.cache_control` example
 - checks whether turn 2 shows nonzero cached tokens
 
+First run behavior:
+
+- the first run usually takes longer because it builds separate cache-pinning-only Docker images from the isolated PR stack
+- later runs should reuse those images unless you set `CACHE_PINNING_REBUILD_IMAGES=1`
+
 ### Main Knobs
 
 ```text
@@ -1756,6 +1763,7 @@ CACHE_PINNING_PINNED_RATIO
 CACHE_PINNING_HICACHE_RATIO
 CACHE_PINNING_HICACHE_WRITE_POLICY
 CACHE_PINNING_MEM_FRACTION_STATIC
+CACHE_PINNING_EPP_IMAGE
 CACHE_PINNING_REBUILD_IMAGES
 AUTO_BUILD_CACHE_PINNING_IMAGES
 ```

@@ -83,8 +83,6 @@ prepare_cache_pinning_sources() {
     return 0
   fi
   ./runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh | tee -a "${DRIVER_LOG}"
-  SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
-  ./runtime_instrumentation/prepare_instrumented_dynamo_source.sh | tee -a "${DRIVER_LOG}"
   ./runtime_instrumentation/fetch_cache_pinning_sglang_source.sh | tee -a "${DRIVER_LOG}"
 
   if ! require_cache_pinning_source_markers "${CACHE_PINNING_DYNAMO_SOURCE_DIR}" "${CACHE_PINNING_SGLANG_ROOT}"; then
@@ -96,17 +94,24 @@ prepare_cache_pinning_sources() {
 
 ensure_cache_pinning_runtime_images() {
   local need_build=0
+  local -a build_reasons=()
   if [[ "${CACHE_PINNING_REBUILD_IMAGES}" = "1" ]]; then
     need_build=1
+    build_reasons+=("CACHE_PINNING_REBUILD_IMAGES=1")
   fi
   if ! docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1; then
     need_build=1
+    build_reasons+=("frontend image missing")
   fi
   if ! docker image inspect "${CACHE_PINNING_WORKER_IMAGE}" >/dev/null 2>&1; then
     need_build=1
+    build_reasons+=("worker image missing")
   fi
 
   if [[ "${need_build}" = "0" ]]; then
+    echo "Reusing existing cache-pinning images; no isolated Dynamo rebuild needed for this run." | tee -a "${DRIVER_LOG}"
+    echo "Frontend image: ${CACHE_PINNING_FRONTEND_IMAGE}" | tee -a "${DRIVER_LOG}"
+    echo "Worker image: ${CACHE_PINNING_WORKER_IMAGE}" | tee -a "${DRIVER_LOG}"
     echo "frontend image ok" | tee -a "${DRIVER_LOG}"
     echo "worker image ok" | tee -a "${DRIVER_LOG}"
     banner_numbered 1 6 "CACHE PINNING IMAGE READY (isolated cache-pinning images are there)" | tee -a "${DRIVER_LOG}"
@@ -121,12 +126,15 @@ ensure_cache_pinning_runtime_images() {
   echo "Preparing isolated cache-pinning sources..." | tee -a "${DRIVER_LOG}"
   prepare_cache_pinning_sources
 
-  echo "Building isolated cache-pinning runtime images..." | tee -a "${DRIVER_LOG}"
+  echo "Building isolated cache-pinning runtime images from the cache-pinning PR stack..." | tee -a "${DRIVER_LOG}"
+  if [[ "${#build_reasons[@]}" -gt 0 ]]; then
+    printf 'Build reason(s): %s\n' "${build_reasons[*]}" | tee -a "${DRIVER_LOG}"
+  fi
   SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
   FRONTEND_IMAGE_TAG="${CACHE_PINNING_FRONTEND_IMAGE}" \
   WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
-  LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
-    ./runtime_instrumentation/build_instrumented_dynamo_images.sh | tee -a "${DRIVER_LOG}"
+  LEAN_FRONTEND=1 \
+    ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh | tee -a "${DRIVER_LOG}"
 
   docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1
   docker image inspect "${CACHE_PINNING_WORKER_IMAGE}" >/dev/null 2>&1
@@ -297,6 +305,7 @@ print_local_ready "${FRONTEND_FLAG}"
 echo "Cache-pinning doc validation run ID: ${CACHE_PINNING_DOC_ID}" | tee -a "${DRIVER_LOG}"
 echo "Model: ${MODEL}" | tee -a "${DRIVER_LOG}"
 echo "TTL: ${CACHE_PINNING_TTL}" | tee -a "${DRIVER_LOG}"
+echo "EPP image: ${CACHE_PINNING_EPP_IMAGE}" | tee -a "${DRIVER_LOG}"
 echo "Driver log: ${DRIVER_LOG}" | tee -a "${DRIVER_LOG}"
 echo "Smoke log: ${SMOKE_LOG}" | tee -a "${DRIVER_LOG}"
 echo "Worker log: ${WORKER_LOG}" | tee -a "${DRIVER_LOG}"
@@ -312,7 +321,6 @@ WORKER_EXTRA_ARGS="--enable-cache-report --enable-hierarchical-cache --hicache-r
 WORKER_SGLANG_DEV_MODE=1 \
 WORKER_SGLANG_SOURCE_ROOT="${CACHE_PINNING_SGLANG_ROOT}" \
 SGLANG_HICACHE_MAX_PINNED_RATIO="${CACHE_PINNING_PINNED_RATIO}" \
-DYN_RUNTIME_JSON_LOGS=1 \
 DYN_TOOL_CALL_PARSER=hermes \
 DYNAMO_MODEL_PATH="${MODEL}" \
 DYNAMO_SERVED_MODEL_NAME="${MODEL}" \
@@ -338,7 +346,7 @@ banner_numbered 6 6 "CACHE PINNING EXPERIMENT GO (doc-style validation requests 
   --ttl "${CACHE_PINNING_TTL}" \
   --turn1-max-tokens "${CACHE_PINNING_TURN1_MAX_TOKENS}" \
   --turn2-max-tokens "${CACHE_PINNING_TURN2_MAX_TOKENS}" \
-  --frontend-flag "${FRONTEND_FLAG}" \
+  --frontend-flag="${FRONTEND_FLAG}" \
   --out-dir "${RUN_DIR}" >> "${DRIVER_LOG}" 2>&1
 
 docker logs dynamo-sglang-worker > "${WORKER_LOG}" 2>&1 || true
@@ -350,7 +358,7 @@ docker logs dynamo-sglang-worker > "${WORKER_LOG}" 2>&1 || true
   --ttl "${CACHE_PINNING_TTL}" \
   --turn1-max-tokens "${CACHE_PINNING_TURN1_MAX_TOKENS}" \
   --turn2-max-tokens "${CACHE_PINNING_TURN2_MAX_TOKENS}" \
-  --frontend-flag "${FRONTEND_FLAG}" \
+  --frontend-flag="${FRONTEND_FLAG}" \
   --worker-log "${WORKER_LOG}" \
   --out-dir "${RUN_DIR}" \
   --postprocess-only >> "${DRIVER_LOG}" 2>&1
