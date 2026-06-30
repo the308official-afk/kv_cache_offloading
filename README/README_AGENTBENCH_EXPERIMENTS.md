@@ -1455,6 +1455,8 @@ Strongest proof in this setup: `scheduler_priority_applied` in the raw
 
 ## Experiment 10: Cache-Control Retention
 
+https://docs.nvidia.com/dynamo/v1.0.1/user-guides/agents/sg-lang-for-agentic-workloads#cache-pinning-experimental 
+
 Use this to test `nvext.cache_control` directly.
 
 Supported control under test:
@@ -1474,6 +1476,21 @@ a GPU-only counterfactual, set:
 ```bash
 CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE=0
 ```
+
+The wrapper now also follows the Dynamo cache-pinning doc as closely as the
+current pinned stack allows:
+
+- defaults `HICACHE_WRITE_POLICY=write_through`
+- defaults `SGLANG_HICACHE_MAX_PINNED_RATIO=0.1`
+- checks whether the pinned Dynamo source actually exposes a frontend
+  `--enable-cache-control` flag
+- checks whether the pinned source shows any live cache-pin path signals such as
+  `pin_prefix`, `pin_expiry`, or `router_enable_cache_control`
+
+So the report now tells you two different things:
+
+- did the request carry `cache_control` metadata?
+- was the runtime even eligible to exercise the documented cache-pinning path?
 
 The precise cache-control wrappers now use the same automatic source/image
 freshness checks, so they will rebuild Dynamo when the local instrumented
@@ -1564,6 +1581,10 @@ DISTRACTOR_INPUT_LEN
 KV_TIER_MODES
 CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE
 PROTECTED_CACHE_CONTROL_PROFILES
+CACHE_CONTROL_DOC_MODE
+CACHE_CONTROL_FRONTEND_FLAG_MODE
+CACHE_CONTROL_PINNED_RATIO
+CACHE_CONTROL_HICACHE_WRITE_POLICY
 ```
 
 ### Key Columns
@@ -1573,6 +1594,11 @@ Compact matrix fields:
 ```text
 arm
 protected_cache
+doc_mode
+frontend_cc_flag
+pin_path
+pinned_ratio
+write_policy
 first_ms
 replay_ms
 replay_cached
@@ -1606,6 +1632,13 @@ Use these as the exact places to inspect when you want to prove what
   Dynamo. Preserves extra request metadata into runtime observability so the
   worker/report path can still identify the request later.
 
+- [`run_dynamo_head.sh:147`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_head.sh:147) launches `python3 -m dynamo.frontend ... ${ROUTER_EXTRA_ARGS}`  
+  Frontend launcher. This is where a documented `--enable-cache-control` flag
+  would have to be injected if the pinned frontend source supports it.
+
+- [`run_dynamo_worker.sh:183`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/run_dynamo_worker.sh:183) forwards `SGLANG_HICACHE_MAX_PINNED_RATIO` into the live worker container  
+  Worker launcher. This is the doc-aligned worker-side pin budget control.
+
 - [`runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) preserves `nvext.extra["cache_control"]` into `runtime_observability`  
   Dynamo repair helper. This is the code we added so cache-control survives
   long enough to be visible in worker/runtime logs.
@@ -1633,6 +1666,14 @@ Use these as the exact places to inspect when you want to prove what
 Strongest proof in this setup: `req_cache_status` / `worker_cache_status` prove
 receipt; `replay_evict_cache_match` proves eviction-side identity evidence when
 present.
+
+New doc-alignment proof fields:
+
+- `frontend_cc_flag`: whether the pinned frontend source actually supported /
+  enabled the documented `--enable-cache-control` flag
+- `pin_path`: whether the pinned source showed direct cache-pin path signals
+- `pinned_ratio`: worker-side `SGLANG_HICACHE_MAX_PINNED_RATIO`
+- `write_policy`: the HiCache write policy active during the run
 
 ### Pinned-Code Verdict
 
@@ -1668,6 +1709,136 @@ cat experiments/reports/latest_cache_control_retention_threshold_matrix.csv
 cat experiments/reports/latest_cache_control_retention_threshold_comparison.csv
 cat experiments/reports/latest_cache_control_retention_threshold_summary.md
 ```
+
+## Experiment 10A: Cache-Pinning Doc Validation
+
+Use this only to answer the basic question:
+
+- does the Dynamo/SGLang cache-pinning sample from the docs work at all on an isolated stack?
+
+This experiment is intentionally isolated from the rest of the README:
+
+- separate Dynamo source checkout
+- separate SGLang source checkout
+- separate Docker image tags
+
+So changes here do not disturb the default stack used by the other experiments.
+
+### Run
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+CACHE_PINNING_DOC_ID="cache_pinning_doc_$(date +%Y%m%d_%H%M%S)" \
+CACHE_PINNING_TTL=1h \
+CACHE_PINNING_PINNED_RATIO=0.1 \
+CACHE_PINNING_HICACHE_RATIO=1 \
+./agentbench/run_cache_pinning_doc_validation_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### What It Does
+
+- checks out the Dynamo cache-pinning PR stack
+- checks out the SGLang cache-pinning PR stack
+- builds separate cache-pinning-only images
+- starts Dynamo with the cache-pinning frontend flag the isolated source exposes
+- sends the minimal two-turn doc-style `nvext.cache_control` example
+- checks whether turn 2 shows nonzero cached tokens
+
+### Main Knobs
+
+```text
+DYNAMO_MACHINE_PROFILE
+CACHE_PINNING_TTL
+CACHE_PINNING_PINNED_RATIO
+CACHE_PINNING_HICACHE_RATIO
+CACHE_PINNING_HICACHE_WRITE_POLICY
+CACHE_PINNING_MEM_FRACTION_STATIC
+CACHE_PINNING_REBUILD_IMAGES
+AUTO_BUILD_CACHE_PINNING_IMAGES
+```
+
+### Key Reports
+
+```bash
+cat experiments/reports/latest_cache_pinning_doc_validation_summary.csv
+cat experiments/reports/latest_cache_pinning_doc_validation_requests.csv
+cat experiments/reports/latest_cache_pinning_doc_validation_summary.md
+```
+
+### Key Columns
+
+```text
+turn1_cached
+turn2_cached
+turn2_cache
+worker_pin_signal
+worker_pin_matches
+verdict
+```
+
+Simple reading:
+
+- `turn2_cached > 0` means the second turn reused cached prefix tokens
+- `worker_pin_signal=seen` means the worker log showed pin-related evidence
+- `verdict=cache_pinning_worked` means the doc-style sample behaved like cache pinning
+
+### Decision Proof
+
+These are the exact codepaths this isolated validation is based on.
+
+- [`runtime_instrumentation/cache_pinning_profile.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/cache_pinning_profile.sh)  
+  Local setup. Pins the isolated Dynamo PR ref, isolated SGLang PR ref, and
+  separate cache-pinning-only image tags.
+
+- [`runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh)  
+  Local setup. Fetches the exact Dynamo cache-pinning PR head into its own
+  source directory.
+
+- [`runtime_instrumentation/fetch_cache_pinning_sglang_source.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/fetch_cache_pinning_sglang_source.sh)  
+  Local setup. Fetches the exact SGLang cache-pinning PR head into its own
+  source directory.
+
+- [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)  
+  Wrapper. Detects which frontend flag exists in the isolated Dynamo source,
+  starts the isolated stack, runs the doc-style sample, and writes compact
+  reports.
+
+- [`experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py)  
+  Driver. Sends the two-turn `nvext.cache_control` requests and compares turn 1
+  vs turn 2 cached tokens.
+
+### PR Codepaths Under Test
+
+These are the feature codepaths we are trying to validate with this isolated
+experiment.
+
+- Dynamo PR `#6213`:
+  - `lib/llm/src/preprocessor.rs`
+    Reads `nvext.cache_control` into routing hints
+  - `lib/llm/src/kv_router/push_router.rs`
+    Fires `spawn_pin_prefix(...)` after stream completion
+  - `lib/llm/src/kv_router/cache_control.rs`
+    Sends the TTL pin request to the worker
+  - `lib/llm/src/kv_router/config.rs`
+    Defines the router-side cache-control enable flag
+
+- SGLang PR `#18941`:
+  - `python/sglang/srt/mem_cache/hiradix_cache.py`
+    Implements `pin_prefix()` and TTL refresh-on-hit
+  - `python/sglang/srt/managers/scheduler.py`
+    Enforces pin-budget gating
+  - `python/sglang/srt/entrypoints/http_server.py`
+    Exposes the worker pin endpoint
+
+### Expected Outcome
+
+If this isolated validation works, then it is worth returning to the larger
+retention sweeps. If it does not work, the problem is below the harness level,
+and the correct next step is to fix the cache-pinning stack itself rather than
+debug the retention experiment.
 
 ## Experiment 11: Priority Scheduling Probe
 

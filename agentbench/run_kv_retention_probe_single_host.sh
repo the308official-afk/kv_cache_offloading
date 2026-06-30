@@ -32,6 +32,11 @@ CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
+CACHE_CONTROL_DOC_MODE="${CACHE_CONTROL_DOC_MODE:-1}"
+CACHE_CONTROL_STRICT_DOC_MODE="${CACHE_CONTROL_STRICT_DOC_MODE:-0}"
+CACHE_CONTROL_FRONTEND_FLAG_MODE="${CACHE_CONTROL_FRONTEND_FLAG_MODE:-auto}"
+CACHE_CONTROL_PINNED_RATIO="${CACHE_CONTROL_PINNED_RATIO:-0.1}"
+CACHE_CONTROL_HICACHE_WRITE_POLICY="${CACHE_CONTROL_HICACHE_WRITE_POLICY:-write_through}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 SGLANG_TRANSFER_LOG_OVERHEAD_TIMING="${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-0}"
 RETENTION_MATRIX_APPEND="${RETENTION_MATRIX_APPEND:-0}"
@@ -71,6 +76,13 @@ LATEST_PROBE_MATRIX="experiments/reports/latest_retention_probe_matrix.csv"
 LATEST_PROBE_REQUESTS="experiments/reports/latest_retention_probe_requests.csv"
 LATEST_PROBE_SUMMARY="experiments/reports/latest_retention_probe_summary.md"
 mkdir -p "${BATCH_DIR}"
+
+DEFAULT_ROUTER_EXTRA_ARGS="--no-router-kv-events --router-queue-threshold 4.0"
+CACHE_CONTROL_DOC_FRONTEND_FLAG_ACTIVE=0
+CACHE_CONTROL_DOC_FRONTEND_FLAG_SUPPORTED=0
+CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="not_checked"
+CACHE_CONTROL_DOC_PIN_PATH_STATUS="not_checked"
+CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS="${ROUTER_EXTRA_ARGS:-${DEFAULT_ROUTER_EXTRA_ARGS}}"
 
 usage() {
   cat <<EOF
@@ -187,6 +199,93 @@ EOF
   fi
 }
 
+dynamo_frontend_supports_cache_control_flag() {
+  local frontend_args="upstream/dynamo/components/src/dynamo/frontend/frontend_args.py"
+  local frontend_main="upstream/dynamo/components/src/dynamo/frontend/main.py"
+  if grep -q -- "--enable-cache-control" "${frontend_args}" 2>/dev/null; then
+    return 0
+  fi
+  if grep -q "router_enable_cache_control" "${frontend_main}" 2>/dev/null; then
+    return 0
+  fi
+  return 1
+}
+
+dynamo_source_has_cache_pin_path() {
+  if rg -n "pin_prefix|pin_expiry|router_enable_cache_control" \
+    upstream/dynamo/components upstream/dynamo/lib \
+    -S >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+configure_cache_control_doc_mode() {
+  CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS="${ROUTER_EXTRA_ARGS:-${DEFAULT_ROUTER_EXTRA_ARGS}}"
+  CACHE_CONTROL_DOC_FRONTEND_FLAG_ACTIVE=0
+  CACHE_CONTROL_DOC_FRONTEND_FLAG_SUPPORTED=0
+  CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="disabled"
+  CACHE_CONTROL_DOC_PIN_PATH_STATUS="not_requested"
+
+  if [[ "${CACHE_CONTROL_DOC_MODE}" != "1" ]]; then
+    return
+  fi
+  if ! cache_control_requested; then
+    return
+  fi
+
+  if [[ -z "${HICACHE_WRITE_POLICY}" ]]; then
+    HICACHE_WRITE_POLICY="${CACHE_CONTROL_HICACHE_WRITE_POLICY}"
+  fi
+  if [[ -z "${SGLANG_HICACHE_MAX_PINNED_RATIO:-}" ]]; then
+    SGLANG_HICACHE_MAX_PINNED_RATIO="${CACHE_CONTROL_PINNED_RATIO}"
+  fi
+
+  if dynamo_frontend_supports_cache_control_flag; then
+    CACHE_CONTROL_DOC_FRONTEND_FLAG_SUPPORTED=1
+    case "${CACHE_CONTROL_FRONTEND_FLAG_MODE}" in
+      auto|force|require)
+        if [[ " ${CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS} " != *" --enable-cache-control "* ]]; then
+          CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS="${CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS} --enable-cache-control"
+        fi
+        CACHE_CONTROL_DOC_FRONTEND_FLAG_ACTIVE=1
+        CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="enabled"
+        ;;
+      disable)
+        CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="supported_but_disabled"
+        ;;
+      *)
+        CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="unknown_mode_${CACHE_CONTROL_FRONTEND_FLAG_MODE}"
+        ;;
+    esac
+  else
+    CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS="unsupported_in_pinned_source"
+    if [[ "${CACHE_CONTROL_FRONTEND_FLAG_MODE}" = "require" ]]; then
+      echo "Cache-control doc mode error: frontend --enable-cache-control flag not found in pinned Dynamo source." >&2
+      exit 1
+    fi
+  fi
+
+  if dynamo_source_has_cache_pin_path; then
+    CACHE_CONTROL_DOC_PIN_PATH_STATUS="source_signals_found"
+  else
+    CACHE_CONTROL_DOC_PIN_PATH_STATUS="source_signals_missing"
+    if [[ "${CACHE_CONTROL_STRICT_DOC_MODE}" = "1" ]]; then
+      echo "Cache-control doc mode error: no cache pin source signals (pin_prefix / pin_expiry / router_enable_cache_control) found." >&2
+      exit 1
+    fi
+  fi
+
+  cat <<EOF
+Cache-control doc mode:
+  frontend_flag_mode: ${CACHE_CONTROL_FRONTEND_FLAG_MODE}
+  frontend_flag_status: ${CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS}
+  hicache_write_policy: ${HICACHE_WRITE_POLICY:-off}
+  sglang_hicache_max_pinned_ratio: ${SGLANG_HICACHE_MAX_PINNED_RATIO:-off}
+  source_pin_path_status: ${CACHE_CONTROL_DOC_PIN_PATH_STATUS}
+EOF
+}
+
 choose_python() {
   if [[ -n "${PYTHON_BIN}" ]]; then
     echo "${PYTHON_BIN}"
@@ -201,6 +300,7 @@ choose_python() {
 
 PYTHON_BIN="$(choose_python)"
 normalize_kv_tier_modes_for_cache_control
+configure_cache_control_doc_mode
 
 safe_name() {
   echo "$1" | tr '/:.' '___' | tr -cs 'A-Za-z0-9_-' '_'
@@ -318,6 +418,9 @@ worker_args_for_kv_tier_mode() {
       ;;
     gpu_cpu)
       args="${args} --enable-hierarchical-cache --hicache-ratio ${HICACHE_RATIO}"
+      if [[ -n "${HICACHE_WRITE_POLICY}" ]]; then
+        args="${args} --hicache-write-policy ${HICACHE_WRITE_POLICY}"
+      fi
       ;;
     gpu_cpu_storage)
       args="${args} --enable-hierarchical-cache --hicache-ratio ${HICACHE_RATIO}"
@@ -563,6 +666,11 @@ run_probe() {
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
     --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
     --request-context-mode "${RETENTION_REQUEST_CONTEXT_MODE}"
+    --cache-control-doc-mode "${CACHE_CONTROL_DOC_MODE}"
+    --cache-control-frontend-flag-status "${CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS}"
+    --cache-control-pin-path-status "${CACHE_CONTROL_DOC_PIN_PATH_STATUS}"
+    --cache-control-pinned-ratio "${SGLANG_HICACHE_MAX_PINNED_RATIO:-}"
+    --cache-control-write-policy "${HICACHE_WRITE_POLICY:-}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
@@ -616,6 +724,11 @@ postprocess_probe() {
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
     --top-level-priority-mode "${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
     --request-context-mode "${RETENTION_REQUEST_CONTEXT_MODE}"
+    --cache-control-doc-mode "${CACHE_CONTROL_DOC_MODE}"
+    --cache-control-frontend-flag-status "${CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS}"
+    --cache-control-pin-path-status "${CACHE_CONTROL_DOC_PIN_PATH_STATUS}"
+    --cache-control-pinned-ratio "${SGLANG_HICACHE_MAX_PINNED_RATIO:-}"
+    --cache-control-write-policy "${HICACHE_WRITE_POLICY:-}"
     --matrix-path "${BATCH_MATRIX}"
     --skip-matrix-write
     --postprocess-only
@@ -714,6 +827,8 @@ start_dynamo_for_profile() {
     "DYNAMO_SERVED_MODEL_NAME=${model}"
     "WORKER_EXTRA_ARGS=${worker_extra_args}"
     "DYN_TOOL_CALL_PARSER=hermes"
+    "ROUTER_EXTRA_ARGS=${CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS}"
+    "SGLANG_HICACHE_MAX_PINNED_RATIO=${SGLANG_HICACHE_MAX_PINNED_RATIO:-}"
   )
   env_cmd=(
     env
@@ -961,6 +1076,11 @@ reset_latest_probe_reports
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"
   echo "Top-level priority mode: ${RETENTION_TOP_LEVEL_PRIORITY_MODE}"
   echo "Default cache-control TTL: ${CACHE_CONTROL_EPHEMERAL_TTL}"
+  echo "Cache-control doc mode: ${CACHE_CONTROL_DOC_MODE}"
+  echo "Cache-control frontend flag status: ${CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS}"
+  echo "Cache-control source pin-path status: ${CACHE_CONTROL_DOC_PIN_PATH_STATUS}"
+  echo "Cache-control pinned ratio: ${SGLANG_HICACHE_MAX_PINNED_RATIO:-off}"
+  echo "HiCache write policy: ${HICACHE_WRITE_POLICY:-off}"
   echo "Mem fraction static: ${MEM_FRACTION_STATIC}"
   echo "GPU-only mem fraction static: ${GPU_ONLY_MEM_FRACTION_STATIC}"
   if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
@@ -975,17 +1095,25 @@ reset_latest_probe_reports
 } | tee -a "${BATCH_LOG}"
 
 if cache_control_requested; then
-  cat <<'EOF' | tee -a "${BATCH_LOG}"
+  cat <<EOF | tee -a "${BATCH_LOG}"
 Note:
-  cache_control is enabled in this run, but current upstream Dynamo mainline
-  documents nvext.cache_control as not being a supported self-hosted TTL
-  pinning API.
+  cache_control is enabled in this run.
+  Doc-aligned prerequisites now attempt to turn on:
+    - hierarchical cache
+    - HiCache write-through
+    - nonzero HiCache pinned ratio
+    - frontend --enable-cache-control when supported by the pinned source
+
+  Current source checks for this run:
+    - frontend flag status: ${CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS}
+    - source pin path status: ${CACHE_CONTROL_DOC_PIN_PATH_STATUS}
+
   Treat this run as:
     - metadata receipt / forwarding proof
     - worker-side observability proof
     - empirical behavior check
-  not as confirmed proof of a live TTL pin path unless that path is verified
-  directly in the runtime under test.
+  and only treat it as confirmed TTL pinning proof if the runtime under test
+  also exposes a real cache-pin execution path.
 
 EOF
 fi

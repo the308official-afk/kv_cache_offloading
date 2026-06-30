@@ -120,6 +120,11 @@ SUMMARY_COLUMNS = [
     "distractor_hint_profile",
     "protected_cache_control_profile",
     "distractor_cache_control_profile",
+    "cache_control_doc_mode",
+    "cache_control_frontend_flag_status",
+    "cache_control_pin_path_status",
+    "cache_control_pinned_ratio",
+    "cache_control_write_policy",
     "protected_input_len",
     "distractor_input_len",
     "distractor_count",
@@ -189,6 +194,11 @@ PUBLIC_SUMMARY_COLUMNS = [
     "kv_tier",
     "hint_profile",
     "protected_cache",
+    "doc_mode",
+    "frontend_cc_flag",
+    "pin_path",
+    "pinned_ratio",
+    "write_policy",
     "distractors",
     "first_status",
     "replay_status",
@@ -264,6 +274,11 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("CACHE_CONTROL_EPHEMERAL_TTL", DEFAULT_CACHE_CONTROL_EPHEMERAL_TTL),
         help="Default TTL used when cache-control profile is 'ephemeral' without an explicit ':ttl' suffix.",
     )
+    parser.add_argument("--cache-control-doc-mode", default=os.environ.get("CACHE_CONTROL_DOC_MODE", "0"))
+    parser.add_argument("--cache-control-frontend-flag-status", default=os.environ.get("CACHE_CONTROL_DOC_FRONTEND_FLAG_STATUS", ""))
+    parser.add_argument("--cache-control-pin-path-status", default=os.environ.get("CACHE_CONTROL_DOC_PIN_PATH_STATUS", ""))
+    parser.add_argument("--cache-control-pinned-ratio", default=os.environ.get("SGLANG_HICACHE_MAX_PINNED_RATIO", ""))
+    parser.add_argument("--cache-control-write-policy", default=os.environ.get("HICACHE_WRITE_POLICY", ""))
     parser.add_argument("--kv-tier-mode", default=os.environ.get("KV_TIER_MODE", os.environ.get("KV_TIER_MODES", "")))
     parser.add_argument("--request-timeout", type=float, default=600.0)
     parser.add_argument(
@@ -1226,6 +1241,11 @@ def build_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "kv_tier": summary.get("kv_tier_mode", ""),
         "hint_profile": summary.get("protected_hint_profile", ""),
         "protected_cache": summary.get("protected_cache_control_profile", ""),
+        "doc_mode": summary.get("cache_control_doc_mode", ""),
+        "frontend_cc_flag": summary.get("cache_control_frontend_flag_status", ""),
+        "pin_path": summary.get("cache_control_pin_path_status", ""),
+        "pinned_ratio": summary.get("cache_control_pinned_ratio", ""),
+        "write_policy": summary.get("cache_control_write_policy", ""),
         "distractors": summary.get("distractor_count", ""),
         "first_status": summary.get("a_first_status", ""),
         "replay_status": summary.get("a_replay_status", ""),
@@ -1326,6 +1346,11 @@ def build_summary(
         "distractor_hint_profile": args.distractor_hint_profile,
         "protected_cache_control_profile": first.get("cache_control_profile", ""),
         "distractor_cache_control_profile": first_distractor.get("cache_control_profile", ""),
+        "cache_control_doc_mode": args.cache_control_doc_mode,
+        "cache_control_frontend_flag_status": args.cache_control_frontend_flag_status,
+        "cache_control_pin_path_status": args.cache_control_pin_path_status,
+        "cache_control_pinned_ratio": args.cache_control_pinned_ratio,
+        "cache_control_write_policy": args.cache_control_write_policy,
         "protected_input_len": args.protected_input_len,
         "distractor_input_len": args.distractor_input_len,
         "distractor_count": args.distractor_count,
@@ -1403,6 +1428,11 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- distractor_hint_profile: `{summary['distractor_hint_profile']}`",
         f"- protected_cache_control_profile: `{summary['protected_cache_control_profile']}`",
         f"- distractor_cache_control_profile: `{summary['distractor_cache_control_profile']}`",
+        f"- cache_control_doc_mode: `{summary['cache_control_doc_mode']}`",
+        f"- cache_control_frontend_flag_status: `{summary['cache_control_frontend_flag_status']}`",
+        f"- cache_control_pin_path_status: `{summary['cache_control_pin_path_status']}`",
+        f"- cache_control_pinned_ratio: `{summary['cache_control_pinned_ratio']}`",
+        f"- cache_control_write_policy: `{summary['cache_control_write_policy']}`",
         f"- distractor_count: `{summary['distractor_count']}`",
         "",
         "## A Prompt Replay",
