@@ -57,6 +57,14 @@ LATEST_PRIORITY_SCHEDULING_PROOF_REPORT="latest_priority_scheduling_proof.csv"
 LATEST_PRIORITY_SCHEDULING_SUMMARY_REPORT="latest_priority_scheduling_summary.csv"
 LATEST_PRIORITY_SCHEDULING_SUMMARY_MD_REPORT="latest_priority_scheduling_summary.md"
 LATEST_PRIORITY_SCHEDULING_RUN_REPORT="latest_priority_scheduling_run.txt"
+LATEST_PRIORITY_SCHEDULING_MICROBENCH_MATRIX_REPORT="latest_priority_scheduling_microbenchmark_matrix.csv"
+LATEST_PRIORITY_SCHEDULING_MICROBENCH_SUMMARY_REPORT="latest_priority_scheduling_microbenchmark_summary.csv"
+LATEST_PRIORITY_SCHEDULING_MICROBENCH_SUMMARY_MD_REPORT="latest_priority_scheduling_microbenchmark_summary.md"
+LATEST_PRIORITY_SCHEDULING_MICROBENCH_CONTRACT_REPORT="latest_priority_scheduling_microbenchmark_run_contract.json"
+LATEST_SPEC_PREFILL_MICROBENCH_MATRIX_REPORT="latest_speculative_prefill_microbenchmark_matrix.csv"
+LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_REPORT="latest_speculative_prefill_microbenchmark_summary.csv"
+LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_MD_REPORT="latest_speculative_prefill_microbenchmark_summary.md"
+LATEST_SPEC_PREFILL_MICROBENCH_CONTRACT_REPORT="latest_speculative_prefill_microbenchmark_run_contract.json"
 LATEST_RETENTION_PROBE_PROGRESS_REPORT="latest_retention_probe_progress.csv"
 LATEST_RETENTION_PROBE_MATRIX_REPORT="latest_retention_probe_matrix.csv"
 LATEST_RETENTION_PROBE_REQUESTS_REPORT="latest_retention_probe_requests.csv"
@@ -65,6 +73,10 @@ LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_PROGRESS_REPORT="latest_cache_control_r
 LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_MATRIX_REPORT="latest_cache_control_retention_threshold_matrix.csv"
 LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_COMPARISON_REPORT="latest_cache_control_retention_threshold_comparison.csv"
 LATEST_CACHE_CONTROL_RETENTION_THRESHOLD_SUMMARY_REPORT="latest_cache_control_retention_threshold_summary.md"
+LATEST_KV_RETENTION_MICROBENCH_MATRIX_REPORT="latest_kv_retention_microbenchmark_matrix.csv"
+LATEST_KV_RETENTION_MICROBENCH_SUMMARY_REPORT="latest_kv_retention_microbenchmark_summary.csv"
+LATEST_KV_RETENTION_MICROBENCH_SUMMARY_MD_REPORT="latest_kv_retention_microbenchmark_summary.md"
+LATEST_KV_RETENTION_MICROBENCH_CONTRACT_REPORT="latest_kv_retention_microbenchmark_run_contract.json"
 RETENTION_THRESHOLD_PROGRESS_REPORT="retention_threshold_sweep_progress.csv"
 RETENTION_THRESHOLD_MATRIX_REPORT="retention_threshold_matrix.csv"
 RETENTION_THRESHOLD_COMPARISON_REPORT="retention_threshold_comparison.csv"
@@ -116,6 +128,16 @@ RSYNC_COMMON_OPTS=(
   --no-owner
   --no-group
 )
+
+print_local_report_if_present() {
+  local path="$1"
+  if [[ -f "${path}" ]]; then
+    python3 - <<'PY' "${REPO_ROOT}" "${path}"
+import os, sys
+print("  " + os.path.relpath(sys.argv[2], sys.argv[1]))
+PY
+  fi
+}
 
 ip="${SERVERS[$INDEX]}"
 label="${LABELS[$INDEX]}"
@@ -196,5 +218,19 @@ if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py
     echo "Warning: local report builder failed; raw downloads are still present." >&2
   fi
 fi
+
+echo "==== Notable local latest reports ===="
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_KV_RETENTION_MICROBENCH_MATRIX_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_KV_RETENTION_MICROBENCH_SUMMARY_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_KV_RETENTION_MICROBENCH_SUMMARY_MD_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_KV_RETENTION_MICROBENCH_CONTRACT_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_PRIORITY_SCHEDULING_MICROBENCH_MATRIX_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_PRIORITY_SCHEDULING_MICROBENCH_SUMMARY_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_PRIORITY_SCHEDULING_MICROBENCH_SUMMARY_MD_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_PRIORITY_SCHEDULING_MICROBENCH_CONTRACT_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_MATRIX_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_MD_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_CONTRACT_REPORT}"
 
 echo "Download complete."

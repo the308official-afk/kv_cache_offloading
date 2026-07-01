@@ -44,3 +44,9 @@ Current contracts
 
 - `cache_pinning_microbenchmark.contract.sh`
 - `cache_pinning_microbenchmark.contract.md`
+- `kv_retention_microbenchmark.contract.sh`
+- `kv_retention_microbenchmark.contract.md`
+- `priority_scheduling_microbenchmark.contract.sh`
+- `priority_scheduling_microbenchmark.contract.md`
+- `speculative_prefill_microbenchmark.contract.sh`
+- `speculative_prefill_microbenchmark.contract.md`

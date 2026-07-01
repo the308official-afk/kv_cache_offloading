@@ -1,0 +1,196 @@
+#!/usr/bin/env bash
+
+# Machine-readable contract for the KV retention microbenchmark.
+# Source this file when you want the retention microbenchmark to inherit
+# its defaults from one place.
+
+CONTRACT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="${ROOT_DIR:-$(cd "${CONTRACT_DIR}/.." && pwd)}"
+MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-default}"
+
+# Contract identity
+: "${KV_RETENTION_SCHEMA_VERSION:=1}"
+: "${KV_RETENTION_MODE:=all}"
+: "${KV_RETENTION_ID:=kv_retention_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
+
+# Public and internal entrypoints
+: "${KV_RETENTION_PUBLIC_WRAPPER:=${ROOT_DIR}/agentbench/run_kv_retention_microbenchmark_single_host.sh}"
+: "${KV_RETENTION_PROBE_HELPER:=${ROOT_DIR}/agentbench/run_kv_retention_probe_single_host.sh}"
+: "${KV_RETENTION_SWEEP_HELPER:=${ROOT_DIR}/agentbench/run_kv_retention_threshold_sweep_single_host.sh}"
+
+# Standard precise runtime stack
+: "${KV_RETENTION_DYNAMO_SOURCE_DIR:=${ROOT_DIR}/upstream/dynamo}"
+: "${KV_RETENTION_SGLANG_SOURCE_IMAGE:=lmsysorg/sglang:v0.5.11-cu129-runtime}"
+: "${KV_RETENTION_SGLANG_SOURCE_DIR:=${ROOT_DIR}/upstream/sglang}"
+: "${KV_RETENTION_SGLANG_ROOT:=${KV_RETENTION_SGLANG_SOURCE_DIR}/python/sglang}"
+: "${KV_RETENTION_FRONTEND_IMAGE:=local/dynamo-frontend:runtime-json-logs-${MACHINE_PROFILE}}"
+: "${KV_RETENTION_WORKER_IMAGE:=local/dynamo-sglang:runtime-json-logs-${MACHINE_PROFILE}}"
+
+# Runtime selection / build behavior
+: "${KV_RETENTION_EXPERIMENT_KIND:=hint_retention}"
+: "${KV_RETENTION_SUPPORTED_MODES:=probe sweep plot all}"
+: "${KV_RETENTION_SUPPORTED_CONTROLS:=priority cache_control}"
+: "${KV_RETENTION_DEFAULT_CONTROL:=priority}"
+: "${RETENTION_ATTRIBUTION_MODE:=precise}"
+: "${RETENTION_REQUEST_CONTEXT_MODE:=auto}"
+: "${RETENTION_TOP_LEVEL_PRIORITY_MODE:=auto}"
+: "${AUTO_BUILD_PRECISE_IMAGES:=1}"
+: "${REQUIRE_PRECISE_KV:=1}"
+
+# Probe / sweep defaults
+: "${KV_TIER_MODES:=gpu_only}"
+: "${DISTRACTOR_COUNT:=100}"
+: "${DISTRACTOR_COUNTS:=25 50 75 100 125 150}"
+: "${PROTECTED_INPUT_LEN:=14000}"
+: "${DISTRACTOR_INPUT_LEN:=14000}"
+: "${RANDOM_OUTPUT_LEN:=1}"
+: "${RETENTION_PROBE_SEED:=42}"
+: "${IGNORE_EOS:=1}"
+: "${REQUEST_TIMEOUT:=600}"
+: "${MAX_CONTEXT_TOKENS:=17146}"
+: "${CONTEXT_RESERVE_TOKENS:=2048}"
+
+# Hint and cache-control controls
+: "${CONTROL_HINT_PROFILE:=none}"
+: "${PROTECTED_HINT_PROFILES:=high-priority}"
+: "${CONTROL_CACHE_CONTROL_PROFILE:=off}"
+: "${PROTECTED_CACHE_CONTROL_PROFILES:=off}"
+: "${DISTRACTOR_CACHE_CONTROL_PROFILE:=off}"
+: "${CACHE_CONTROL_EPHEMERAL_TTL:=1h}"
+: "${CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE:=1}"
+: "${CACHE_CONTROL_DOC_MODE:=1}"
+: "${CACHE_CONTROL_STRICT_DOC_MODE:=0}"
+: "${CACHE_CONTROL_FRONTEND_FLAG_MODE:=auto}"
+: "${CACHE_CONTROL_PINNED_RATIO:=0.1}"
+: "${CACHE_CONTROL_HICACHE_WRITE_POLICY:=write_through}"
+
+# Worker / memory settings
+: "${SGLANG_TRANSFER_LOG_PROFILE:=full}"
+: "${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:=0}"
+: "${MEM_FRACTION_STATIC:=0.7}"
+: "${GPU_ONLY_MEM_FRACTION_STATIC:=${MEM_FRACTION_STATIC}}"
+: "${GPU_CPU_MEM_FRACTION_STATIC:=${MEM_FRACTION_STATIC}}"
+: "${GPU_CPU_STORAGE_MEM_FRACTION_STATIC:=${MEM_FRACTION_STATIC}}"
+: "${HICACHE_RATIO:=1}"
+: "${HICACHE_STORAGE_BACKEND:=file}"
+: "${HICACHE_STORAGE_PREFETCH_POLICY:=wait_complete}"
+: "${HICACHE_WRITE_POLICY:=}"
+: "${HICACHE_EXTRA_ARGS:=}"
+: "${FILE_STORAGE_PATH:=/hicache-storage}"
+: "${HOST_FILE_STORAGE_PATH:=/mnt/docker-data/hicache_storage}"
+: "${WORKER_BASE_ARGS:=--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority}"
+: "${WORKER_EXTRA_ARGS_SUFFIX:=}"
+
+# Threshold/report interpretation defaults
+: "${RETENTION_MATCH_EVENT_MIN:=1}"
+: "${RETENTION_MIN_SPEEDUP_RATIO:=1.05}"
+: "${RETENTION_MIN_LATENCY_GAIN_MS:=100}"
+: "${RETENTION_MATRIX_APPEND:=0}"
+: "${STOP_ON_PROBE_FAILURE:=0}"
+: "${STOP_DYNAMO_WHEN_DONE:=1}"
+: "${KV_RETENTION_REQUIRE_REPLAY_CACHED_TOKENS:=1}"
+: "${KV_RETENTION_REQUIRE_WORKER_PRIORITY_PROOF:=1}"
+
+# Recommended readiness defaults
+: "${MODEL_READY_RETRIES:=900}"
+: "${MODEL_READY_DELAY_SECS:=3}"
+: "${MODEL_READY_STABLE_HITS:=2}"
+: "${MODEL_SMOKE_RETRIES:=180}"
+: "${MODEL_SMOKE_DELAY_SECS:=15}"
+: "${MODEL_COOLDOWN_SECS:=60}"
+
+# Planned consolidated microbenchmark outputs
+: "${KV_RETENTION_REPORT_DIR:=${ROOT_DIR}/experiments/reports/kv_retention_microbenchmark}"
+: "${KV_RETENTION_LATEST_MATRIX:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_matrix.csv}"
+: "${KV_RETENTION_LATEST_SUMMARY_CSV:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_summary.csv}"
+: "${KV_RETENTION_LATEST_SUMMARY_MD:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_summary.md}"
+: "${KV_RETENTION_LATEST_RUN_CONTRACT:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_run_contract.json}"
+: "${KV_RETENTION_LATEST_REPLAY_LATENCY_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg}"
+: "${KV_RETENTION_LATEST_REPLAY_CACHED_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg}"
+: "${KV_RETENTION_LATEST_SURVIVAL_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg}"
+: "${KV_RETENTION_LATEST_CHART_MANIFEST:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_chart_manifest.json}"
+
+export ROOT_DIR
+export MACHINE_PROFILE
+export KV_RETENTION_SCHEMA_VERSION
+export KV_RETENTION_MODE
+export KV_RETENTION_ID
+export KV_RETENTION_PUBLIC_WRAPPER
+export KV_RETENTION_PROBE_HELPER
+export KV_RETENTION_SWEEP_HELPER
+export KV_RETENTION_DYNAMO_SOURCE_DIR
+export KV_RETENTION_SGLANG_SOURCE_IMAGE
+export KV_RETENTION_SGLANG_SOURCE_DIR
+export KV_RETENTION_SGLANG_ROOT
+export KV_RETENTION_FRONTEND_IMAGE
+export KV_RETENTION_WORKER_IMAGE
+export KV_RETENTION_EXPERIMENT_KIND
+export KV_RETENTION_SUPPORTED_MODES
+export KV_RETENTION_SUPPORTED_CONTROLS
+export KV_RETENTION_DEFAULT_CONTROL
+export RETENTION_ATTRIBUTION_MODE
+export RETENTION_REQUEST_CONTEXT_MODE
+export RETENTION_TOP_LEVEL_PRIORITY_MODE
+export AUTO_BUILD_PRECISE_IMAGES
+export REQUIRE_PRECISE_KV
+export KV_TIER_MODES
+export DISTRACTOR_COUNT
+export DISTRACTOR_COUNTS
+export PROTECTED_INPUT_LEN
+export DISTRACTOR_INPUT_LEN
+export RANDOM_OUTPUT_LEN
+export RETENTION_PROBE_SEED
+export IGNORE_EOS
+export REQUEST_TIMEOUT
+export MAX_CONTEXT_TOKENS
+export CONTEXT_RESERVE_TOKENS
+export CONTROL_HINT_PROFILE
+export PROTECTED_HINT_PROFILES
+export CONTROL_CACHE_CONTROL_PROFILE
+export PROTECTED_CACHE_CONTROL_PROFILES
+export DISTRACTOR_CACHE_CONTROL_PROFILE
+export CACHE_CONTROL_EPHEMERAL_TTL
+export CACHE_CONTROL_REQUIRE_HIERARCHICAL_CACHE
+export CACHE_CONTROL_DOC_MODE
+export CACHE_CONTROL_STRICT_DOC_MODE
+export CACHE_CONTROL_FRONTEND_FLAG_MODE
+export CACHE_CONTROL_PINNED_RATIO
+export CACHE_CONTROL_HICACHE_WRITE_POLICY
+export SGLANG_TRANSFER_LOG_PROFILE
+export SGLANG_TRANSFER_LOG_OVERHEAD_TIMING
+export MEM_FRACTION_STATIC
+export GPU_ONLY_MEM_FRACTION_STATIC
+export GPU_CPU_MEM_FRACTION_STATIC
+export GPU_CPU_STORAGE_MEM_FRACTION_STATIC
+export HICACHE_RATIO
+export HICACHE_STORAGE_BACKEND
+export HICACHE_STORAGE_PREFETCH_POLICY
+export HICACHE_WRITE_POLICY
+export HICACHE_EXTRA_ARGS
+export FILE_STORAGE_PATH
+export HOST_FILE_STORAGE_PATH
+export WORKER_BASE_ARGS
+export WORKER_EXTRA_ARGS_SUFFIX
+export RETENTION_MATCH_EVENT_MIN
+export RETENTION_MIN_SPEEDUP_RATIO
+export RETENTION_MIN_LATENCY_GAIN_MS
+export RETENTION_MATRIX_APPEND
+export STOP_ON_PROBE_FAILURE
+export STOP_DYNAMO_WHEN_DONE
+export KV_RETENTION_REQUIRE_REPLAY_CACHED_TOKENS
+export KV_RETENTION_REQUIRE_WORKER_PRIORITY_PROOF
+export MODEL_READY_RETRIES
+export MODEL_READY_DELAY_SECS
+export MODEL_READY_STABLE_HITS
+export MODEL_SMOKE_RETRIES
+export MODEL_SMOKE_DELAY_SECS
+export MODEL_COOLDOWN_SECS
+export KV_RETENTION_REPORT_DIR
+export KV_RETENTION_LATEST_MATRIX
+export KV_RETENTION_LATEST_SUMMARY_CSV
+export KV_RETENTION_LATEST_SUMMARY_MD
+export KV_RETENTION_LATEST_RUN_CONTRACT
+export KV_RETENTION_LATEST_REPLAY_LATENCY_CHART
+export KV_RETENTION_LATEST_REPLAY_CACHED_CHART
+export KV_RETENTION_LATEST_SURVIVAL_CHART
+export KV_RETENTION_LATEST_CHART_MANIFEST

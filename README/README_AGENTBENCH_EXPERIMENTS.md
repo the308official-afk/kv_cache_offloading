@@ -1319,98 +1319,134 @@ gpu_cpu_storage   HBM + CPU RAM + file storage. Adds --hicache-storage-backend,
 
 ## Experiment 9: KV Retention Probe
 
-Use this for hint-based KV retention.
+This is the public KV-retention microbenchmark entrypoint.
 
-```text
-A first -> distractors -> A replay
-```
+Contract files:
 
-Supported control under test:
+- [`contracts/kv_retention_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/kv_retention_microbenchmark.contract.sh)
+- [`contracts/kv_retention_microbenchmark.contract.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/kv_retention_microbenchmark.contract.md)
 
-- `priority`
+Public wrapper:
 
-Common pattern:
+- [`agentbench/run_kv_retention_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_microbenchmark_single_host.sh)
 
-- control arm: `CONTROL_HINT_PROFILE=none`
-- protected arm: `PROTECTED_HINT_PROFILES="high-priority"`
+Supported modes:
+
+- `probe`: one `A first -> distractors -> A replay` run
+- `sweep`: threshold sweep across distractor counts
+- `all`: probe, then sweep
+- `plot`: rebuild charts from one existing matrix CSV
 
 ### Run
-
-Best first run:
 
 ```bash
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-RETENTION_PROBE_ID="retention_probe_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=precise \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-DISTRACTOR_COUNT=200 \
-PROTECTED_INPUT_LEN=200 \
-DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.70 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-./agentbench/run_kv_retention_probe_single_host.sh \
+KV_RETENTION_MODE=probe \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-This precise wrapper now decides the Dynamo rebuild question for you. Use the
-manual rebuild path only for first-time setup or recovery.
+```bash
+cd ~/kv_cache_offloading
 
-### Outputs
-
-Quick-look outputs:
+DYNAMO_MACHINE_PROFILE=ec2 \
+KV_RETENTION_MODE=sweep \
+DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+PROTECTED_INPUT_LEN=14000 \
+DISTRACTOR_INPUT_LEN=14000 \
+PROTECTED_HINT_PROFILES="high-priority" \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
 
 ```bash
-cat experiments/reports/latest_retention_probe_progress.csv
-cat experiments/reports/latest_retention_probe_matrix.csv
-cat experiments/reports/latest_retention_probe_requests.csv
-cat experiments/reports/latest_retention_probe_summary.md
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+KV_RETENTION_MODE=all \
+DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+PROTECTED_HINT_PROFILES="high-priority" \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Key Columns
+```bash
+cd ~/kv_cache_offloading
 
-Main matrix fields:
-
-```text
-arm
-hint_profile
-protected_cache
-distractors
-first_ms
-replay_ms
-replay_cached
-replay_reuse
-survived
-req_prio_status
-worker_prio_status
-replay_evicts
-replay_evict_cache
-replay_evict_status
-effect_status
+DYNAMO_MACHINE_PROFILE=ec2 \
+KV_RETENTION_MODE=plot \
+KV_RETENTION_PLOT_MATRIX_CSV=experiments/reports/latest_kv_retention_microbenchmark_matrix.csv \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Main Knobs
-
-Main knobs:
+### Core Contract Knobs
 
 ```text
+CONTROL_HINT_PROFILE
+PROTECTED_HINT_PROFILES
+CONTROL_CACHE_CONTROL_PROFILE
+PROTECTED_CACHE_CONTROL_PROFILES
+KV_TIER_MODES
 DISTRACTOR_COUNT
+DISTRACTOR_COUNTS
 PROTECTED_INPUT_LEN
 DISTRACTOR_INPUT_LEN
 GPU_ONLY_MEM_FRACTION_STATIC
-PROTECTED_HINT_PROFILES
+SGLANG_TRANSFER_LOG_PROFILE
 ```
+
+The contract is the source of truth for:
+
+- precise runtime defaults
+- model-readiness timing
+- priority-hint defaults
+- optional cache-control comparison settings
+- top-level latest report paths
+
+### Top-Level Outputs
+
+```bash
+cat experiments/reports/latest_kv_retention_microbenchmark_matrix.csv
+cat experiments/reports/latest_kv_retention_microbenchmark_summary.csv
+cat experiments/reports/latest_kv_retention_microbenchmark_summary.md
+cat experiments/reports/latest_kv_retention_microbenchmark_run_contract.json
+
+ls experiments/reports/latest_kv_retention_microbenchmark_*.svg
+cat experiments/reports/latest_kv_retention_microbenchmark_chart_manifest.json
+```
+
+Main outputs:
+
+- `latest_kv_retention_microbenchmark_matrix.csv`: normalized probe + sweep table
+- `latest_kv_retention_microbenchmark_summary.csv`: one-row summary
+- `latest_kv_retention_microbenchmark_run_contract.json`: exact resolved settings
+- `replay_latency.svg`
+- `replay_cached_tokens.svg`
+- `survival_curve.svg`
 
 ### Decision Proof
 
 Use these as the exact places to inspect when you want to prove that priority
 retention signals were attached, read, applied, and summarized.
+
+- [`contracts/kv_retention_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/kv_retention_microbenchmark.contract.sh)  
+  Contract. Owns the public defaults for probe vs sweep, hint arms,
+  distractor pressure, precise-runtime settings, and top-level latest outputs.
+
+- [`agentbench/run_kv_retention_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_microbenchmark_single_host.sh)  
+  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`,
+  clears stale latest outputs, and writes the consolidated report and chart
+  artifacts.
+
+- [`experiments/scripts/retention_probe/build_kv_retention_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_kv_retention_microbenchmark_report.py)  
+  Report builder. Merges probe and sweep evidence into one compact matrix, one
+  summary row, one markdown summary, and one `run_contract.json`.
+
+- [`experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py)  
+  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
 
 - [`experiments/scripts/retention_probe/run_kv_retention_probe.py:523`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`  
   Script layer. Builds the probe request and attaches the hint payload for
@@ -1452,6 +1488,16 @@ retention signals were attached, read, applied, and summarized.
 
 Strongest proof in this setup: `scheduler_priority_applied` in the raw
 `sglang.priority` event stream.
+
+### Lower-Level Wrappers
+
+These are the lower-level wrappers behind this experiment. Normally use the
+single public wrapper above.
+
+- [`agentbench/run_kv_retention_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh)
+  - probe component
+- [`agentbench/run_kv_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_threshold_sweep_single_host.sh)
+  - sweep component
 
 ## Experiment 10: Cache-Pinning Microbenchmark
 
@@ -1658,45 +1704,25 @@ Component report names now use compact fields such as:
 
 ## Experiment 11: Priority Scheduling Probe
 
-Use this when you want to test queue ordering directly:
+This is the public priority-scheduling microbenchmark entrypoint.
 
-- send a burst of low-priority requests first
-- send a burst of high-priority requests slightly later
-- check whether the later high-priority requests get attached first anyway
+Contract files:
 
-Supported control under test:
+- [`contracts/priority_scheduling_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/priority_scheduling_microbenchmark.contract.sh)
+- [`contracts/priority_scheduling_microbenchmark.contract.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/priority_scheduling_microbenchmark.contract.md)
 
-- `priority`
+Public wrapper:
+
+- [`agentbench/run_priority_scheduling_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_priority_scheduling_microbenchmark_single_host.sh)
+
+Supported modes:
+
+- `probe`: one live mixed-priority burst
+- `sweep`: multiple live bursts over one public knob
+- `all`: probe, then sweep, then plot
+- `plot`: rebuild charts from one existing matrix CSV
 
 This is a synthetic scheduling experiment. It does **not** use SWE-bench.
-
-What it measures:
-
-- did high-priority requests leapfrog earlier low-priority requests?
-- did high-priority requests wait less in the worker queue?
-- did the worker actually receive the priority hints?
-- if patched SGLang is active, did the SGLang priority path say it applied priority?
-
-The wrapper handles precise setup automatically. On a healthy run, you should
-see the 6 readiness signals before requests are sent.
-
-That automatic setup now includes image selection, local source checks, local
-patch refresh, and an automatic Dynamo image rebuild when the current
-instrumented source no longer matches the already-built precise runtime images.
-
-For a healthy precise scheduling run, you should now see this readiness chain
-before the synthetic requests are sent:
-
-- `(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)`
-- `(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)`
-- `(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)`
-- `(4/6) PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)`
-- `(5/6) MODEL READINESS GO (model registration and smoke test both passed)`
-- `(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)`
-
-The precise SGLang patcher now removes older fragile `schedule_policy.py`
-wrappers before the run, so syncing the latest repo should also prevent the
-old `too many statically nested blocks` startup error.
 
 ### Run
 
@@ -1704,51 +1730,119 @@ old `too many statically nested blocks` startup error.
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_ID="priority_scheduling_$(date +%Y%m%d_%H%M%S)" \
-PRIORITY_SCHEDULING_ATTRIBUTION_MODE=precise \
-PRIORITY_REQUEST_CONTEXT_MODE=auto \
+PRIORITY_SCHEDULING_MODE=probe \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+PRIORITY_SCHEDULING_MODE=sweep \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+PRIORITY_SCHEDULING_MODE=all \
 LOW_PRIORITY_COUNT=8 \
 HIGH_PRIORITY_COUNT=4 \
 PRIORITY_INPUT_LEN=4000 \
 PRIORITY_OUTPUT_LEN=128 \
 PRIORITY_ARRIVAL_GAP_MS=200 \
 PRIORITY_INTER_REQUEST_GAP_MS=20 \
-PRIORITY_TOP_LEVEL_PRIORITY_MODE=auto \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_priority_scheduling_probe_single_host.sh \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Outputs
+```bash
+cd ~/kv_cache_offloading
 
-To watch the worker:
+DYNAMO_MACHINE_PROFILE=ec2 \
+PRIORITY_SCHEDULING_MODE=plot \
+PRIORITY_SCHEDULING_PLOT_MATRIX_CSV=experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### Core Contract Knobs
+
+```text
+LOW_PRIORITY_COUNT
+HIGH_PRIORITY_COUNT
+LOW_PRIORITY_VALUE
+HIGH_PRIORITY_VALUE
+PRIORITY_INPUT_LEN
+PRIORITY_OUTPUT_LEN
+PRIORITY_ARRIVAL_GAP_MS
+PRIORITY_INTER_REQUEST_GAP_MS
+PRIORITY_SCHEDULING_SWEEP_AXIS
+PRIORITY_SCHEDULING_SWEEP_VALUES
+PRIORITY_TOP_LEVEL_PRIORITY_MODE
+PRIORITY_REQUEST_CONTEXT_MODE
+SGLANG_TRANSFER_LOG_PROFILE
+WORKER_BASE_ARGS
+```
+
+The contract is the source of truth for:
+
+- precise runtime defaults
+- model-readiness timing
+- queue-burst shape
+- priority values
+- top-level latest report paths
+
+### Top-Level Outputs
+
+```bash
+cat experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv
+cat experiments/reports/latest_priority_scheduling_microbenchmark_summary.csv
+cat experiments/reports/latest_priority_scheduling_microbenchmark_summary.md
+cat experiments/reports/latest_priority_scheduling_microbenchmark_run_contract.json
+
+ls experiments/reports/latest_priority_scheduling_microbenchmark_*.svg
+cat experiments/reports/latest_priority_scheduling_microbenchmark_chart_manifest.json
+```
+
+Main outputs:
+
+- `latest_priority_scheduling_microbenchmark_matrix.csv`: one row per request or per sweep point
+- `latest_priority_scheduling_microbenchmark_summary.csv`: one-row summary
+- `latest_priority_scheduling_microbenchmark_run_contract.json`: exact resolved settings
+- `attach_gain.svg`
+- `queue_wait.svg`
+
+### Debug
 
 ```bash
 docker logs -f dynamo-sglang-worker
-```
-
-Top-level latest copies:
-
-```bash
-cat experiments/reports/priority_scheduling_readable.csv
-cat experiments/reports/priority_scheduling_requests.csv
-cat experiments/reports/priority_scheduling_proof.csv
-cat experiments/reports/priority_scheduling_summary.csv
-cat experiments/reports/priority_scheduling_summary.md
-
-cat experiments/reports/latest_priority_scheduling_readable.csv
-cat experiments/reports/latest_priority_scheduling_requests.csv
-cat experiments/reports/latest_priority_scheduling_proof.csv
-cat experiments/reports/latest_priority_scheduling_summary.csv
-cat experiments/reports/latest_priority_scheduling_summary.md
-cat experiments/reports/latest_priority_scheduling_run.txt
 ```
 
 ### Decision Proof
 
 Use these as the exact places to inspect when you want to prove that queue
 priority was attached, read, applied, and observed.
+
+- [`contracts/priority_scheduling_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/priority_scheduling_microbenchmark.contract.sh)  
+  Contract. Owns the public defaults for burst shape, priority values,
+  precise-runtime settings, and top-level latest outputs.
+
+- [`agentbench/run_priority_scheduling_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_priority_scheduling_microbenchmark_single_host.sh)  
+  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`, clears
+  stale latest outputs, and writes the consolidated report and chart artifacts.
+
+- [`experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py)  
+  Report builder. Normalizes the probe’s readable request table into one compact
+  matrix, one summary row, one markdown summary, and one `run_contract.json`.
+
+- [`experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py)  
+  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
 
 - [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350) `build_hint_payload(...)`  
   Script layer. Builds `agent_hints.priority`.
@@ -1790,25 +1884,32 @@ priority was attached, read, applied, and observed.
 Strongest proof in this setup: `sglang_scheduler_priority_applied=true` plus a
 positive `attach_gain` / `beat_low_attach`.
 
-### Key Columns
+### Lower-Level Wrapper
 
-Most important request-level columns:
+Normally use the single public wrapper above.
 
-```text
-request            Request label
-prio_class         low-priority or high-priority
-arrival            Planned arrival order
-attach             Actual attach order
-complete           Actual finish order
-attach_gain        How far a request moved forward at attach time
-beat_low_attach    Earlier low-priority requests it beat in attach order
-queue_ms           Worker-side queue wait
-latency_ms         End-to-end latency
-worker_hint_prio   Priority value seen by worker
-worker_top_prio    Top-level priority seen by worker
-sglang_prio        Whether SGLang said priority was applied
-effect             yes_strong / yes_partial / no / baseline_low / unknown
-```
+- [`agentbench/run_priority_scheduling_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_priority_scheduling_probe_single_host.sh)
+  - probe component
+
+Component report names now use compact fields such as:
+
+- `request`
+- `prio_class`
+- `arrival`
+- `attach`
+- `complete`
+- `attach_gain`
+- `complete_gain`
+- `beat_low_attach`
+- `beat_low_complete`
+- `queue_ms`
+- `latency_ms`
+- `worker_hint_prio`
+- `sent_top_prio`
+- `worker_top_prio`
+- `sglang_prio`
+- `runtime_match`
+- `effect`
 
 ### Main Knobs
 
@@ -1819,61 +1920,32 @@ PRIORITY_INPUT_LEN
 PRIORITY_OUTPUT_LEN
 PRIORITY_ARRIVAL_GAP_MS
 PRIORITY_INTER_REQUEST_GAP_MS
+PRIORITY_SCHEDULING_SWEEP_AXIS
+PRIORITY_SCHEDULING_SWEEP_VALUES
 PRIORITY_TOP_LEVEL_PRIORITY_MODE
-```
-
-Most important summary columns:
-
-```text
-top_prio_compat
-  supported / unsupported / not_attempted
-
-worker_hint_status
-  Whether the worker actually received the expected high-priority hint values
-
-worker_top_prio_status
-  Whether the worker actually saw the top-level priority values
-
-sglang_prio_status
-  applied / seen_not_applied / worker_received_hint / not_seen
-
-high_attach_leapfrogs
-  Total number of earlier low-priority requests that were beaten by later
-  high-priority requests in attach order
-
-effect_status
-  Simple yes/no summary of whether leapfrogging happened
 ```
 
 ## Experiment 12: Speculative Prefill Probe
 
-Use this when you want to test whether Dynamo actually fires
-`speculative_prefill` after turn A, and whether turn B comes in warmer.
+This is the public speculative-prefill microbenchmark entrypoint.
 
-Supported control under test:
+Contract files:
 
-- `speculative_prefill`
+- [`contracts/speculative_prefill_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/speculative_prefill_microbenchmark.contract.sh)
+- [`contracts/speculative_prefill_microbenchmark.contract.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/speculative_prefill_microbenchmark.contract.md)
+
+Public wrapper:
+
+- [`agentbench/run_speculative_prefill_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_speculative_prefill_microbenchmark_single_host.sh)
+
+Supported modes:
+
+- `probe`: one live two-turn speculative-prefill run
+- `sweep`: multiple live runs over one public knob
+- `all`: probe, then sweep, then plot
+- `plot`: rebuild charts from one existing matrix CSV
 
 This is a synthetic two-turn experiment. It does **not** use SWE-bench.
-
-What it measures:
-
-- did the worker receive `speculative_prefill=true`?
-- did Dynamo’s real speculative-prefill branch emit `wrap_checked`, `prefill_sent`, and `prefill_completed`?
-- if those named events are missing, did we still see an anonymous warmup request
-  appear between protected turn A and protected turn B?
-- did the prefill event point at the exact turn B request we expected?
-- did turn B show more cached tokens or lower latency in the protected arm?
-
-The wrapper handles precise setup automatically. On a healthy precise run, you
-should see the same 6 readiness signals before requests are sent.
-
-If the local Dynamo source is missing the speculative-prefill markers, the
-wrapper now prepares the instrumented Dynamo source and rebuilds the precise
-runtime images automatically before the run continues.
-
-It also uses the same image-freshness check as the other precise experiments,
-so you should not have to manually decide whether Dynamo needs a rebuild first.
 
 ### Run
 
@@ -1881,46 +1953,112 @@ so you should not have to manually decide whether Dynamo needs a rebuild first.
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SPEC_PREFILL_ID="speculative_prefill_$(date +%Y%m%d_%H%M%S)" \
-SPEC_PREFILL_ATTRIBUTION_MODE=precise \
-SPEC_PREFILL_REQUEST_CONTEXT_MODE=auto \
+SPEC_PREFILL_MODE=probe \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SPEC_PREFILL_MODE=sweep \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SPEC_PREFILL_MODE=all \
 SPEC_PREFILL_TURN_A_WORDS=4000 \
 SPEC_PREFILL_TURN_B_WORDS=512 \
 SPEC_PREFILL_OUTPUT_TOKENS=64 \
 SPEC_PREFILL_WARMUP_WAIT_MS=500 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_speculative_prefill_probe_single_host.sh \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Outputs
+```bash
+cd ~/kv_cache_offloading
 
-To watch the worker:
+DYNAMO_MACHINE_PROFILE=ec2 \
+SPEC_PREFILL_MODE=plot \
+SPEC_PREFILL_PLOT_MATRIX_CSV=experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### Core Contract Knobs
+
+```text
+SPEC_PREFILL_TURN_A_WORDS
+SPEC_PREFILL_TURN_B_WORDS
+SPEC_PREFILL_OUTPUT_TOKENS
+SPEC_PREFILL_WARMUP_WAIT_MS
+SPEC_PREFILL_SWEEP_AXIS
+SPEC_PREFILL_SWEEP_VALUES
+SPEC_PREFILL_REQUEST_CONTEXT_MODE
+SGLANG_TRANSFER_LOG_PROFILE
+WORKER_BASE_ARGS
+```
+
+The contract is the source of truth for:
+
+- precise runtime defaults
+- model-readiness timing
+- two-turn workload shape
+- warmup timing
+- top-level latest report paths
+
+### Top-Level Outputs
+
+```bash
+cat experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv
+cat experiments/reports/latest_speculative_prefill_microbenchmark_summary.csv
+cat experiments/reports/latest_speculative_prefill_microbenchmark_summary.md
+cat experiments/reports/latest_speculative_prefill_microbenchmark_run_contract.json
+
+ls experiments/reports/latest_speculative_prefill_microbenchmark_*.svg
+cat experiments/reports/latest_speculative_prefill_microbenchmark_chart_manifest.json
+```
+
+Main outputs:
+
+- `latest_speculative_prefill_microbenchmark_matrix.csv`: one row per arm or per sweep-arm point
+- `latest_speculative_prefill_microbenchmark_summary.csv`: one-row summary
+- `latest_speculative_prefill_microbenchmark_run_contract.json`: exact resolved settings
+- `turnb_latency.svg`
+- `turnb_cached.svg`
+
+### Debug
 
 ```bash
 docker logs -f dynamo-sglang-worker
-```
-
-Top-level latest copies:
-
-```bash
-cat experiments/reports/speculative_prefill_requests.csv
-cat experiments/reports/speculative_prefill_matrix.csv
-cat experiments/reports/speculative_prefill_summary.csv
-cat experiments/reports/speculative_prefill_summary.md
-
-cat experiments/reports/latest_speculative_prefill_requests.csv
-cat experiments/reports/latest_speculative_prefill_matrix.csv
-cat experiments/reports/latest_speculative_prefill_summary.csv
-cat experiments/reports/latest_speculative_prefill_summary.md
-cat experiments/reports/latest_speculative_prefill_run.txt
 ```
 
 ### Decision Proof
 
 Use these as the exact places to inspect when you want to prove that Dynamo
 made a speculative-prefill decision.
+
+- [`contracts/speculative_prefill_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/speculative_prefill_microbenchmark.contract.sh)  
+  Contract. Owns the public defaults for the two-turn workload,
+  precise-runtime settings, and top-level latest outputs.
+
+- [`agentbench/run_speculative_prefill_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_speculative_prefill_microbenchmark_single_host.sh)  
+  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`, clears
+  stale latest outputs, and writes the consolidated report and chart artifacts.
+
+- [`experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py)  
+  Report builder. Normalizes the probe matrix into one compact matrix, one
+  summary row, one markdown summary, and one `run_contract.json`.
+
+- [`experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py)  
+  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
 
 - [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413) `"speculative_prefill": spec_prefill`  
   Script layer. Attaches the `speculative_prefill` hint to the protected arm.
@@ -1962,36 +2100,30 @@ made a speculative-prefill decision.
 Strongest proof in this setup: `worker.spec_prefill.prefill_sent` followed by
 `worker.spec_prefill.prefill_completed`.
 
-### Key Columns
+### Lower-Level Wrapper
 
-Most important matrix columns:
+Normally use the single public wrapper above.
 
-```text
-arm                 control or protected
-spec_prefill        false / true
-turn_b_ms           Turn B end-to-end latency
-turn_b_latency_gain_ms Control turn B minus this arm's turn B
-turn_b_cached       Turn B cached tokens
-turn_b_reuse        Turn B cached-token ratio
-hint_status         Did the worker see speculative_prefill on/off?
-prefill_evidence_status baseline_off / direct_prefill_seen / inferred_prefill_seen / hint_seen_no_prefill_evidence / hint_missing
-prefill_wrap        on / off / missing
-prefill_sent        Did Dynamo send the synthetic warmup request?
-prefill_done        Did that warmup request complete?
-prefill_target_seen Did the runtime event point at the exact turn B request?
-anonymous_warmup_seen Did an unnamed in-between warmup request show up in runtime logs?
-prefill_tokens      Tokens in the warmed next-turn prefix
-effect_status       faster_direct / faster_inferred / direct_no_visible_gain / inferred_no_visible_gain / hint_seen_no_prefill_evidence / baseline_off
-```
+- [`agentbench/run_speculative_prefill_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_speculative_prefill_probe_single_host.sh)
+  - probe component
 
-Interpretation:
+Component report names now use compact fields such as:
 
-- `direct_prefill_seen` means the named `worker.spec_prefill.*` events were present.
-- `inferred_prefill_seen` means the named events were missing, but the worker log
-  still showed an anonymous warmup request between protected turn A and protected
-  turn B, which is strong indirect evidence that speculative prefill ran.
-- `faster_direct` / `faster_inferred` mean protected turn B was faster than the
-  control turn B under direct or inferred prefill evidence.
+- `arm`
+- `spec_prefill`
+- `turn_a_ms`
+- `turn_b_ms`
+- `turn_b_gain_ms`
+- `turn_b_cached`
+- `turn_b_reuse`
+- `hint_status`
+- `prefill_wrap`
+- `prefill_spawned`
+- `prefill_sent`
+- `prefill_done`
+- `prefill_target_seen`
+- `prefill_tokens`
+- `effect`
 
 ### Main Knobs
 
