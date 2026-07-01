@@ -2178,6 +2178,35 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+All these use the same instrumented docker version
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_EXPERIMENTS="9 10 11 12" \
+DISTRACTOR_COUNTS="25 50 75 100" \
+PROTECTED_INPUT_LEN=400 \
+DISTRACTOR_INPUT_LEN=400 \
+PROTECTED_HINT_PROFILES="high-priority" \
+CACHE_PINNING_TTL=1h \
+CACHE_PINNING_PINNED_RATIO=0.1 \
+CACHE_PINNING_HICACHE_RATIO=1 \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=512 \
+SPEC_PREFILL_OUTPUT_TOKENS=64 \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
 ### Core Suite Knobs
 
 ```text
@@ -2214,3 +2243,52 @@ Main outputs:
 - `latest_agentic_hint_sweeps_suite_summary.md`: one landing-page summary for the full run
 - `latest_agentic_hint_sweeps_suite_manifest.json`: exact experiment statuses, chart paths, and report paths
 - `latest_agentic_hint_sweeps_suite_driver.log`: suite-level launch log
+
+The suite terminal output and nohup log now print very clear start/end banners
+for each experiment block, so you can easily see when 9, 10, 11, or 12 begins
+and ends.
+
+If a precise or cache-pinning image rebuild happens, you will also now see
+clear build banners such as:
+
+- `PRECISE IMAGE BUILD START`
+- `PRECISE IMAGE BUILD DONE`
+- `CACHE PINNING IMAGE BUILD START`
+- `CACHE PINNING IMAGE BUILD DONE`
+
+These appear in both the live terminal run and the nohup log.
+
+### If Docker Space Is Tight
+
+Use this before rerunning the suite if a Dynamo image build fails because of
+disk space:
+
+```bash
+cd ~/kv_cache_offloading
+
+./run_dynamo_single_host.sh stop || true
+
+df -h /
+docker system df
+
+docker container prune -f
+docker image prune -f
+docker builder prune -f
+
+df -h /
+docker system df
+```
+
+If you still need a more aggressive cleanup and do not need old Docker state:
+
+```bash
+cd ~/kv_cache_offloading
+
+./run_dynamo_single_host.sh stop || true
+
+docker system prune -af
+docker builder prune -af
+
+df -h /
+docker system df
+```

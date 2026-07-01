@@ -157,9 +157,12 @@ if [[ "${SOURCE_READY}" -eq 1 && "${frontend_ok}" -eq 1 && "${worker_ok}" -eq 1 
   echo "Stamped source signature: ${STAMP_SOURCE_SIGNATURE:-<missing>}"
 fi
 
+precise_banner "PRECISE IMAGE BUILD START (building machine-specific Dynamo images; plain Docker logs are expected while output is captured)"
+echo "Build reason: precise runtime images are missing or stale for the current instrumented source."
 echo "Building machine-specific instrumented Dynamo images..."
 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
   ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+precise_banner "PRECISE IMAGE BUILD DONE (machine-specific Dynamo images finished building)"
 
 docker image inspect "${FRONTEND_IMAGE}" >/dev/null 2>&1 || {
   echo "Failed to build frontend image: ${FRONTEND_IMAGE}" >&2

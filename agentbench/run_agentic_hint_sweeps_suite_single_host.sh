@@ -37,6 +37,41 @@ $1
 EOF
 }
 
+suite_run_start_banner() {
+  local index="$1"
+  local total="$2"
+  local experiment_id="$3"
+  local label="$4"
+  local mode="$5"
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+
+################################################################################
+### SUITE EXPERIMENT ${index}/${total}: EXPERIMENT ${experiment_id} START
+### LABEL: ${label}
+### MODE: ${mode}
+### MODEL: ${MODEL}
+################################################################################
+
+EOF
+}
+
+suite_run_end_banner() {
+  local index="$1"
+  local total="$2"
+  local experiment_id="$3"
+  local label="$4"
+  local status="$5"
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+
+################################################################################
+### SUITE EXPERIMENT ${index}/${total}: EXPERIMENT ${experiment_id} END
+### LABEL: ${label}
+### STATUS: ${status}
+################################################################################
+
+EOF
+}
+
 usage() {
   cat <<'EOF'
 Usage:
@@ -246,7 +281,7 @@ run_experiment_9() {
   local status="passed"
   local error_message=""
   log
-  banner "(1/4) EXPERIMENT 9 SUITE RUN" | tee -a "${SUITE_DRIVER_LOG}"
+  suite_run_start_banner "1" "4" "9" "kv_retention" "${mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
@@ -254,6 +289,7 @@ run_experiment_9() {
     error_message="Experiment 9 wrapper failed"
   fi
   stop_dynamo_if_requested
+  suite_run_end_banner "1" "4" "9" "kv_retention" "${status}"
   append_result_json \
     "9" "kv_retention" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" \
@@ -274,7 +310,7 @@ run_experiment_10() {
   local status="passed"
   local error_message=""
   log
-  banner "(2/4) EXPERIMENT 10 SUITE RUN" | tee -a "${SUITE_DRIVER_LOG}"
+  suite_run_start_banner "2" "4" "10" "cache_pinning" "${mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
@@ -282,6 +318,7 @@ run_experiment_10() {
     error_message="Experiment 10 wrapper failed"
   fi
   stop_dynamo_if_requested
+  suite_run_end_banner "2" "4" "10" "cache_pinning" "${status}"
   append_result_json \
     "10" "cache_pinning" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" \
@@ -302,7 +339,7 @@ run_experiment_11() {
   local status="passed"
   local error_message=""
   log
-  banner "(3/4) EXPERIMENT 11 SUITE RUN" | tee -a "${SUITE_DRIVER_LOG}"
+  suite_run_start_banner "3" "4" "11" "priority_scheduling" "${mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
@@ -310,6 +347,7 @@ run_experiment_11() {
     error_message="Experiment 11 wrapper failed"
   fi
   stop_dynamo_if_requested
+  suite_run_end_banner "3" "4" "11" "priority_scheduling" "${status}"
   append_result_json \
     "11" "priority_scheduling" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" \
@@ -330,7 +368,7 @@ run_experiment_12() {
   local status="passed"
   local error_message=""
   log
-  banner "(4/4) EXPERIMENT 12 SUITE RUN" | tee -a "${SUITE_DRIVER_LOG}"
+  suite_run_start_banner "4" "4" "12" "speculative_prefill" "${mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
@@ -338,6 +376,7 @@ run_experiment_12() {
     error_message="Experiment 12 wrapper failed"
   fi
   stop_dynamo_if_requested
+  suite_run_end_banner "4" "4" "12" "speculative_prefill" "${status}"
   append_result_json \
     "12" "speculative_prefill" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" \

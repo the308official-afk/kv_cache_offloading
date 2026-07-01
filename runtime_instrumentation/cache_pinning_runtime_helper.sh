@@ -119,6 +119,7 @@ ensure_cache_pinning_runtime_images() {
   echo "Preparing isolated cache-pinning sources..." | tee -a "${log_path}"
   prepare_cache_pinning_sources "${log_path}"
 
+  cache_pinning_banner "CACHE PINNING IMAGE BUILD START (building isolated cache-pinning images; plain Docker logs are expected while output is captured)" | tee -a "${log_path}"
   echo "Building isolated cache-pinning runtime images from the cache-pinning PR stack..." | tee -a "${log_path}"
   if [[ "${#build_reasons[@]}" -gt 0 ]]; then
     printf 'Build reason(s): %s\n' "${build_reasons[*]}" | tee -a "${log_path}"
@@ -128,6 +129,7 @@ ensure_cache_pinning_runtime_images() {
   WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
   LEAN_FRONTEND=1 \
     ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh | tee -a "${log_path}"
+  cache_pinning_banner "CACHE PINNING IMAGE BUILD DONE (isolated cache-pinning images finished building)" | tee -a "${log_path}"
 
   docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1
   docker image inspect "${CACHE_PINNING_WORKER_IMAGE}" >/dev/null 2>&1
