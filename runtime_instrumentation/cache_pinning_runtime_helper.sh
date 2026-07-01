@@ -124,11 +124,21 @@ ensure_cache_pinning_runtime_images() {
   if [[ "${#build_reasons[@]}" -gt 0 ]]; then
     printf 'Build reason(s): %s\n' "${build_reasons[*]}" | tee -a "${log_path}"
   fi
-  SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
-  FRONTEND_IMAGE_TAG="${CACHE_PINNING_FRONTEND_IMAGE}" \
-  WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
-  LEAN_FRONTEND=1 \
-    ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh | tee -a "${log_path}"
+  if [[ "${INTERACTIVE_BUILD_PROGRESS:-0}" = "1" && -t 1 ]]; then
+    echo "Interactive build progress enabled for cache-pinning image rebuild." | tee -a "${log_path}"
+    echo "Note: live Docker build output will stream to the terminal instead of being mirrored line-by-line into this log." | tee -a "${log_path}"
+    SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
+    FRONTEND_IMAGE_TAG="${CACHE_PINNING_FRONTEND_IMAGE}" \
+    WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
+    LEAN_FRONTEND=1 \
+      ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh
+  else
+    SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
+    FRONTEND_IMAGE_TAG="${CACHE_PINNING_FRONTEND_IMAGE}" \
+    WORKER_IMAGE_TAG="${CACHE_PINNING_WORKER_IMAGE}" \
+    LEAN_FRONTEND=1 \
+      ./runtime_instrumentation/build_cache_pinning_dynamo_images.sh | tee -a "${log_path}"
+  fi
   cache_pinning_banner "CACHE PINNING IMAGE BUILD DONE (isolated cache-pinning images finished building)" | tee -a "${log_path}"
 
   docker image inspect "${CACHE_PINNING_FRONTEND_IMAGE}" >/dev/null 2>&1

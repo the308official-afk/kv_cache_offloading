@@ -2155,6 +2155,7 @@ Public wrappers:
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_INTERACTIVE_BUILD_PROGRESS=1 \
 SUITE_EXPERIMENTS="9 10 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
 PROTECTED_INPUT_LEN=400 \
@@ -2184,6 +2185,7 @@ All these use the same instrumented docker version
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_INTERACTIVE_BUILD_PROGRESS=1 \
 SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
 PROTECTED_INPUT_LEN=400 \
@@ -2216,7 +2218,10 @@ SUITE_EXPERIMENTS
 SUITE_CONTINUE_ON_ERROR
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS
 SUITE_DEFAULT_MODE
+SUITE_INTERACTIVE_BUILD_PROGRESS
 ```
+
+`SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
 
 Per-experiment sweep knobs still pass through unchanged. Examples:
 

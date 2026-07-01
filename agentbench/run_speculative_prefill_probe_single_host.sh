@@ -57,8 +57,15 @@ ensure_precise_specprefill_runtime_images() {
   if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
     cmd+=(--build-if-missing)
   fi
-  AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
-    "${cmd[@]}" | tee -a "${DRIVER_LOG}"
+  if [[ "${INTERACTIVE_BUILD_PROGRESS:-0}" = "1" && -t 1 ]]; then
+    echo "Interactive build progress enabled for precise runtime image checks." | tee -a "${DRIVER_LOG}"
+    echo "Note: live Docker build output will stream to the terminal instead of being mirrored line-by-line into this log." | tee -a "${DRIVER_LOG}"
+    AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+      "${cmd[@]}"
+  else
+    AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+      "${cmd[@]}" | tee -a "${DRIVER_LOG}"
+  fi
 }
 
 ensure_precise_specprefill_dynamo_source() {
@@ -81,8 +88,15 @@ ensure_precise_specprefill_dynamo_source() {
 
   if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
     echo "Rebuilding machine-specific precise runtime images to include speculative-prefill markers..." | tee -a "${DRIVER_LOG}"
-    LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
-      ./runtime_instrumentation/build_instrumented_dynamo_images.sh | tee -a "${DRIVER_LOG}"
+    if [[ "${INTERACTIVE_BUILD_PROGRESS:-0}" = "1" && -t 1 ]]; then
+      echo "Interactive build progress enabled for speculative-prefill image rebuild." | tee -a "${DRIVER_LOG}"
+      echo "Note: live Docker build output will stream to the terminal instead of being mirrored line-by-line into this log." | tee -a "${DRIVER_LOG}"
+      LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+        ./runtime_instrumentation/build_instrumented_dynamo_images.sh
+    else
+      LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+        ./runtime_instrumentation/build_instrumented_dynamo_images.sh | tee -a "${DRIVER_LOG}"
+    fi
   fi
 }
 

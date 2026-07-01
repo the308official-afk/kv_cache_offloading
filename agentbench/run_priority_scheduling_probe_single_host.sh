@@ -63,8 +63,15 @@ ensure_precise_priority_runtime_images() {
   if [[ "${AUTO_BUILD_PRECISE_IMAGES}" = "1" ]]; then
     cmd+=(--build-if-missing)
   fi
-  AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
-    "${cmd[@]}" | tee -a "${DRIVER_LOG}"
+  if [[ "${INTERACTIVE_BUILD_PROGRESS:-0}" = "1" && -t 1 ]]; then
+    echo "Interactive build progress enabled for precise runtime image checks." | tee -a "${DRIVER_LOG}"
+    echo "Note: live Docker build output will stream to the terminal instead of being mirrored line-by-line into this log." | tee -a "${DRIVER_LOG}"
+    AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+      "${cmd[@]}"
+  else
+    AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
+      "${cmd[@]}" | tee -a "${DRIVER_LOG}"
+  fi
 }
 
 check_precise_priority_runtime_ready() {
