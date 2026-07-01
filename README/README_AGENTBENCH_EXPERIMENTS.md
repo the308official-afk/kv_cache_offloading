@@ -2134,3 +2134,83 @@ SPEC_PREFILL_OUTPUT_TOKENS
 SPEC_PREFILL_WARMUP_WAIT_MS
 SPEC_PREFILL_REQUEST_CONTEXT_MODE
 ```
+
+## Experiment Suite: Agentic Hint Sweeps
+
+Use this when you want one long run across the public microbenchmarks for:
+
+- Experiment 9: KV retention
+- Experiment 10: cache pinning
+- Experiment 11: priority scheduling
+- Experiment 12: speculative prefill
+
+Public wrappers:
+
+- [`agentbench/run_agentic_hint_sweeps_suite_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_single_host.sh)
+- [`agentbench/run_agentic_hint_sweeps_suite_nohup.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_nohup.sh)
+
+### Run
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_EXPERIMENTS="9 10 11 12" \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_EXPERIMENTS="9 11 12" \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_EXPERIMENTS="9 10 11 12" \
+./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### Core Suite Knobs
+
+```text
+DYNAMO_MACHINE_PROFILE
+SUITE_MODEL
+SUITE_EXPERIMENTS
+SUITE_CONTINUE_ON_ERROR
+SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS
+SUITE_DEFAULT_MODE
+```
+
+Per-experiment sweep knobs still pass through unchanged. Examples:
+
+```text
+KV_RETENTION_SWEEP_VALUES
+CACHE_PINNING_TTL
+CACHE_PINNING_HICACHE_RATIO
+PRIORITY_SCHEDULING_SWEEP_AXIS
+PRIORITY_SCHEDULING_SWEEP_VALUES
+SPEC_PREFILL_SWEEP_AXIS
+SPEC_PREFILL_SWEEP_VALUES
+```
+
+### Top-Level Outputs
+
+```bash
+cat experiments/reports/latest_agentic_hint_sweeps_suite_summary.md
+cat experiments/reports/latest_agentic_hint_sweeps_suite_manifest.json
+cat experiments/reports/latest_agentic_hint_sweeps_suite_driver.log
+```
+
+Main outputs:
+
+- `latest_agentic_hint_sweeps_suite_summary.md`: one landing-page summary for the full run
+- `latest_agentic_hint_sweeps_suite_manifest.json`: exact experiment statuses, chart paths, and report paths
+- `latest_agentic_hint_sweeps_suite_driver.log`: suite-level launch log

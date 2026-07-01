@@ -65,6 +65,9 @@ LATEST_SPEC_PREFILL_MICROBENCH_MATRIX_REPORT="latest_speculative_prefill_microbe
 LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_REPORT="latest_speculative_prefill_microbenchmark_summary.csv"
 LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_MD_REPORT="latest_speculative_prefill_microbenchmark_summary.md"
 LATEST_SPEC_PREFILL_MICROBENCH_CONTRACT_REPORT="latest_speculative_prefill_microbenchmark_run_contract.json"
+LATEST_AGENTIC_HINT_SWEEPS_SUITE_SUMMARY_REPORT="latest_agentic_hint_sweeps_suite_summary.md"
+LATEST_AGENTIC_HINT_SWEEPS_SUITE_MANIFEST_REPORT="latest_agentic_hint_sweeps_suite_manifest.json"
+LATEST_AGENTIC_HINT_SWEEPS_SUITE_DRIVER_LOG="latest_agentic_hint_sweeps_suite_driver.log"
 LATEST_RETENTION_PROBE_PROGRESS_REPORT="latest_retention_probe_progress.csv"
 LATEST_RETENTION_PROBE_MATRIX_REPORT="latest_retention_probe_matrix.csv"
 LATEST_RETENTION_PROBE_REQUESTS_REPORT="latest_retention_probe_requests.csv"
@@ -232,5 +235,8 @@ print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROB
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_REPORT}"
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_SUMMARY_MD_REPORT}"
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROBENCH_CONTRACT_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_SUMMARY_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_MANIFEST_REPORT}"
+print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_DRIVER_LOG}"
 
 echo "Download complete."
