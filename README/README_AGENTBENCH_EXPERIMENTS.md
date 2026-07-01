@@ -1663,53 +1663,6 @@ Use these as the exact places to inspect when you want to prove what
   Report builder. Decides whether the replay-side eviction evidence matches the
   protected cache-control identity.
 
-Strongest proof in this setup: `req_cache_status` / `worker_cache_status` prove
-receipt; `replay_evict_cache_match` proves eviction-side identity evidence when
-present.
-
-New doc-alignment proof fields:
-
-- `frontend_cc_flag`: whether the pinned frontend source actually supported /
-  enabled the documented `--enable-cache-control` flag
-- `pin_path`: whether the pinned source showed direct cache-pin path signals
-- `pinned_ratio`: worker-side `SGLANG_HICACHE_MAX_PINNED_RATIO`
-- `write_policy`: the HiCache write policy active during the run
-
-### Pinned-Code Verdict
-
-These are the exact pinned-code signals behind the current conclusion.
-
-- [nvext.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:290) does not define a typed `cache_control` field on `NvExt`; unknown fields fall into `NvExt.extra`
-- [preprocessor.rs](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) builds `runtime_observability`, but pinned source does not show a first-class `cache_control -> routing -> worker retention` branch there
-- [repair_dynamo_hint_preservation_source.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_dynamo_hint_preservation_source.py:143) is what preserves `cache_control` into runtime observability for logs in our setup
-- [decode_handler.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) has a direct live read of `routing.priority`, but there is no comparable live `cache_control` branch in the pinned worker handler
-- [nvext.md](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/docs/components/frontend/nvext.md:1) documents `agent_hints` and `session_control`, but pinned frontend docs do not expose a first-class `cache_control` launch flag or request-field section
-
-Simple reading:
-
-- `priority` has a clear execution path
-- `cache_control` has a clear observability path
-- in this pinned revision, we have not found a comparably clear live
-  `cache_control -> pin_prefix / TTL retention` execution path yet
-
-Current upstream Dynamo `origin/main` docs also explicitly say that
-`nvext.cache_control` is not currently a supported self-hosted TTL pinning API,
-and that the supported production controls are `agent_hints.priority` and
-`session_control`.
-
-Top-level outputs:
-
-```bash
-cat experiments/reports/latest_retention_probe_matrix.csv
-cat experiments/reports/retention_threshold_matrix.csv
-cat experiments/reports/retention_threshold_comparison.csv
-cat experiments/reports/retention_threshold_summary.md
-cat experiments/reports/latest_cache_control_retention_threshold_progress.csv
-cat experiments/reports/latest_cache_control_retention_threshold_matrix.csv
-cat experiments/reports/latest_cache_control_retention_threshold_comparison.csv
-cat experiments/reports/latest_cache_control_retention_threshold_summary.md
-```
-
 ## Experiment 10A: Cache-Pinning Microbenchmark
 
 This is the public cache-pinning entrypoint.
