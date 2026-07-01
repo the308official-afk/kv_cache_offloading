@@ -20,10 +20,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./download.sh
-    Download AgentBench results, reports, and SGLang transfer logs from server 0
+    Download AgentBench results, the full experiments/reports tree, and SGLang transfer logs from server 0
 
   ./download.sh <server-index>
-    Download AgentBench results, reports, and SGLang transfer logs from the given server
+    Download AgentBench results, the full experiments/reports tree, and SGLang transfer logs from the given server
 
 Examples:
   ./download.sh

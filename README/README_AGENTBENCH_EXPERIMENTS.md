@@ -1710,281 +1710,227 @@ cat experiments/reports/latest_cache_control_retention_threshold_comparison.csv
 cat experiments/reports/latest_cache_control_retention_threshold_summary.md
 ```
 
-## Experiment 10A: Cache-Pinning Doc Validation
+## Experiment 10A: Cache-Pinning Microbenchmark
 
-Use this only to answer the basic question:
+This is the public cache-pinning entrypoint.
 
-- does the Dynamo/SGLang cache-pinning sample from the docs work at all on an isolated stack?
+Use it when you want one reproducible experiment that:
 
-This experiment is intentionally isolated from the rest of the README:
+- uses the isolated cache-pinning Dynamo/SGLang stack
+- reads its setup from one contract
+- can run doc validation, retention sweep, both, or charts only
 
-- separate Dynamo source checkout
-- separate SGLang source checkout
-- separate Docker image tags
+Contract files:
 
-So changes here do not disturb the default stack used by the other experiments.
-This isolated validation uses the cache-pinning PR source directly. It does not
-force that older branch through the newer runtime-attribution repair pipeline.
+- [`contracts/cache_pinning_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh)
+- [`contracts/cache_pinning_microbenchmark.contract.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.md)
+
+Public wrapper:
+
+- [`agentbench/run_cache_pinning_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_microbenchmark_single_host.sh)
+
+Supported modes:
+
+- `CACHE_PINNING_MODE=validate`
+  - two-turn doc-style cache-pinning check
+- `CACHE_PINNING_MODE=sweep`
+  - threshold sweep: `off` vs `ephemeral:1h`
+- `CACHE_PINNING_MODE=all`
+  - validation, then sweep
+- `CACHE_PINNING_MODE=plot`
+  - rebuild charts from one existing microbenchmark matrix CSV
 
 ### Run
+
+Validation only:
 
 ```bash
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-CACHE_PINNING_DOC_ID="cache_pinning_doc_$(date +%Y%m%d_%H%M%S)" \
-CACHE_PINNING_TTL=1h \
-CACHE_PINNING_PINNED_RATIO=0.1 \
-CACHE_PINNING_HICACHE_RATIO=1 \
-./agentbench/run_cache_pinning_doc_validation_single_host.sh \
+CACHE_PINNING_MODE=validate \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### What It Does
+Sweep only:
 
-- checks out the Dynamo cache-pinning PR stack
-- checks out the SGLang cache-pinning PR stack
-- builds separate cache-pinning-only images
-- starts Dynamo with the cache-pinning frontend flag the isolated source exposes
-- sends the minimal two-turn doc-style `nvext.cache_control` example
-- checks whether turn 2 shows nonzero cached tokens
+```bash
+cd ~/kv_cache_offloading
 
-First run behavior:
+DYNAMO_MACHINE_PROFILE=ec2 \
+CACHE_PINNING_MODE=sweep \
+DISTRACTOR_COUNTS="40 80 120 160" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
 
-- the first run usually takes longer because it builds separate cache-pinning-only Docker images from the isolated PR stack
-- later runs should reuse those images unless you set `CACHE_PINNING_REBUILD_IMAGES=1`
+Validation + sweep:
 
-### Main Knobs
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+CACHE_PINNING_MODE=all \
+DISTRACTOR_COUNTS="40 80 120 160" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+Charts only from one matrix:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+CACHE_PINNING_MODE=plot \
+CACHE_PINNING_PLOT_MATRIX_CSV=experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+### What The Wrapper Reads From The Contract
+
+Main doc-facing prerequisites:
 
 ```text
-DYNAMO_MACHINE_PROFILE
+CACHE_PINNING_FRONTEND_FLAG_MODE
+CACHE_PINNING_FRONTEND_FLAG_VALUE
+CACHE_PINNING_ENABLE_CACHE_CONTROL
+CACHE_PINNING_ROUTER_MODE
+CACHE_PINNING_REQUEST_TYPE
 CACHE_PINNING_TTL
 CACHE_PINNING_PINNED_RATIO
+SGLANG_HICACHE_MAX_PINNED_RATIO
 CACHE_PINNING_HICACHE_RATIO
 CACHE_PINNING_HICACHE_WRITE_POLICY
 CACHE_PINNING_MEM_FRACTION_STATIC
-CACHE_PINNING_EPP_IMAGE
-CACHE_PINNING_REBUILD_IMAGES
-AUTO_BUILD_CACHE_PINNING_IMAGES
+CACHE_PINNING_ENABLE_CACHE_REPORT
+CACHE_PINNING_ENABLE_HIERARCHICAL_CACHE
+CACHE_PINNING_REQUIRE_HIERARCHICAL_CACHE
+CACHE_PINNING_DEVELOPMENT_BRANCH_STACK
 ```
 
-### Key Reports
+Pinned upstream stack:
+
+- Dynamo PR `#6213`
+  - commit `7d3d4ec8e4ae865af2f903b21b4afabca28e1940`
+- SGLang PR `#18941`
+  - commit `ff2f70b0fcb6b3ea130c46927ed98edf69d5c17c`
+
+### Top-Level Outputs
 
 ```bash
-cat experiments/reports/latest_cache_pinning_doc_validation_summary.csv
-cat experiments/reports/latest_cache_pinning_doc_validation_requests.csv
-cat experiments/reports/latest_cache_pinning_doc_validation_summary.md
+cat experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv
+cat experiments/reports/latest_cache_pinning_microbenchmark_summary.csv
+cat experiments/reports/latest_cache_pinning_microbenchmark_summary.md
+cat experiments/reports/latest_cache_pinning_microbenchmark_run_contract.json
+
+ls experiments/reports/latest_cache_pinning_microbenchmark_*.svg
+cat experiments/reports/latest_cache_pinning_microbenchmark_chart_manifest.json
 ```
 
-### Key Columns
+### Main Output Meaning
 
-```text
-turn1_cached
-turn2_cached
-turn2_cache
-router_pin_status
-router_pin_ttls
-router_skip_reasons
-worker_pin_status
-worker_pin_ttls
-worker_pin_refreshes
-verdict
-```
-
-Simple reading:
-
-- `turn2_cached > 0` means the second turn reused cached prefix tokens
-- `router_pin_status=spawned` means Dynamo took the pinning path and issued a pin request
-- `worker_pin_status=applied` means SGLang called its pinning path
-- `worker_pin_refreshes > 0` means the worker refreshed TTL on later cache use
-- `verdict=pin_path_applied_and_cache_reused` is the strongest success signal
-
-Important debugging note:
-
-- if the frontend log shows `Failed to pin prefix: instance_id=... not found for endpoint dynamo/backend/cache_control`,
-  the router tried to send the pin request but the live worker did not expose the
-  `cache_control` service endpoint correctly
+- `latest_cache_pinning_microbenchmark_matrix.csv`
+  - one main table for validation rows and sweep rows
+- `latest_cache_pinning_microbenchmark_summary.csv`
+  - one-row nutshell summary
+- `latest_cache_pinning_microbenchmark_run_contract.json`
+  - exact resolved contract values used for the run
+- `validation_latency.svg`
+  - turn 1 vs turn 2 latency chart
+- `validation_cached_tokens.svg`
+  - turn 1 vs turn 2 cached-token chart
+- `sweep_replay_latency.svg`
+  - replay latency versus distractor count
+- `sweep_replay_cached_tokens.svg`
+  - replay cached tokens versus distractor count
 
 ### Decision Proof
 
-These are the exact codepaths this isolated validation uses.
+These are the exact places to inspect when you want to prove the signal path.
 
-- [`runtime_instrumentation/cache_pinning_profile.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/cache_pinning_profile.sh)  
-  Local setup. Pins the isolated Dynamo PR ref, isolated SGLang PR ref, and
-  separate cache-pinning-only image tags.
+- [`contracts/cache_pinning_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh)  
+  Contract. Owns the pinned repos, commits, frontend flag behavior, router mode,
+  request type, TTL, pinned ratio, HiCache knobs, and readiness defaults.
 
-- [`runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh)  
-  Local setup. Fetches the exact Dynamo cache-pinning PR head into its own
-  source directory.
+- [`agentbench/run_cache_pinning_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_microbenchmark_single_host.sh)  
+  Public wrapper. Reads the contract, runs validate/sweep/all/plot, clears stale
+  latest outputs, and writes the consolidated report and chart artifacts.
 
-- [`runtime_instrumentation/fetch_cache_pinning_sglang_source.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/fetch_cache_pinning_sglang_source.sh)  
-  Local setup. Fetches the exact SGLang cache-pinning PR head into its own
-  source directory.
+- [`experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py)  
+  Report builder. Merges validation and sweep evidence into one compact matrix,
+  one summary row, one markdown summary, and one `run_contract.json`.
+
+- [`experiments/scripts/cache_pinning/plot_cache_pinning_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/plot_cache_pinning_microbenchmark.py)  
+  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
 
 - [`runtime_instrumentation/repair_cache_pinning_dynamo_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py)  
-  Local patcher. Adds direct router-side logs to the isolated Dynamo cache-pinning source:
+  Local patcher for Dynamo. Adds router-side logs:
   - `router.cache_control_seen`
   - `router.pin_state_created`
   - `router.pin_state_skipped`
   - `router.pin_prefix_spawned`
-  - patches `components/src/dynamo/sglang/init_llm.py` so the live worker
-    actually serves the `cache_control` endpoint used by router-side pin RPCs
+  - and patches `init_llm.py` so the worker serves the live `cache_control` endpoint
 
 - [`runtime_instrumentation/repair_cache_pinning_sglang_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_sglang_source.py)  
-  Local patcher. Adds direct worker-side logs to the isolated SGLang cache-pinning source:
+  Local patcher for SGLang. Adds worker-side logs:
   - `worker.pin_prefix_applied`
   - `worker.pin_refreshed_host_insert`
   - `worker.pin_refreshed_cache_hit`
 
-- [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)  
-  Wrapper. Detects which frontend flag exists in the isolated Dynamo source,
-  patches the isolated sources, starts the isolated stack, captures frontend and
-  worker logs, runs the doc-style sample, and writes compact reports.
+### Feature Codepaths Under Test
 
-- [`experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py)  
-  Driver. Sends the two-turn `nvext.cache_control` requests and compares turn 1
-  vs turn 2 cached tokens, plus router-side and worker-side pin-path evidence.
+- `upstream/dynamo_cache_pinning/lib/llm/src/preprocessor.rs` (Dynamo)  
+  Reads `nvext.cache_control` and carries TTL into routing metadata.
 
-### PR Codepaths Under Test
+- `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/push_router.rs` (Dynamo)  
+  Builds pin state and spawns the pin-prefix request after generation.
 
-These are the feature codepaths we are validating with this isolated
-experiment. The file location is shown together with which runtime owns it.
+- `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/cache_control.rs` (Dynamo)  
+  Sends the TTL pin RPC toward the worker.
 
-- Dynamo PR `#6213`:
-  - `upstream/dynamo_cache_pinning/lib/llm/src/preprocessor.rs` (Dynamo)  
-    Reads `nvext.cache_control` and carries TTL into routing metadata.
-  - `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/push_router.rs` (Dynamo)  
-    Builds `PinState` from `cache_control_ttl` and calls `spawn_pin_prefix(...)`
-    after generation finishes.
-  - `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/cache_control.rs` (Dynamo)  
-    Owns the client that sends the TTL pin request toward the worker.
-  - `upstream/dynamo_cache_pinning/components/src/dynamo/sglang/init_llm.py` (Dynamo)  
-    Serves the live `cache_control` endpoint on the worker. Without this, the
-    router can create a pin request but it dies before reaching SGLang.
-  - `upstream/dynamo_cache_pinning/components/src/dynamo/frontend/frontend_args.py` (Dynamo)  
-    Exposes the cache-control frontend flag.
+- `upstream/dynamo_cache_pinning/components/src/dynamo/sglang/init_llm.py` (Dynamo)  
+  Serves the live `cache_control` endpoint on the worker.
 
-- SGLang PR `#18941`:
-  - `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
-    Implements `pin_prefix(...)` and refresh-on-hit TTL behavior.
+- `upstream/dynamo_cache_pinning/components/src/dynamo/frontend/frontend_args.py` (Dynamo)  
+  Exposes the cache-control frontend flag.
 
-## Experiment 10B: Cache-Pinning Retention Threshold Sweep
+- `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
+  Implements `pin_prefix(...)` and refresh-on-hit TTL behavior.
 
-Use this when you want a stronger behavioral test than the two-turn doc check:
+- `upstream/sglang_cache_pinning/python/sglang/srt/managers/scheduler.py` (SGLang)  
+  Enforces pin-budget gating.
 
-- control arm: `cache_control=off`
-- protected arm: `cache_control=ephemeral:1h`
-- increase distractor pressure
-- compare when replay A turns cold
+### Success Reading
 
-This also stays isolated from the rest of the README:
+- if validation shows:
+  - `turn2_cached > 0`
+  - `router_pin_status=spawned`
+  - `worker_pin_status=applied`
+  then the pinning path worked end to end
 
-- separate Dynamo source checkout
-- separate SGLang source checkout
-- separate cache-pinning-only Docker images
+- if sweep shows:
+  - protected arm survives deeper than control
+  then cache pinning improved retention under pressure
 
-### Run
+- if both arms turn cold at the same distractor count
+  then cache pinning did not buy retention in that setup
 
-```bash
-cd ~/kv_cache_offloading
+## Experiment 10B: Cache-Pinning Component Wrappers
 
-DYNAMO_MACHINE_PROFILE=ec2 \
-RETENTION_SWEEP_ID="cache_pinning_retention_sweep_$(date +%Y%m%d_%H%M%S)" \
-DISTRACTOR_COUNTS="40 80 120 160" \
-PROTECTED_INPUT_LEN=500 \
-DISTRACTOR_INPUT_LEN=200 \
-./agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
+These are the two lower-level wrappers used by Experiment 10A. Normally you
+should call the single public wrapper above instead.
 
-### What It Does
-
-- reuses the isolated cache-pinning PR images
-- keeps those isolated images and the isolated SGLang source active during the light-mode retention launch
-- runs the existing retention-threshold report flow on that stack
-- compares `off` vs `ephemeral:1h`
-- writes the normal matrix/comparison style outputs, but with cache-pinning-only latest files
-
-### Main Knobs
-
-```text
-DYNAMO_MACHINE_PROFILE
-RETENTION_SWEEP_ID
-DISTRACTOR_COUNTS
-KV_TIER_MODES
-PROTECTED_INPUT_LEN
-DISTRACTOR_INPUT_LEN
-CACHE_PINNING_TTL
-CACHE_PINNING_PINNED_RATIO
-CACHE_PINNING_HICACHE_RATIO
-CACHE_PINNING_HICACHE_WRITE_POLICY
-CACHE_PINNING_MEM_FRACTION_STATIC
-AUTO_BUILD_CACHE_PINNING_IMAGES
-CACHE_PINNING_REBUILD_IMAGES
-```
-
-### Key Reports
-
-```bash
-cat experiments/reports/latest_cache_pinning_retention_threshold_progress.csv
-cat experiments/reports/latest_cache_pinning_retention_threshold_matrix.csv
-cat experiments/reports/latest_cache_pinning_retention_threshold_comparison.csv
-cat experiments/reports/latest_cache_pinning_retention_threshold_summary.md
-```
-
-### Key Columns
-
-```text
-protected_cache
-distractors
-replay_ms
-replay_cached
-replay_reuse
-survived
-req_cache_status
-worker_cache_status
-effect_status
-```
-
-Simple reading:
-
-- if `ephemeral:1h` stays warm at higher distractor counts than `off`, that is stronger evidence that cache pinning is doing real work
-- if both arms go cold at the same point, pinning is not buying retention in that setup
-- `req_cache_status=full` means the request payload carried the expected cache-control metadata
-- `worker_cache_status=full` means the worker-side observability also saw that metadata
-- this isolated stack does not accept `--radix-eviction-policy priority`; the wrapper automatically normalizes that to `lru` for this experiment
-
-### Decision Proof
-
-- [`runtime_instrumentation/cache_pinning_runtime_helper.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/cache_pinning_runtime_helper.sh)  
-  Local setup. Ensures the isolated cache-pinning PR images and source refs are the ones used for the run.
-
-- [`agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh)  
-  Wrapper. Forces the retention-threshold sweep onto the isolated cache-pinning images, passes the cache-control frontend flag, and writes dedicated latest report files.
-
-- [`agentbench/run_kv_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_threshold_sweep_single_host.sh)  
-  Sweep runner. Repeats the probe across distractor counts and builds the threshold report.
-
-- [`agentbench/run_kv_retention_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh)  
-  Retention launcher. Now preserves custom `FRONTEND_IMAGE`, `WORKER_IMAGE`, and custom SGLang source when the cache-pinning sweep asks for the isolated runtime stack, even in `light` mode.
-
-- [`experiments/scripts/retention_probe/build_retention_threshold_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py)  
-  Report builder. Produces the compact matrix, comparison table, and summary used to judge whether `ephemeral:1h` outlasts `off`.
-
-- SGLang PR `#18941`:
-  - `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
-    Implements `pin_prefix()` and TTL refresh-on-hit.
-  - `upstream/sglang_cache_pinning/python/sglang/srt/managers/scheduler.py` (SGLang)  
-    Enforces pin-budget gating.
-  - `python/sglang/srt/entrypoints/http_server.py`
-    Exposes the worker pin endpoint
-
-### Expected Outcome
-
-If this isolated validation works, then it is worth returning to the larger
-retention sweeps. If it does not work, the problem is below the harness level,
-and the correct next step is to fix the cache-pinning stack itself rather than
-debug the retention experiment.
+- [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)
+  - validate component
+- [`agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh)
+  - sweep component
 
 ## Experiment 11: Priority Scheduling Probe
 

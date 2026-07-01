@@ -49,6 +49,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--frontend-url", required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--ttl", default="1h")
+    parser.add_argument("--cache-control-type", default="ephemeral")
     parser.add_argument("--turn1-max-tokens", type=int, default=128)
     parser.add_argument("--turn2-max-tokens", type=int, default=128)
     parser.add_argument("--system-prompt", default="You are a helpful assistant.")
@@ -295,7 +296,7 @@ def run_validation(args: argparse.Namespace, out_dir: Path) -> None:
         "max_tokens": args.turn1_max_tokens,
         "temperature": 0,
         "stream": False,
-        "nvext": {"cache_control": {"type": "ephemeral", "ttl": args.ttl}},
+        "nvext": {"cache_control": {"type": args.cache_control_type, "ttl": args.ttl}},
     }
 
     status1, resp1, latency1 = post_json(args.frontend_url, payload1)
@@ -313,7 +314,7 @@ def run_validation(args: argparse.Namespace, out_dir: Path) -> None:
         "max_tokens": args.turn2_max_tokens,
         "temperature": 0,
         "stream": False,
-        "nvext": {"cache_control": {"type": "ephemeral", "ttl": args.ttl}},
+        "nvext": {"cache_control": {"type": args.cache_control_type, "ttl": args.ttl}},
     }
 
     status2, resp2, latency2 = post_json(args.frontend_url, payload2)

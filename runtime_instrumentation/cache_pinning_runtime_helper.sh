@@ -22,6 +22,14 @@ detect_cache_pinning_frontend_flag() {
   local root="$1"
   local frontend_args="${root}/lib/llm/src/kv_router/config.rs"
   local frontend_py="${root}/components/src/dynamo/frontend/frontend_args.py"
+  local mode="${CACHE_PINNING_FRONTEND_FLAG_MODE:-auto}"
+  local fixed_value="${CACHE_PINNING_FRONTEND_FLAG_VALUE:---enable-cache-control}"
+
+  if [[ "${mode}" = "fixed" ]]; then
+    printf '%s\n' "${fixed_value}"
+    return 0
+  fi
+
   if grep -q -- "--enable-agentic-cache-control" "${frontend_args}" 2>/dev/null; then
     printf '%s\n' "--enable-agentic-cache-control"
     return 0
