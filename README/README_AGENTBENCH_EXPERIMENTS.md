@@ -1453,7 +1453,7 @@ retention signals were attached, read, applied, and summarized.
 Strongest proof in this setup: `scheduler_priority_applied` in the raw
 `sglang.priority` event stream.
 
-## Experiment 10A: Cache-Pinning Microbenchmark
+## Experiment 10: Cache-Pinning Microbenchmark
 
 This is the public cache-pinning entrypoint.
 
@@ -1633,9 +1633,9 @@ These are the exact places to inspect when you want to prove the signal path.
 - If both arms turn cold at the same point:
   - cache pinning did not improve retention in that setup
 
-## Experiment 10B: Cache-Pinning Component Wrappers
+### Lower-Level Wrappers
 
-These are the lower-level wrappers behind Experiment 10A. Normally use the
+These are the lower-level wrappers behind this experiment. Normally use the
 single public wrapper above.
 
 - [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)
