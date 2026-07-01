@@ -2184,7 +2184,7 @@ All these use the same instrumented docker version
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_EXPERIMENTS="9 10 11 12" \
+SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
 PROTECTED_INPUT_LEN=400 \
 DISTRACTOR_INPUT_LEN=400 \
