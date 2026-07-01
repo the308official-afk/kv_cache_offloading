@@ -38,17 +38,36 @@ require_cache_pinning_source_markers() {
   local sglang_root="$2"
   grep -q "cache_control_ttl" "${dynamo_root}/lib/llm/src/preprocessor.rs" 2>/dev/null
   grep -q "spawn_pin_prefix" "${dynamo_root}/lib/llm/src/kv_router/push_router.rs" 2>/dev/null
+  grep -q "cache_control_endpoint = runtime.endpoint(" "${dynamo_root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null
+  grep -q "cache_control_endpoint.serve_endpoint(" "${dynamo_root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null
   grep -q "pin_prefix" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
   grep -q "pin_expiry" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
+}
+
+require_cache_pinning_instrumentation_markers() {
+  local dynamo_root="$1"
+  local sglang_root="$2"
+  grep -q "router.cache_control_seen" "${dynamo_root}/lib/llm/src/kv_router/push_router.rs" 2>/dev/null
+  grep -q "router.pin_prefix_spawned" "${dynamo_root}/lib/llm/src/kv_router/push_router.rs" 2>/dev/null
+  grep -q "worker.pin_prefix_applied" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
+  grep -q "worker.pin_refreshed_cache_hit" "${sglang_root}/srt/mem_cache/hiradix_cache.py" 2>/dev/null
 }
 
 prepare_cache_pinning_sources() {
   local log_path="${1:-/dev/null}"
   ./runtime_instrumentation/fetch_cache_pinning_dynamo_source.sh | tee -a "${log_path}"
   ./runtime_instrumentation/fetch_cache_pinning_sglang_source.sh | tee -a "${log_path}"
+  SOURCE_DIR="${CACHE_PINNING_DYNAMO_SOURCE_DIR}" \
+    python3 ./runtime_instrumentation/repair_cache_pinning_dynamo_source.py | tee -a "${log_path}"
+  SOURCE_DIR="${CACHE_PINNING_SGLANG_SOURCE_DIR}" \
+    python3 ./runtime_instrumentation/repair_cache_pinning_sglang_source.py | tee -a "${log_path}"
 
   if ! require_cache_pinning_source_markers "${CACHE_PINNING_DYNAMO_SOURCE_DIR}" "${CACHE_PINNING_SGLANG_ROOT}"; then
     echo "Cache-pinning source markers were not found in the isolated PR stack." | tee -a "${log_path}" >&2
+    return 1
+  fi
+  if ! require_cache_pinning_instrumentation_markers "${CACHE_PINNING_DYNAMO_SOURCE_DIR}" "${CACHE_PINNING_SGLANG_ROOT}"; then
+    echo "Cache-pinning instrumentation markers were not found in the isolated PR stack." | tee -a "${log_path}" >&2
     return 1
   fi
 }

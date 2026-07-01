@@ -34,7 +34,7 @@ CACHE_PINNING_MEM_FRACTION_STATIC="${CACHE_PINNING_MEM_FRACTION_STATIC:-0.7}"
 AUTO_BUILD_CACHE_PINNING_IMAGES="${AUTO_BUILD_CACHE_PINNING_IMAGES:-1}"
 CACHE_PINNING_REBUILD_IMAGES="${CACHE_PINNING_REBUILD_IMAGES:-0}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-off}"
-WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority}"
+WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --radix-eviction-policy lru}"
 
 usage() {
   cat <<EOF
@@ -71,6 +71,12 @@ fi
 LOG_DIR="experiments/reports/cache_pinning_retention_threshold_sweeps/${RETENTION_SWEEP_ID}"
 LOG_PATH="${LOG_DIR}/cache_pinning_retention_threshold_driver.log"
 mkdir -p "${LOG_DIR}"
+
+if [[ " ${WORKER_BASE_ARGS} " == *" --radix-eviction-policy priority "* ]]; then
+  echo "Cache-pinning note: this isolated SGLang stack does not accept --radix-eviction-policy priority." | tee -a "${LOG_PATH}"
+  echo "Cache-pinning note: rewriting eviction policy to lru for this experiment." | tee -a "${LOG_PATH}"
+  WORKER_BASE_ARGS="$(printf '%s' "${WORKER_BASE_ARGS}" | sed 's/--radix-eviction-policy[[:space:]]\+priority/--radix-eviction-policy lru/g')"
+fi
 
 echo "Ensuring isolated cache-pinning images..." | tee -a "${LOG_PATH}"
 echo "Using machine profile: ${DYNAMO_MACHINE_PROFILE}" | tee -a "${LOG_PATH}"
@@ -151,6 +157,8 @@ exec env \
   SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE}" \
   FRONTEND_IMAGE="${CACHE_PINNING_FRONTEND_IMAGE}" \
   WORKER_IMAGE="${CACHE_PINNING_WORKER_IMAGE}" \
+  CUSTOM_RUNTIME_IMAGES_MODE=1 \
+  CUSTOM_RUNTIME_SGLANG_ROOT="${CACHE_PINNING_SGLANG_ROOT}" \
   ROUTER_EXTRA_ARGS="--no-router-kv-events --router-queue-threshold 4.0 ${FRONTEND_FLAG}" \
   WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
   LATEST_RETENTION_THRESHOLD_PROGRESS="experiments/reports/latest_cache_pinning_retention_threshold_progress.csv" \

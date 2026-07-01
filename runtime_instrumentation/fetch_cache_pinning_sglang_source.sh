@@ -13,6 +13,7 @@ SOURCE_DIR="${SOURCE_DIR:-${CACHE_PINNING_SGLANG_SOURCE_DIR}}"
 SOURCE_REPO="${SOURCE_REPO:-${CACHE_PINNING_SGLANG_SOURCE_REPO}}"
 SOURCE_REF="${SOURCE_REF:-${CACHE_PINNING_SGLANG_SOURCE_REF}}"
 PULL_REF="${PULL_REF:-${CACHE_PINNING_SGLANG_PULL_REF}}"
+AUTO_RESET_DIRTY_SOURCE="${AUTO_RESET_DIRTY_SOURCE:-1}"
 
 mkdir -p "$(dirname "${SOURCE_DIR}")"
 
@@ -24,8 +25,14 @@ fi
 
 if [[ -d "${SOURCE_DIR}/.git" ]]; then
   if ! git -C "${SOURCE_DIR}" diff --quiet --ignore-submodules=all; then
-    echo "Existing cache-pinning SGLang clone is dirty: ${SOURCE_DIR}" >&2
-    exit 1
+    if [[ "${AUTO_RESET_DIRTY_SOURCE}" = "1" ]]; then
+      echo "Resetting dirty cache-pinning SGLang clone at ${SOURCE_DIR}"
+      git -C "${SOURCE_DIR}" reset --hard >/dev/null
+      git -C "${SOURCE_DIR}" clean -fd >/dev/null
+    else
+      echo "Existing cache-pinning SGLang clone is dirty: ${SOURCE_DIR}" >&2
+      exit 1
+    fi
   fi
   echo "Updating cache-pinning SGLang source clone at ${SOURCE_DIR}"
   git -C "${SOURCE_DIR}" fetch --all --tags

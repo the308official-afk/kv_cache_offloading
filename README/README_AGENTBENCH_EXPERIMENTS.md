@@ -1782,20 +1782,32 @@ cat experiments/reports/latest_cache_pinning_doc_validation_summary.md
 turn1_cached
 turn2_cached
 turn2_cache
-worker_pin_signal
-worker_pin_matches
+router_pin_status
+router_pin_ttls
+router_skip_reasons
+worker_pin_status
+worker_pin_ttls
+worker_pin_refreshes
 verdict
 ```
 
 Simple reading:
 
 - `turn2_cached > 0` means the second turn reused cached prefix tokens
-- `worker_pin_signal=seen` means the worker log showed pin-related evidence
-- `verdict=cache_pinning_worked` means the doc-style sample behaved like cache pinning
+- `router_pin_status=spawned` means Dynamo took the pinning path and issued a pin request
+- `worker_pin_status=applied` means SGLang called its pinning path
+- `worker_pin_refreshes > 0` means the worker refreshed TTL on later cache use
+- `verdict=pin_path_applied_and_cache_reused` is the strongest success signal
+
+Important debugging note:
+
+- if the frontend log shows `Failed to pin prefix: instance_id=... not found for endpoint dynamo/backend/cache_control`,
+  the router tried to send the pin request but the live worker did not expose the
+  `cache_control` service endpoint correctly
 
 ### Decision Proof
 
-These are the exact codepaths this isolated validation is based on.
+These are the exact codepaths this isolated validation uses.
 
 - [`runtime_instrumentation/cache_pinning_profile.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/cache_pinning_profile.sh)  
   Local setup. Pins the isolated Dynamo PR ref, isolated SGLang PR ref, and
@@ -1809,29 +1821,52 @@ These are the exact codepaths this isolated validation is based on.
   Local setup. Fetches the exact SGLang cache-pinning PR head into its own
   source directory.
 
+- [`runtime_instrumentation/repair_cache_pinning_dynamo_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py)  
+  Local patcher. Adds direct router-side logs to the isolated Dynamo cache-pinning source:
+  - `router.cache_control_seen`
+  - `router.pin_state_created`
+  - `router.pin_state_skipped`
+  - `router.pin_prefix_spawned`
+  - patches `components/src/dynamo/sglang/init_llm.py` so the live worker
+    actually serves the `cache_control` endpoint used by router-side pin RPCs
+
+- [`runtime_instrumentation/repair_cache_pinning_sglang_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_sglang_source.py)  
+  Local patcher. Adds direct worker-side logs to the isolated SGLang cache-pinning source:
+  - `worker.pin_prefix_applied`
+  - `worker.pin_refreshed_host_insert`
+  - `worker.pin_refreshed_cache_hit`
+
 - [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)  
   Wrapper. Detects which frontend flag exists in the isolated Dynamo source,
-  starts the isolated stack, runs the doc-style sample, and writes compact
-  reports.
+  patches the isolated sources, starts the isolated stack, captures frontend and
+  worker logs, runs the doc-style sample, and writes compact reports.
 
 - [`experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py)  
   Driver. Sends the two-turn `nvext.cache_control` requests and compares turn 1
-  vs turn 2 cached tokens.
+  vs turn 2 cached tokens, plus router-side and worker-side pin-path evidence.
 
 ### PR Codepaths Under Test
 
-These are the feature codepaths we are trying to validate with this isolated
-experiment.
+These are the feature codepaths we are validating with this isolated
+experiment. The file location is shown together with which runtime owns it.
 
 - Dynamo PR `#6213`:
-  - `lib/llm/src/preprocessor.rs`
-    Reads `nvext.cache_control` into routing hints
-  - `lib/llm/src/kv_router/push_router.rs`
-    Fires `spawn_pin_prefix(...)` after stream completion
-  - `lib/llm/src/kv_router/cache_control.rs`
-    Sends the TTL pin request to the worker
-  - `lib/llm/src/kv_router/config.rs`
-    Defines the router-side cache-control enable flag
+  - `upstream/dynamo_cache_pinning/lib/llm/src/preprocessor.rs` (Dynamo)  
+    Reads `nvext.cache_control` and carries TTL into routing metadata.
+  - `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/push_router.rs` (Dynamo)  
+    Builds `PinState` from `cache_control_ttl` and calls `spawn_pin_prefix(...)`
+    after generation finishes.
+  - `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/cache_control.rs` (Dynamo)  
+    Owns the client that sends the TTL pin request toward the worker.
+  - `upstream/dynamo_cache_pinning/components/src/dynamo/sglang/init_llm.py` (Dynamo)  
+    Serves the live `cache_control` endpoint on the worker. Without this, the
+    router can create a pin request but it dies before reaching SGLang.
+  - `upstream/dynamo_cache_pinning/components/src/dynamo/frontend/frontend_args.py` (Dynamo)  
+    Exposes the cache-control frontend flag.
+
+- SGLang PR `#18941`:
+  - `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
+    Implements `pin_prefix(...)` and refresh-on-hit TTL behavior.
 
 ## Experiment 10B: Cache-Pinning Retention Threshold Sweep
 
@@ -1865,6 +1900,7 @@ DISTRACTOR_INPUT_LEN=200 \
 ### What It Does
 
 - reuses the isolated cache-pinning PR images
+- keeps those isolated images and the isolated SGLang source active during the light-mode retention launch
 - runs the existing retention-threshold report flow on that stack
 - compares `off` vs `ephemeral:1h`
 - writes the normal matrix/comparison style outputs, but with cache-pinning-only latest files
@@ -1905,12 +1941,18 @@ replay_ms
 replay_cached
 replay_reuse
 survived
+req_cache_status
+worker_cache_status
+effect_status
 ```
 
 Simple reading:
 
 - if `ephemeral:1h` stays warm at higher distractor counts than `off`, that is stronger evidence that cache pinning is doing real work
 - if both arms go cold at the same point, pinning is not buying retention in that setup
+- `req_cache_status=full` means the request payload carried the expected cache-control metadata
+- `worker_cache_status=full` means the worker-side observability also saw that metadata
+- this isolated stack does not accept `--radix-eviction-policy priority`; the wrapper automatically normalizes that to `lru` for this experiment
 
 ### Decision Proof
 
@@ -1923,14 +1965,17 @@ Simple reading:
 - [`agentbench/run_kv_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_threshold_sweep_single_host.sh)  
   Sweep runner. Repeats the probe across distractor counts and builds the threshold report.
 
+- [`agentbench/run_kv_retention_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh)  
+  Retention launcher. Now preserves custom `FRONTEND_IMAGE`, `WORKER_IMAGE`, and custom SGLang source when the cache-pinning sweep asks for the isolated runtime stack, even in `light` mode.
+
 - [`experiments/scripts/retention_probe/build_retention_threshold_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_retention_threshold_report.py)  
   Report builder. Produces the compact matrix, comparison table, and summary used to judge whether `ephemeral:1h` outlasts `off`.
 
 - SGLang PR `#18941`:
-  - `python/sglang/srt/mem_cache/hiradix_cache.py`
-    Implements `pin_prefix()` and TTL refresh-on-hit
-  - `python/sglang/srt/managers/scheduler.py`
-    Enforces pin-budget gating
+  - `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
+    Implements `pin_prefix()` and TTL refresh-on-hit.
+  - `upstream/sglang_cache_pinning/python/sglang/srt/managers/scheduler.py` (SGLang)  
+    Enforces pin-budget gating.
   - `python/sglang/srt/entrypoints/http_server.py`
     Exposes the worker pin endpoint
 

@@ -33,8 +33,12 @@ SUMMARY_COLUMNS = [
     "turn1_cached",
     "turn2_cached",
     "turn2_cache",
-    "worker_pin_signal",
-    "worker_pin_matches",
+    "router_pin_status",
+    "router_pin_ttls",
+    "router_skip_reasons",
+    "worker_pin_status",
+    "worker_pin_ttls",
+    "worker_pin_refreshes",
     "verdict",
 ]
 
@@ -51,6 +55,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--turn1-user", default="Explain how a radix tree works in simple terms.")
     parser.add_argument("--turn2-user", default="Now explain what the leaves store.")
     parser.add_argument("--frontend-flag", default="")
+    parser.add_argument("--frontend-log", default="")
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--worker-log", default="")
     parser.add_argument("--postprocess-only", action="store_true")
@@ -108,22 +113,101 @@ def write_csv(path: Path, rows: list[dict], columns: list[str]) -> None:
         writer.writerows(rows)
 
 
-def build_worker_pin_signal(worker_log: Path) -> tuple[str, str]:
+def extract_first_json_object(payload: str) -> dict | None:
+    json_start = payload.find("{")
+    if json_start < 0:
+        return None
+    decoder = json.JSONDecoder()
+    try:
+        parsed, _ = decoder.raw_decode(payload[json_start:])
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def parse_cache_pinning_events(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    events: list[dict] = []
+    for raw_line in path.read_text(errors="replace").splitlines():
+        marker = "[CACHE_PINNING_JSON]"
+        if marker not in raw_line:
+            continue
+        payload = raw_line.split(marker, 1)[1].strip()
+        parsed = extract_first_json_object(payload)
+        if not isinstance(parsed, dict):
+            continue
+        events.append(parsed)
+    return events
+
+
+def summarize_router_pin(frontend_log: Path) -> tuple[str, str, str]:
+    events = parse_cache_pinning_events(frontend_log)
+    if not frontend_log.exists():
+        return "missing", "", ""
+
+    seen = False
+    spawned = False
+    ttls: set[str] = set()
+    skip_reasons: set[str] = set()
+    for event in events:
+        event_type = str(event.get("event_type", ""))
+        ttl = event.get("ttl_seconds", event.get("cache_control_ttl"))
+        if ttl not in (None, ""):
+            ttls.add(str(ttl))
+        if event_type == "router.cache_control_seen":
+            seen = True
+        elif event_type == "router.pin_state_created":
+            seen = True
+        elif event_type == "router.pin_prefix_spawned":
+            seen = True
+            spawned = True
+        elif event_type == "router.pin_state_skipped":
+            seen = True
+            reason = event.get("reason")
+            if reason not in (None, ""):
+                skip_reasons.add(str(reason))
+
+    if spawned:
+        status = "spawned"
+    elif seen:
+        status = "seen"
+    else:
+        status = "not_seen"
+    return status, "|".join(sorted(ttls)), "|".join(sorted(skip_reasons))
+
+
+def summarize_worker_pin(worker_log: Path) -> tuple[str, str, str]:
+    events = parse_cache_pinning_events(worker_log)
     if not worker_log.exists():
-        return "missing", "0"
-    text = worker_log.read_text(errors="replace")
-    matches = []
-    for needle in (
-        "Pinned ",
-        "pin_prefix",
-        "ttl_seconds",
-        "/hicache/pin_prefix",
-    ):
-        if needle in text:
-            matches.append(needle)
-    if not matches:
-        return "not_seen", "0"
-    return "seen", str(len(matches))
+        return "missing", "", ""
+
+    applied = False
+    seen = False
+    ttls: set[str] = set()
+    refreshes = 0
+    for event in events:
+        event_type = str(event.get("event_type", ""))
+        ttl = event.get("ttl_seconds")
+        if ttl not in (None, ""):
+            ttls.add(str(ttl))
+        if event_type == "worker.pin_prefix_applied":
+            seen = True
+            try:
+                applied = applied or int(event.get("nodes_pinned", 0)) > 0
+            except Exception:
+                pass
+        elif event_type in {"worker.pin_refreshed_cache_hit", "worker.pin_refreshed_host_insert"}:
+            seen = True
+            refreshes += 1
+
+    if applied:
+        status = "applied"
+    elif seen:
+        status = "seen"
+    else:
+        status = "not_seen"
+    return status, "|".join(sorted(ttls)), str(refreshes)
 
 
 def build_summary(args: argparse.Namespace, requests_rows: list[dict]) -> dict:
@@ -134,11 +218,23 @@ def build_summary(args: argparse.Namespace, requests_rows: list[dict]) -> dict:
         cached_positive = int(turn2_cached) > 0
     except Exception:
         cached_positive = False
-    worker_pin_signal, worker_pin_matches = build_worker_pin_signal(Path(args.worker_log)) if args.worker_log else ("missing", "0")
+    router_pin_status, router_pin_ttls, router_skip_reasons = (
+        summarize_router_pin(Path(args.frontend_log)) if args.frontend_log else ("missing", "", "")
+    )
+    worker_pin_status, worker_pin_ttls, worker_pin_refreshes = (
+        summarize_worker_pin(Path(args.worker_log)) if args.worker_log else ("missing", "", "")
+    )
 
     verdict = "request_failed"
     if row1.get("http_status", "").startswith("2") and row2.get("http_status", "").startswith("2"):
-        verdict = "cache_pinning_worked" if cached_positive else "no_cached_tokens"
+        if cached_positive and router_pin_status == "spawned" and worker_pin_status == "applied":
+            verdict = "pin_path_applied_and_cache_reused"
+        elif cached_positive and router_pin_status == "spawned":
+            verdict = "router_spawned_pin_and_cache_reused"
+        elif cached_positive:
+            verdict = "cache_reused"
+        else:
+            verdict = "no_cached_tokens"
 
     return {
         "run_id": args.run_id,
@@ -152,8 +248,12 @@ def build_summary(args: argparse.Namespace, requests_rows: list[dict]) -> dict:
         "turn1_cached": row1.get("cached_tokens", ""),
         "turn2_cached": row2.get("cached_tokens", ""),
         "turn2_cache": "hit" if cached_positive else "miss",
-        "worker_pin_signal": worker_pin_signal,
-        "worker_pin_matches": worker_pin_matches,
+        "router_pin_status": router_pin_status,
+        "router_pin_ttls": router_pin_ttls,
+        "router_skip_reasons": router_skip_reasons,
+        "worker_pin_status": worker_pin_status,
+        "worker_pin_ttls": worker_pin_ttls,
+        "worker_pin_refreshes": worker_pin_refreshes,
         "verdict": verdict,
     }
 
@@ -173,8 +273,12 @@ def write_summary_md(path: Path, summary: dict) -> None:
         f"- turn1_cached: `{summary['turn1_cached']}`",
         f"- turn2_cached: `{summary['turn2_cached']}`",
         f"- turn2_cache: `{summary['turn2_cache']}`",
-        f"- worker_pin_signal: `{summary['worker_pin_signal']}`",
-        f"- worker_pin_matches: `{summary['worker_pin_matches']}`",
+        f"- router_pin_status: `{summary['router_pin_status']}`",
+        f"- router_pin_ttls: `{summary['router_pin_ttls']}`",
+        f"- router_skip_reasons: `{summary['router_skip_reasons']}`",
+        f"- worker_pin_status: `{summary['worker_pin_status']}`",
+        f"- worker_pin_ttls: `{summary['worker_pin_ttls']}`",
+        f"- worker_pin_refreshes: `{summary['worker_pin_refreshes']}`",
         f"- verdict: `{summary['verdict']}`",
         "",
     ]

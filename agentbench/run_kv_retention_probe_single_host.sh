@@ -62,6 +62,8 @@ REQUIRE_PRECISE_KV="${REQUIRE_PRECISE_KV:-1}"
 AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES:-1}"
 FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
+CUSTOM_RUNTIME_IMAGES_MODE="${CUSTOM_RUNTIME_IMAGES_MODE:-0}"
+CUSTOM_RUNTIME_SGLANG_ROOT="${CUSTOM_RUNTIME_SGLANG_ROOT:-}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 CLI_MODELS=("$@")
 
@@ -822,6 +824,7 @@ start_dynamo_for_profile() {
   echo "Starting Dynamo for ${model} with KV tier ${kv_tier_mode}..." | tee -a "${BATCH_LOG}"
   local -a env_vars
   local -a env_cmd
+  local use_custom_runtime_stack=0
   env_vars=(
     "DYNAMO_MODEL_PATH=${model}"
     "DYNAMO_SERVED_MODEL_NAME=${model}"
@@ -830,19 +833,11 @@ start_dynamo_for_profile() {
     "ROUTER_EXTRA_ARGS=${CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS}"
     "SGLANG_HICACHE_MAX_PINNED_RATIO=${SGLANG_HICACHE_MAX_PINNED_RATIO:-}"
   )
-  env_cmd=(
-    env
-    -u FRONTEND_IMAGE
-    -u WORKER_IMAGE
-    -u WORKER_SGLANG_DEV_MODE
-    -u WORKER_SGLANG_SOURCE_ROOT
-    -u SGLANG_TRANSFER_LOG
-    -u SGLANG_TRANSFER_LOG_PROFILE
-    -u SGLANG_TRANSFER_LOG_OVERHEAD_TIMING
-    -u DYN_RUNTIME_JSON_LOGS
-    -u HICACHE_STORAGE_HOST_PATH
-    -u HICACHE_STORAGE_CONTAINER_PATH
-  )
+  env_cmd=(env)
+
+  if [[ "${CUSTOM_RUNTIME_IMAGES_MODE}" = "1" ]]; then
+    use_custom_runtime_stack=1
+  fi
 
   if [[ -n "${host_file_storage_path}" ]]; then
     env_vars+=("HICACHE_STORAGE_HOST_PATH=${host_file_storage_path}")
@@ -852,6 +847,7 @@ start_dynamo_for_profile() {
   fi
 
   if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+    use_custom_runtime_stack=1
     env_vars+=(
       "WORKER_SGLANG_DEV_MODE=1"
       "WORKER_SGLANG_SOURCE_ROOT=${sglang_root}"
@@ -863,6 +859,35 @@ start_dynamo_for_profile() {
       "WORKER_IMAGE=${WORKER_IMAGE}"
     )
   fi
+
+  if [[ "${use_custom_runtime_stack}" != "1" ]]; then
+    env_cmd+=(
+      -u FRONTEND_IMAGE
+      -u WORKER_IMAGE
+      -u WORKER_SGLANG_DEV_MODE
+      -u WORKER_SGLANG_SOURCE_ROOT
+    )
+  else
+    env_vars+=(
+      "FRONTEND_IMAGE=${FRONTEND_IMAGE}"
+      "WORKER_IMAGE=${WORKER_IMAGE}"
+    )
+    if [[ "${RETENTION_ATTRIBUTION_MODE}" != "precise" && -n "${CUSTOM_RUNTIME_SGLANG_ROOT}" ]]; then
+      env_vars+=(
+        "WORKER_SGLANG_DEV_MODE=1"
+        "WORKER_SGLANG_SOURCE_ROOT=${CUSTOM_RUNTIME_SGLANG_ROOT}"
+      )
+    fi
+  fi
+
+  env_cmd+=(
+    -u SGLANG_TRANSFER_LOG
+    -u SGLANG_TRANSFER_LOG_PROFILE
+    -u SGLANG_TRANSFER_LOG_OVERHEAD_TIMING
+    -u DYN_RUNTIME_JSON_LOGS
+    -u HICACHE_STORAGE_HOST_PATH
+    -u HICACHE_STORAGE_CONTAINER_PATH
+  )
 
   "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
 

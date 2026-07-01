@@ -32,6 +32,7 @@ RUN_DIR="experiments/reports/cache_pinning_doc_validation/${CACHE_PINNING_DOC_ID
 DRIVER_LOG="${RUN_DIR}/cache_pinning_doc_driver.log"
 SMOKE_LOG="${RUN_DIR}/cache_pinning_doc_smoke_test.log"
 WORKER_LOG="${RUN_DIR}/cache_pinning_doc_worker.log"
+FRONTEND_LOG="${RUN_DIR}/cache_pinning_doc_frontend.log"
 LATEST_SUMMARY_CSV="experiments/reports/latest_cache_pinning_doc_validation_summary.csv"
 LATEST_REQUESTS_CSV="experiments/reports/latest_cache_pinning_doc_validation_requests.csv"
 LATEST_SUMMARY_MD="experiments/reports/latest_cache_pinning_doc_validation_summary.md"
@@ -201,6 +202,7 @@ echo "TTL: ${CACHE_PINNING_TTL}" | tee -a "${DRIVER_LOG}"
 echo "EPP image: ${CACHE_PINNING_EPP_IMAGE}" | tee -a "${DRIVER_LOG}"
 echo "Driver log: ${DRIVER_LOG}" | tee -a "${DRIVER_LOG}"
 echo "Smoke log: ${SMOKE_LOG}" | tee -a "${DRIVER_LOG}"
+echo "Frontend log: ${FRONTEND_LOG}" | tee -a "${DRIVER_LOG}"
 echo "Worker log: ${WORKER_LOG}" | tee -a "${DRIVER_LOG}"
 
 echo "Stopping Dynamo..." | tee -a "${DRIVER_LOG}"
@@ -243,6 +245,7 @@ cache_pinning_banner_numbered 6 6 "CACHE PINNING EXPERIMENT GO (doc-style valida
   --out-dir "${RUN_DIR}" >> "${DRIVER_LOG}" 2>&1
 
 docker logs dynamo-sglang-worker > "${WORKER_LOG}" 2>&1 || true
+docker logs dynamo-frontend > "${FRONTEND_LOG}" 2>&1 || true
 
 "${PYTHON_BIN}" experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py \
   --run-id "${CACHE_PINNING_DOC_ID}" \
@@ -252,6 +255,7 @@ docker logs dynamo-sglang-worker > "${WORKER_LOG}" 2>&1 || true
   --turn1-max-tokens "${CACHE_PINNING_TURN1_MAX_TOKENS}" \
   --turn2-max-tokens "${CACHE_PINNING_TURN2_MAX_TOKENS}" \
   --frontend-flag="${FRONTEND_FLAG}" \
+  --frontend-log "${FRONTEND_LOG}" \
   --worker-log "${WORKER_LOG}" \
   --out-dir "${RUN_DIR}" \
   --postprocess-only >> "${DRIVER_LOG}" 2>&1
