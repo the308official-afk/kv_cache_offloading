@@ -16,8 +16,8 @@ REQUESTS_COLUMNS = [
     "latency_ms",
     "prompt_tokens",
     "cached_tokens",
-    "completion_tokens",
-    "response_preview",
+    "output_tokens",
+    "preview",
     "error",
 ]
 
@@ -33,13 +33,13 @@ SUMMARY_COLUMNS = [
     "turn1_cached",
     "turn2_cached",
     "turn2_cache",
-    "router_pin_status",
-    "router_pin_ttls",
-    "router_skip_reasons",
-    "worker_pin_status",
-    "worker_pin_ttls",
+    "router_pin",
+    "router_ttls",
+    "router_skip",
+    "worker_pin",
+    "worker_ttls",
     "worker_pin_refreshes",
-    "verdict",
+    "result",
 ]
 
 
@@ -112,6 +112,24 @@ def write_csv(path: Path, rows: list[dict], columns: list[str]) -> None:
         writer = csv.DictWriter(f, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
+
+
+def normalize_request_rows(rows: list[dict]) -> list[dict]:
+    normalized: list[dict] = []
+    for row in rows:
+        normalized.append(
+            {
+                "turn": row.get("turn", ""),
+                "http_status": row.get("http_status", ""),
+                "latency_ms": row.get("latency_ms", ""),
+                "prompt_tokens": row.get("prompt_tokens", ""),
+                "cached_tokens": row.get("cached_tokens", ""),
+                "output_tokens": row.get("output_tokens", row.get("completion_tokens", "")),
+                "preview": row.get("preview", row.get("response_preview", "")),
+                "error": row.get("error", ""),
+            }
+        )
+    return normalized
 
 
 def extract_first_json_object(payload: str) -> dict | None:
@@ -249,13 +267,13 @@ def build_summary(args: argparse.Namespace, requests_rows: list[dict]) -> dict:
         "turn1_cached": row1.get("cached_tokens", ""),
         "turn2_cached": row2.get("cached_tokens", ""),
         "turn2_cache": "hit" if cached_positive else "miss",
-        "router_pin_status": router_pin_status,
-        "router_pin_ttls": router_pin_ttls,
-        "router_skip_reasons": router_skip_reasons,
-        "worker_pin_status": worker_pin_status,
-        "worker_pin_ttls": worker_pin_ttls,
+        "router_pin": router_pin_status,
+        "router_ttls": router_pin_ttls,
+        "router_skip": router_skip_reasons,
+        "worker_pin": worker_pin_status,
+        "worker_ttls": worker_pin_ttls,
         "worker_pin_refreshes": worker_pin_refreshes,
-        "verdict": verdict,
+        "result": verdict,
     }
 
 
@@ -274,13 +292,13 @@ def write_summary_md(path: Path, summary: dict) -> None:
         f"- turn1_cached: `{summary['turn1_cached']}`",
         f"- turn2_cached: `{summary['turn2_cached']}`",
         f"- turn2_cache: `{summary['turn2_cache']}`",
-        f"- router_pin_status: `{summary['router_pin_status']}`",
-        f"- router_pin_ttls: `{summary['router_pin_ttls']}`",
-        f"- router_skip_reasons: `{summary['router_skip_reasons']}`",
-        f"- worker_pin_status: `{summary['worker_pin_status']}`",
-        f"- worker_pin_ttls: `{summary['worker_pin_ttls']}`",
+        f"- router_pin: `{summary['router_pin']}`",
+        f"- router_ttls: `{summary['router_ttls']}`",
+        f"- router_skip: `{summary['router_skip']}`",
+        f"- worker_pin: `{summary['worker_pin']}`",
+        f"- worker_ttls: `{summary['worker_ttls']}`",
         f"- worker_pin_refreshes: `{summary['worker_pin_refreshes']}`",
-        f"- verdict: `{summary['verdict']}`",
+        f"- result: `{summary['result']}`",
         "",
     ]
     path.write_text("\n".join(lines))
@@ -327,8 +345,8 @@ def run_validation(args: argparse.Namespace, out_dir: Path) -> None:
             "latency_ms": latency1,
             "prompt_tokens": prompt1,
             "cached_tokens": cached1,
-            "completion_tokens": completion1,
-            "response_preview": response_text(resp1)[:200],
+            "output_tokens": completion1,
+            "preview": response_text(resp1)[:200],
             "error": resp1.get("_error", ""),
         },
         {
@@ -337,8 +355,8 @@ def run_validation(args: argparse.Namespace, out_dir: Path) -> None:
             "latency_ms": latency2,
             "prompt_tokens": prompt2,
             "cached_tokens": cached2,
-            "completion_tokens": completion2,
-            "response_preview": response_text(resp2)[:200],
+            "output_tokens": completion2,
+            "preview": response_text(resp2)[:200],
             "error": resp2.get("_error", ""),
         },
     ]
@@ -357,7 +375,7 @@ def main() -> int:
 
     result_path = out_dir / "doc_validation_result.json"
     result = json.loads(result_path.read_text())
-    requests_rows = result.get("requests", [])
+    requests_rows = normalize_request_rows(result.get("requests", []))
     write_csv(out_dir / "doc_validation_requests.csv", requests_rows, REQUESTS_COLUMNS)
 
     summary = build_summary(args, requests_rows)

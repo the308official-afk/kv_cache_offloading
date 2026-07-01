@@ -129,7 +129,7 @@ EOF
 
 cache_pinning_banner_numbered 4 4 "CACHE PINNING RETENTION EXPERIMENT GO (threshold sweep is about to start)" | tee -a "${LOG_PATH}"
 
-exec env \
+env \
   DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE}" \
   RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID}" \
   RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE}" \
@@ -171,3 +171,16 @@ exec env \
   AUTO_BUILD_CACHE_PINNING_IMAGES="${AUTO_BUILD_CACHE_PINNING_IMAGES}" \
   CACHE_PINNING_REBUILD_IMAGES="${CACHE_PINNING_REBUILD_IMAGES}" \
   ./agentbench/run_kv_retention_threshold_sweep_single_host.sh "$@"
+
+sweep_exit_code=$?
+if [[ "${sweep_exit_code}" -ne 0 ]]; then
+  exit "${sweep_exit_code}"
+fi
+
+python3 experiments/scripts/cache_pinning/compact_cache_pinning_retention_reports.py \
+  --matrix "${LOG_DIR}/retention_threshold_matrix.csv" \
+  --comparison "${LOG_DIR}/retention_threshold_comparison.csv"
+
+python3 experiments/scripts/cache_pinning/compact_cache_pinning_retention_reports.py \
+  --matrix "experiments/reports/latest_cache_pinning_retention_threshold_matrix.csv" \
+  --comparison "experiments/reports/latest_cache_pinning_retention_threshold_comparison.csv"

@@ -97,6 +97,13 @@ def write_csv(path: Path, rows: list[dict[str, Any]], fieldnames: list[str]) -> 
         writer.writerows(rows)
 
 
+def pick(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        if key in row and row.get(key, "") != "":
+            return row.get(key, "")
+    return ""
+
+
 def normalize_cache_hit(value: str) -> str:
     lowered = str(value).strip().lower()
     if lowered in {"hit", "true", "1", "yes"}:
@@ -196,7 +203,7 @@ def matrix_rows_from_validate(
                 "distractors": "",
                 "cache_control": f"{summary.get('ttl', '') and 'ephemeral:' + summary.get('ttl', '')}",
                 "ttl": summary.get("ttl", ""),
-                "http_status": request.get("http_status", ""),
+                "http_status": pick(request, "http_status"),
                 "latency_ms": request.get("latency_ms", ""),
                 "prompt_tokens": request.get("prompt_tokens", ""),
                 "cached_tokens": request.get("cached_tokens", ""),
@@ -207,14 +214,14 @@ def matrix_rows_from_validate(
                 "replay_ms": "",
                 "delta_ms": "",
                 "speedup_x": "",
-                "router_pin": summary.get("router_pin_status", ""),
-                "worker_pin": summary.get("worker_pin_status", ""),
+                "router_pin": pick(summary, "router_pin", "router_pin_status"),
+                "worker_pin": pick(summary, "worker_pin", "worker_pin_status"),
                 "worker_refreshes": summary.get("worker_pin_refreshes", ""),
                 "req_cache_status": "",
                 "worker_cache_status": "",
                 "replay_evicts": "",
                 "replay_evict_status": "",
-                "result": summary.get("verdict", ""),
+                "result": pick(summary, "result", "verdict"),
                 "reuse_signal": "",
             }
         )
@@ -233,7 +240,7 @@ def matrix_rows_from_validate(
                 "distractors": "",
                 "cache_control": f"{summary.get('ttl', '') and 'ephemeral:' + summary.get('ttl', '')}",
                 "ttl": summary.get("ttl", ""),
-                "http_status": summary.get("turn2_status", ""),
+                "http_status": pick(summary, "turn2_status"),
                 "latency_ms": summary.get("turn2_ms", ""),
                 "prompt_tokens": "",
                 "cached_tokens": summary.get("turn2_cached", ""),
@@ -244,14 +251,14 @@ def matrix_rows_from_validate(
                 "replay_ms": summary.get("turn2_ms", ""),
                 "delta_ms": "",
                 "speedup_x": "",
-                "router_pin": summary.get("router_pin_status", ""),
-                "worker_pin": summary.get("worker_pin_status", ""),
+                "router_pin": pick(summary, "router_pin", "router_pin_status"),
+                "worker_pin": pick(summary, "worker_pin", "worker_pin_status"),
                 "worker_refreshes": summary.get("worker_pin_refreshes", ""),
                 "req_cache_status": "",
                 "worker_cache_status": "",
                 "replay_evicts": "",
                 "replay_evict_status": "",
-                "result": summary.get("verdict", ""),
+                "result": pick(summary, "result", "verdict"),
                 "reuse_signal": "doc_validation",
             }
         )
@@ -275,32 +282,32 @@ def matrix_rows_from_sweep(
                 "row_kind": "sweep_arm",
                 "run_id": sweep_run_id,
                 "model": row.get("model", ""),
-                "kv_tier": row.get("kv_tier", ""),
+                "kv_tier": pick(row, "kv_tier", "kv_tier_mode"),
                 "arm": row.get("arm", ""),
                 "turn": "replay",
-                "distractors": row.get("distractors", ""),
-                "cache_control": row.get("protected_cache", ""),
+                "distractors": pick(row, "distractors", "distractor_count"),
+                "cache_control": pick(row, "cache_control", "protected_cache", "protected_cache_control_profile"),
                 "ttl": "",
-                "http_status": row.get("replay_status", ""),
-                "latency_ms": row.get("replay_ms", ""),
+                "http_status": pick(row, "replay_http_status", "replay_status", "a_replay_status"),
+                "latency_ms": pick(row, "replay_ms", "a_replay_latency_ms"),
                 "prompt_tokens": "",
-                "cached_tokens": row.get("replay_cached", ""),
-                "cache_hit": "hit" if row.get("replay_cached", "") not in {"", "0"} else "miss",
-                "reuse_ratio": row.get("replay_reuse", ""),
-                "warm": row.get("survived", ""),
-                "first_ms": row.get("first_ms", ""),
-                "replay_ms": row.get("replay_ms", ""),
-                "delta_ms": row.get("replay_delta_ms", ""),
-                "speedup_x": row.get("replay_speedup", ""),
+                "cached_tokens": pick(row, "replay_cached", "a_replay_cached_tokens"),
+                "cache_hit": "hit" if pick(row, "replay_cached", "a_replay_cached_tokens") not in {"", "0"} else "miss",
+                "reuse_ratio": pick(row, "replay_reuse", "a_replay_cache_reuse_ratio"),
+                "warm": pick(row, "warm", "survived", "survived_effective"),
+                "first_ms": pick(row, "first_ms", "a_first_latency_ms"),
+                "replay_ms": pick(row, "replay_ms", "a_replay_latency_ms"),
+                "delta_ms": pick(row, "delta_ms", "replay_delta_ms", "a_replay_latency_delta_ms"),
+                "speedup_x": pick(row, "speedup_x", "replay_speedup", "a_replay_speedup_ratio"),
                 "router_pin": "",
                 "worker_pin": "",
                 "worker_refreshes": "",
-                "req_cache_status": row.get("req_cache_status", ""),
-                "worker_cache_status": row.get("worker_cache_status", ""),
-                "replay_evicts": row.get("replay_evicts", ""),
-                "replay_evict_status": row.get("replay_evict_status", ""),
-                "result": row.get("effect_status", ""),
-                "reuse_signal": row.get("reuse_status", ""),
+                "req_cache_status": pick(row, "req_cache_status", "request_cache_control_status"),
+                "worker_cache_status": pick(row, "worker_cache_status", "worker_cache_control_status"),
+                "replay_evicts": pick(row, "replay_evicts", "a_replay_sglang_cache_evict_events"),
+                "replay_evict_status": pick(row, "replay_evict_status", "a_replay_sglang_evict_identity_status"),
+                "result": pick(row, "result", "effect_status", "hint_runtime_effect_status"),
+                "reuse_signal": pick(row, "reuse_signal", "reuse_status"),
             }
         )
 
@@ -312,13 +319,13 @@ def matrix_rows_from_sweep(
                 "row_kind": "sweep_compare",
                 "run_id": sweep_run_id,
                 "model": row.get("model", ""),
-                "kv_tier": row.get("kv_tier_mode", ""),
+                "kv_tier": pick(row, "kv_tier", "kv_tier_mode"),
                 "arm": "compare",
                 "turn": "",
                 "distractors": "",
-                "cache_control": row.get("protected_cache_control_profile", ""),
+                "cache_control": pick(row, "protected_cache_control", "protected_cache_control_profile"),
                 "ttl": "",
-                "http_status": row.get("sweep_status", ""),
+                "http_status": pick(row, "status", "sweep_status"),
                 "latency_ms": "",
                 "prompt_tokens": "",
                 "cached_tokens": "",
@@ -330,14 +337,14 @@ def matrix_rows_from_sweep(
                 "delta_ms": "",
                 "speedup_x": "",
                 "router_pin": "",
-                "worker_pin": row.get("worker_cache_control_status", ""),
+                "worker_pin": pick(row, "worker_cache_status", "worker_cache_control_status"),
                 "worker_refreshes": "",
                 "req_cache_status": "",
-                "worker_cache_status": row.get("worker_cache_control_status", ""),
+                "worker_cache_status": pick(row, "worker_cache_status", "worker_cache_control_status"),
                 "replay_evicts": "",
                 "replay_evict_status": "",
-                "result": row.get("hint_runtime_effect_status", ""),
-                "reuse_signal": row.get("interpretation", ""),
+                "result": pick(row, "result", "hint_runtime_effect_status"),
+                "reuse_signal": pick(row, "sweep_result", "interpretation"),
             }
         )
 
@@ -356,27 +363,27 @@ def build_summary_row(
 ) -> dict[str, Any]:
     validate = validate_summary_rows[0] if validate_summary_rows else {}
     compare = sweep_comparison_rows[0] if sweep_comparison_rows else {}
-    kv_tiers = sorted({row.get("kv_tier", "") for row in sweep_matrix_rows if row.get("kv_tier", "")})
+    kv_tiers = sorted({pick(row, "kv_tier", "kv_tier_mode") for row in sweep_matrix_rows if pick(row, "kv_tier", "kv_tier_mode")})
     return {
         "benchmark_id": microbenchmark_id,
         "mode": mode,
         "model": model,
         "validate_run_id": validate_run_id,
-        "validate_result": validate.get("verdict", ""),
+        "validate_result": pick(validate, "result", "verdict"),
         "validate_turn1_ms": validate.get("turn1_ms", ""),
         "validate_turn2_ms": validate.get("turn2_ms", ""),
         "validate_turn2_cached": validate.get("turn2_cached", ""),
-        "validate_router_pin": validate.get("router_pin_status", ""),
-        "validate_worker_pin": validate.get("worker_pin_status", ""),
+        "validate_router_pin": pick(validate, "router_pin", "router_pin_status"),
+        "validate_worker_pin": pick(validate, "worker_pin", "worker_pin_status"),
         "sweep_run_id": sweep_run_id,
         "sweep_rows": str(len(sweep_matrix_rows)) if sweep_matrix_rows else "",
         "kv_tiers": "|".join(kv_tiers),
-        "control_last_warm": compare.get("control_last_survived_distractor_count", ""),
-        "control_first_cold": compare.get("control_first_evicted_distractor_count", ""),
-        "protected_last_warm": compare.get("protected_last_survived_distractor_count", ""),
-        "protected_first_cold": compare.get("protected_first_evicted_distractor_count", ""),
-        "threshold_gap": compare.get("threshold_gap_distractors", ""),
-        "sweep_result": compare.get("interpretation", ""),
+        "control_last_warm": pick(compare, "control_last_warm", "control_last_survived_distractor_count"),
+        "control_first_cold": pick(compare, "control_first_cold", "control_first_evicted_distractor_count"),
+        "protected_last_warm": pick(compare, "protected_last_warm", "protected_last_survived_distractor_count"),
+        "protected_first_cold": pick(compare, "protected_first_cold", "protected_first_evicted_distractor_count"),
+        "threshold_gap": pick(compare, "threshold_gap", "threshold_gap_distractors"),
+        "sweep_result": pick(compare, "sweep_result", "interpretation"),
     }
 
 

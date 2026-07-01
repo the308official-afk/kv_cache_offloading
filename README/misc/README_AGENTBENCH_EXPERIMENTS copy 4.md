@@ -1714,6 +1714,12 @@ cat experiments/reports/latest_cache_control_retention_threshold_summary.md
 
 This is the public cache-pinning entrypoint.
 
+Use it when you want one reproducible experiment that:
+
+- uses the isolated cache-pinning Dynamo/SGLang stack
+- reads its setup from one contract
+- can run doc validation, retention sweep, both, or charts only
+
 Contract files:
 
 - [`contracts/cache_pinning_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh)
@@ -1725,12 +1731,18 @@ Public wrapper:
 
 Supported modes:
 
-- `validate`: two-turn doc-style cache-pinning check
-- `sweep`: threshold sweep, `off` vs `ephemeral:1h`
-- `all`: validation, then sweep
-- `plot`: rebuild charts from one existing matrix CSV
+- `CACHE_PINNING_MODE=validate`
+  - two-turn doc-style cache-pinning check
+- `CACHE_PINNING_MODE=sweep`
+  - threshold sweep: `off` vs `ephemeral:1h`
+- `CACHE_PINNING_MODE=all`
+  - validation, then sweep
+- `CACHE_PINNING_MODE=plot`
+  - rebuild charts from one existing microbenchmark matrix CSV
 
 ### Run
+
+Validation only:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1740,6 +1752,8 @@ CACHE_PINNING_MODE=validate \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+Sweep only:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -1753,6 +1767,8 @@ DISTRACTOR_INPUT_LEN=200 \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+Validation + sweep:
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1765,6 +1781,8 @@ DISTRACTOR_INPUT_LEN=200 \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+Charts only from one matrix:
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1775,26 +1793,29 @@ CACHE_PINNING_PLOT_MATRIX_CSV=experiments/reports/latest_cache_pinning_microbenc
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-### Core Contract Knobs
+### What The Wrapper Reads From The Contract
+
+Main doc-facing prerequisites:
 
 ```text
 CACHE_PINNING_FRONTEND_FLAG_MODE
+CACHE_PINNING_FRONTEND_FLAG_VALUE
+CACHE_PINNING_ENABLE_CACHE_CONTROL
+CACHE_PINNING_ROUTER_MODE
+CACHE_PINNING_REQUEST_TYPE
 CACHE_PINNING_TTL
 CACHE_PINNING_PINNED_RATIO
 SGLANG_HICACHE_MAX_PINNED_RATIO
 CACHE_PINNING_HICACHE_RATIO
+CACHE_PINNING_HICACHE_WRITE_POLICY
 CACHE_PINNING_MEM_FRACTION_STATIC
+CACHE_PINNING_ENABLE_CACHE_REPORT
+CACHE_PINNING_ENABLE_HIERARCHICAL_CACHE
+CACHE_PINNING_REQUIRE_HIERARCHICAL_CACHE
+CACHE_PINNING_DEVELOPMENT_BRANCH_STACK
 ```
 
-The contract is the source of truth for:
-
-- pinned Dynamo/SGLang refs
-- frontend cache-control flag behavior
-- TTL and pinned-ratio settings
-- HiCache and memory settings
-- readiness defaults
-
-Pinned stack:
+Pinned upstream stack:
 
 - Dynamo PR `#6213`
   - commit `7d3d4ec8e4ae865af2f903b21b4afabca28e1940`
@@ -1813,13 +1834,22 @@ ls experiments/reports/latest_cache_pinning_microbenchmark_*.svg
 cat experiments/reports/latest_cache_pinning_microbenchmark_chart_manifest.json
 ```
 
-Main outputs:
+### Main Output Meaning
 
-- `latest_cache_pinning_microbenchmark_matrix.csv`: validation + sweep table
-- `latest_cache_pinning_microbenchmark_summary.csv`: one-row summary
-- `latest_cache_pinning_microbenchmark_run_contract.json`: exact resolved settings
-- `validation_latency.svg` / `validation_cached_tokens.svg`
-- `sweep_replay_latency.svg` / `sweep_replay_cached_tokens.svg`
+- `latest_cache_pinning_microbenchmark_matrix.csv`
+  - one main table for validation rows and sweep rows
+- `latest_cache_pinning_microbenchmark_summary.csv`
+  - one-row nutshell summary
+- `latest_cache_pinning_microbenchmark_run_contract.json`
+  - exact resolved contract values used for the run
+- `validation_latency.svg`
+  - turn 1 vs turn 2 latency chart
+- `validation_cached_tokens.svg`
+  - turn 1 vs turn 2 cached-token chart
+- `sweep_replay_latency.svg`
+  - replay latency versus distractor count
+- `sweep_replay_cached_tokens.svg`
+  - replay cached tokens versus distractor count
 
 ### Decision Proof
 
@@ -1879,39 +1909,53 @@ These are the exact places to inspect when you want to prove the signal path.
 
 ### Success Reading
 
-- Validation success:
+- if validation shows:
   - `turn2_cached > 0`
   - `router_pin=spawned`
   - `worker_pin=applied`
+  then the pinning path worked end to end
 
-- Sweep success:
-  - protected arm stays warm deeper than control
+- if sweep shows:
+  - protected arm survives deeper than control
+  then cache pinning improved retention under pressure
 
-- If both arms turn cold at the same point:
-  - cache pinning did not improve retention in that setup
+- if both arms turn cold at the same distractor count
+  then cache pinning did not buy retention in that setup
 
 ## Experiment 10B: Cache-Pinning Component Wrappers
 
-These are the lower-level wrappers behind Experiment 10A. Normally use the
-single public wrapper above.
+These are the two lower-level wrappers used by Experiment 10A. Normally you
+should call the single public wrapper above instead.
 
 - [`agentbench/run_cache_pinning_doc_validation_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_doc_validation_single_host.sh)
   - validate component
 - [`agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh)
   - sweep component
 
-Component report names now use compact fields such as:
+10A doc-validation component reports now use compact names such as:
 
 - `output_tokens`
+- `preview`
 - `router_pin`
+- `router_ttls`
+- `router_skip`
 - `worker_pin`
+- `worker_ttls`
+- `result`
+
+10B sweep component reports now use compact names such as:
+
+- `run_id`
 - `cache_control`
+- `first_http_status`
 - `replay_http_status`
 - `delta_ms`
 - `speedup_x`
 - `warm`
+- `warm_source`
 - `reuse_signal`
 - `result`
+- `sweep_result`
 
 ## Experiment 11: Priority Scheduling Probe
 
