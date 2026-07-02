@@ -206,6 +206,7 @@ Runtime defaults:
   attribution_mode=${RETENTION_ATTRIBUTION_MODE}
   request_context_mode=${RETENTION_REQUEST_CONTEXT_MODE}
   top_level_priority_mode=${RETENTION_TOP_LEVEL_PRIORITY_MODE}
+  experiment_reset_mode=${EXPERIMENT_RESET_MODE}
   transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
   worker_base_args=${WORKER_BASE_ARGS}
 
@@ -275,6 +276,7 @@ keys = [
     "RETENTION_ATTRIBUTION_MODE",
     "RETENTION_REQUEST_CONTEXT_MODE",
     "RETENTION_TOP_LEVEL_PRIORITY_MODE",
+    "EXPERIMENT_RESET_MODE",
     "KV_TIER_MODES",
     "DISTRACTOR_COUNT",
     "DISTRACTOR_COUNTS",
@@ -385,6 +387,16 @@ build_microbenchmark_charts() {
   fi
 }
 
+finalize_runtime_cleanup() {
+  if [[ "${STOP_DYNAMO_WHEN_DONE}" != "1" || "${KV_RETENTION_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  echo "Final cleanup: stopping Dynamo once after KV retention microbenchmark."
+  ./run_dynamo_single_host.sh stop >/dev/null 2>&1 || true
+  env EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}" \
+    ./runtime_instrumentation/reset_experiment_state.sh clear-active >/dev/null 2>&1 || true
+}
+
 print_final_status() {
   banner "KV RETENTION MICROBENCH PHASE 4 READY"
   if [[ "${KV_RETENTION_MODE}" = "plot" ]]; then
@@ -470,6 +482,7 @@ run_probe_mode() {
     MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES}" \
     MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS}" \
     MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS}" \
+    EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     REQUIRE_PRECISE_KV="${REQUIRE_PRECISE_KV}" \
     STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
@@ -507,7 +520,8 @@ run_sweep_mode() {
     RETENTION_MIN_SPEEDUP_RATIO="${RETENTION_MIN_SPEEDUP_RATIO}" \
     RETENTION_MIN_LATENCY_GAIN_MS="${RETENTION_MIN_LATENCY_GAIN_MS}" \
     STOP_ON_PROBE_FAILURE="${STOP_ON_PROBE_FAILURE}" \
-    STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
+    STOP_DYNAMO_WHEN_DONE="0" \
+    EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
     "${KV_RETENTION_SWEEP_HELPER}" "${MODEL}"
   printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_sweep_run_id.txt"
   LAST_SWEEP_RUN_ID="${run_id}"
@@ -560,5 +574,7 @@ if [[ "${KV_RETENTION_MODE}" != "plot" ]]; then
   build_microbenchmark_report
   build_microbenchmark_charts "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 fi
+
+finalize_runtime_cleanup
 
 print_final_status

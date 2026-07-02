@@ -31,6 +31,8 @@ SGLANG_ROOT="${SGLANG_ROOT:-}"
 AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES:-1}"
 FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
+EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}"
 
 RUN_DIR="experiments/reports/speculative_prefill/${SPEC_PREFILL_ID}"
 DRIVER_LOG="${RUN_DIR}/speculative_prefill_driver.log"
@@ -252,6 +254,56 @@ capture_worker_runtime_log() {
   docker logs dynamo-sglang-worker > "${out_path}" 2>&1
 }
 
+build_runtime_signature() {
+  printf '%s\n' \
+    "model=${MODEL}" \
+    "attribution_mode=${SPEC_PREFILL_ATTRIBUTION_MODE}" \
+    "frontend_image=${FRONTEND_IMAGE}" \
+    "worker_image=${WORKER_IMAGE}" \
+    "worker_extra_args=${WORKER_BASE_ARGS}" \
+    "router_extra_args=" \
+    "sglang_root=${SGLANG_ROOT}" \
+    "host_file_storage_path=" \
+    "file_storage_path=" \
+    "custom_runtime_images_mode=" \
+    "custom_runtime_sglang_root=" \
+    "runtime_stack=standard" | \
+    shasum -a 256 | awk '{print $1}'
+}
+
+runtime_reset_env_cmd() {
+  local signature="$1"
+  env \
+    FRONTEND_URL="${FRONTEND_URL}" \
+    EXPERIMENT_RUNTIME_SIGNATURE="${signature}" \
+    EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
+    EXPERIMENT_EXPECTED_MODEL="${MODEL}"
+}
+
+runtime_reuse_ready() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh reuse-ready
+}
+
+runtime_flush() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh flush
+}
+
+runtime_mark_active() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh mark-active >/dev/null
+}
+
+runtime_clear_active() {
+  env \
+    EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
+    ./runtime_instrumentation/reset_experiment_state.sh clear-active >/dev/null
+}
+
 warn_if_worker_runtime_missing() {
   local worker_runtime_log="$1"
   if [[ ! -f "${worker_runtime_log}" ]]; then
@@ -290,51 +342,68 @@ fi
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
   echo "Worker runtime log: ${WORKER_RUNTIME_LOG}"
-  echo
-  echo "Stopping Dynamo..."
 } | tee -a "${DRIVER_LOG}"
 
-./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
-
-agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
-echo "Starting Dynamo for ${MODEL}..." | tee -a "${DRIVER_LOG}"
-env_cmd=(
-  env
-  -u DYN_RUNTIME_JSON_LOGS
-  -u WORKER_SGLANG_DEV_MODE
-  -u WORKER_SGLANG_SOURCE_ROOT
-  -u SGLANG_TRANSFER_LOG
-  -u SGLANG_TRANSFER_LOG_PROFILE
-)
-env_vars=(
-  "DYNAMO_MODEL_PATH=${MODEL}"
-  "DYNAMO_SERVED_MODEL_NAME=${MODEL}"
-  "WORKER_EXTRA_ARGS=${WORKER_BASE_ARGS}"
-  "DYN_TOOL_CALL_PARSER=hermes"
-)
-if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
-  env_vars+=("DYN_RUNTIME_JSON_LOGS=1")
-  if [[ -n "${SGLANG_ROOT}" && -d "${SGLANG_ROOT}" ]]; then
-    env_vars+=(
-      "WORKER_SGLANG_DEV_MODE=1"
-      "WORKER_SGLANG_SOURCE_ROOT=${SGLANG_ROOT}"
-      "SGLANG_TRANSFER_LOG=1"
-      "SGLANG_TRANSFER_LOG_PROFILE=${SGLANG_TRANSFER_LOG_PROFILE}"
-    )
+RUNTIME_SIGNATURE="$(build_runtime_signature)"
+if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${RUNTIME_SIGNATURE}" >/dev/null 2>&1; then
+  echo "Reusing live Dynamo runtime with EXPERIMENT_RESET_MODE=${EXPERIMENT_RESET_MODE}..." | tee -a "${DRIVER_LOG}"
+  if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+    runtime_flush "${RUNTIME_SIGNATURE}" | tee -a "${DRIVER_LOG}"
+    echo "KV cache flush complete. Reusing current worker/frontend stack." | tee -a "${DRIVER_LOG}"
+  else
+    echo "No runtime reset requested; reusing current worker/frontend stack as-is." | tee -a "${DRIVER_LOG}"
   fi
-fi
-"${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
+  check_precise_specprefill_runtime_ready
+  agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+    precise_print_go_summary "specprefill" "${DRIVER_LOG}"
+  fi
+  runtime_mark_active "${RUNTIME_SIGNATURE}"
+else
+  echo "Stopping Dynamo..." | tee -a "${DRIVER_LOG}"
+  ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
 
-smoke_test_model "${MODEL}" "${SMOKE_LOG}"
-check_precise_specprefill_runtime_ready
-agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
-if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
-  precise_print_go_summary "specprefill" "${DRIVER_LOG}"
-fi
+  agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
+  echo "Starting Dynamo for ${MODEL}..." | tee -a "${DRIVER_LOG}"
+  env_cmd=(
+    env
+    -u DYN_RUNTIME_JSON_LOGS
+    -u WORKER_SGLANG_DEV_MODE
+    -u WORKER_SGLANG_SOURCE_ROOT
+    -u SGLANG_TRANSFER_LOG
+    -u SGLANG_TRANSFER_LOG_PROFILE
+  )
+  env_vars=(
+    "DYNAMO_MODEL_PATH=${MODEL}"
+    "DYNAMO_SERVED_MODEL_NAME=${MODEL}"
+    "WORKER_EXTRA_ARGS=${WORKER_BASE_ARGS}"
+    "DYN_TOOL_CALL_PARSER=hermes"
+  )
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+    env_vars+=("DYN_RUNTIME_JSON_LOGS=1")
+    if [[ -n "${SGLANG_ROOT}" && -d "${SGLANG_ROOT}" ]]; then
+      env_vars+=(
+        "WORKER_SGLANG_DEV_MODE=1"
+        "WORKER_SGLANG_SOURCE_ROOT=${SGLANG_ROOT}"
+        "SGLANG_TRANSFER_LOG=1"
+        "SGLANG_TRANSFER_LOG_PROFILE=${SGLANG_TRANSFER_LOG_PROFILE}"
+      )
+    fi
+  fi
+  "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
 
-if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
-  echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
-  sleep "${MODEL_COOLDOWN_SECS}"
+  smoke_test_model "${MODEL}" "${SMOKE_LOG}"
+  check_precise_specprefill_runtime_ready
+  agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+    precise_print_go_summary "specprefill" "${DRIVER_LOG}"
+  fi
+
+  if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
+    echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
+    sleep "${MODEL_COOLDOWN_SECS}"
+  fi
+  runtime_mark_active "${RUNTIME_SIGNATURE}"
 fi
 
 probe_cmd=(
@@ -367,6 +436,7 @@ echo "Rebuilding report with worker-side evidence..." | tee -a "${DRIVER_LOG}"
 if [[ "${STOP_DYNAMO_WHEN_DONE}" = "1" ]]; then
   echo "Stopping Dynamo after speculative-prefill probe..." | tee -a "${DRIVER_LOG}"
   ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
+  runtime_clear_active
 fi
 
 {

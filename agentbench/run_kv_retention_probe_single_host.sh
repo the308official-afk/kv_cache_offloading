@@ -64,6 +64,8 @@ FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
 CUSTOM_RUNTIME_IMAGES_MODE="${CUSTOM_RUNTIME_IMAGES_MODE:-0}"
 CUSTOM_RUNTIME_SGLANG_ROOT="${CUSTOM_RUNTIME_SGLANG_ROOT:-}"
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
+EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}"
 PYTHON_BIN="${PYTHON_BIN:-}"
 CLI_MODELS=("$@")
 
@@ -801,6 +803,62 @@ with matrix_path.open("w", encoding="utf-8", newline="") as handle:
 PY
 }
 
+build_runtime_signature() {
+  local model="$1"
+  local kv_tier_mode="$2"
+  local worker_extra_args="$3"
+  local sglang_root="$4"
+  local host_file_storage_path="$5"
+  local file_storage_path="$6"
+  printf '%s\n' \
+    "model=${model}" \
+    "attribution_mode=${RETENTION_ATTRIBUTION_MODE}" \
+    "frontend_image=${FRONTEND_IMAGE}" \
+    "worker_image=${WORKER_IMAGE}" \
+    "worker_extra_args=${worker_extra_args}" \
+    "router_extra_args=${CACHE_CONTROL_DOC_ROUTER_EXTRA_ARGS}" \
+    "sglang_root=${sglang_root}" \
+    "host_file_storage_path=${host_file_storage_path}" \
+    "file_storage_path=${file_storage_path}" \
+    "custom_runtime_images_mode=${CUSTOM_RUNTIME_IMAGES_MODE}" \
+    "custom_runtime_sglang_root=${CUSTOM_RUNTIME_SGLANG_ROOT}" \
+    "runtime_stack=standard" | \
+    shasum -a 256 | awk '{print $1}'
+}
+
+runtime_reset_env_cmd() {
+  local signature="$1"
+  env \
+    FRONTEND_URL="${FRONTEND_URL:-${AGENTBENCH_FRONTEND_URL}}" \
+    EXPERIMENT_RUNTIME_SIGNATURE="${signature}" \
+    EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
+    EXPERIMENT_EXPECTED_MODEL="${MODEL_NAME}"
+}
+
+runtime_reuse_ready() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh reuse-ready
+}
+
+runtime_flush() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh flush
+}
+
+runtime_mark_active() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh mark-active >/dev/null
+}
+
+runtime_clear_active() {
+  env \
+    EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
+    ./runtime_instrumentation/reset_experiment_state.sh clear-active >/dev/null
+}
+
 iter_probe_arms() {
   printf 'control\t%s\t%s\n' "${CONTROL_HINT_PROFILE}" "${CONTROL_CACHE_CONTROL_PROFILE}"
   for hint_profile in ${PROTECTED_HINT_PROFILES}; do
@@ -821,6 +879,32 @@ start_dynamo_for_profile() {
   local host_file_storage_path="$5"
   local file_storage_path="$6"
   local smoke_log="$7"
+  local runtime_signature
+
+  runtime_signature="$(build_runtime_signature \
+    "${model}" \
+    "${kv_tier_mode}" \
+    "${worker_extra_args}" \
+    "${sglang_root}" \
+    "${host_file_storage_path}" \
+    "${file_storage_path}")"
+
+  if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${runtime_signature}" >/dev/null 2>&1; then
+    echo "Reusing live Dynamo runtime with EXPERIMENT_RESET_MODE=${EXPERIMENT_RESET_MODE}..." | tee -a "${BATCH_LOG}"
+    if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+      runtime_flush "${runtime_signature}" | tee -a "${BATCH_LOG}"
+      echo "KV cache flush complete. Reusing current worker/frontend stack." | tee -a "${BATCH_LOG}"
+    else
+      echo "No runtime reset requested; reusing current worker/frontend stack as-is." | tee -a "${BATCH_LOG}"
+    fi
+    check_precise_kv_runtime_ready "${smoke_log}"
+    agentbench_print_model_readiness_go_banner | tee -a "${BATCH_LOG}"
+    if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+      precise_print_go_summary "transfer" "${BATCH_LOG}"
+    fi
+    runtime_mark_active "${runtime_signature}"
+    return 0
+  fi
 
   {
     echo "Stopping Dynamo..."
@@ -909,6 +993,8 @@ start_dynamo_for_profile() {
     echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${BATCH_LOG}"
     sleep "${MODEL_COOLDOWN_SECS}"
   fi
+
+  runtime_mark_active "${runtime_signature}"
 }
 
 write_batch_summary() {
@@ -1160,7 +1246,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
     {
       echo "===== Model: ${MODEL_NAME} | KV tier: ${KV_TIER_MODE} ====="
       echo "Worker args: ${CURRENT_WORKER_EXTRA_ARGS}"
-      echo "Each hint profile below gets a fresh Dynamo restart so cache state stays isolated."
+      echo "Each hint profile below gets an isolated runtime reset so cache state stays isolated."
     } | tee -a "${BATCH_LOG}"
 
     while IFS=$'\t' read -r ARM_ROLE HINT_PROFILE CACHE_CONTROL_PROFILE; do
@@ -1180,7 +1266,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
       fi
 
       {
-        echo "--- Arm role: ${ARM_ROLE} | Hint profile: ${HINT_PROFILE} | Cache-control profile: ${CACHE_CONTROL_PROFILE} (fresh start) ---"
+        echo "--- Arm role: ${ARM_ROLE} | Hint profile: ${HINT_PROFILE} | Cache-control profile: ${CACHE_CONTROL_PROFILE} (reset mode: ${EXPERIMENT_RESET_MODE}) ---"
       } | tee -a "${BATCH_LOG}"
 
       start_dynamo_for_profile \
@@ -1226,6 +1312,7 @@ done
 if [[ "${STOP_DYNAMO_WHEN_DONE}" = "1" ]]; then
   echo "Stopping Dynamo after retention probe..." | tee -a "${BATCH_LOG}"
   ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
+  runtime_clear_active
 fi
 
 write_batch_summary

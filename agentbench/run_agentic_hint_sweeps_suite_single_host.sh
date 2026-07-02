@@ -16,6 +16,20 @@ SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-all}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-}"
+
+if [[ -z "${EXPERIMENT_RESET_MODE}" ]]; then
+  if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" ]]; then
+    EXPERIMENT_RESET_MODE="flush"
+  else
+    EXPERIMENT_RESET_MODE="restart"
+  fi
+fi
+
+WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
+if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" ]]; then
+  WRAPPER_STOP_DYNAMO_WHEN_DONE="0"
+fi
 
 SUITE_ROOT_DIR="experiments/reports/agentic_hint_sweeps_suite/${SUITE_ID}"
 LATEST_PREFIX="experiments/reports/latest_agentic_hint_sweeps_suite"
@@ -85,6 +99,7 @@ Environment:
   SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0|1
   SUITE_DEFAULT_MODE=all
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
+  EXPERIMENT_RESET_MODE=restart|flush|none
 
 This suite calls the public wrappers for:
   9  = KV retention microbenchmark
@@ -104,7 +119,6 @@ if [[ -z "${MODEL}" ]]; then
   exit 1
 fi
 
-rm -rf "${SUITE_ROOT_DIR}"
 mkdir -p "${SUITE_ROOT_DIR}"
 rm -f "${LATEST_SUMMARY_MD}" "${LATEST_MANIFEST_JSON}" "${LATEST_DRIVER_LOG}"
 : > "${SUITE_DRIVER_LOG}"
@@ -119,6 +133,8 @@ SUITE_CONTINUE_ON_ERROR='${SUITE_CONTINUE_ON_ERROR}'
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}'
 SUITE_DEFAULT_MODE='${SUITE_DEFAULT_MODE}'
 SUITE_INTERACTIVE_BUILD_PROGRESS='${SUITE_INTERACTIVE_BUILD_PROGRESS}'
+EXPERIMENT_RESET_MODE='${EXPERIMENT_RESET_MODE}'
+WRAPPER_STOP_DYNAMO_WHEN_DONE='${WRAPPER_STOP_DYNAMO_WHEN_DONE}'
 KV_RETENTION_MODE='${KV_RETENTION_MODE:-}'
 KV_RETENTION_SWEEP_AXIS='${KV_RETENTION_SWEEP_AXIS:-}'
 KV_RETENTION_SWEEP_VALUES='${KV_RETENTION_SWEEP_VALUES:-}'
@@ -307,7 +323,7 @@ run_experiment_9() {
   suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
@@ -340,7 +356,7 @@ run_experiment_10() {
   suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
   fi
@@ -373,7 +389,7 @@ run_experiment_11() {
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
@@ -406,7 +422,7 @@ run_experiment_12() {
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
@@ -433,6 +449,8 @@ log "Continue on error: ${SUITE_CONTINUE_ON_ERROR}"
 log "Stop Dynamo between experiments: ${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
 log "Default mode: ${SUITE_DEFAULT_MODE}"
 log "Interactive build progress: ${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+log "Experiment reset mode: ${EXPERIMENT_RESET_MODE}"
+log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 

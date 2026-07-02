@@ -134,6 +134,7 @@ Workload defaults:
 Runtime defaults:
   attribution_mode=${SPEC_PREFILL_ATTRIBUTION_MODE}
   request_context_mode=${SPEC_PREFILL_REQUEST_CONTEXT_MODE}
+  experiment_reset_mode=${EXPERIMENT_RESET_MODE}
   transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
   worker_base_args=${WORKER_BASE_ARGS}
 EOF
@@ -188,6 +189,7 @@ keys = [
     "SPEC_PREFILL_WORKER_IMAGE",
     "SPEC_PREFILL_ATTRIBUTION_MODE",
     "SPEC_PREFILL_REQUEST_CONTEXT_MODE",
+    "EXPERIMENT_RESET_MODE",
     "SPEC_PREFILL_TURN_A_WORDS",
     "SPEC_PREFILL_TURN_B_WORDS",
     "SPEC_PREFILL_OUTPUT_TOKENS",
@@ -283,6 +285,16 @@ build_microbenchmark_charts() {
   fi
 }
 
+finalize_runtime_cleanup() {
+  if [[ "${STOP_DYNAMO_WHEN_DONE}" != "1" || "${SPEC_PREFILL_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  echo "Final cleanup: stopping Dynamo once after speculative-prefill microbenchmark."
+  ./run_dynamo_single_host.sh stop >/dev/null 2>&1 || true
+  env EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}" \
+    ./runtime_instrumentation/reset_experiment_state.sh clear-active >/dev/null 2>&1 || true
+}
+
 run_probe_mode() {
   local run_id="${BASE_ID}__probe"
   banner "SPECULATIVE PREFILL MICROBENCH PROBE"
@@ -306,6 +318,7 @@ run_probe_mode() {
     MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS}" \
     STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
     WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
+    EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
   printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
@@ -347,8 +360,9 @@ run_sweep_mode() {
       MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES}" \
       MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS}" \
       MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS}" \
-      STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
+      STOP_DYNAMO_WHEN_DONE="0" \
       WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
+      EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
       AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
       "${sweep_axis}=${value}" \
       "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
@@ -432,5 +446,7 @@ if [[ "${SPEC_PREFILL_MODE}" != "plot" ]]; then
   build_microbenchmark_report
   build_microbenchmark_charts "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 fi
+
+finalize_runtime_cleanup
 
 print_final_status

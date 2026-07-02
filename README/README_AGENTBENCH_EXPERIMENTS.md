@@ -2249,9 +2249,26 @@ SUITE_CONTINUE_ON_ERROR
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS
 SUITE_DEFAULT_MODE
 SUITE_INTERACTIVE_BUILD_PROGRESS
+EXPERIMENT_RESET_MODE
 ```
 
 `SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
+
+`EXPERIMENT_RESET_MODE` controls how the suite reuses an already-running stack:
+
+- `restart`: always stop/start Dynamo again
+- `flush`: keep the current runtime and call `/clear_kv_blocks` before the next run
+- `none`: keep the current runtime without flushing it
+
+If you set `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0`, the suite now defaults to `EXPERIMENT_RESET_MODE=flush`.
+That reuse path is meant for Experiments 9, 11, and 12 when they are using the same model/images/worker args.
+In that mode, the suite also suppresses each wrapper's final `stop`, so the next experiment can keep reusing the same live runtime.
+
+For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
+
+```bash
+tail -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
+```
 
 Per-experiment sweep knobs still pass through unchanged. Examples:
 
