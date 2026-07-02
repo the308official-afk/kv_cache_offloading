@@ -897,13 +897,16 @@ start_dynamo_for_profile() {
     else
       echo "No runtime reset requested; reusing current worker/frontend stack as-is." | tee -a "${BATCH_LOG}"
     fi
-    check_precise_kv_runtime_ready "${smoke_log}"
-    agentbench_print_model_readiness_go_banner | tee -a "${BATCH_LOG}"
-    if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
-      precise_print_go_summary "transfer" "${BATCH_LOG}"
+    if check_precise_kv_runtime_ready "${smoke_log}"; then
+      agentbench_print_model_readiness_go_banner | tee -a "${BATCH_LOG}"
+      if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then
+        precise_print_go_summary "transfer" "${BATCH_LOG}"
+      fi
+      runtime_mark_active "${runtime_signature}"
+      return 0
     fi
-    runtime_mark_active "${runtime_signature}"
-    return 0
+    echo "Reused runtime failed precise preflight; falling back to a clean Dynamo restart for this run." | tee -a "${BATCH_LOG}"
+    ./run_dynamo_single_host.sh stop >> "${BATCH_LOG}" 2>&1 || true
   fi
 
   {
@@ -1160,7 +1163,7 @@ if [[ "${#MODELS_TO_RUN[@]}" -eq 0 ]]; then
   exit 1
 fi
 
-RESOLVED_SGLANG_ROOT="$(resolve_sglang_root || true)"
+RESOLVED_SGLANG_ROOT="$(resolve_precise_sglang_root || true)"
 ensure_precise_runtime_images
 require_precise_kv_ready
 if [[ "${RETENTION_ATTRIBUTION_MODE}" = "precise" ]]; then

@@ -16,15 +16,7 @@ SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-all}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
-EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-}"
-
-if [[ -z "${EXPERIMENT_RESET_MODE}" ]]; then
-  if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" ]]; then
-    EXPERIMENT_RESET_MODE="flush"
-  else
-    EXPERIMENT_RESET_MODE="restart"
-  fi
-fi
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
 
 WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
 if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" ]]; then
@@ -99,7 +91,7 @@ Environment:
   SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0|1
   SUITE_DEFAULT_MODE=all
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
-  EXPERIMENT_RESET_MODE=restart|flush|none
+  EXPERIMENT_RESET_MODE=restart|flush|none   # applied inside each experiment
 
 This suite calls the public wrappers for:
   9  = KV retention microbenchmark
@@ -451,6 +443,15 @@ log "Default mode: ${SUITE_DEFAULT_MODE}"
 log "Interactive build progress: ${SUITE_INTERACTIVE_BUILD_PROGRESS}"
 log "Experiment reset mode: ${EXPERIMENT_RESET_MODE}"
 log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" && "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+  log "Suite runtime policy: restart between experiments, flush between sweep values inside each experiment"
+elif [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" && "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+  log "Suite runtime policy: reuse one live runtime across experiments and flush between runs"
+elif [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" && "${EXPERIMENT_RESET_MODE}" = "restart" ]]; then
+  log "Suite runtime policy: full restart between experiments and between sweep values"
+else
+  log "Suite runtime policy: custom"
+fi
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 

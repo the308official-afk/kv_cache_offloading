@@ -353,13 +353,22 @@ if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${RUNTI
   else
     echo "No runtime reset requested; reusing current worker/frontend stack as-is." | tee -a "${DRIVER_LOG}"
   fi
-  check_precise_specprefill_runtime_ready
-  agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
-  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
-    precise_print_go_summary "specprefill" "${DRIVER_LOG}"
+  if check_precise_specprefill_runtime_ready; then
+    agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
+    if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+      precise_print_go_summary "specprefill" "${DRIVER_LOG}"
+    fi
+    runtime_mark_active "${RUNTIME_SIGNATURE}"
+  else
+    echo "Reused runtime failed precise preflight; falling back to a clean Dynamo restart for this run." | tee -a "${DRIVER_LOG}"
+    ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
+    RUNTIME_RESTART_REQUIRED=1
   fi
-  runtime_mark_active "${RUNTIME_SIGNATURE}"
 else
+  RUNTIME_RESTART_REQUIRED=1
+fi
+
+if [[ "${RUNTIME_RESTART_REQUIRED:-0}" = "1" ]]; then
   echo "Stopping Dynamo..." | tee -a "${DRIVER_LOG}"
   ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
 

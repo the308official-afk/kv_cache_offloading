@@ -2155,7 +2155,7 @@ Public wrappers:
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0 \
+SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1 \
 EXPERIMENT_RESET_MODE=flush \
 SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
@@ -2183,7 +2183,7 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0 \
+SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1 \
 EXPERIMENT_RESET_MODE=flush \
 SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
@@ -2220,15 +2220,26 @@ EXPERIMENT_RESET_MODE
 
 `SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
 
-`EXPERIMENT_RESET_MODE` controls how the suite reuses an already-running stack:
+`EXPERIMENT_RESET_MODE` controls how each experiment reuses an already-running stack during its own probe/sweep steps:
 
-- `restart`: always stop/start Dynamo again
+- `restart`: always stop/start Dynamo again inside the experiment
 - `flush`: keep the current runtime and call `/clear_kv_blocks` before the next run
 - `none`: keep the current runtime without flushing it
 
-If you set `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0`, the suite now defaults to `EXPERIMENT_RESET_MODE=flush`.
-That reuse path is meant for Experiments 9, 11, and 12 when they are using the same model/images/worker args.
+Recommended default:
+
+- `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1`
+- `EXPERIMENT_RESET_MODE=flush`
+
+That gives you:
+
+- restart between experiments
+- flush between sweep values inside each experiment
+
+If you set `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0`, the same `flush` mode will also reuse one live runtime across experiments.
+That cross-experiment reuse path is meant for Experiments 9, 11, and 12 when they are using the same model/images/worker args.
 In that mode, the suite also suppresses each wrapper's final `stop`, so the next experiment can keep reusing the same live runtime.
+If a reused runtime fails the precise instrumentation preflight, the wrapper now falls back to a clean restart for that experiment instead of stopping the full suite immediately.
 
 For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
 
