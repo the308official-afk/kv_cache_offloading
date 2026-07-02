@@ -2236,6 +2236,8 @@ That gives you:
 - restart between experiments
 - flush between sweep values inside each experiment
 
+With that setting, the suite now clears the active-runtime state and stops Dynamo before each new experiment starts, so a new experiment does not try reuse-first behavior.
+
 If you set `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0`, the same `flush` mode will also reuse one live runtime across experiments.
 That cross-experiment reuse path is meant for Experiments 9, 11, and 12 when they are using the same model/images/worker args.
 In that mode, the suite also suppresses each wrapper's final `stop`, so the next experiment can keep reusing the same live runtime.
@@ -2244,7 +2246,9 @@ If a reused runtime fails the precise instrumentation preflight, the wrapper now
 For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
 
 ```bash
-tail -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
+tail -n 20 -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
+tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
+tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_driver.log
 ```
 
 Per-experiment sweep knobs still pass through unchanged. Examples:

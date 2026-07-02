@@ -57,7 +57,18 @@ EOF
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
+  rm -f \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_matrix.csv" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_cached_tokens.svg" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_survival_curve.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_matrix.csv" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_latency_gain_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_cache_gain_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg"
 }
 
 usage() {
@@ -364,7 +375,7 @@ build_microbenchmark_charts() {
   local matrix_csv="${1}"
   prepare_shared_chart_dir
   if [[ -f "${matrix_csv}" ]]; then
-    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_matrix.csv"
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/exp9_kvretention_matrix.csv"
   fi
   "${PYTHON_BIN}" experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
@@ -372,15 +383,23 @@ build_microbenchmark_charts() {
 
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${MICROBENCH_LATEST_PREFIX}_replay_latency.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_latency.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_cached_tokens.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp9_kvretention_latency_gain_vs_distractors.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${SHARED_CHART_DIR}/exp9_kvretention_cache_gain_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${MICROBENCH_LATEST_PREFIX}_survival_curve.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_survival_curve.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"

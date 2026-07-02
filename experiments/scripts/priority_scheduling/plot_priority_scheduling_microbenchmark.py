@@ -31,6 +31,26 @@ def parse_int(value: str | None) -> int | None:
         return None
 
 
+def series_bounds(values: list[int]) -> tuple[float, float]:
+    if not values:
+        return 0.0, 1.0
+    min_y = float(min(values))
+    max_y = float(max(values))
+    if min_y == max_y:
+        if min_y == 0:
+            max_y = 1.0
+        else:
+            min_y = min(0.0, min_y * 0.8)
+            max_y = max(0.0, max_y * 1.2)
+    if min_y > 0:
+        min_y = 0.0
+    if max_y < 0:
+        max_y = 0.0
+    if min_y == max_y:
+        max_y = min_y + 1.0
+    return min_y, max_y
+
+
 def prio_color(value: str) -> str:
     return "#2563eb" if value == "high-priority" else "#94a3b8"
 
@@ -111,12 +131,13 @@ def build_line_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     all_values = [value for _, _, values in series for value in values]
-    max_y = max(all_values) if all_values else 1
-    if max_y <= 0:
-        max_y = 1
-    max_y = int(max_y * 1.12) or 1
+    min_y, max_y = series_bounds(all_values)
+    if max_y > 0:
+        max_y *= 1.12
+    if min_y < 0:
+        min_y *= 1.12
     grid_lines = 5
-    y_ticks = [round(max_y * step / grid_lines) for step in range(grid_lines + 1)]
+    y_ticks = [min_y + (max_y - min_y) * step / grid_lines for step in range(grid_lines + 1)]
     count = max(len(labels), 1)
     x_step = plot_width / max(count - 1, 1)
 
@@ -129,9 +150,9 @@ def build_line_chart_svg(
     ]
 
     for tick in y_ticks:
-        y = top + plot_height - (tick / max_y) * plot_height
+        y = top + plot_height - ((tick - min_y) / (max_y - min_y)) * plot_height
         parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{left + plot_width}" y2="{y:.2f}" stroke="#e2e8f0" stroke-width="1"/>')
-        parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{tick}</text>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{int(round(tick))}</text>')
 
     for idx, label in enumerate(labels):
         x = left + (idx * x_step if count > 1 else plot_width / 2)
@@ -143,7 +164,7 @@ def build_line_chart_svg(
         points = []
         for value_idx, value in enumerate(values):
             x = left + (value_idx * x_step if count > 1 else plot_width / 2)
-            y = top + plot_height - (value / max_y) * plot_height
+            y = top + plot_height - ((value - min_y) / (max_y - min_y)) * plot_height
             points.append(f"{x:.2f},{y:.2f}")
         if points:
             parts.append(f'<polyline fill="none" stroke="{color}" stroke-width="4" points="{" ".join(points)}"/>')
@@ -171,16 +192,20 @@ def main() -> None:
         attach_values = [max(0, parse_int(row.get("high_attach_leapfrogs")) or 0) for row in sweep_rows]
         low_wait_values = [parse_int(row.get("low_wait_ms")) or 0 for row in sweep_rows]
         high_wait_values = [parse_int(row.get("high_wait_ms")) or 0 for row in sweep_rows]
+        low_latency_values = [parse_int(row.get("low_latency_ms")) or 0 for row in sweep_rows]
+        high_latency_values = [parse_int(row.get("high_latency_ms")) or 0 for row in sweep_rows]
+        wait_gain_values = [max(0, low - high) for low, high in zip(low_wait_values, high_wait_values)]
+        latency_gain_values = [max(0, low - high) for low, high in zip(low_latency_values, high_latency_values)]
 
         write_svg(
-            out_dir / "attach_gain.svg",
+            out_dir / "priority_wins.svg",
             build_bar_chart_svg(
-                title="Priority Scheduling Sweep: Attach Leapfrogs",
+                title="Priority Scheduling Sweep: Priority Wins",
                 subtitle="More attached leapfrogs means late high-priority requests moved ahead more often.",
                 labels=labels,
                 values=attach_values,
                 colors=["#2563eb"] * len(labels),
-                y_label="High Attach Leapfrogs",
+                y_label="High-Priority Wins",
             ),
         )
 
@@ -197,13 +222,49 @@ def main() -> None:
                 y_label="Queue Wait (ms)",
             ),
         )
+        write_svg(
+            out_dir / "wait_gain.svg",
+            build_line_chart_svg(
+                title="Priority Scheduling Sweep: Wait Gain",
+                subtitle="Positive values mean high-priority requests waited less than low-priority requests.",
+                labels=labels,
+                series=[("Wait gain", "#16a34a", wait_gain_values)],
+                y_label="Wait Gain (ms)",
+            ),
+        )
+        write_svg(
+            out_dir / "latency_vs_arrival_gap.svg",
+            build_line_chart_svg(
+                title="Priority Scheduling Sweep: Request Latency",
+                subtitle="Lower high-priority latency than low-priority latency supports scheduling separation.",
+                labels=labels,
+                series=[
+                    ("Low-priority latency", "#94a3b8", low_latency_values),
+                    ("High-priority latency", "#2563eb", high_latency_values),
+                ],
+                y_label="Latency (ms)",
+            ),
+        )
+        write_svg(
+            out_dir / "latency_gain.svg",
+            build_line_chart_svg(
+                title="Priority Scheduling Sweep: Latency Gain",
+                subtitle="Positive values mean high-priority requests finished faster than low-priority requests.",
+                labels=labels,
+                series=[("Latency gain", "#16a34a", latency_gain_values)],
+                y_label="Latency Gain (ms)",
+            ),
+        )
 
         manifest = {
             "matrix_csv": str(Path(args.matrix_csv).resolve()),
             "chart_mode": "sweep",
             "charts": {
-                "attach_gain": str((out_dir / "attach_gain.svg").resolve()),
+                "priority_wins": str((out_dir / "priority_wins.svg").resolve()),
                 "queue_wait": str((out_dir / "queue_wait.svg").resolve()),
+                "wait_gain": str((out_dir / "wait_gain.svg").resolve()),
+                "latency_vs_arrival_gap": str((out_dir / "latency_vs_arrival_gap.svg").resolve()),
+                "latency_gain": str((out_dir / "latency_gain.svg").resolve()),
             },
         }
         (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

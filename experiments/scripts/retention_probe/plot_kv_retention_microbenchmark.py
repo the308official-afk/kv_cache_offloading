@@ -394,6 +394,49 @@ def build_sweep_charts(rows: list[dict[str, str]], out_dir: Path) -> list[dict[s
             )
         return built
 
+    def gain_series_for(metric: str, *, lower_is_better: bool = False) -> list[dict[str, object]]:
+        control_rows = {
+            parse_int(row.get("distractors")): row
+            for row in sweep_rows
+            if row.get("arm", "") == "control" and parse_int(row.get("distractors")) is not None
+        }
+        built: list[dict[str, object]] = []
+        for arm, secondary in series_keys:
+            if arm == "control":
+                continue
+            values: list[float | None] = []
+            for distractor in distractors:
+                candidate = next(
+                    (
+                        row
+                        for row in sweep_rows
+                        if row.get("arm", "") == arm
+                        and (row.get("hint_profile", "") or row.get("cache_control", "") or row.get("kv_tier", "")) == secondary
+                        and parse_int(row.get("distractors")) == distractor
+                    ),
+                    None,
+                )
+                control = control_rows.get(distractor)
+                if not candidate or not control:
+                    values.append(None)
+                    continue
+                control_value = parse_float(control.get(metric))
+                candidate_value = parse_float(candidate.get(metric))
+                if control_value is None or candidate_value is None:
+                    values.append(None)
+                    continue
+                values.append(
+                    (control_value - candidate_value) if lower_is_better else (candidate_value - control_value)
+                )
+            built.append(
+                {
+                    "label": f"{secondary} gain" if secondary else f"{arm} gain",
+                    "color": color_map[(arm, secondary)],
+                    "values": values,
+                }
+            )
+        return built
+
     latency_svg = build_line_chart_svg(
         title="KV Retention Replay Latency",
         subtitle="Replay latency versus distractor count",
@@ -415,18 +458,40 @@ def build_sweep_charts(rows: list[dict[str, str]], out_dir: Path) -> list[dict[s
         series=series_for("warm", warm_metric=True),
         y_label="Warm Replay (1=yes, 0=no)",
     )
+    latency_gain_series = gain_series_for("replay_ms", lower_is_better=True)
+    cache_gain_series = gain_series_for("replay_cached")
+    latency_gain_svg = build_line_chart_svg(
+        title="KV Retention Latency Gain",
+        subtitle="Positive values mean the protected arm replayed faster than control.",
+        x_values=distractors,
+        series=latency_gain_series or [{"label": "No gain series", "color": "#94a3b8", "values": [0.0 for _ in distractors]}],
+        y_label="Latency Gain (ms)",
+    )
+    cache_gain_svg = build_line_chart_svg(
+        title="KV Retention Cache Gain",
+        subtitle="Positive values mean the protected arm replayed with more cached tokens than control.",
+        x_values=distractors,
+        series=cache_gain_series or [{"label": "No gain series", "color": "#94a3b8", "values": [0.0 for _ in distractors]}],
+        y_label="Cached-Token Gain",
+    )
 
     latency_path = out_dir / "replay_latency.svg"
     cached_path = out_dir / "replay_cached_tokens.svg"
     survival_path = out_dir / "survival_curve.svg"
+    latency_gain_path = out_dir / "latency_gain.svg"
+    cache_gain_path = out_dir / "cache_gain.svg"
     write_svg(latency_path, latency_svg)
     write_svg(cached_path, cached_svg)
     write_svg(survival_path, survival_svg)
+    write_svg(latency_gain_path, latency_gain_svg)
+    write_svg(cache_gain_path, cache_gain_svg)
 
     return [
         {"chart_key": "replay_latency", "path": str(latency_path), "part": "sweep"},
         {"chart_key": "replay_cached_tokens", "path": str(cached_path), "part": "sweep"},
         {"chart_key": "survival_curve", "path": str(survival_path), "part": "sweep"},
+        {"chart_key": "latency_gain", "path": str(latency_gain_path), "part": "sweep"},
+        {"chart_key": "cache_gain", "path": str(cache_gain_path), "part": "sweep"},
     ]
 
 

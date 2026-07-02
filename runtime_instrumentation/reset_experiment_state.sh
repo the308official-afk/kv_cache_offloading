@@ -10,6 +10,7 @@ RUNTIME_SIGNATURE="${EXPERIMENT_RUNTIME_SIGNATURE:-}"
 STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}"
 EXPECTED_MODEL="${EXPERIMENT_EXPECTED_MODEL:-${MODEL:-${MODEL_NAME:-}}}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-dynamo-sglang-worker}"
 
 usage() {
   cat <<EOF
@@ -21,6 +22,7 @@ Environment:
   EXPERIMENT_RUNTIME_SIGNATURE
   EXPERIMENT_RESET_STATE_FILE
   EXPERIMENT_EXPECTED_MODEL
+  WORKER_CONTAINER_NAME
 EOF
 }
 
@@ -69,6 +71,11 @@ state_dir() {
   dirname "${STATE_FILE}"
 }
 
+worker_container_running() {
+  command -v docker >/dev/null 2>&1 || return 1
+  [[ "$(docker inspect "${WORKER_CONTAINER_NAME}" --format '{{.State.Running}}' 2>/dev/null || true)" = "true" ]]
+}
+
 models_contains_expected() {
   local payload
   payload="$(curl -fsS "$(models_url)" 2>/dev/null || true)"
@@ -101,6 +108,7 @@ do_reuse_ready() {
   [[ -f "${STATE_FILE}" ]] || exit 1
   [[ "$(cat "${STATE_FILE}")" = "${RUNTIME_SIGNATURE}" ]] || exit 1
   [[ -n "${EXPECTED_MODEL}" ]] || exit 1
+  worker_container_running || exit 1
   models_contains_expected
 }
 

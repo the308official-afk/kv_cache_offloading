@@ -152,6 +152,15 @@ run_and_log() {
   "$@" 2>&1 | tee -a "${SUITE_DRIVER_LOG}"
 }
 
+sync_latest_matrices_to_shared_charts() {
+  local charts_dir="experiments/charts"
+  mkdir -p "${charts_dir}"
+  [[ -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" "${charts_dir}/exp9_kvretention_matrix.csv"
+  [[ -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
+  [[ -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
+  [[ -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+}
+
 resolved_mode_display() {
   local experiment_id="$1"
   local mode="$2"
@@ -297,7 +306,19 @@ stop_dynamo_if_requested() {
   if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" ]]; then
     log "Stopping Dynamo between experiments..."
     ./run_dynamo_single_host.sh stop >> "${SUITE_DRIVER_LOG}" 2>&1 || true
+    env EXPERIMENT_RESET_STATE_FILE="experiments/runtime_state/active_runtime_signature.txt" \
+      ./runtime_instrumentation/reset_experiment_state.sh clear-active >> "${SUITE_DRIVER_LOG}" 2>&1 || true
   fi
+}
+
+prepare_fresh_runtime_for_experiment() {
+  if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" != "1" ]]; then
+    return 0
+  fi
+  log "Preparing a clean Dynamo state for the next experiment..."
+  ./run_dynamo_single_host.sh stop >> "${SUITE_DRIVER_LOG}" 2>&1 || true
+  env EXPERIMENT_RESET_STATE_FILE="experiments/runtime_state/active_runtime_signature.txt" \
+    ./runtime_instrumentation/reset_experiment_state.sh clear-active >> "${SUITE_DRIVER_LOG}" 2>&1 || true
 }
 
 run_experiment_9() {
@@ -312,6 +333,7 @@ run_experiment_9() {
   local status="passed"
   local error_message=""
   log
+  prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
@@ -345,6 +367,7 @@ run_experiment_10() {
   local status="passed"
   local error_message=""
   log
+  prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
@@ -378,6 +401,7 @@ run_experiment_11() {
   local status="passed"
   local error_message=""
   log
+  prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
@@ -411,6 +435,7 @@ run_experiment_12() {
   local status="passed"
   local error_message=""
   log
+  prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
@@ -489,6 +514,8 @@ for token in ${SUITE_EXPERIMENTS}; do
 done
 
 build_suite_outputs
+
+sync_latest_matrices_to_shared_charts
 
 banner "AGENTIC HINT SWEEPS SUITE READY" | tee -a "${SUITE_DRIVER_LOG}"
 log "Suite run dir: ${SUITE_ROOT_DIR}"

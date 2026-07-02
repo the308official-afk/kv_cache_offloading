@@ -354,6 +354,36 @@ def build_sweep_charts(rows: list[dict[str, str]], out_dir: Path) -> list[dict[s
             )
         return built
 
+    def gain_series(metric: str, *, lower_is_better: bool = False) -> list[dict[str, object]]:
+        control_by_distractor = {
+            parse_int(row.get("distractors")): row
+            for row in sweep_rows
+            if row.get("arm") == "control" and parse_int(row.get("distractors")) is not None
+        }
+        protected_values: list[float | None] = []
+        for distractor in distractors:
+            protected = next(
+                (
+                    row
+                    for row in sweep_rows
+                    if row.get("arm") == "protected" and parse_int(row.get("distractors")) == distractor
+                ),
+                None,
+            )
+            control = control_by_distractor.get(distractor)
+            if not protected or not control:
+                protected_values.append(None)
+                continue
+            control_value = parse_float(control.get(metric))
+            protected_value = parse_float(protected.get(metric))
+            if control_value is None or protected_value is None:
+                protected_values.append(None)
+                continue
+            protected_values.append(
+                (control_value - protected_value) if lower_is_better else (protected_value - control_value)
+            )
+        return [{"label": "Protected gain", "color": "#16a34a", "values": protected_values}]
+
     latency_svg = build_line_chart_svg(
         title="Cache-Pinning Replay Latency",
         subtitle="Replay latency versus distractor count",
@@ -368,15 +398,35 @@ def build_sweep_charts(rows: list[dict[str, str]], out_dir: Path) -> list[dict[s
         series=series_for("cached_tokens"),
         y_label="Replay Cached Tokens",
     )
+    latency_gain_svg = build_line_chart_svg(
+        title="Cache-Pinning Latency Gain",
+        subtitle="Positive values mean the pinned arm replayed faster than control.",
+        x_values=distractors,
+        series=gain_series("replay_ms", lower_is_better=True),
+        y_label="Latency Gain (ms)",
+    )
+    cache_gain_svg = build_line_chart_svg(
+        title="Cache-Pinning Cache Gain",
+        subtitle="Positive values mean the pinned arm replayed with more cached tokens than control.",
+        x_values=distractors,
+        series=gain_series("cached_tokens"),
+        y_label="Cached-Token Gain",
+    )
 
     latency_path = out_dir / "sweep_replay_latency.svg"
     cached_path = out_dir / "sweep_replay_cached_tokens.svg"
+    latency_gain_path = out_dir / "sweep_latency_gain.svg"
+    cache_gain_path = out_dir / "sweep_cache_gain.svg"
     write_svg(latency_path, latency_svg)
     write_svg(cached_path, cached_svg)
+    write_svg(latency_gain_path, latency_gain_svg)
+    write_svg(cache_gain_path, cache_gain_svg)
 
     return [
         {"chart_key": "sweep_replay_latency", "path": str(latency_path), "part": "sweep"},
         {"chart_key": "sweep_replay_cached_tokens", "path": str(cached_path), "part": "sweep"},
+        {"chart_key": "sweep_latency_gain", "path": str(latency_gain_path), "part": "sweep"},
+        {"chart_key": "sweep_cache_gain", "path": str(cache_gain_path), "part": "sweep"},
     ]
 
 

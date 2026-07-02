@@ -56,7 +56,17 @@ EOF
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
+  rm -f \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_cached.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_matrix.csv" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turna_latency_vs_warmup_wait.svg"
 }
 
 usage() {
@@ -267,19 +277,23 @@ build_microbenchmark_charts() {
   local matrix_csv="$1"
   prepare_shared_chart_dir
   if [[ -f "${matrix_csv}" ]]; then
-    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv"
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/exp12_specprefill_matrix.csv"
   fi
   "${PYTHON_BIN}" experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_cached.svg"
   fi
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi

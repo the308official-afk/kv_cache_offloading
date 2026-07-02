@@ -31,6 +31,26 @@ def parse_int(value: str | None) -> int | None:
         return None
 
 
+def series_bounds(values: list[int]) -> tuple[float, float]:
+    if not values:
+        return 0.0, 1.0
+    min_y = float(min(values))
+    max_y = float(max(values))
+    if min_y == max_y:
+        if min_y == 0:
+            max_y = 1.0
+        else:
+            min_y = min(0.0, min_y * 0.8)
+            max_y = max(0.0, max_y * 1.2)
+    if min_y > 0:
+        min_y = 0.0
+    if max_y < 0:
+        max_y = 0.0
+    if min_y == max_y:
+        max_y = min_y + 1.0
+    return min_y, max_y
+
+
 def color_for_arm(arm: str) -> str:
     return "#16a34a" if arm == "protected" else "#94a3b8"
 
@@ -111,12 +131,13 @@ def build_line_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     all_values = [value for _, _, values in series for value in values]
-    max_y = max(all_values) if all_values else 1
-    if max_y <= 0:
-        max_y = 1
-    max_y = int(max_y * 1.12) or 1
+    min_y, max_y = series_bounds(all_values)
+    if max_y > 0:
+        max_y *= 1.12
+    if min_y < 0:
+        min_y *= 1.12
     grid_lines = 5
-    y_ticks = [round(max_y * step / grid_lines) for step in range(grid_lines + 1)]
+    y_ticks = [min_y + (max_y - min_y) * step / grid_lines for step in range(grid_lines + 1)]
     count = max(len(labels), 1)
     x_step = plot_width / max(count - 1, 1)
 
@@ -129,9 +150,9 @@ def build_line_chart_svg(
     ]
 
     for tick in y_ticks:
-        y = top + plot_height - (tick / max_y) * plot_height
+        y = top + plot_height - ((tick - min_y) / (max_y - min_y)) * plot_height
         parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{left + plot_width}" y2="{y:.2f}" stroke="#e2e8f0" stroke-width="1"/>')
-        parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{tick}</text>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{int(round(tick))}</text>')
 
     for idx, label in enumerate(labels):
         x = left + (idx * x_step if count > 1 else plot_width / 2)
@@ -143,7 +164,7 @@ def build_line_chart_svg(
         points = []
         for value_idx, value in enumerate(values):
             x = left + (value_idx * x_step if count > 1 else plot_width / 2)
-            y = top + plot_height - (value / max_y) * plot_height
+            y = top + plot_height - ((value - min_y) / (max_y - min_y)) * plot_height
             points.append(f"{x:.2f},{y:.2f}")
         if points:
             parts.append(f'<polyline fill="none" stroke="{color}" stroke-width="4" points="{" ".join(points)}"/>')
@@ -180,6 +201,8 @@ def main() -> None:
         protected_latency = [parse_int(row.get("turn_b_ms")) or 0 for row in by_arm["protected"]]
         control_cached = [parse_int(row.get("turn_b_cached")) or 0 for row in by_arm["control"]]
         protected_cached = [parse_int(row.get("turn_b_cached")) or 0 for row in by_arm["protected"]]
+        latency_gain = [max(0, control - protected) for control, protected in zip(control_latency, protected_latency)]
+        cache_gain = [max(0, protected - control) for control, protected in zip(control_cached, protected_cached)]
 
         write_svg(
             out_dir / "turnb_latency.svg",
@@ -208,6 +231,26 @@ def main() -> None:
                 y_label="Turn B Cached Tokens",
             ),
         )
+        write_svg(
+            out_dir / "latency_gain.svg",
+            build_line_chart_svg(
+                title="Speculative Prefill Sweep: Latency Gain",
+                subtitle="Positive values mean the protected arm replayed turn B faster than control.",
+                labels=labels,
+                series=[("Latency gain", "#16a34a", latency_gain)],
+                y_label="Latency Gain (ms)",
+            ),
+        )
+        write_svg(
+            out_dir / "cache_gain.svg",
+            build_line_chart_svg(
+                title="Speculative Prefill Sweep: Cache Gain",
+                subtitle="Positive values mean the protected arm replayed turn B with more cached tokens than control.",
+                labels=labels,
+                series=[("Cache gain", "#16a34a", cache_gain)],
+                y_label="Cached-Token Gain",
+            ),
+        )
 
         manifest = {
             "matrix_csv": str(Path(args.matrix_csv).resolve()),
@@ -215,6 +258,8 @@ def main() -> None:
             "charts": {
                 "turnb_latency": str((out_dir / "turnb_latency.svg").resolve()),
                 "turnb_cached": str((out_dir / "turnb_cached.svg").resolve()),
+                "latency_gain": str((out_dir / "latency_gain.svg").resolve()),
+                "cache_gain": str((out_dir / "cache_gain.svg").resolve()),
             },
         }
         (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")

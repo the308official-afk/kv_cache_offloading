@@ -56,7 +56,17 @@ EOF
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
+  rm -f \
+    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_matrix.csv" \
+    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg" \
+    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_latency_vs_arrival_gap.svg" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
 }
 
 usage() {
@@ -278,19 +288,29 @@ build_microbenchmark_charts() {
   local matrix_csv="$1"
   prepare_shared_chart_dir
   if [[ -f "${matrix_csv}" ]]; then
-    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_matrix.csv"
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv"
   fi
   "${PYTHON_BIN}" experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${MICROBENCH_LATEST_PREFIX}_queue_wait.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg"
   fi
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${MICROBENCH_LATEST_PREFIX}_priority_wins.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_latency_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi
