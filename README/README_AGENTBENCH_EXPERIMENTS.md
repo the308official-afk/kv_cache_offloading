@@ -2215,10 +2215,35 @@ SUITE_CONTINUE_ON_ERROR
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS
 SUITE_DEFAULT_MODE
 SUITE_INTERACTIVE_BUILD_PROGRESS
+SUITE_ENSURE_PRECISE_RUNTIME
 EXPERIMENT_RESET_MODE
 ```
 
 `SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
+
+Charts are published to [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you do not need to wait for the whole suite before the first chart files appear.
+
+`SUITE_ENSURE_PRECISE_RUNTIME` controls a one-time suite preflight before the first experiment:
+
+- `auto` (default): run `ensure_precise_runtime_ready.sh --build-if-missing` only when `DYNAMO_MACHINE_PROFILE=gh200`
+- `1`: always run that suite-level preflight
+- `0`: never run that suite-level preflight
+
+Recommended behavior:
+
+- `gh200`: leave `SUITE_ENSURE_PRECISE_RUNTIME=auto`
+- `ec2`: leave `SUITE_ENSURE_PRECISE_RUNTIME=auto` and it will skip the extra suite-level prebuild
+
+So on GH200, the suite now automatically does the equivalent of:
+
+```bash
+DYNAMO_MACHINE_PROFILE=gh200 \
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile gh200 \
+  --build-if-missing
+```
+
+once at suite startup, before Experiment 9 begins.
 
 `EXPERIMENT_RESET_MODE` controls how each experiment reuses an already-running stack during its own probe/sweep steps:
 

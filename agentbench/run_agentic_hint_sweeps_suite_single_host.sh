@@ -16,6 +16,7 @@ SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-all}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
+SUITE_ENSURE_PRECISE_RUNTIME="${SUITE_ENSURE_PRECISE_RUNTIME:-auto}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
 
 WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
@@ -91,6 +92,7 @@ Environment:
   SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0|1
   SUITE_DEFAULT_MODE=all
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
+  SUITE_ENSURE_PRECISE_RUNTIME=auto|0|1 # auto => run once only for gh200
   EXPERIMENT_RESET_MODE=restart|flush|none   # applied inside each experiment
 
 This suite calls the public wrappers for:
@@ -125,6 +127,7 @@ SUITE_CONTINUE_ON_ERROR='${SUITE_CONTINUE_ON_ERROR}'
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}'
 SUITE_DEFAULT_MODE='${SUITE_DEFAULT_MODE}'
 SUITE_INTERACTIVE_BUILD_PROGRESS='${SUITE_INTERACTIVE_BUILD_PROGRESS}'
+SUITE_ENSURE_PRECISE_RUNTIME='${SUITE_ENSURE_PRECISE_RUNTIME}'
 EXPERIMENT_RESET_MODE='${EXPERIMENT_RESET_MODE}'
 WRAPPER_STOP_DYNAMO_WHEN_DONE='${WRAPPER_STOP_DYNAMO_WHEN_DONE}'
 KV_RETENTION_MODE='${KV_RETENTION_MODE:-}'
@@ -152,6 +155,39 @@ run_and_log() {
   "$@" 2>&1 | tee -a "${SUITE_DRIVER_LOG}"
 }
 
+should_ensure_precise_runtime() {
+  case "${SUITE_ENSURE_PRECISE_RUNTIME}" in
+    1|true|yes)
+      return 0
+      ;;
+    0|false|no)
+      return 1
+      ;;
+    auto|"")
+      [[ "${DYNAMO_MACHINE_PROFILE:-}" = "gh200" ]]
+      return
+      ;;
+    *)
+      echo "Unknown SUITE_ENSURE_PRECISE_RUNTIME value: ${SUITE_ENSURE_PRECISE_RUNTIME}" >&2
+      echo "Valid values: auto 0 1" >&2
+      exit 2
+      ;;
+  esac
+}
+
+ensure_suite_precise_runtime_if_needed() {
+  if ! should_ensure_precise_runtime; then
+    return 0
+  fi
+
+  banner "SUITE PRECISE RUNTIME START (GH200 preflight/build is running once before the suite)" | tee -a "${SUITE_DRIVER_LOG}"
+  if ! run_and_log ./runtime_instrumentation/ensure_precise_runtime_ready.sh --machine-profile "${DYNAMO_MACHINE_PROFILE}" --build-if-missing; then
+    echo "Suite precise runtime preflight failed." >&2
+    exit 1
+  fi
+  banner "SUITE PRECISE RUNTIME READY (GH200 machine-specific precise images are ready)" | tee -a "${SUITE_DRIVER_LOG}"
+}
+
 sync_latest_matrices_to_shared_charts() {
   local charts_dir="experiments/charts"
   mkdir -p "${charts_dir}"
@@ -159,6 +195,64 @@ sync_latest_matrices_to_shared_charts() {
   [[ -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
   [[ -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
   [[ -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+}
+
+sync_shared_assets_for_experiment() {
+  local experiment_id="$1"
+  local published_any=0
+  local charts_dir="experiments/charts"
+  mkdir -p "${charts_dir}"
+
+  sync_one() {
+    local src="$1"
+    local dest="$2"
+    if [[ -f "${src}" ]]; then
+      cp -f "${src}" "${dest}"
+      published_any=1
+    fi
+  }
+
+  case "${experiment_id}" in
+    9)
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" "${charts_dir}/exp9_kvretention_matrix.csv"
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg" "${charts_dir}/exp9_kvretention_latency_vs_distractors.svg"
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg" "${charts_dir}/exp9_kvretention_cache_vs_distractors.svg"
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_latency_gain.svg" "${charts_dir}/exp9_kvretention_latency_gain_vs_distractors.svg"
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_cache_gain.svg" "${charts_dir}/exp9_kvretention_cache_gain_vs_distractors.svg"
+      sync_one "experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg" "${charts_dir}/exp9_kvretention_survival_vs_distractors.svg"
+      ;;
+    10)
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_validation_latency.svg" "${charts_dir}/exp10_cachepinning_validation_latency.svg"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_validation_cached_tokens.svg" "${charts_dir}/exp10_cachepinning_validation_cache.svg"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_sweep_replay_latency.svg" "${charts_dir}/exp10_cachepinning_latency_vs_distractors.svg"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_sweep_replay_cached_tokens.svg" "${charts_dir}/exp10_cachepinning_cache_vs_distractors.svg"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_sweep_latency_gain.svg" "${charts_dir}/exp10_cachepinning_latency_gain_vs_distractors.svg"
+      sync_one "experiments/reports/latest_cache_pinning_microbenchmark_sweep_cache_gain.svg" "${charts_dir}/exp10_cachepinning_cache_gain_vs_distractors.svg"
+      ;;
+    11)
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_priority_wins.svg" "${charts_dir}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg" "${charts_dir}/exp11_prioritysched_wait_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_wait_gain.svg" "${charts_dir}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_latency_vs_arrival_gap.svg" "${charts_dir}/exp11_prioritysched_latency_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_latency_gain.svg" "${charts_dir}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
+      ;;
+    12)
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_cached.svg" "${charts_dir}/exp12_specprefill_cache_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_latency_gain.svg" "${charts_dir}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_cache_gain.svg" "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turna_latency.svg" "${charts_dir}/exp12_specprefill_turna_latency_vs_warmup_wait.svg"
+      ;;
+  esac
+
+  if [[ "${published_any}" = "1" ]]; then
+    log "Published Experiment ${experiment_id} charts to ${charts_dir}"
+  else
+    log "No publishable chart outputs were found yet for Experiment ${experiment_id}"
+  fi
 }
 
 resolved_mode_display() {
@@ -341,6 +435,9 @@ run_experiment_9() {
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
+  if [[ "${status}" = "passed" ]]; then
+    sync_shared_assets_for_experiment "9"
+  fi
   stop_dynamo_if_requested
   suite_run_end_banner "${index}" "${total}" "9" "kv_retention" "${status}"
   append_result_json \
@@ -374,6 +471,9 @@ run_experiment_10() {
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
+  fi
+  if [[ "${status}" = "passed" ]]; then
+    sync_shared_assets_for_experiment "10"
   fi
   stop_dynamo_if_requested
   suite_run_end_banner "${index}" "${total}" "10" "cache_pinning" "${status}"
@@ -409,6 +509,9 @@ run_experiment_11() {
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
+  if [[ "${status}" = "passed" ]]; then
+    sync_shared_assets_for_experiment "11"
+  fi
   stop_dynamo_if_requested
   suite_run_end_banner "${index}" "${total}" "11" "priority_scheduling" "${status}"
   append_result_json \
@@ -443,6 +546,9 @@ run_experiment_12() {
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
+  if [[ "${status}" = "passed" ]]; then
+    sync_shared_assets_for_experiment "12"
+  fi
   stop_dynamo_if_requested
   suite_run_end_banner "${index}" "${total}" "12" "speculative_prefill" "${status}"
   append_result_json \
@@ -466,6 +572,7 @@ log "Continue on error: ${SUITE_CONTINUE_ON_ERROR}"
 log "Stop Dynamo between experiments: ${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
 log "Default mode: ${SUITE_DEFAULT_MODE}"
 log "Interactive build progress: ${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+log "Suite ensure precise runtime: ${SUITE_ENSURE_PRECISE_RUNTIME}"
 log "Experiment reset mode: ${EXPERIMENT_RESET_MODE}"
 log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
 if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" && "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
@@ -479,6 +586,8 @@ else
 fi
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
+
+ensure_suite_precise_runtime_if_needed
 
 suite_ok=1
 selected_experiment_total=0

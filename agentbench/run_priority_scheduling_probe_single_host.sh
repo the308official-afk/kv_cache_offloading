@@ -279,11 +279,13 @@ build_runtime_signature() {
 
 runtime_reset_env_cmd() {
   local signature="$1"
+  shift
   env \
     FRONTEND_URL="${FRONTEND_URL}" \
     EXPERIMENT_RUNTIME_SIGNATURE="${signature}" \
     EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
-    EXPERIMENT_EXPECTED_MODEL="${MODEL}"
+    EXPERIMENT_EXPECTED_MODEL="${MODEL}" \
+    "$@"
 }
 
 runtime_reuse_ready() {
