@@ -1353,6 +1353,7 @@ cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
 KV_RETENTION_MODE=sweep \
+KV_RETENTION_RESET_MODE=restart \
 DISTRACTOR_COUNTS="25 50 75 100 125 150" \
 PROTECTED_INPUT_LEN=14000 \
 DISTRACTOR_INPUT_LEN=14000 \
@@ -1366,6 +1367,7 @@ cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
 KV_RETENTION_MODE=all \
+KV_RETENTION_RESET_MODE=restart \
 DISTRACTOR_COUNTS="25 50 75 100 125 150" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
@@ -1389,6 +1391,7 @@ CONTROL_HINT_PROFILE
 PROTECTED_HINT_PROFILES
 CONTROL_CACHE_CONTROL_PROFILE
 PROTECTED_CACHE_CONTROL_PROFILES
+KV_RETENTION_RESET_MODE
 KV_TIER_MODES
 DISTRACTOR_COUNT
 DISTRACTOR_COUNTS
@@ -2155,8 +2158,7 @@ Public wrappers:
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1 \
-EXPERIMENT_RESET_MODE=flush \
+SUITE_ISOLATION_MODE=clean \
 SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
 PROTECTED_INPUT_LEN=400 \
@@ -2183,8 +2185,7 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1 \
-EXPERIMENT_RESET_MODE=flush \
+SUITE_ISOLATION_MODE=fast \
 SUITE_EXPERIMENTS="9 11 12" \
 DISTRACTOR_COUNTS="25 50 75 100" \
 PROTECTED_INPUT_LEN=400 \
@@ -2212,16 +2213,20 @@ DYNAMO_MACHINE_PROFILE
 SUITE_MODEL
 SUITE_EXPERIMENTS
 SUITE_CONTINUE_ON_ERROR
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS
+SUITE_ISOLATION_MODE
 SUITE_DEFAULT_MODE
 SUITE_INTERACTIVE_BUILD_PROGRESS
 SUITE_ENSURE_PRECISE_RUNTIME
-EXPERIMENT_RESET_MODE
 ```
 
 `SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
 
 Charts are published to [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you do not need to wait for the whole suite before the first chart files appear.
+
+[`aws/download.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/aws/download.sh) now downloads both:
+
+- [`experiments/reports/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports)
+- [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts)
 
 `SUITE_ENSURE_PRECISE_RUNTIME` controls a one-time suite preflight before the first experiment:
 
@@ -2245,28 +2250,22 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 
 once at suite startup, before Experiment 9 begins.
 
-`EXPERIMENT_RESET_MODE` controls how each experiment reuses an already-running stack during its own probe/sweep steps:
+`SUITE_ISOLATION_MODE` is the main runtime policy knob:
 
-- `restart`: always stop/start Dynamo again inside the experiment
-- `flush`: keep the current runtime and call `/clear_kv_blocks` before the next run
-- `none`: keep the current runtime without flushing it
+- `clean`:
+  - restart between experiments
+  - restart between sweep values
+  - keep the same prompts across sweep values
+- `fast`:
+  - restart between experiments
+  - no restart between sweep values
+  - change prompts across sweep values so runs do not reuse the exact same token sequence
 
-Recommended default:
+Default behavior:
 
-- `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=1`
-- `EXPERIMENT_RESET_MODE=flush`
+- `SUITE_DEFAULT_MODE=sweep`
 
-That gives you:
-
-- restart between experiments
-- flush between sweep values inside each experiment
-
-With that setting, the suite now clears the active-runtime state and stops Dynamo before each new experiment starts, so a new experiment does not try reuse-first behavior.
-
-If you set `SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0`, the same `flush` mode will also reuse one live runtime across experiments.
-That cross-experiment reuse path is meant for Experiments 9, 11, and 12 when they are using the same model/images/worker args.
-In that mode, the suite also suppresses each wrapper's final `stop`, so the next experiment can keep reusing the same live runtime.
-If a reused runtime fails the precise instrumentation preflight, the wrapper now falls back to a clean restart for that experiment instead of stopping the full suite immediately.
+So the suite now defaults to the main sweep for each experiment instead of quietly running probe/validate work first. If you want a different mode for one experiment, set that experiment's mode explicitly, for example `KV_RETENTION_MODE=plot`.
 
 For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
 

@@ -20,10 +20,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./download.sh
-    Download AgentBench results, the full experiments/reports tree, and SGLang transfer logs from server 0
+    Download AgentBench results, the full experiments/reports tree, the shared experiments/charts tree, and SGLang transfer logs from server 0
 
   ./download.sh <server-index>
-    Download AgentBench results, the full experiments/reports tree, and SGLang transfer logs from the given server
+    Download AgentBench results, the full experiments/reports tree, the shared experiments/charts tree, and SGLang transfer logs from the given server
 
 Examples:
   ./download.sh
@@ -41,6 +41,8 @@ REMOTE_RUN_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports/runs"
 LOCAL_RUN_REPORTS_DIR="${REPO_ROOT}/experiments/reports/runs"
 REMOTE_REPORTS_DIR="${REMOTE_PROJECT_DIR}/experiments/reports"
 LOCAL_REPORTS_DIR="${REPO_ROOT}/experiments/reports"
+REMOTE_CHARTS_DIR="${REMOTE_PROJECT_DIR}/experiments/charts"
+LOCAL_CHARTS_DIR="${REPO_ROOT}/experiments/charts"
 REMOTE_PRIORITY_SCHEDULING_REPORTS_DIR="${REMOTE_REPORTS_DIR}/priority_scheduling"
 LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR="${LOCAL_REPORTS_DIR}/priority_scheduling"
 LOGGING_PROFILE_WALLTIME_REPORT="sglang_logging_profile_walltime.csv"
@@ -112,6 +114,7 @@ mkdir -p "$LOCAL_RESULTS_DIR"
 mkdir -p "$LOCAL_TRANSFER_LOG_DIR"
 mkdir -p "$LOCAL_RUN_REPORTS_DIR"
 mkdir -p "$LOCAL_REPORTS_DIR"
+mkdir -p "$LOCAL_CHARTS_DIR"
 mkdir -p "$LOCAL_PRIORITY_SCHEDULING_REPORTS_DIR"
 
 SSH_OPTS=(
@@ -215,6 +218,20 @@ else
   echo "Remote reports directory not found; skipping full reports sync." >&2
 fi
 
+echo "==== Downloading shared charts tree from ${label} (${ip}) ===="
+echo "Remote source: ${REMOTE_CHARTS_DIR}/"
+echo "Local dest:    ${LOCAL_CHARTS_DIR}/"
+
+if ssh "${SSH_OPTS[@]}" "$remote_host" "test -d '${REMOTE_CHARTS_DIR}'"; then
+  rsync \
+    "${RSYNC_COMMON_OPTS[@]}" \
+    -e "$SSH_CMD" \
+    "${remote_host}:${REMOTE_CHARTS_DIR}/" \
+    "${LOCAL_CHARTS_DIR}/"
+else
+  echo "Remote charts directory not found; skipping shared charts sync." >&2
+fi
+
 if [[ -x "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py" ]]; then
   echo "==== Building local latest run report ===="
   if ! python3 "${REPO_ROOT}/experiments/scripts/agentbench_report/build_run_report.py"; then
@@ -238,5 +255,9 @@ print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_SPEC_PREFILL_MICROB
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_SUMMARY_REPORT}"
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_MANIFEST_REPORT}"
 print_local_report_if_present "${LOCAL_REPORTS_DIR}/${LATEST_AGENTIC_HINT_SWEEPS_SUITE_DRIVER_LOG}"
+print_local_report_if_present "${LOCAL_CHARTS_DIR}/exp9_kvretention_matrix.csv"
+print_local_report_if_present "${LOCAL_CHARTS_DIR}/exp10_cachepinning_matrix.csv"
+print_local_report_if_present "${LOCAL_CHARTS_DIR}/exp11_prioritysched_matrix.csv"
+print_local_report_if_present "${LOCAL_CHARTS_DIR}/exp12_specprefill_matrix.csv"
 
 echo "Download complete."

@@ -14,15 +14,20 @@ SUITE_ID="${AGENTIC_HINT_SUITE_ID:-agentic_hint_sweeps_suite_$(date +%Y%m%d_%H%M
 SUITE_EXPERIMENTS="${SUITE_EXPERIMENTS:-9 10 11 12}"
 SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
-SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-all}"
+SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-sweep}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
 SUITE_ENSURE_PRECISE_RUNTIME="${SUITE_ENSURE_PRECISE_RUNTIME:-auto}"
+SUITE_ISOLATION_MODE="${SUITE_ISOLATION_MODE:-clean}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
 
+EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
+EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
+EFFECTIVE_KV_RETENTION_RESET_MODE="restart"
+EFFECTIVE_RETENTION_SWEEP_SEED_MODE="fixed"
+EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="fixed"
+EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="fixed"
+EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="fixed"
 WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
-if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" ]]; then
-  WRAPPER_STOP_DYNAMO_WHEN_DONE="0"
-fi
 
 SUITE_ROOT_DIR="experiments/reports/agentic_hint_sweeps_suite/${SUITE_ID}"
 LATEST_PREFIX="experiments/reports/latest_agentic_hint_sweeps_suite"
@@ -88,12 +93,11 @@ Usage:
 Environment:
   DYNAMO_MACHINE_PROFILE=ec2|gh200
   SUITE_EXPERIMENTS="9 10 11 12"        # or "retention cache_pinning priority spec_prefill"
+  SUITE_ISOLATION_MODE=clean|fast       # clean=restarts sweep values, fast=reuses runtime within experiments
   SUITE_CONTINUE_ON_ERROR=0|1
-  SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS=0|1
-  SUITE_DEFAULT_MODE=all
+  SUITE_DEFAULT_MODE=sweep
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
   SUITE_ENSURE_PRECISE_RUNTIME=auto|0|1 # auto => run once only for gh200
-  EXPERIMENT_RESET_MODE=restart|flush|none   # applied inside each experiment
 
 This suite calls the public wrappers for:
   9  = KV retention microbenchmark
@@ -113,6 +117,32 @@ if [[ -z "${MODEL}" ]]; then
   exit 1
 fi
 
+case "${SUITE_ISOLATION_MODE}" in
+  clean)
+    EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
+    EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
+    EFFECTIVE_KV_RETENTION_RESET_MODE="restart"
+    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="fixed"
+    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="fixed"
+    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="fixed"
+    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="fixed"
+    ;;
+  fast)
+    EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
+    EFFECTIVE_EXPERIMENT_RESET_MODE="flush"
+    EFFECTIVE_KV_RETENTION_RESET_MODE="flush"
+    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
+    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
+    ;;
+  *)
+    echo "Unknown SUITE_ISOLATION_MODE: ${SUITE_ISOLATION_MODE}" >&2
+    echo "Valid values: clean fast" >&2
+    exit 2
+    ;;
+esac
+
 mkdir -p "${SUITE_ROOT_DIR}"
 rm -f "${LATEST_SUMMARY_MD}" "${LATEST_MANIFEST_JSON}" "${LATEST_DRIVER_LOG}"
 : > "${SUITE_DRIVER_LOG}"
@@ -123,26 +153,32 @@ AGENTIC_HINT_SUITE_ID='${SUITE_ID}'
 DYNAMO_MACHINE_PROFILE='${DYNAMO_MACHINE_PROFILE:-}'
 SUITE_MODEL='${MODEL}'
 SUITE_EXPERIMENTS='${SUITE_EXPERIMENTS}'
+SUITE_ISOLATION_MODE='${SUITE_ISOLATION_MODE}'
 SUITE_CONTINUE_ON_ERROR='${SUITE_CONTINUE_ON_ERROR}'
-SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}'
+SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}'
 SUITE_DEFAULT_MODE='${SUITE_DEFAULT_MODE}'
 SUITE_INTERACTIVE_BUILD_PROGRESS='${SUITE_INTERACTIVE_BUILD_PROGRESS}'
 SUITE_ENSURE_PRECISE_RUNTIME='${SUITE_ENSURE_PRECISE_RUNTIME}'
-EXPERIMENT_RESET_MODE='${EXPERIMENT_RESET_MODE}'
+EXPERIMENT_RESET_MODE='${EFFECTIVE_EXPERIMENT_RESET_MODE}'
 WRAPPER_STOP_DYNAMO_WHEN_DONE='${WRAPPER_STOP_DYNAMO_WHEN_DONE}'
 KV_RETENTION_MODE='${KV_RETENTION_MODE:-}'
+KV_RETENTION_RESET_MODE='${EFFECTIVE_KV_RETENTION_RESET_MODE}'
+RETENTION_SWEEP_SEED_MODE='${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}'
 KV_RETENTION_SWEEP_AXIS='${KV_RETENTION_SWEEP_AXIS:-}'
 KV_RETENTION_SWEEP_VALUES='${KV_RETENTION_SWEEP_VALUES:-}'
 CACHE_PINNING_MODE='${CACHE_PINNING_MODE:-}'
+CACHE_PINNING_SWEEP_SEED_MODE='${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}'
 CACHE_PINNING_VALIDATE_TTL='${CACHE_PINNING_VALIDATE_TTL:-}'
 CACHE_PINNING_SWEEP_VALUES='${CACHE_PINNING_SWEEP_VALUES:-}'
 CACHE_PINNING_TTL='${CACHE_PINNING_TTL:-}'
 CACHE_PINNING_PINNED_RATIO='${CACHE_PINNING_PINNED_RATIO:-}'
 CACHE_PINNING_HICACHE_RATIO='${CACHE_PINNING_HICACHE_RATIO:-}'
 PRIORITY_SCHEDULING_MODE='${PRIORITY_SCHEDULING_MODE:-}'
+PRIORITY_SCHEDULING_SWEEP_SEED_MODE='${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}'
 PRIORITY_SCHEDULING_SWEEP_AXIS='${PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
 PRIORITY_SCHEDULING_SWEEP_VALUES='${PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
 SPEC_PREFILL_MODE='${SPEC_PREFILL_MODE:-}'
+SPEC_PREFILL_SWEEP_SEED_MODE='${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}'
 SPEC_PREFILL_SWEEP_AXIS='${SPEC_PREFILL_SWEEP_AXIS:-}'
 SPEC_PREFILL_SWEEP_VALUES='${SPEC_PREFILL_SWEEP_VALUES:-}'
 EOF
@@ -397,7 +433,7 @@ PY
 }
 
 stop_dynamo_if_requested() {
-  if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" ]]; then
+  if [[ "${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" ]]; then
     log "Stopping Dynamo between experiments..."
     ./run_dynamo_single_host.sh stop >> "${SUITE_DRIVER_LOG}" 2>&1 || true
     env EXPERIMENT_RESET_STATE_FILE="experiments/runtime_state/active_runtime_signature.txt" \
@@ -406,7 +442,7 @@ stop_dynamo_if_requested() {
 }
 
 prepare_fresh_runtime_for_experiment() {
-  if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" != "1" ]]; then
+  if [[ "${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" != "1" ]]; then
     return 0
   fi
   log "Preparing a clean Dynamo state for the next experiment..."
@@ -431,7 +467,8 @@ run_experiment_9() {
   suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  log "KV retention reset mode: ${EFFECTIVE_KV_RETENTION_RESET_MODE}"
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
@@ -468,7 +505,7 @@ run_experiment_10() {
   suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
   fi
@@ -505,7 +542,7 @@ run_experiment_11() {
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
@@ -542,7 +579,7 @@ run_experiment_12() {
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
@@ -568,21 +605,20 @@ log "Suite id: ${SUITE_ID}"
 log "Model: ${MODEL}"
 log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}"
 log "Experiments: ${SUITE_EXPERIMENTS}"
+log "Suite isolation mode: ${SUITE_ISOLATION_MODE}"
 log "Continue on error: ${SUITE_CONTINUE_ON_ERROR}"
-log "Stop Dynamo between experiments: ${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
+log "Stop Dynamo between experiments: ${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
 log "Default mode: ${SUITE_DEFAULT_MODE}"
 log "Interactive build progress: ${SUITE_INTERACTIVE_BUILD_PROGRESS}"
 log "Suite ensure precise runtime: ${SUITE_ENSURE_PRECISE_RUNTIME}"
-log "Experiment reset mode: ${EXPERIMENT_RESET_MODE}"
+log "Experiment reset mode: ${EFFECTIVE_EXPERIMENT_RESET_MODE}"
 log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
-if [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" && "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
-  log "Suite runtime policy: restart between experiments, flush between sweep values inside each experiment"
-elif [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "0" && "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
-  log "Suite runtime policy: reuse one live runtime across experiments and flush between runs"
-elif [[ "${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}" = "1" && "${EXPERIMENT_RESET_MODE}" = "restart" ]]; then
-  log "Suite runtime policy: full restart between experiments and between sweep values"
+if [[ "${SUITE_ISOLATION_MODE}" = "clean" ]]; then
+  log "Suite runtime policy: restart between experiments, restart between sweep values"
+  log "Sweep prompt policy: fixed prompts across sweep values"
 else
-  log "Suite runtime policy: custom"
+  log "Suite runtime policy: restart between experiments, no restart between sweep values"
+  log "Sweep prompt policy: different prompts across sweep values"
 fi
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"

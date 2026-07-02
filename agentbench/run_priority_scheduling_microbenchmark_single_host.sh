@@ -21,6 +21,8 @@ source "${CONTRACT_PATH}"
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
 BASE_ID="${PRIORITY_SCHEDULING_ID:-priority_scheduling_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+PRIORITY_PROBE_SEED="${PRIORITY_PROBE_SEED:-42}"
+PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${PRIORITY_SCHEDULING_SWEEP_SEED_MODE:-fixed}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_priority_scheduling_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/priority_scheduling_microbenchmark/${BASE_ID}"
@@ -80,6 +82,24 @@ Modes:
   PRIORITY_SCHEDULING_MODE=all     sweep, then plot (default)
   PRIORITY_SCHEDULING_MODE=plot    rebuild charts from one existing matrix CSV
 EOF
+}
+
+derive_priority_probe_seed() {
+  local base_seed="$1"
+  local value_index="$2"
+  local sweep_value="$3"
+  case "${PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" in
+    fixed)
+      echo "${base_seed}"
+      ;;
+    per_value)
+      echo $((base_seed + value_index * 1000 + sweep_value))
+      ;;
+    *)
+      echo "Unknown PRIORITY_SCHEDULING_SWEEP_SEED_MODE: ${PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" >&2
+      return 2
+      ;;
+  esac
 }
 
 choose_python() {
@@ -152,6 +172,8 @@ Runtime defaults:
   experiment_reset_mode=${EXPERIMENT_RESET_MODE}
   transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
   worker_base_args=${WORKER_BASE_ARGS}
+  probe_seed=${PRIORITY_PROBE_SEED}
+  sweep_seed_mode=${PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
 EOF
   printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -224,6 +246,8 @@ keys = [
     "MODEL_SMOKE_RETRIES",
     "MODEL_SMOKE_DELAY_SECS",
     "MODEL_COOLDOWN_SECS",
+    "PRIORITY_PROBE_SEED",
+    "PRIORITY_SCHEDULING_SWEEP_SEED_MODE",
 ]
 payload = {k: os.environ.get(k, "") for k in keys}
 payload["model"] = model
@@ -357,6 +381,7 @@ run_probe_mode() {
     WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
     IGNORE_EOS="${IGNORE_EOS}" \
     EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
+    PRIORITY_PROBE_SEED="${PRIORITY_PROBE_SEED}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     "${PRIORITY_SCHEDULING_PROBE_HELPER}" "${MODEL}"
   printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
@@ -379,7 +404,9 @@ run_sweep_mode() {
   for value in "${sweep_values[@]}"; do
     idx=$((idx + 1))
     local run_id="${BASE_ID}__sweep_${idx}"
-    echo "[${idx}/${#sweep_values[@]}] ${sweep_axis}=${value}"
+    local run_seed
+    run_seed="$(derive_priority_probe_seed "${PRIORITY_PROBE_SEED}" "${idx}" "${value}")"
+    echo "[${idx}/${#sweep_values[@]}] ${sweep_axis}=${value} priority_probe_seed=${run_seed}"
     env \
       DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" \
       FRONTEND_IMAGE="${PRIORITY_SCHEDULING_FRONTEND_IMAGE}" \
@@ -408,6 +435,7 @@ run_sweep_mode() {
       WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
       IGNORE_EOS="${IGNORE_EOS}" \
       EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
+      PRIORITY_PROBE_SEED="${run_seed}" \
       AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
       "${sweep_axis}=${value}" \
       "${PRIORITY_SCHEDULING_PROBE_HELPER}" "${MODEL}"

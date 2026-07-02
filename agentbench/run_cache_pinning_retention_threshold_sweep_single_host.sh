@@ -38,6 +38,9 @@ AUTO_BUILD_CACHE_PINNING_IMAGES="${AUTO_BUILD_CACHE_PINNING_IMAGES:-1}"
 CACHE_PINNING_REBUILD_IMAGES="${CACHE_PINNING_REBUILD_IMAGES:-0}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-off}"
 WORKER_BASE_ARGS="${WORKER_BASE_ARGS:---enable-cache-report --radix-eviction-policy lru}"
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
+RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
+RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE:-fixed}"
 
 usage() {
   cat <<EOF
@@ -125,6 +128,9 @@ pinned_ratio: ${CACHE_PINNING_PINNED_RATIO}
 hicache_ratio: ${CACHE_PINNING_HICACHE_RATIO}
 hicache_write_policy: ${CACHE_PINNING_HICACHE_WRITE_POLICY}
 mem_fraction_static: ${CACHE_PINNING_MEM_FRACTION_STATIC}
+experiment_reset_mode: ${EXPERIMENT_RESET_MODE}
+retention_probe_seed: ${RETENTION_PROBE_SEED}
+retention_sweep_seed_mode: ${RETENTION_SWEEP_SEED_MODE}
 EOF
 
 cache_pinning_banner_numbered 4 4 "CACHE PINNING RETENTION EXPERIMENT GO (threshold sweep is about to start)" | tee -a "${LOG_PATH}"
@@ -170,6 +176,9 @@ env \
   LATEST_RETENTION_THRESHOLD_SUMMARY="experiments/reports/latest_cache_pinning_retention_threshold_summary.md" \
   AUTO_BUILD_CACHE_PINNING_IMAGES="${AUTO_BUILD_CACHE_PINNING_IMAGES}" \
   CACHE_PINNING_REBUILD_IMAGES="${CACHE_PINNING_REBUILD_IMAGES}" \
+  EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
+  RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED}" \
+  RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE}" \
   ./agentbench/run_kv_retention_threshold_sweep_single_host.sh "$@"
 
 sweep_exit_code=$?

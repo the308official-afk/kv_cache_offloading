@@ -10,6 +10,8 @@ RETENTION_SWEEP_ID="${RETENTION_SWEEP_ID:-retention_threshold_sweep_$(date +%Y%m
 RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE:-precise}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
 DISTRACTOR_COUNTS="${DISTRACTOR_COUNTS:-25 50 75 100 125 150}"
+RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
+RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE:-fixed}"
 KV_TIER_MODES="${KV_TIER_MODES:-gpu_only}"
 CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE:-none}"
 PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES:-high-priority}"
@@ -202,6 +204,25 @@ rebuild_threshold_reports() {
   cp "${SWEEP_SUMMARY}" "${LATEST_SUMMARY}"
 }
 
+derive_probe_seed() {
+  local base_seed="$1"
+  local cell_index="$2"
+  local distractor_count="$3"
+  case "${RETENTION_SWEEP_SEED_MODE}" in
+    fixed)
+      echo "${base_seed}"
+      ;;
+    per_cell)
+      echo $((base_seed + cell_index * 1000 + distractor_count))
+      ;;
+    *)
+      echo "Unknown RETENTION_SWEEP_SEED_MODE: ${RETENTION_SWEEP_SEED_MODE}" >&2
+      echo "Valid values: fixed per_cell" >&2
+      exit 2
+      ;;
+  esac
+}
+
 MODELS_TO_RUN=()
 while IFS= read -r MODEL_LINE; do
   MODELS_TO_RUN+=("${MODEL_LINE}")
@@ -225,6 +246,8 @@ init_progress_file
   echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor counts: ${DISTRACTOR_COUNTS}"
+  echo "Retention probe seed: ${RETENTION_PROBE_SEED}"
+  echo "Retention sweep seed mode: ${RETENTION_SWEEP_SEED_MODE}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"
   echo "Random output len: ${RANDOM_OUTPUT_LEN}"
@@ -239,11 +262,14 @@ init_progress_file
 
 for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
   MODEL_SAFE_NAME="$(safe_name "${MODEL_NAME}")"
+  CELL_INDEX=0
 
   for KV_TIER_MODE in ${KV_TIER_MODES}; do
     KV_TIER_SAFE_NAME="$(safe_name "${KV_TIER_MODE}")"
 
     for DISTRACTOR_COUNT in ${DISTRACTOR_COUNTS}; do
+      CELL_INDEX=$((CELL_INDEX + 1))
+      CELL_SEED="$(derive_probe_seed "${RETENTION_PROBE_SEED}" "${CELL_INDEX}" "${DISTRACTOR_COUNT}")"
       PROBE_ID="${RETENTION_SWEEP_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_d${DISTRACTOR_COUNT}"
       BATCH_MATRIX="experiments/reports/retention_probe_batches/${PROBE_ID}/design_space_retention_matrix.csv"
 
@@ -252,6 +278,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         echo "model=${MODEL_NAME}"
         echo "kv_tier_mode=${KV_TIER_MODE}"
         echo "distractor_count=${DISTRACTOR_COUNT}"
+        echo "retention_probe_seed=${CELL_SEED}"
         echo "retention_probe_id=${PROBE_ID}"
       } | tee -a "${SWEEP_LOG}"
 
@@ -259,6 +286,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         KV_TIER_MODES="${KV_TIER_MODE}" \
         RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE}" \
         RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE}" \
+        RETENTION_PROBE_SEED="${CELL_SEED}" \
         CONTROL_HINT_PROFILE="${CONTROL_HINT_PROFILE}" \
         PROTECTED_HINT_PROFILES="${PROTECTED_HINT_PROFILES}" \
         PROTECTED_INPUT_LEN="${PROTECTED_INPUT_LEN}" \

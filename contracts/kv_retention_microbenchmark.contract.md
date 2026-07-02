@@ -53,7 +53,7 @@ Supported modes
 - `sweep`
   - threshold sweep across distractor counts
 - `all`
-  - probe, then sweep, then plot
+  - sweep, then plot
 - `plot`
   - rebuild charts from one existing microbenchmark matrix CSV
 
@@ -93,6 +93,8 @@ The shell contract currently exposes:
   - `RETENTION_ATTRIBUTION_MODE`
   - `RETENTION_REQUEST_CONTEXT_MODE`
   - `RETENTION_TOP_LEVEL_PRIORITY_MODE`
+- reset policy:
+  - `KV_RETENTION_RESET_MODE`
 - controls under test:
   - `CONTROL_HINT_PROFILE`
   - `PROTECTED_HINT_PROFILES`
@@ -211,6 +213,13 @@ Default worker/runtime settings:
 - `WORKER_BASE_ARGS=--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 - `MEM_FRACTION_STATIC=0.7`
 - `HICACHE_RATIO=1`
+- `KV_RETENTION_RESET_MODE=restart`
+
+Why the reset default matters:
+
+- the control arm and protected arm should both start cold
+- `KV_RETENTION_RESET_MODE=restart` prevents the protected `a_first` request
+  from accidentally inheriting warm cache from the control arm
 
 
 Validation and proof signals

@@ -21,6 +21,8 @@ source "${CONTRACT_PATH}"
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
 BASE_ID="${SPEC_PREFILL_ID:-speculative_prefill_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+SPEC_PREFILL_SEED="${SPEC_PREFILL_SEED:-42}"
+SPEC_PREFILL_SWEEP_SEED_MODE="${SPEC_PREFILL_SWEEP_SEED_MODE:-fixed}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_speculative_prefill_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/speculative_prefill_microbenchmark/${BASE_ID}"
@@ -80,6 +82,24 @@ Modes:
   SPEC_PREFILL_MODE=all     sweep, then plot (default)
   SPEC_PREFILL_MODE=plot    rebuild charts from one existing matrix CSV
 EOF
+}
+
+derive_spec_prefill_seed() {
+  local base_seed="$1"
+  local value_index="$2"
+  local sweep_value="$3"
+  case "${SPEC_PREFILL_SWEEP_SEED_MODE}" in
+    fixed)
+      echo "${base_seed}"
+      ;;
+    per_value)
+      echo $((base_seed + value_index * 1000 + sweep_value))
+      ;;
+    *)
+      echo "Unknown SPEC_PREFILL_SWEEP_SEED_MODE: ${SPEC_PREFILL_SWEEP_SEED_MODE}" >&2
+      return 2
+      ;;
+  esac
 }
 
 choose_python() {
@@ -147,6 +167,8 @@ Runtime defaults:
   experiment_reset_mode=${EXPERIMENT_RESET_MODE}
   transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
   worker_base_args=${WORKER_BASE_ARGS}
+  probe_seed=${SPEC_PREFILL_SEED}
+  sweep_seed_mode=${SPEC_PREFILL_SWEEP_SEED_MODE}
 EOF
   printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -214,6 +236,8 @@ keys = [
     "MODEL_SMOKE_RETRIES",
     "MODEL_SMOKE_DELAY_SECS",
     "MODEL_COOLDOWN_SECS",
+    "SPEC_PREFILL_SEED",
+    "SPEC_PREFILL_SWEEP_SEED_MODE",
 ]
 payload = {k: os.environ.get(k, "") for k in keys}
 payload["model"] = model
@@ -333,6 +357,7 @@ run_probe_mode() {
     STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
     WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
     EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
+    SPEC_PREFILL_SEED="${SPEC_PREFILL_SEED}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
   printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
@@ -355,7 +380,9 @@ run_sweep_mode() {
   for value in "${sweep_values[@]}"; do
     idx=$((idx + 1))
     local run_id="${BASE_ID}__sweep_${idx}"
-    echo "[${idx}/${#sweep_values[@]}] ${sweep_axis}=${value}"
+    local run_seed
+    run_seed="$(derive_spec_prefill_seed "${SPEC_PREFILL_SEED}" "${idx}" "${value}")"
+    echo "[${idx}/${#sweep_values[@]}] ${sweep_axis}=${value} spec_prefill_seed=${run_seed}"
     env \
       DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" \
       FRONTEND_IMAGE="${SPEC_PREFILL_FRONTEND_IMAGE}" \
@@ -377,6 +404,7 @@ run_sweep_mode() {
       STOP_DYNAMO_WHEN_DONE="0" \
       WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
       EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
+      SPEC_PREFILL_SEED="${run_seed}" \
       AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
       "${sweep_axis}=${value}" \
       "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
