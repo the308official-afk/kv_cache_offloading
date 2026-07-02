@@ -144,6 +144,22 @@ run_and_log() {
   "$@" 2>&1 | tee -a "${SUITE_DRIVER_LOG}"
 }
 
+resolved_mode_display() {
+  local experiment_id="$1"
+  local mode="$2"
+  case "${experiment_id}:${mode}" in
+    9:all|11:all|12:all)
+      echo "all (resolved to sweep + plot)"
+      ;;
+    10:all)
+      echo "all (resolved to validate + sweep + plot)"
+      ;;
+    *)
+      echo "${mode}"
+      ;;
+  esac
+}
+
 canonical_experiment() {
   case "$1" in
     9|retention|kv_retention) echo "9" ;;
@@ -277,22 +293,26 @@ stop_dynamo_if_requested() {
 }
 
 run_experiment_9() {
+  local index="$1"
+  local total="$2"
   local mode="${KV_RETENTION_MODE:-${SUITE_DEFAULT_MODE}}"
+  local display_mode
+  display_mode="$(resolved_mode_display "9" "${mode}")"
   local wrapper="./agentbench/run_kv_retention_microbenchmark_single_host.sh"
   local started_at
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
   log
-  suite_run_start_banner "1" "4" "9" "kv_retention" "${mode}"
+  suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
   log "Wrapper: ${wrapper}"
-  log "Mode: ${mode}"
+  log "Mode: ${display_mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
   stop_dynamo_if_requested
-  suite_run_end_banner "1" "4" "9" "kv_retention" "${status}"
+  suite_run_end_banner "${index}" "${total}" "9" "kv_retention" "${status}"
   append_result_json \
     "9" "kv_retention" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" \
@@ -306,22 +326,26 @@ run_experiment_9() {
 }
 
 run_experiment_10() {
+  local index="$1"
+  local total="$2"
   local mode="${CACHE_PINNING_MODE:-${SUITE_DEFAULT_MODE}}"
+  local display_mode
+  display_mode="$(resolved_mode_display "10" "${mode}")"
   local wrapper="./agentbench/run_cache_pinning_microbenchmark_single_host.sh"
   local started_at
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
   log
-  suite_run_start_banner "2" "4" "10" "cache_pinning" "${mode}"
+  suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
   log "Wrapper: ${wrapper}"
-  log "Mode: ${mode}"
+  log "Mode: ${display_mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
   fi
   stop_dynamo_if_requested
-  suite_run_end_banner "2" "4" "10" "cache_pinning" "${status}"
+  suite_run_end_banner "${index}" "${total}" "10" "cache_pinning" "${status}"
   append_result_json \
     "10" "cache_pinning" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" \
@@ -335,22 +359,26 @@ run_experiment_10() {
 }
 
 run_experiment_11() {
+  local index="$1"
+  local total="$2"
   local mode="${PRIORITY_SCHEDULING_MODE:-${SUITE_DEFAULT_MODE}}"
+  local display_mode
+  display_mode="$(resolved_mode_display "11" "${mode}")"
   local wrapper="./agentbench/run_priority_scheduling_microbenchmark_single_host.sh"
   local started_at
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
   log
-  suite_run_start_banner "3" "4" "11" "priority_scheduling" "${mode}"
+  suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
   log "Wrapper: ${wrapper}"
-  log "Mode: ${mode}"
+  log "Mode: ${display_mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
   stop_dynamo_if_requested
-  suite_run_end_banner "3" "4" "11" "priority_scheduling" "${status}"
+  suite_run_end_banner "${index}" "${total}" "11" "priority_scheduling" "${status}"
   append_result_json \
     "11" "priority_scheduling" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" \
@@ -364,22 +392,26 @@ run_experiment_11() {
 }
 
 run_experiment_12() {
+  local index="$1"
+  local total="$2"
   local mode="${SPEC_PREFILL_MODE:-${SUITE_DEFAULT_MODE}}"
+  local display_mode
+  display_mode="$(resolved_mode_display "12" "${mode}")"
   local wrapper="./agentbench/run_speculative_prefill_microbenchmark_single_host.sh"
   local started_at
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
   log
-  suite_run_start_banner "4" "4" "12" "speculative_prefill" "${mode}"
+  suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
   log "Wrapper: ${wrapper}"
-  log "Mode: ${mode}"
+  log "Mode: ${display_mode}"
   if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
   stop_dynamo_if_requested
-  suite_run_end_banner "4" "4" "12" "speculative_prefill" "${status}"
+  suite_run_end_banner "${index}" "${total}" "12" "speculative_prefill" "${status}"
   append_result_json \
     "12" "speculative_prefill" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" \
@@ -405,6 +437,15 @@ log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 
 suite_ok=1
+selected_experiment_total=0
+for token in ${SUITE_EXPERIMENTS}; do
+  if exp="$(canonical_experiment "${token}")"; then
+    selected_experiment_total=$((selected_experiment_total + 1))
+  fi
+done
+log "Resolved selected experiment count: ${selected_experiment_total}"
+
+selected_experiment_index=0
 for token in ${SUITE_EXPERIMENTS}; do
   if ! exp="$(canonical_experiment "${token}")"; then
     log "Unknown suite experiment token: ${token}"
@@ -415,11 +456,12 @@ for token in ${SUITE_EXPERIMENTS}; do
     continue
   fi
 
+  selected_experiment_index=$((selected_experiment_index + 1))
   case "${exp}" in
-    9) run_experiment_9 || suite_ok=0 ;;
-    10) run_experiment_10 || suite_ok=0 ;;
-    11) run_experiment_11 || suite_ok=0 ;;
-    12) run_experiment_12 || suite_ok=0 ;;
+    9) run_experiment_9 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
+    10) run_experiment_10 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
+    11) run_experiment_11 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
+    12) run_experiment_12 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
   esac
 
   if [[ "${suite_ok}" != "1" && "${SUITE_CONTINUE_ON_ERROR}" != "1" ]]; then

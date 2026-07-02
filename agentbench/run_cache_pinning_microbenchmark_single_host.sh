@@ -26,6 +26,7 @@ MICROBENCH_LATEST_PREFIX="experiments/reports/latest_cache_pinning_microbenchmar
 MICROBENCH_OUT_DIR="experiments/reports/cache_pinning_microbenchmark/${BASE_ID}"
 MICROBENCH_CHART_DIR="${MICROBENCH_OUT_DIR}/charts"
 MICROBENCH_MATRIX_PATH="${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
+SHARED_CHART_DIR="experiments/charts"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -56,6 +57,11 @@ banner() {
 $1
 ========================================
 EOF
+}
+
+prepare_shared_chart_dir() {
+  mkdir -p "${SHARED_CHART_DIR}"
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
 }
 
 usage() {
@@ -305,6 +311,10 @@ build_microbenchmark_report() {
 }
 
 build_microbenchmark_charts() {
+  prepare_shared_chart_dir
+  if [[ -f "${MICROBENCH_MATRIX_PATH}" ]]; then
+    cp -f "${MICROBENCH_MATRIX_PATH}" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_matrix.csv"
+  fi
   python3 experiments/scripts/cache_pinning/plot_cache_pinning_microbenchmark.py \
     --matrix-csv "${MICROBENCH_MATRIX_PATH}" \
     --out-dir "${MICROBENCH_CHART_DIR}"
@@ -319,6 +329,7 @@ build_microbenchmark_charts() {
   for chart_name in "${chart_names[@]}"; do
     if [[ -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" ]]; then
       cp -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" "${MICROBENCH_LATEST_PREFIX}_${chart_name}.svg"
+      cp -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_${chart_name}.svg"
     fi
   done
   if [[ -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" ]]; then
@@ -356,11 +367,19 @@ case "${CACHE_PINNING_MODE}" in
 esac
 
 if [[ "${CACHE_PINNING_MODE}" = "plot" ]]; then
+  prepare_shared_chart_dir
+  if [[ -f "${MICROBENCH_MATRIX_PATH}" ]]; then
+    cp -f "${MICROBENCH_MATRIX_PATH}" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_matrix.csv"
+  fi
   cp -f "${MICROBENCH_CHART_DIR}/validation_latency.svg" "${MICROBENCH_LATEST_PREFIX}_validation_latency.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/validation_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_validation_cached_tokens.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${MICROBENCH_LATEST_PREFIX}_sweep_replay_latency.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_sweep_replay_cached_tokens.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" 2>/dev/null || true
+  cp -f "${MICROBENCH_CHART_DIR}/validation_latency.svg" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_latency.svg" 2>/dev/null || true
+  cp -f "${MICROBENCH_CHART_DIR}/validation_cached_tokens.svg" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_cached_tokens.svg" 2>/dev/null || true
+  cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_latency.svg" 2>/dev/null || true
+  cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_cached_tokens.svg" "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_cached_tokens.svg" 2>/dev/null || true
 else
   build_microbenchmark_report
   build_microbenchmark_charts

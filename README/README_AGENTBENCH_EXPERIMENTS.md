@@ -1334,7 +1334,7 @@ Supported modes:
 
 - `probe`: one `A first -> distractors -> A replay` run
 - `sweep`: threshold sweep across distractor counts
-- `all`: probe, then sweep
+- `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
 ### Run
@@ -1516,7 +1516,7 @@ Supported modes:
 
 - `validate`: two-turn doc-style cache-pinning check
 - `sweep`: threshold sweep, `off` vs `ephemeral:1h`
-- `all`: validation, then sweep
+- `all`: validation, then sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
 ### Run
@@ -1719,7 +1719,7 @@ Supported modes:
 
 - `probe`: one live mixed-priority burst
 - `sweep`: multiple live bursts over one public knob
-- `all`: probe, then sweep, then plot
+- `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
 This is a synthetic scheduling experiment. It does **not** use SWE-bench.
@@ -1942,7 +1942,7 @@ Supported modes:
 
 - `probe`: one live two-turn speculative-prefill run
 - `sweep`: multiple live runs over one public knob
-- `all`: probe, then sweep, then plot
+- `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
 This is a synthetic two-turn experiment. It does **not** use SWE-bench.
@@ -2179,6 +2179,36 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+### Nohup
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_INTERACTIVE_BUILD_PROGRESS=0 \
+SUITE_EXPERIMENTS="9 11 12" \
+DISTRACTOR_COUNTS="25 50 75 100" \
+PROTECTED_INPUT_LEN=400 \
+DISTRACTOR_INPUT_LEN=400 \
+PROTECTED_HINT_PROFILES="high-priority" \
+CACHE_PINNING_TTL=1h \
+CACHE_PINNING_PINNED_RATIO=0.1 \
+CACHE_PINNING_HICACHE_RATIO=1 \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=512 \
+SPEC_PREFILL_OUTPUT_TOKENS=64 \
+./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
 All these use the same instrumented docker version
 
 ```bash
@@ -2248,6 +2278,15 @@ Main outputs:
 - `latest_agentic_hint_sweeps_suite_summary.md`: one landing-page summary for the full run
 - `latest_agentic_hint_sweeps_suite_manifest.json`: exact experiment statuses, chart paths, and report paths
 - `latest_agentic_hint_sweeps_suite_driver.log`: suite-level launch log
+- `experiments/charts/`: shared folder containing only the latest chart SVGs and the matrix CSVs they were generated from
+
+The suite banners now show the actual selected count, for example `1/3`, `2/3`, `3/3`.
+When a wrapper uses `MODE=all`, the banner also shows the resolved behavior, for example:
+
+- Experiment 9: `all (resolved to sweep + plot)`
+- Experiment 10: `all (resolved to validate + sweep + plot)`
+- Experiment 11: `all (resolved to sweep + plot)`
+- Experiment 12: `all (resolved to sweep + plot)`
 
 The suite terminal output and nohup log now print very clear start/end banners
 for each experiment block, so you can easily see when 9, 10, 11, or 12 begins

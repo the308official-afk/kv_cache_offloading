@@ -24,6 +24,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_priority_scheduling_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/priority_scheduling_microbenchmark/${BASE_ID}"
+SHARED_CHART_DIR="experiments/charts"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -53,6 +54,11 @@ $1
 EOF
 }
 
+prepare_shared_chart_dir() {
+  mkdir -p "${SHARED_CHART_DIR}"
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -61,7 +67,7 @@ Usage:
 Modes:
   PRIORITY_SCHEDULING_MODE=probe   one live priority-scheduling run
   PRIORITY_SCHEDULING_MODE=sweep   multiple live runs over one sweep axis
-  PRIORITY_SCHEDULING_MODE=all     probe, then sweep, then plot (default)
+  PRIORITY_SCHEDULING_MODE=all     sweep, then plot (default)
   PRIORITY_SCHEDULING_MODE=plot    rebuild charts from one existing matrix CSV
 EOF
 }
@@ -268,14 +274,20 @@ build_microbenchmark_report() {
 
 build_microbenchmark_charts() {
   local matrix_csv="$1"
+  prepare_shared_chart_dir
+  if [[ -f "${matrix_csv}" ]]; then
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_matrix.csv"
+  fi
   "${PYTHON_BIN}" experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${MICROBENCH_LATEST_PREFIX}_queue_wait.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
@@ -428,7 +440,6 @@ case "${PRIORITY_SCHEDULING_MODE}" in
     run_sweep_mode
     ;;
   all)
-    run_probe_mode
     run_sweep_mode
     ;;
   plot)

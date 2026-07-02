@@ -24,6 +24,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_kv_retention_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/kv_retention_microbenchmark/${BASE_ID}"
+SHARED_CHART_DIR="experiments/charts"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -54,6 +55,11 @@ $1
 EOF
 }
 
+prepare_shared_chart_dir() {
+  mkdir -p "${SHARED_CHART_DIR}"
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -62,7 +68,7 @@ Usage:
 Modes:
   KV_RETENTION_MODE=probe   one retention-probe run
   KV_RETENTION_MODE=sweep   threshold sweep across distractor counts
-  KV_RETENTION_MODE=all     probe, then sweep, then plot (default)
+  KV_RETENTION_MODE=all     sweep, then plot (default)
   KV_RETENTION_MODE=plot    rebuild charts from one existing matrix CSV
 
 Examples:
@@ -354,18 +360,25 @@ build_microbenchmark_report() {
 
 build_microbenchmark_charts() {
   local matrix_csv="${1}"
+  prepare_shared_chart_dir
+  if [[ -f "${matrix_csv}" ]]; then
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_matrix.csv"
+  fi
   "${PYTHON_BIN}" experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
 
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${MICROBENCH_LATEST_PREFIX}_replay_latency.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_latency.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_cached_tokens.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${MICROBENCH_LATEST_PREFIX}_survival_curve.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_survival_curve.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
@@ -530,7 +543,6 @@ case "${KV_RETENTION_MODE}" in
     run_sweep_mode
     ;;
   all)
-    run_probe_mode
     run_sweep_mode
     ;;
   plot)

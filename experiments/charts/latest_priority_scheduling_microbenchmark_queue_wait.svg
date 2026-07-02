@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1260" height="560" viewBox="0 0 1260 560">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="92" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">Priority Scheduling Sweep: Queue Wait</text>
+<text x="92" y="70" font-family="Inter, Arial, sans-serif" font-size="14" fill="#64748b">Lower high-priority wait than low-priority wait supports scheduling separation.</text>
+<rect x="92" y="96" width="1108" height="354" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>
+<line x1="92" y1="450.00" x2="1200" y2="450.00" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="455.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">0</text>
+<line x1="92" y1="379.21" x2="1200" y2="379.21" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="384.71" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1795</text>
+<line x1="92" y1="308.42" x2="1200" y2="308.42" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="313.92" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">3590</text>
+<line x1="92" y1="237.58" x2="1200" y2="237.58" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="243.08" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">5386</text>
+<line x1="92" y1="166.79" x2="1200" y2="166.79" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="172.29" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">7181</text>
+<line x1="92" y1="96.00" x2="1200" y2="96.00" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="101.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">8976</text>
+<text x="646.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">200</text>
+<polyline fill="none" stroke="#94a3b8" stroke-width="4" points="646.00,133.90"/>
+<circle cx="646.00" cy="133.90" r="5" fill="#94a3b8"/>
+<rect x="92" y="515" width="18" height="18" rx="5" fill="#94a3b8"/>
+<text x="118" y="529" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Low-priority wait</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="4" points="646.00,306.92"/>
+<circle cx="646.00" cy="306.92" r="5" fill="#2563eb"/>
+<rect x="312" y="515" width="18" height="18" rx="5" fill="#2563eb"/>
+<text x="338" y="529" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High-priority wait</text>
+<text x="28" y="273.00" transform="rotate(-90 28 273.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Queue Wait (ms)</text>
+</svg>

@@ -24,6 +24,7 @@ PYTHON_BIN="${PYTHON_BIN:-}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_speculative_prefill_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/speculative_prefill_microbenchmark/${BASE_ID}"
+SHARED_CHART_DIR="experiments/charts"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -53,6 +54,11 @@ $1
 EOF
 }
 
+prepare_shared_chart_dir() {
+  mkdir -p "${SHARED_CHART_DIR}"
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' \) -delete
+}
+
 usage() {
   cat <<EOF
 Usage:
@@ -61,7 +67,7 @@ Usage:
 Modes:
   SPEC_PREFILL_MODE=probe   one live speculative-prefill run
   SPEC_PREFILL_MODE=sweep   multiple live runs over one sweep axis
-  SPEC_PREFILL_MODE=all     probe, then sweep, then plot (default)
+  SPEC_PREFILL_MODE=all     sweep, then plot (default)
   SPEC_PREFILL_MODE=plot    rebuild charts from one existing matrix CSV
 EOF
 }
@@ -257,14 +263,20 @@ build_microbenchmark_report() {
 
 build_microbenchmark_charts() {
   local matrix_csv="$1"
+  prepare_shared_chart_dir
+  if [[ -f "${matrix_csv}" ]]; then
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv"
+  fi
   "${PYTHON_BIN}" experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_cached.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
@@ -403,7 +415,6 @@ case "${SPEC_PREFILL_MODE}" in
     run_sweep_mode
     ;;
   all)
-    run_probe_mode
     run_sweep_mode
     ;;
   plot)
