@@ -2210,7 +2210,7 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-bash```
+```bash
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
