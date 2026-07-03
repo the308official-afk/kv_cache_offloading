@@ -354,12 +354,7 @@ build_microbenchmark_charts() {
       cp -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" "${MICROBENCH_LATEST_PREFIX}_${chart_name}.svg"
     fi
   done
-  [[ -f "${MICROBENCH_CHART_DIR}/validation_latency.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/validation_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_validation_latency.svg"
-  [[ -f "${MICROBENCH_CHART_DIR}/validation_cached_tokens.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/validation_cached_tokens.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_validation_cache.svg"
   [[ -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg"
-  [[ -f "${MICROBENCH_CHART_DIR}/sweep_replay_cached_tokens.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_cached_tokens.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_cache_vs_distractors.svg"
-  [[ -f "${MICROBENCH_CHART_DIR}/sweep_latency_gain.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_latency_gain.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_gain_vs_distractors.svg"
-  [[ -f "${MICROBENCH_CHART_DIR}/sweep_cache_gain.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_cache_gain.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.svg"
   if [[ -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi
@@ -407,12 +402,7 @@ if [[ "${CACHE_PINNING_MODE}" = "plot" ]]; then
   cp -f "${MICROBENCH_CHART_DIR}/sweep_latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_sweep_latency_gain.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/sweep_cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_sweep_cache_gain.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" 2>/dev/null || true
-  cp -f "${MICROBENCH_CHART_DIR}/validation_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_validation_latency.svg" 2>/dev/null || true
-  cp -f "${MICROBENCH_CHART_DIR}/validation_cached_tokens.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_validation_cache.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg" 2>/dev/null || true
-  cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_cached_tokens.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_cache_vs_distractors.svg" 2>/dev/null || true
-  cp -f "${MICROBENCH_CHART_DIR}/sweep_latency_gain.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_gain_vs_distractors.svg" 2>/dev/null || true
-  cp -f "${MICROBENCH_CHART_DIR}/sweep_cache_gain.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.svg" 2>/dev/null || true
 else
   build_microbenchmark_report
   build_microbenchmark_charts
