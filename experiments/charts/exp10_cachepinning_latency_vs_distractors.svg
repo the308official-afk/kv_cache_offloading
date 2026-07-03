@@ -17,21 +17,29 @@
 <text x="78" y="101.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">213</text>
 <line x1="92.00" y1="96" x2="92.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
 <text x="92.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">40</text>
-<line x1="432.00" y1="96" x2="432.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="432.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">80</text>
-<line x1="772.00" y1="96" x2="772.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="772.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">120</text>
+<line x1="296.00" y1="96" x2="296.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
+<text x="296.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">80</text>
+<line x1="500.00" y1="96" x2="500.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
+<text x="500.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">120</text>
+<line x1="704.00" y1="96" x2="704.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
+<text x="704.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">160</text>
+<line x1="908.00" y1="96" x2="908.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
+<text x="908.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">200</text>
 <line x1="1112.00" y1="96" x2="1112.00" y2="524" stroke="#eef2f7" stroke-width="1"/>
-<text x="1112.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">160</text>
-<polyline fill="none" stroke="#2563eb" stroke-width="3.2" points="92.00,373.15 432.00,141.86 772.00,141.86 1112.00,141.86"/>
+<text x="1112.00" y="554" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">240</text>
+<polyline fill="none" stroke="#2563eb" stroke-width="3.2" points="92.00,373.15 296.00,141.86 500.00,141.86 704.00,141.86 908.00,141.86 1112.00,141.86"/>
 <circle cx="92.00" cy="373.15" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
-<circle cx="432.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
-<circle cx="772.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
+<circle cx="296.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
+<circle cx="500.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
+<circle cx="704.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
+<circle cx="908.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
 <circle cx="1112.00" cy="141.86" r="4.8" fill="#ffffff" stroke="#2563eb" stroke-width="2.6"/>
-<polyline fill="none" stroke="#16a34a" stroke-width="3.2" points="92.00,373.15 432.00,367.12 772.00,369.13 1112.00,369.13"/>
+<polyline fill="none" stroke="#16a34a" stroke-width="3.2" points="92.00,373.15 296.00,369.13 500.00,369.13 704.00,369.13 908.00,369.13 1112.00,369.13"/>
 <circle cx="92.00" cy="373.15" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
-<circle cx="432.00" cy="367.12" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
-<circle cx="772.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
+<circle cx="296.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
+<circle cx="500.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
+<circle cx="704.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
+<circle cx="908.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
 <circle cx="1112.00" cy="369.13" r="4.8" fill="#ffffff" stroke="#16a34a" stroke-width="2.6"/>
 <text x="28" y="310.00" transform="rotate(-90 28 310.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Replay Latency (ms)</text>
 <text x="602.00" y="580" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Distractor Count</text>
