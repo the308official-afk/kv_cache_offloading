@@ -64,6 +64,7 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg" \
     "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg" \
@@ -330,11 +331,7 @@ build_microbenchmark_charts() {
   [[ -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_latency_vs_arrival_gap.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi

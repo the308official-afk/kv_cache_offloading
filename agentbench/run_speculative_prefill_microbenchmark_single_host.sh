@@ -315,9 +315,6 @@ build_microbenchmark_charts() {
   [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi

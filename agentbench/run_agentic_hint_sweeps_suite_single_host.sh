@@ -93,7 +93,7 @@ Usage:
 Environment:
   DYNAMO_MACHINE_PROFILE=ec2|gh200
   SUITE_EXPERIMENTS="9 10 11 12"        # or "retention cache_pinning priority spec_prefill"
-  SUITE_ISOLATION_MODE=clean|fast       # clean=restarts sweep values, fast=reuses runtime within experiments
+  SUITE_ISOLATION_MODE=clean|fast       # clean=restarts sweep values, fast=reuses runtime within experiments without flush
   SUITE_CONTINUE_ON_ERROR=0|1
   SUITE_DEFAULT_MODE=sweep
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
@@ -129,8 +129,8 @@ case "${SUITE_ISOLATION_MODE}" in
     ;;
   fast)
     EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
-    EFFECTIVE_EXPERIMENT_RESET_MODE="flush"
-    EFFECTIVE_KV_RETENTION_RESET_MODE="flush"
+    EFFECTIVE_EXPERIMENT_RESET_MODE="none"
+    EFFECTIVE_KV_RETENTION_RESET_MODE="none"
     EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
     EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
     EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
@@ -253,9 +253,6 @@ sync_shared_assets_for_experiment() {
       sync_one "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" "${charts_dir}/exp9_kvretention_matrix.csv"
       sync_one "experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg" "${charts_dir}/exp9_kvretention_latency_vs_distractors.svg"
       sync_one "experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg" "${charts_dir}/exp9_kvretention_cache_vs_distractors.svg"
-      sync_one "experiments/reports/latest_kv_retention_microbenchmark_latency_gain.svg" "${charts_dir}/exp9_kvretention_latency_gain_vs_distractors.svg"
-      sync_one "experiments/reports/latest_kv_retention_microbenchmark_cache_gain.svg" "${charts_dir}/exp9_kvretention_cache_gain_vs_distractors.svg"
-      sync_one "experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg" "${charts_dir}/exp9_kvretention_survival_vs_distractors.svg"
       ;;
     10)
       sync_one "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
@@ -268,19 +265,11 @@ sync_shared_assets_for_experiment() {
       ;;
     11)
       sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_priority_wins.svg" "${charts_dir}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg" "${charts_dir}/exp11_prioritysched_wait_vs_arrival_gap.svg"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_wait_gain.svg" "${charts_dir}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_latency_vs_arrival_gap.svg" "${charts_dir}/exp11_prioritysched_latency_vs_arrival_gap.svg"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_latency_gain.svg" "${charts_dir}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg" "${charts_dir}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg"
       ;;
     12)
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg"
-      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_cached.svg" "${charts_dir}/exp12_specprefill_cache_vs_warmup_wait.svg"
-      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_latency_gain.svg" "${charts_dir}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
-      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_cache_gain.svg" "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg"
-      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turna_latency.svg" "${charts_dir}/exp12_specprefill_turna_latency_vs_warmup_wait.svg"
       ;;
   esac
 

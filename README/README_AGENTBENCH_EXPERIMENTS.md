@@ -2259,6 +2259,7 @@ once at suite startup, before Experiment 9 begins.
 - `fast`:
   - restart between experiments
   - no restart between sweep values
+  - no flush between sweep values
   - change prompts across sweep values so runs do not reuse the exact same token sequence
 
 Default behavior:
@@ -2266,6 +2267,10 @@ Default behavior:
 - `SUITE_DEFAULT_MODE=sweep`
 
 So the suite now defaults to the main sweep for each experiment instead of quietly running probe/validate work first. If you want a different mode for one experiment, set that experiment's mode explicitly, for example `KV_RETENTION_MODE=plot`.
+
+Use `clean` for the careful runs you want to trust for conclusions.
+
+Use `fast` for quick debugging and iteration when you want to avoid the long wait inside an experiment.
 
 For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
 

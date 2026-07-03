@@ -393,15 +393,12 @@ build_microbenchmark_charts() {
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${SHARED_CHART_DIR}/exp9_kvretention_latency_gain_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${SHARED_CHART_DIR}/exp9_kvretention_cache_gain_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${MICROBENCH_LATEST_PREFIX}_survival_curve.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
