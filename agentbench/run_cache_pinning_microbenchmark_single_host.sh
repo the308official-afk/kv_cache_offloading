@@ -21,6 +21,7 @@ source runtime_instrumentation/cache_pinning_profile.sh
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
 FRONTEND_URL="${FRONTEND_URL:-${AGENTBENCH_FRONTEND_URL}}"
 BASE_ID="${CACHE_PINNING_ID:-cache_pinning_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
+EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
 RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
 RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE:-fixed}"
 

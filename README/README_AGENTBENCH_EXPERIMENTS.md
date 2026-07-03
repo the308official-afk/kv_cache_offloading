@@ -1522,6 +1522,10 @@ Supported modes:
 - `all`: validation, then sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
+Direct wrapper default:
+
+- `EXPERIMENT_RESET_MODE=restart`
+
 ### Run
 
 ```bash
@@ -2202,6 +2206,21 @@ SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
 SPEC_PREFILL_TURN_A_WORDS=4000 \
 SPEC_PREFILL_TURN_B_WORDS=512 \
 SPEC_PREFILL_OUTPUT_TOKENS=64 \
+./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+bash```
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+SUITE_INTERACTIVE_BUILD_PROGRESS=0 \
+SUITE_ISOLATION_MODE=clean \
+SUITE_EXPERIMENTS="10" \
+CACHE_PINNING_MODE=all \
+DISTRACTOR_COUNTS="40 80 120 160 200 240" \
+PROTECTED_INPUT_LEN=500 \
+DISTRACTOR_INPUT_LEN=200 \
 ./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```

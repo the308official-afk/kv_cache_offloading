@@ -53,6 +53,15 @@ Supported modes
 - `plot`
   - rebuild charts from one existing microbenchmark matrix CSV
 
+Direct-run reset default
+------------------------
+
+If you run the public wrapper directly, outside the suite, it now defaults to:
+
+- `EXPERIMENT_RESET_MODE=restart`
+
+That avoids accidental runtime reuse between the validate and sweep phases.
+
 
 Pinned upstream sources
 -----------------------

@@ -11,6 +11,7 @@ MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-default}"
 # Public wrapper behavior
 : "${CACHE_PINNING_MODE:=all}"
 : "${CACHE_PINNING_ID:=cache_pinning_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
+: "${EXPERIMENT_RESET_MODE:=restart}"
 
 # Pinned isolated upstream stack
 : "${CACHE_PINNING_DYNAMO_SOURCE_REPO:=https://github.com/ai-dynamo/dynamo.git}"
@@ -86,6 +87,7 @@ export ROOT_DIR
 export MACHINE_PROFILE
 export CACHE_PINNING_MODE
 export CACHE_PINNING_ID
+export EXPERIMENT_RESET_MODE
 export CACHE_PINNING_DYNAMO_SOURCE_REPO
 export CACHE_PINNING_DYNAMO_PULL_REF
 export CACHE_PINNING_DYNAMO_SOURCE_REF
