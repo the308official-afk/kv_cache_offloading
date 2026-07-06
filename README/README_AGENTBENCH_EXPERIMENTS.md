@@ -1518,6 +1518,7 @@ KV_RETENTION_MODE=probe \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This works on EC2
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1536,6 +1537,7 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+-- not yet verified
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1554,6 +1556,7 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+This works on GH200?
 ```bash
 cd ~/kv_cache_offloading
 
