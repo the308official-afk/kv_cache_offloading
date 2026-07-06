@@ -223,8 +223,9 @@ Why the reset default matters:
 - `KV_RETENTION_RESET_MODE=flush` is faster, but only valid when the live
   Dynamo runtime serves `POST /clear_kv_blocks`
 - the instrumented Dynamo source-prep path now repairs and verifies the
-  worker-side `clear_kv_blocks` plumbing before image build, so future precise
-  rebuilds should fail early if flush support is missing
+  frontend route registration plus the worker-side `clear_kv_blocks` plumbing
+  before image build, so future precise rebuilds should fail early if flush
+  support is missing
 
 
 Validation and proof signals

@@ -345,6 +345,10 @@ The prepare step now also repairs and verifies the Dynamo KV-flush path used by
 `EXPERIMENT_RESET_MODE=flush` and `KV_RETENTION_RESET_MODE=flush`. It checks
 for:
 
+- `pub mod clear_kv_blocks;` in
+  [`upstream/dynamo/lib/llm/src/http/service.rs`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/http/service.rs)
+- `super::clear_kv_blocks::clear_kv_blocks_router(state.clone(), None),` in
+  [`upstream/dynamo/lib/llm/src/http/service/service_v2.rs`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/http/service/service_v2.rs)
 - `clear_kv_blocks_endpoint = runtime.endpoint(...)` in
   [`upstream/dynamo/components/src/dynamo/sglang/init_llm.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/init_llm.py)
 - `clear_kv_blocks_endpoint.serve_endpoint(...)` in
@@ -356,8 +360,12 @@ for:
 - `flush_cache` in
   [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py)
 
-So if a future upstream clone is missing the worker-side flush plumbing, the
-prepare/build path should now fail early instead of letting you discover it
+So if a future upstream clone is missing either:
+
+- the frontend `/clear_kv_blocks` route registration, or
+- the worker-side flush plumbing,
+
+the prepare/build path should now fail early instead of letting you discover it
 later through `POST /clear_kv_blocks -> 404`.
 
 Then build the local runtime-logging images once:
@@ -1613,6 +1621,19 @@ Expected success signal:
 
 If you still get `404`, rebuild the precise runtime images from the repaired
 instrumented Dynamo source before using `flush`.
+
+If you want to prove the source is fixed before rebuilding, these two checks
+should both print matches:
+
+```bash
+cd ~/kv_cache_offloading
+
+grep -n 'pub mod clear_kv_blocks;' \
+  upstream/dynamo/lib/llm/src/http/service.rs
+
+grep -n 'clear_kv_blocks_router(state.clone(), None)' \
+  upstream/dynamo/lib/llm/src/http/service/service_v2.rs
+```
 
 The public experiment wrappers now automate this for you when you choose
 `flush`:

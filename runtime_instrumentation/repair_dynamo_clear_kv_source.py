@@ -2,6 +2,8 @@
 """Repair Dynamo source so precise runtimes expose clear_kv_blocks end to end.
 
 This keeps the fix small and idempotent:
+- export the frontend `clear_kv_blocks` route module
+- merge the frontend `/clear_kv_blocks` route into the live HTTP router
 - register/serve `clear_kv_blocks` in SGLang init paths
 - add `clear_kv_blocks()` handler that calls `flush_cache()`
 - register the engine route so frontend clear_kv_blocks can reach workers
@@ -24,6 +26,34 @@ def write_if_changed(path: Path, text: str) -> None:
         return
     path.write_text(text)
     print(f"updated: {path}")
+
+
+def repair_http_service_module() -> None:
+    path = SOURCE_DIR / "lib/llm/src/http/service.rs"
+    text = path.read_text()
+
+    line = "pub mod clear_kv_blocks;\n"
+    if line not in text:
+        anchor = "pub mod busy_threshold;\n"
+        if anchor not in text:
+            raise SystemExit(f"Could not find busy_threshold module anchor in {path}")
+        text = text.replace(anchor, line + anchor, 1)
+
+    write_if_changed(path, text)
+
+
+def repair_http_service_v2() -> None:
+    path = SOURCE_DIR / "lib/llm/src/http/service/service_v2.rs"
+    text = path.read_text()
+
+    route_line = "            super::clear_kv_blocks::clear_kv_blocks_router(state.clone(), None),\n"
+    if route_line not in text:
+        anchor = "            super::busy_threshold::busy_threshold_router(state.clone(), None),\n"
+        if anchor not in text:
+            raise SystemExit(f"Could not find busy_threshold router anchor in {path}")
+        text = text.replace(anchor, anchor + route_line, 1)
+
+    write_if_changed(path, text)
 
 
 def repair_init_llm() -> None:
@@ -131,6 +161,8 @@ def repair_handler_base() -> None:
 
 
 def main() -> None:
+    repair_http_service_module()
+    repair_http_service_v2()
     repair_init_llm()
     repair_handler_base()
     print("Dynamo clear_kv_blocks source repair complete.")
