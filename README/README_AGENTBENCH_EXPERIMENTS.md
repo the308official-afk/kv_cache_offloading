@@ -204,6 +204,20 @@ The `validate` run above is the first-time bring-up for Experiment `10` because
 it will prepare the isolated cache-pinning Dynamo/SGLang sources and build the
 machine-specific cache-pinning images if they are missing.
 
+Source-of-truth table:
+
+| Stack | Experiments | Dynamo source | SGLang source | EC2 images | GH200 images |
+| --- | --- | --- | --- | --- | --- |
+| Shared precise runtime | `9`, `11`, `12` | `upstream/dynamo` pinned to `8cee1e50e10fefb0ac570144b48458a043361d94` | pinned source image `lmsysorg/sglang:v0.5.11-cu129-runtime` | `local/dynamo-frontend:runtime-json-logs-ec2`<br>`local/dynamo-sglang:runtime-json-logs-ec2` | `local/dynamo-frontend:runtime-json-logs-gh200`<br>`local/dynamo-sglang:runtime-json-logs-gh200` |
+| Isolated cache-pinning stack | `10` | `upstream/dynamo_cache_pinning` pinned to PR `6213` / ref `7d3d4ec8e4ae865af2f903b21b4afabca28e1940` | `upstream/sglang_cache_pinning` pinned to PR `18941` / ref `ff2f70b0fcb6b3ea130c46927ed98edf69d5c17c` | `local/dynamo-frontend:cache-pinning-ec2`<br>`local/dynamo-sglang:cache-pinning-ec2` | `local/dynamo-frontend:cache-pinning-gh200`<br>`local/dynamo-sglang:cache-pinning-gh200` |
+
+Interpretation:
+
+- the source baseline is intended to stay the same across `ec2` and `gh200`
+- what changes between the two machines is the built image architecture and tag
+- so GH200 should rebuild the same intended stack for `linux/arm64`, instead of
+  reusing the EC2/x86 image artifacts
+
 Machine profile quick switch:
 
 ```bash
