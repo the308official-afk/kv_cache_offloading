@@ -54,7 +54,19 @@ PY
 
 
 ```bash
+cd ~/kv_cache_offloading
 
+grep -n 'pub fn get_model_card_keys' \
+  upstream/dynamo/lib/llm/src/discovery/model_manager.rs
+
+grep -n 'pub fn runtime(&self) -> Option<&DistributedRuntime>' \
+  upstream/dynamo/lib/llm/src/http/service/service_v2.rs
+
+grep -n 'distributed_runtime(Some(distributed_runtime.clone()))' \
+  upstream/dynamo/lib/llm/src/entrypoint/input/http.rs
+
+grep -n 'from_client_no_fault_detection' \
+  upstream/dynamo/lib/llm/src/http/service/clear_kv_blocks.rs
 ```
 
 
