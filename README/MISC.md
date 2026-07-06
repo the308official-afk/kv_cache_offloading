@@ -14,3 +14,6 @@ RUN_ID="kv_retention_microbenchmark_20260706_163851__sweep_Qwen_Qwen2_5-Coder-7B
 
 cat "experiments/reports/retention_probe_batches/$RUN_ID"/*smoke_test.log 2>/dev/null || true
 ```
+
+
+mkdir -p /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/sglang_transfer_logs
