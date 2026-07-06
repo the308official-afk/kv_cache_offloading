@@ -1,3 +1,110 @@
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 25
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25
+
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+Dynamo head node is ready.
+
+etcd endpoint: http://127.0.0.1:2379
+nats endpoint: nats://127.0.0.1:4222
+frontend:      http://127.0.0.1:8000
+model name:    Qwen/Qwen2.5-Coder-7B-Instruct
+kv block size: 64
+machine profile: gh200
+frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+
+Next steps:
+  ./run_dynamo_head.sh status
+  ./run_dynamo_head.sh logs
+  ./run_dynamo_head.sh test
+mkdir: cannot create directory ‘/home/central/ojaiyeob/kv_cache_offloading/experiments/raw’: Permission denied
+ojaiyeob@gracehopper:~/kv_cache_offloading$
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
 
 cd ~/kv_cache_offloading
