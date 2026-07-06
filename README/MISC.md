@@ -1,19 +1,8 @@
-```bash
-cd ~/kv_cache_offloading
+status	sweep_id	model	kv_tier	arm	hint_profile	protected_cache	distractors	first_status	replay_status	first_ms	replay_ms	replay_delta_ms	replay_speedup	replay_cached	replay_reuse	survived	survival_source	reuse_status	req_cache_status	req_cache_values	worker_cache_status	worker_cache_values	replay_evicts	replay_evict_cache	replay_evict_cache_match	replay_evict_status	effect_status
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	control	none	off	25	200	200	288	22	-266	13.091	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	control_row
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	protected	high-priority	off	25	200	200	286	22	-264	13	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	frontend_priority_unsupported
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	control	none	off	50	200	200	289	22	-267	13.136	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	control_row
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	protected	high-priority	off	50	200	200	283	22	-261	12.864	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	frontend_priority_unsupported
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	control	none	off	75	200	200	290	22	-268	13.182	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	control_row
+partial	kv_retention_microbenchmark_20260706_171316__sweep	Qwen/Qwen2.5-Coder-7B-Instruct	gpu_only	protected	high-priority	off	75	200	200	287	22	-265	13.045	448	0.959	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	none		0		FALSE	no_evict_seen	frontend_priority_unsupported
 
-RUN_ID="kv_retention_microbenchmark_20260706_163851__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25"
-
-cat "experiments/reports/retention_probe_batches/$RUN_ID/retention_probe_progress.log"
-ls -l "experiments/reports/retention_probe_batches/$RUN_ID"
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-RUN_ID="kv_retention_microbenchmark_20260706_163851__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25"
-
-cat "experiments/reports/retention_probe_batches/$RUN_ID"/*smoke_test.log 2>/dev/null || true
-```
-
-
-mkdir -p /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/sglang_transfer_logs
