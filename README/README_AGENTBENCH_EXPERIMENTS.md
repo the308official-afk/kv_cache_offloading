@@ -1518,6 +1518,7 @@ KV_RETENTION_MODE=probe \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This works on EC2
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1536,6 +1537,7 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+This works on GH200
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1543,16 +1545,20 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 KV_RETENTION_MODE=sweep \
 RETENTION_ATTRIBUTION_MODE=precise \
-KV_RETENTION_RESET_MODE=flush \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
+KV_RETENTION_RESET_MODE=restart \
 RETENTION_SWEEP_SEED_MODE=per_cell \
 STOP_ON_PROBE_FAILURE=1 \
-DISTRACTOR_COUNTS="25 50 75 100 125 150" \
-PROTECTED_INPUT_LEN=400 \
-DISTRACTOR_INPUT_LEN=400 \
+DISTRACTOR_COUNTS="200" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
+
+DISTRACTOR_COUNTS="2 10 50 100 200" \
 
 ```bash
 cd ~/kv_cache_offloading
