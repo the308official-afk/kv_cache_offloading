@@ -9,6 +9,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
 EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
+PRECISE_CLEAN_START_HELPER="${PRECISE_CLEAN_START_HELPER:-./runtime_instrumentation/ensure_precise_clean_start.sh}"
 
 CONTRACT_PATH="${CONTRACT_PATH:-contracts/priority_scheduling_microbenchmark.contract.sh}"
 CONTRACT_DOC_PATH="${CONTRACT_DOC_PATH:-contracts/priority_scheduling_microbenchmark.contract.md}"
@@ -24,6 +25,7 @@ BASE_ID="${PRIORITY_SCHEDULING_ID:-priority_scheduling_microbenchmark_$(date +%Y
 PYTHON_BIN="${PYTHON_BIN:-}"
 PRIORITY_PROBE_SEED="${PRIORITY_PROBE_SEED:-42}"
 PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${PRIORITY_SCHEDULING_SWEEP_SEED_MODE:-fixed}"
+PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_priority_scheduling_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/priority_scheduling_microbenchmark/${BASE_ID}"
@@ -126,6 +128,18 @@ choose_python() {
 PYTHON_BIN="$(choose_python)"
 
 ensure_experiment_dirs_ready
+
+ensure_clean_start_if_requested() {
+  if [[ "${PRIORITY_SCHEDULING_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  if [[ "${PRIORITY_SCHEDULING_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  "${PRECISE_CLEAN_START_HELPER}" \
+    --label "Priority scheduling microbenchmark" \
+    --mode "${PRECISE_START_MODE}"
+}
 
 if [[ "${1:-}" = "-h" || "${1:-}" = "--help" ]]; then
   usage
@@ -499,6 +513,7 @@ else
 fi
 
 print_contract_summary
+ensure_clean_start_if_requested
 write_run_contract
 
 case "${PRIORITY_SCHEDULING_MODE}" in

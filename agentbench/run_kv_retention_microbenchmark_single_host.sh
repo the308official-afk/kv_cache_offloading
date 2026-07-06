@@ -9,6 +9,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
 EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
+PRECISE_CLEAN_START_HELPER="${PRECISE_CLEAN_START_HELPER:-./runtime_instrumentation/ensure_precise_clean_start.sh}"
 
 CONTRACT_PATH="${CONTRACT_PATH:-contracts/kv_retention_microbenchmark.contract.sh}"
 CONTRACT_DOC_PATH="${CONTRACT_DOC_PATH:-contracts/kv_retention_microbenchmark.contract.md}"
@@ -22,6 +23,7 @@ source "${CONTRACT_PATH}"
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
 BASE_ID="${KV_RETENTION_ID:-kv_retention_microbenchmark_$(date +%Y%m%d_%H%M%S)}"
 PYTHON_BIN="${PYTHON_BIN:-}"
+PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_kv_retention_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/kv_retention_microbenchmark/${BASE_ID}"
@@ -119,6 +121,18 @@ choose_python() {
 PYTHON_BIN="$(choose_python)"
 
 ensure_experiment_dirs_ready
+
+ensure_clean_start_if_requested() {
+  if [[ "${KV_RETENTION_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  if [[ "${RETENTION_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  "${PRECISE_CLEAN_START_HELPER}" \
+    --label "KV retention microbenchmark" \
+    --mode "${PRECISE_START_MODE}"
+}
 
 require_contract_vars() {
   local missing=0
@@ -575,6 +589,7 @@ else
   reset_microbenchmark_outputs
 fi
 print_contract_summary
+ensure_clean_start_if_requested
 write_run_contract
 
 case "${KV_RETENTION_MODE}" in

@@ -141,6 +141,15 @@ Precise-attribution note:
   `experiments/raw`, `experiments/reports`, `experiments/charts`, and
   `experiments/runtime_state` paths before runs; it breaks out immediately if a
   machine cannot create or write them
+- the public microbenchmark wrappers for Experiments `9`-`12` now also do one
+  automatic clean-start before the real run begins, so an older live worker
+  does not get reused accidentally for a precise run
+- that clean-start happens once per experiment, before the first probe/sweep
+  request; after that, the experiment still uses its own normal reset mode
+  inside the sweep
+- the default is `PRECISE_START_MODE=clean`
+- if you intentionally want the old reuse-first behavior, set:
+  `PRECISE_START_MODE=reuse`
 - if you want check-only behavior instead, set:
   `AUTO_BUILD_PRECISE_IMAGES=0`
 - so you should not need to manually re-run the SGLang extract/patch steps for

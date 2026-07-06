@@ -9,6 +9,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
 EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
+PRECISE_CLEAN_START_HELPER="${PRECISE_CLEAN_START_HELPER:-./runtime_instrumentation/ensure_precise_clean_start.sh}"
 
 CONTRACT_PATH="${CONTRACT_PATH:-contracts/speculative_prefill_microbenchmark.contract.sh}"
 CONTRACT_DOC_PATH="${CONTRACT_DOC_PATH:-contracts/speculative_prefill_microbenchmark.contract.md}"
@@ -24,6 +25,7 @@ BASE_ID="${SPEC_PREFILL_ID:-speculative_prefill_microbenchmark_$(date +%Y%m%d_%H
 PYTHON_BIN="${PYTHON_BIN:-}"
 SPEC_PREFILL_SEED="${SPEC_PREFILL_SEED:-42}"
 SPEC_PREFILL_SWEEP_SEED_MODE="${SPEC_PREFILL_SWEEP_SEED_MODE:-fixed}"
+PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_speculative_prefill_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/speculative_prefill_microbenchmark/${BASE_ID}"
@@ -125,6 +127,18 @@ choose_python() {
 PYTHON_BIN="$(choose_python)"
 
 ensure_experiment_dirs_ready
+
+ensure_clean_start_if_requested() {
+  if [[ "${SPEC_PREFILL_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" != "precise" ]]; then
+    return 0
+  fi
+  "${PRECISE_CLEAN_START_HELPER}" \
+    --label "Speculative prefill microbenchmark" \
+    --mode "${PRECISE_START_MODE}"
+}
 
 if [[ "${1:-}" = "-h" || "${1:-}" = "--help" ]]; then
   usage
@@ -468,6 +482,7 @@ else
 fi
 
 print_contract_summary
+ensure_clean_start_if_requested
 write_run_contract
 
 case "${SPEC_PREFILL_MODE}" in

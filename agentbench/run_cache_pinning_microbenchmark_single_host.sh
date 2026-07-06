@@ -9,6 +9,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
 EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
+PRECISE_CLEAN_START_HELPER="${PRECISE_CLEAN_START_HELPER:-./runtime_instrumentation/ensure_precise_clean_start.sh}"
 CONTRACT_PATH="${CONTRACT_PATH:-contracts/cache_pinning_microbenchmark.contract.sh}"
 CONTRACT_DOC_PATH="${CONTRACT_DOC_PATH:-contracts/cache_pinning_microbenchmark.contract.md}"
 if [[ ! -f "${CONTRACT_PATH}" ]]; then
@@ -25,6 +26,7 @@ BASE_ID="${CACHE_PINNING_ID:-cache_pinning_microbenchmark_$(date +%Y%m%d_%H%M%S)
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
 RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
 RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE:-fixed}"
+PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_cache_pinning_microbenchmark"
 MICROBENCH_OUT_DIR="experiments/reports/cache_pinning_microbenchmark/${BASE_ID}"
@@ -114,6 +116,15 @@ EOF
 }
 
 ensure_experiment_dirs_ready
+
+ensure_clean_start_if_requested() {
+  if [[ "${CACHE_PINNING_MODE}" = "plot" ]]; then
+    return 0
+  fi
+  "${PRECISE_CLEAN_START_HELPER}" \
+    --label "Cache-pinning microbenchmark" \
+    --mode "${PRECISE_START_MODE}"
+}
 
 require_contract_vars() {
   local missing=0
@@ -377,6 +388,7 @@ else
   reset_microbenchmark_report_outputs
 fi
 print_contract_summary
+ensure_clean_start_if_requested
 
 case "${CACHE_PINNING_MODE}" in
   validate)
