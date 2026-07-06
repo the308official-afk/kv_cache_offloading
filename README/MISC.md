@@ -1,4 +1,4 @@
-AAAAAAA
+```bash
 
 cd ~/kv_cache_offloading
 
@@ -12,3 +12,5 @@ DISTRACTOR_INPUT_LEN=400 \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
+
+```
