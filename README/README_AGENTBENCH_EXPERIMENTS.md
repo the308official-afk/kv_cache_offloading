@@ -143,6 +143,17 @@ Precise-attribution note:
   precise experiments anymore; the wrappers now make that decision for you
 - you may still want to run the helper manually when debugging a fresh machine:
   `./runtime_instrumentation/ensure_precise_runtime_ready.sh --machine-profile ec2 --build-if-missing`
+- on GH200, this is the manual preflight to run once before your first suite or
+  precise experiment:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile gh200 \
+  --build-if-missing
+```
 - if you intentionally want a different SGLang source, override it explicitly:
   `export SGLANG_IMAGE=...` before the run
 
