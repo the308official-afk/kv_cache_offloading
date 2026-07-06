@@ -8,6 +8,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   # shellcheck disable=SC1091
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
+EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
 CONTRACT_PATH="${CONTRACT_PATH:-contracts/cache_pinning_microbenchmark.contract.sh}"
 CONTRACT_DOC_PATH="${CONTRACT_DOC_PATH:-contracts/cache_pinning_microbenchmark.contract.md}"
 if [[ ! -f "${CONTRACT_PATH}" ]]; then
@@ -62,6 +63,13 @@ $1
 EOF
 }
 
+ensure_experiment_dirs_ready() {
+  if [[ "${EXPERIMENT_DIRS_READY_ALREADY:-0}" = "1" ]]; then
+    return 0
+  fi
+  "${EXPERIMENT_DIRS_HELPER}"
+}
+
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
   find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
@@ -104,6 +112,8 @@ Examples:
     Qwen/Qwen2.5-Coder-7B-Instruct
 EOF
 }
+
+ensure_experiment_dirs_ready
 
 require_contract_vars() {
   local missing=0

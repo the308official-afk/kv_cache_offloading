@@ -8,6 +8,7 @@ if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   # shellcheck disable=SC1091
   source runtime_instrumentation/dynamo_machine_profile.sh
 fi
+EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensure_experiment_dirs_ready.sh}"
 
 MODEL="${1:-${SUITE_MODEL:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}}"
 SUITE_ID="${AGENTIC_HINT_SUITE_ID:-agentic_hint_sweeps_suite_$(date +%Y%m%d_%H%M%S)}"
@@ -189,6 +190,14 @@ log() {
 
 run_and_log() {
   "$@" 2>&1 | tee -a "${SUITE_DRIVER_LOG}"
+}
+
+ensure_suite_experiment_dirs_ready() {
+  if ! run_and_log "${EXPERIMENT_DIRS_HELPER}"; then
+    echo "Suite experiment directory preflight failed." >&2
+    exit 1
+  fi
+  export EXPERIMENT_DIRS_READY_ALREADY=1
 }
 
 should_ensure_precise_runtime() {
@@ -457,7 +466,7 @@ run_experiment_9() {
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
   log "KV retention reset mode: ${EFFECTIVE_KV_RETENTION_RESET_MODE}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
@@ -494,7 +503,7 @@ run_experiment_10() {
   suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
   fi
@@ -531,7 +540,7 @@ run_experiment_11() {
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
@@ -568,7 +577,7 @@ run_experiment_12() {
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
   log "Wrapper: ${wrapper}"
   log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
@@ -612,6 +621,7 @@ fi
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 
+ensure_suite_experiment_dirs_ready
 ensure_suite_precise_runtime_if_needed
 
 suite_ok=1

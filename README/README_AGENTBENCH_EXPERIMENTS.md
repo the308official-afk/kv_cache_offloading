@@ -125,6 +125,8 @@ Precise-attribution note:
   [runtime_instrumentation/precise_sglang_helper.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/precise_sglang_helper.sh)
 - the precise wrappers also now share one machine-aware runtime image helper:
   [runtime_instrumentation/ensure_precise_runtime_ready.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/ensure_precise_runtime_ready.sh)
+- the public wrappers for Experiments `9`-`12` now also share one experiment-directory preflight helper:
+  [runtime_instrumentation/ensure_experiment_dirs_ready.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/ensure_experiment_dirs_ready.sh)
 - the helper uses a known-good pinned SGLang source image by default:
   [runtime_instrumentation/sglang_source_profile.sh](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_source_profile.sh)
 - this helper auto-extracts and re-patches the SGLang overlay before precise runs
@@ -135,6 +137,10 @@ Precise-attribution note:
   images are built, so precise wrappers can now notice when the local
   instrumented Dynamo source changed and rebuild automatically instead of
   making you guess whether a rebuild is needed
+- the experiment-directory helper auto-creates and write-checks the required
+  `experiments/raw`, `experiments/reports`, `experiments/charts`, and
+  `experiments/runtime_state` paths before runs; it breaks out immediately if a
+  machine cannot create or write them
 - if you want check-only behavior instead, set:
   `AUTO_BUILD_PRECISE_IMAGES=0`
 - so you should not need to manually re-run the SGLang extract/patch steps for
