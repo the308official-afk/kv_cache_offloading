@@ -1537,25 +1537,6 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
--- not yet verified.
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-KV_RETENTION_MODE=sweep \
-RETENTION_ATTRIBUTION_MODE=precise \
-KV_RETENTION_RESET_MODE=flush \
-RETENTION_SWEEP_SEED_MODE=per_cell \
-STOP_ON_PROBE_FAILURE=1 \
-DISTRACTOR_COUNTS="200" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-PROTECTED_HINT_PROFILES="high-priority" \
-./agentbench/run_kv_retention_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
 This works on GH200?
 ```bash
 cd ~/kv_cache_offloading
