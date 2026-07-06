@@ -1780,6 +1780,14 @@ Supported modes:
 - `all`: validation, then sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
+Recommended flow:
+
+- use the direct Experiment 10 wrapper
+- start with `validate`
+- only move to `sweep` after validation shows the pin path is really alive
+- use `PRECISE_START_MODE=clean` so the run starts from a fresh isolated cache-pinning runtime
+- for the sweep, keep the wrapper defaults unless you have a specific reason to override them
+
 Direct wrapper default:
 
 - `EXPERIMENT_RESET_MODE=restart`
@@ -1790,6 +1798,7 @@ Direct wrapper default:
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
+PRECISE_START_MODE=clean \
 CACHE_PINNING_MODE=validate \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
@@ -1799,8 +1808,9 @@ CACHE_PINNING_MODE=validate \
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
+PRECISE_START_MODE=clean \
 CACHE_PINNING_MODE=sweep \
-DISTRACTOR_COUNTS="40 80 120 160" \
+DISTRACTOR_COUNTS="40 80 120 160 200 240" \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=200 \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
@@ -1811,8 +1821,9 @@ DISTRACTOR_INPUT_LEN=200 \
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
+PRECISE_START_MODE=clean \
 CACHE_PINNING_MODE=all \
-DISTRACTOR_COUNTS="40 80 120 160" \
+DISTRACTOR_COUNTS="40 80 120 160 200 240" \
 PROTECTED_INPUT_LEN=500 \
 DISTRACTOR_INPUT_LEN=200 \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
