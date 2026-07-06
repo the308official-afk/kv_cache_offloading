@@ -1,3 +1,66 @@
+
+cd ~/kv_cache_offloading
+
+ls -ld experiments experiments/raw 2>/dev/null || true
+
+sudo mkdir -p \
+  experiments/raw/sglang_transfer_logs \
+  experiments/raw/lpx_decode_split/profiles \
+  experiments/raw/agentbench/results \
+  experiments/raw/agentbench/diagnostics
+
+sudo chown -R "$USER":"$USER" experiments
+chmod -R u+rwX experiments
+
+
+
+
+
+
+
+
+cd ~/kv_cache_offloading
+
+mkdir -p experiments/raw/test_write && echo ok > experiments/raw/test_write/check.txt
+cat experiments/raw/test_write/check.txt
+
+
+
+
+
+
+
+
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+KV_RETENTION_MODE=sweep \
+KV_RETENTION_RESET_MODE=restart \
+STOP_ON_PROBE_FAILURE=1 \
+DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+PROTECTED_INPUT_LEN=400 \
+DISTRACTOR_INPUT_LEN=400 \
+PROTECTED_HINT_PROFILES="high-priority" \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
 FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
 WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
 frontend image ok
