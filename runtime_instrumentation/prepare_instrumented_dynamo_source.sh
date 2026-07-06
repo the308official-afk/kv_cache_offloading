@@ -44,6 +44,9 @@ python3 "${SCRIPT_DIR}/repair_dynamo_hint_preservation_source.py"
 echo "Repairing speculative-prefill source drift..."
 python3 "${SCRIPT_DIR}/repair_dynamo_speculative_prefill_source.py"
 
+echo "Repairing clear_kv_blocks source drift..."
+python3 "${SCRIPT_DIR}/repair_dynamo_clear_kv_source.py"
+
 echo "Repairing known Dynamo router field rename mismatch..."
 python3 "${SCRIPT_DIR}/repair_dynamo_router_field_rename.py"
 
@@ -70,6 +73,11 @@ required_markers=(
   "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.wrap_checked"
   "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.prefill_sent"
   "lib/llm/src/preprocessor/speculative_prefill.rs:worker.spec_prefill.prefill_completed"
+  "components/src/dynamo/sglang/init_llm.py:clear_kv_blocks_endpoint = runtime.endpoint("
+  "components/src/dynamo/sglang/init_llm.py:clear_kv_blocks_endpoint.serve_endpoint("
+  "components/src/dynamo/sglang/request_handlers/handler_base.py:async def clear_kv_blocks"
+  "components/src/dynamo/sglang/request_handlers/handler_base.py:flush_cache"
+  "components/src/dynamo/sglang/request_handlers/handler_base.py:runtime.register_engine_route(\"clear_kv_blocks\""
 )
 
 for marker in "${required_markers[@]}"; do

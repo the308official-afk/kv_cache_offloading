@@ -341,6 +341,25 @@ the first marker. In other words, it checks for:
 So if `prepare_instrumented_dynamo_source.sh` ends successfully, it should now
 be genuinely safe to continue into the image build.
 
+The prepare step now also repairs and verifies the Dynamo KV-flush path used by
+`EXPERIMENT_RESET_MODE=flush` and `KV_RETENTION_RESET_MODE=flush`. It checks
+for:
+
+- `clear_kv_blocks_endpoint = runtime.endpoint(...)` in
+  [`upstream/dynamo/components/src/dynamo/sglang/init_llm.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/init_llm.py)
+- `clear_kv_blocks_endpoint.serve_endpoint(...)` in
+  [`upstream/dynamo/components/src/dynamo/sglang/init_llm.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/init_llm.py)
+- `async def clear_kv_blocks(...)` in
+  [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py)
+- `runtime.register_engine_route("clear_kv_blocks", ...)` in
+  [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py)
+- `flush_cache` in
+  [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/handler_base.py)
+
+So if a future upstream clone is missing the worker-side flush plumbing, the
+prepare/build path should now fail early instead of letting you discover it
+later through `POST /clear_kv_blocks -> 404`.
+
 Then build the local runtime-logging images once:
 
 ```bash
@@ -358,6 +377,62 @@ Manual rebuild is now mainly a first-time or recovery path. The precise
 experiment wrappers will normally auto-check the machine profile, local
 instrumented source, image freshness, live worker instrumentation, and rebuild
 when needed.
+
+For most rebuilds, you do not need to delete `upstream/dynamo`. The normal
+clean rebuild path is:
+
+```bash
+cd ~/kv_cache_offloading
+
+export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+./run_dynamo_single_host.sh stop || true
+docker rm -f dynamo-sglang-worker dynamo-frontend dynamo-etcd dynamo-nats 2>/dev/null || true
+docker rmi "$FRONTEND_IMAGE" "$WORKER_IMAGE" || true
+
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+
+DOCKER_BUILD_NO_CACHE=1 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+This is the recommended default because:
+
+- it clears the old running containers
+- it clears the old precise frontend/worker images
+- it keeps the local Dynamo source clone and repairs it in place
+- it avoids the extra time of recloning Dynamo on every rebuild
+
+Only delete `upstream/dynamo` when you suspect the source clone itself is
+corrupted, inconsistent, or behaving strangely across repeated prepare runs.
+That stronger reset path is:
+
+```bash
+cd ~/kv_cache_offloading
+
+export DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-ec2}"   # or gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+./run_dynamo_single_host.sh stop || true
+docker rm -f dynamo-sglang-worker dynamo-frontend dynamo-etcd dynamo-nats 2>/dev/null || true
+docker rmi "$FRONTEND_IMAGE" "$WORKER_IMAGE" || true
+
+rm -rf upstream/dynamo
+
+./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
+
+DOCKER_BUILD_NO_CACHE=1 LEAN_FRONTEND=1 DYN_RUNTIME_JSON_LOGS=1 \
+./runtime_instrumentation/build_instrumented_dynamo_images.sh
+```
+
+So in simple terms:
+
+- default: keep `upstream/dynamo`, remove containers/images, rebuild
+- only if suspicious: also remove `upstream/dynamo` and let the repo fetch a
+  fresh pinned clone
+
+That is usually the best balance between cleanliness and rebuild time.
 
 If you suspect Docker reused a stale worker-image layer after a source repair,
 force a no-cache rebuild:
@@ -1508,6 +1583,49 @@ The contract is the source of truth for:
 - priority-hint defaults
 - optional cache-control comparison settings
 - top-level latest report paths
+
+If you want to use `KV_RETENTION_RESET_MODE=flush`, first make sure the current
+runtime actually serves the live flush endpoint:
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import urllib.request, urllib.error
+
+url = "http://127.0.0.1:8000/clear_kv_blocks"
+req = urllib.request.Request(url, data=b"{}", method="POST")
+try:
+    with urllib.request.urlopen(req, timeout=60) as resp:
+        print("STATUS:", resp.status)
+        print(resp.read().decode())
+except urllib.error.HTTPError as e:
+    print("HTTP_ERROR:", e.code)
+    print(e.read().decode())
+except Exception as e:
+    print("FAILED:", e)
+PY
+```
+
+Expected success signal:
+
+- `STATUS: 200`
+
+If you still get `404`, rebuild the precise runtime images from the repaired
+instrumented Dynamo source before using `flush`.
+
+The public experiment wrappers now automate this for you when you choose
+`flush`:
+
+- Experiment 9 (`KV_RETENTION_RESET_MODE=flush`)
+- Experiment 10 sweep path (`EXPERIMENT_RESET_MODE=flush`)
+- Experiment 11 (`EXPERIMENT_RESET_MODE=flush`)
+- Experiment 12 (`EXPERIMENT_RESET_MODE=flush`)
+
+In other words, the wrapper now does a live `POST /clear_kv_blocks` check after
+runtime startup and before the experiment requests begin. If that check fails,
+the wrapper exits early instead of letting you discover the problem halfway
+through a sweep.
 
 ### Top-Level Outputs
 

@@ -300,6 +300,12 @@ runtime_flush() {
     ./runtime_instrumentation/reset_experiment_state.sh flush
 }
 
+runtime_check_flush() {
+  local signature="$1"
+  runtime_reset_env_cmd "${signature}" \
+    ./runtime_instrumentation/reset_experiment_state.sh check-flush
+}
+
 runtime_mark_active() {
   local signature="$1"
   runtime_reset_env_cmd "${signature}" \
@@ -310,6 +316,14 @@ runtime_clear_active() {
   env \
     EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE}" \
     ./runtime_instrumentation/reset_experiment_state.sh clear-active >/dev/null
+}
+
+print_flush_ready_banner() {
+  cat <<EOF
+========================================
+LIVE FLUSH READY (the current runtime serves /clear_kv_blocks)
+========================================
+EOF
 }
 
 warn_if_worker_runtime_missing() {
@@ -381,6 +395,7 @@ if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${RUNTI
   if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
     runtime_flush "${RUNTIME_SIGNATURE}" | tee -a "${DRIVER_LOG}"
     echo "KV cache flush complete. Reusing current worker/frontend stack." | tee -a "${DRIVER_LOG}"
+    print_flush_ready_banner | tee -a "${DRIVER_LOG}"
   else
     echo "No runtime reset requested; reusing current worker/frontend stack as-is." | tee -a "${DRIVER_LOG}"
   fi
@@ -442,6 +457,11 @@ if [[ "${RUNTIME_RESTART_REQUIRED:-0}" = "1" ]]; then
   if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
     echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
     sleep "${MODEL_COOLDOWN_SECS}"
+  fi
+  if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+    echo "Checking live KV cache flush endpoint before requests..." | tee -a "${DRIVER_LOG}"
+    runtime_check_flush "${RUNTIME_SIGNATURE}" | tee -a "${DRIVER_LOG}"
+    print_flush_ready_banner | tee -a "${DRIVER_LOG}"
   fi
   runtime_mark_active "${RUNTIME_SIGNATURE}"
 fi

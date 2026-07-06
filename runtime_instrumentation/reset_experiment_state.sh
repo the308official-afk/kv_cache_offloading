@@ -15,7 +15,7 @@ WORKER_CONTAINER_NAME="${WORKER_CONTAINER_NAME:-dynamo-sglang-worker}"
 usage() {
   cat <<EOF
 Usage:
-  $0 reuse-ready|flush|mark-active|clear-active
+  $0 reuse-ready|check-flush|flush|mark-active|clear-active
 
 Environment:
   FRONTEND_URL
@@ -125,6 +125,15 @@ do_clear_active() {
 }
 
 do_flush() {
+  do_clear_kv_request "KV cache flush succeeded"
+}
+
+do_check_flush() {
+  do_clear_kv_request "KV cache flush endpoint ready"
+}
+
+do_clear_kv_request() {
+  local success_prefix="$1"
   local url http_code response_file
   url="$(clear_url)"
   response_file="$(mktemp)"
@@ -137,7 +146,7 @@ do_flush() {
     fi
     fail "KV cache flush failed at ${url} (http ${http_code:-<none>})"
   fi
-  RESPONSE_FILE="${response_file}" "${PYTHON_BIN}" - <<'PY'
+  RESPONSE_FILE="${response_file}" SUCCESS_PREFIX="${success_prefix}" "${PYTHON_BIN}" - <<'PY'
 import json
 import os
 import sys
@@ -162,7 +171,7 @@ if not cleared:
         + json.dumps(payload, sort_keys=True)
     )
 print(
-    "KV cache flush succeeded: "
+    os.environ["SUCCESS_PREFIX"] + ": "
     + json.dumps(
         {
             "cleared_workers": len(cleared),
@@ -178,6 +187,9 @@ PY
 case "${ACTION}" in
   reuse-ready)
     do_reuse_ready
+    ;;
+  check-flush)
+    do_check_flush
     ;;
   flush)
     do_flush

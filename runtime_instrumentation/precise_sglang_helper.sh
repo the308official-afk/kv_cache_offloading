@@ -139,7 +139,12 @@ _precise_dynamo_require_markers() {
       grep -q "worker.decode.request_completed" "${root}/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py" 2>/dev/null && \
       grep -q "worker.prefill.request_attached" "${root}/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py" 2>/dev/null && \
       grep -q "worker.prefill.request_completed" "${root}/components/src/dynamo/sglang/request_handlers/llm/prefill_handler.py" 2>/dev/null && \
-      grep -q "cache_control_source" "${root}/lib/llm/src/preprocessor.rs" 2>/dev/null
+      grep -q "cache_control_source" "${root}/lib/llm/src/preprocessor.rs" 2>/dev/null && \
+      grep -q "clear_kv_blocks_endpoint = runtime.endpoint(" "${root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null && \
+      grep -q "clear_kv_blocks_endpoint.serve_endpoint(" "${root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null && \
+      grep -q "async def clear_kv_blocks" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
+      grep -q "flush_cache" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
+      grep -q "register_engine_route(\"clear_kv_blocks\"" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null
       ;;
     specprefill)
       grep -q "worker.spec_prefill.wrap_checked" "${root}/lib/llm/src/preprocessor/speculative_prefill.rs" 2>/dev/null && \
@@ -167,6 +172,8 @@ precise_dynamo_source_signature() {
     "lib/llm/src/preprocessor.rs"
     "lib/llm/src/protocols/openai/nvext.rs"
     "lib/llm/src/preprocessor/speculative_prefill.rs"
+    "components/src/dynamo/sglang/init_llm.py"
+    "components/src/dynamo/sglang/request_handlers/handler_base.py"
   )
   (
     cd "${root}"

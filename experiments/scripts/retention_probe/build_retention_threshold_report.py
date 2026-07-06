@@ -814,11 +814,16 @@ def annotate_hint_runtime_effect(
         request_hint_status = str(row.get("request_agent_hints_priority_status", ""))
         worker_hint_status = str(row.get("worker_hint_status", ""))
         mechanism_ready = str(row.get("worker_priority_mechanism_ready", "false")) == "true"
+        fallback_status = str(row.get("request_top_level_priority_fallback_status", ""))
+        frontend_priority_unsupported = (
+            str(row.get("frontend_top_level_priority_compatibility", "")) == "unsupported"
+        )
+        fallback_used = fallback_status not in {"", "none", "missing_requests_csv"}
 
         if request_hint_status in {"missing_requests_csv", "none"}:
             row["hint_runtime_effect_status"] = "not_sent"
             continue
-        if str(row.get("frontend_top_level_priority_compatibility", "")) == "unsupported":
+        if frontend_priority_unsupported and not fallback_used:
             row["hint_runtime_effect_status"] = "frontend_priority_unsupported"
             continue
         if worker_hint_status in {"missing_runtime_json", "none"}:
