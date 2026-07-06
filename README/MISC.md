@@ -1,5 +1,9 @@
 ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
 
+cd ~/kv_cache_offloading
+
+cat experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25/retention_probe_progress.log
+
 DYNAMO_MACHINE_PROFILE=gh200 \
 KV_RETENTION_MODE=sweep \
 KV_RETENTION_RESET_MODE=restart \
