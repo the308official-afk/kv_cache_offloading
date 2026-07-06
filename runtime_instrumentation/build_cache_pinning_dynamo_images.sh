@@ -124,6 +124,41 @@ render_platform_args() {
   fi
 }
 
+repair_rendered_nats_install_block() {
+  local path="${1:-container/rendered.Dockerfile}"
+  if [[ ! -f "${path}" ]]; then
+    echo "Rendered Dockerfile not found for NATS repair: ${path}" >&2
+    exit 1
+  fi
+  python3 - "${path}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("# Install NATS server\n")
+end = text.find("# Install etcd\n", start)
+if start < 0 or end < 0:
+    raise SystemExit(f"Could not find NATS install block in {path}")
+replacement = """# Install NATS server
+ARG NATS_VERSION
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \\
+    NATS_ARCH="${TARGETARCH:-${ARCH:-}}" && \\
+    NATS_ARCH="${NATS_ARCH#linux/}" && \\
+    if [ "$NATS_ARCH" = "aarch64" ]; then NATS_ARCH="arm64"; fi && \\
+    if [ "$NATS_ARCH" != "amd64" ] && [ "$NATS_ARCH" != "arm64" ]; then \\
+        echo "Unsupported NATS arch: $NATS_ARCH" >&2; exit 1; \\
+    fi && \\
+    wget --tries=3 --waitretry=5 https://github.com/nats-io/nats-server/releases/download/${NATS_VERSION}/nats-server-${NATS_VERSION}-${NATS_ARCH}.deb && \\
+    dpkg -i nats-server-${NATS_VERSION}-${NATS_ARCH}.deb && rm nats-server-${NATS_VERSION}-${NATS_ARCH}.deb
+
+"""
+updated = text[:start] + replacement + text[end:]
+if updated != text:
+    path.write_text(updated)
+PY
+}
+
 require_valid_source_repo
 check_build_disk_space
 
@@ -167,6 +202,8 @@ if updated == text:
     raise SystemExit("Could not find EPP image stage to override in rendered Dockerfile")
 path.write_text(updated)
 PY
+  echo "Normalizing rendered NATS install block for amd64/arm64 asset names"
+  repair_rendered_nats_install_block "container/rendered.Dockerfile"
   if [[ "${LEAN_FRONTEND}" == "1" ]]; then
     echo "Applying lean frontend Dockerfile adjustment: skip benchmark package install"
     python3 - <<'PY'
@@ -207,6 +244,8 @@ if [[ "${SKIP_WORKER}" != "1" ]]; then
   echo "Rendering cache-pinning Dynamo SGLang runtime Dockerfile"
   mapfile -t _render_platform_args < <(render_platform_args)
   python3 container/render.py "${_render_platform_args[@]}" --framework=sglang --output-short-filename
+  echo "Normalizing rendered NATS install block for amd64/arm64 asset names"
+  repair_rendered_nats_install_block "container/rendered.Dockerfile"
   build_image "${WORKER_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 

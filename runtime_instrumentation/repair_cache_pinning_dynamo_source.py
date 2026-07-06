@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 
 
@@ -207,9 +208,45 @@ def repair_init_llm() -> None:
     write_if_changed(path, text)
 
 
+def repair_dynamo_base_template() -> None:
+    path = SOURCE_DIR / "container/templates/dynamo_base.Dockerfile"
+    text = path.read_text()
+
+    start = text.find("# Install NATS server\n")
+    end = text.find("# Install etcd\n", start)
+    if start < 0 or end < 0:
+        raise SystemExit(f"Could not find NATS install block in {path}")
+
+    replacement = """# Install NATS server
+ARG NATS_VERSION
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \\
+    NATS_ARCH="${TARGETARCH:-${ARCH:-}}" && \\
+    NATS_ARCH="${NATS_ARCH#linux/}" && \\
+    if [ "$NATS_ARCH" = "aarch64" ]; then NATS_ARCH="arm64"; fi && \\
+    if [ "$NATS_ARCH" != "amd64" ] && [ "$NATS_ARCH" != "arm64" ]; then \\
+        echo "Unsupported NATS arch: $NATS_ARCH" >&2; exit 1; \\
+    fi && \\
+    wget --tries=3 --waitretry=5 https://github.com/nats-io/nats-server/releases/download/${NATS_VERSION}/nats-server-${NATS_VERSION}-${NATS_ARCH}.deb && \\
+    dpkg -i nats-server-${NATS_VERSION}-${NATS_ARCH}.deb && rm nats-server-${NATS_VERSION}-${NATS_ARCH}.deb
+
+"""
+    updated = text[:start] + replacement + text[end:]
+
+    # Keep the change idempotent even if an older broken block used ${ARCH}
+    # while a newer source used ${TARGETARCH}.
+    updated = re.sub(
+        r'nats-server-\$\{NATS_VERSION\}-\$\{(?:TARGETARCH|ARCH)\}\.deb',
+        'nats-server-${NATS_VERSION}-${NATS_ARCH}.deb',
+        updated,
+    )
+
+    write_if_changed(path, updated)
+
+
 def main() -> None:
     repair_push_router()
     repair_init_llm()
+    repair_dynamo_base_template()
     print("Cache-pinning Dynamo source repair complete.")
 
 
