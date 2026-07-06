@@ -1537,7 +1537,7 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
--- not yet verified
+-- not yet verified.
 ```bash
 cd ~/kv_cache_offloading
 
