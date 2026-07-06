@@ -1518,7 +1518,7 @@ KV_RETENTION_MODE=probe \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-This works on EC2
+=== This works on EC2 ===
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1537,7 +1537,7 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
-This works on GH200
+=== This works on GH200 ===
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1804,30 +1804,18 @@ CACHE_PINNING_MODE=validate \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+=== This works on GH200? ===
 ```bash
 cd ~/kv_cache_offloading
 
-DYNAMO_MACHINE_PROFILE=ec2 \
+DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 CACHE_PINNING_MODE=sweep \
-DISTRACTOR_COUNTS="40 80 120 160 200 240" \
-PROTECTED_INPUT_LEN=500 \
-DISTRACTOR_INPUT_LEN=200 \
+DISTRACTOR_COUNTS="200" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=all \
-DISTRACTOR_COUNTS="40 80 120 160 200 240" \
-PROTECTED_INPUT_LEN=500 \
-DISTRACTOR_INPUT_LEN=200 \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
 ```bash
