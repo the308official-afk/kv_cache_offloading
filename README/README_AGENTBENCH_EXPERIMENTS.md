@@ -157,6 +157,53 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 - if you intentionally want a different SGLang source, override it explicitly:
   `export SGLANG_IMAGE=...` before the run
 
+First-time machine bring-up:
+
+- Experiments `9`, `11`, and `12` use the shared precise runtime stack.
+- Experiment `10` uses a separate isolated cache-pinning stack.
+
+So on a fresh machine:
+
+1. shared precise runtime for Experiments `9`, `11`, `12`
+
+```bash
+cd ~/kv_cache_offloading
+
+# EC2 / x86
+DYNAMO_MACHINE_PROFILE=ec2 \
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile ec2 \
+  --build-if-missing
+
+# GH200 / ARM64
+DYNAMO_MACHINE_PROFILE=gh200 \
+./runtime_instrumentation/ensure_precise_runtime_ready.sh \
+  --machine-profile gh200 \
+  --build-if-missing
+```
+
+2. isolated cache-pinning runtime for Experiment `10`
+
+```bash
+cd ~/kv_cache_offloading
+
+# EC2 / x86
+DYNAMO_MACHINE_PROFILE=ec2 \
+CACHE_PINNING_MODE=validate \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+
+# GH200 / ARM64
+DYNAMO_MACHINE_PROFILE=gh200 \
+CACHE_PINNING_MODE=validate \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
+The `validate` run above is the first-time bring-up for Experiment `10` because
+it will prepare the isolated cache-pinning Dynamo/SGLang sources and build the
+machine-specific cache-pinning images if they are missing.
+
 Machine profile quick switch:
 
 ```bash
