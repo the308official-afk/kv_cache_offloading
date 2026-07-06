@@ -1,735 +1,684 @@
-# MISC
+ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
 
-Small things worth trying next.
-
-## 1. Check whether this machine accepts top-level priority
-
-This is the fastest way to tell whether the frontend/runtime supports:
-
-- `priority` at the top level
-- or only `nvext.agent_hints.priority`
-
-```bash
-cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import json
-import urllib.request
-
-url = "http://127.0.0.1:8000/v1/chat/completions"
-payload = {
-    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "messages": [{"role": "user", "content": "Say hello in one word."}],
-    "max_tokens": 4,
-    "temperature": 0,
-    "priority": 10,
-}
-req = urllib.request.Request(
-    url,
-    data=json.dumps(payload).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-
-try:
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        body = resp.read().decode("utf-8")
-        print("STATUS:", resp.status)
-        print(body[:1000])
-except Exception as e:
-    print("REQUEST_FAILED:", e)
-    if hasattr(e, "read"):
-        try:
-            print(e.read().decode("utf-8"))
-        except Exception:
-            pass
-PY
-```
-
-If this fails with `Unsupported parameter(s): priority`, use:
-
-```bash
-export RETENTION_TOP_LEVEL_PRIORITY_MODE=auto
-```
-
-for retention experiments....
-
-### B. Canonical hint-path test
-
-This checks the canonical path we care about most:
-
-- `nvext.agent_hints.priority`
-
-```bash
-cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import json
-import urllib.request
-
-url = "http://127.0.0.1:8000/v1/chat/completions"
-payload = {
-    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "messages": [{"role": "user", "content": "Say hello in one word."}],
-    "max_tokens": 4,
-    "temperature": 0,
-    "nvext": {
-        "agent_hints": {
-            "priority": 10
-        }
-    }
-}
-req = urllib.request.Request(
-    url,
-    data=json.dumps(payload).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-
-try:
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        body = resp.read().decode("utf-8")
-        print("STATUS:", resp.status)
-        print(body[:1000])
-except Exception as e:
-    print("REQUEST_FAILED:", e)
-    if hasattr(e, "read"):
-        try:
-            print(e.read().decode("utf-8"))
-        except Exception:
-            pass
-PY
-```
-
-How to interpret it:
-
-- If the top-level priority test fails but this one succeeds, the machine does
-  not support top-level `priority`, but it does support
-  `nvext.agent_hints.priority`.
-- If both succeed, both paths are supported.
-- If this one fails too, the canonical hint path itself is broken on that
-  machine.
-
-## 2. Start a clean instrumented Dynamo
-
-Good default startup when you want retention, hint, and runtime evidence.
-
-```bash
-./run_dynamo_single_host.sh stop
-
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-./run_dynamo_single_host.sh start
-```
-
-Then watch the worker:
-
-```bash
-docker logs -f dynamo-sglang-worker
-```
-
-## 3. Run the simplest retention sweep first
-
-This is the quickest sanity check that the pipeline works end to end.
-
-```bash
-cd ~/kv_cache_offloading
-
-RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=light \
-DISTRACTOR_COUNTS="2 10 20" \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
+DYNAMO_MACHINE_PROFILE=gh200 \
+KV_RETENTION_MODE=sweep \
+KV_RETENTION_RESET_MODE=restart \
+DISTRACTOR_COUNTS="25 50 75 100 125 150" \
+PROTECTED_INPUT_LEN=400 \
+DISTRACTOR_INPUT_LEN=400 \
 PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=200 \
-DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_kv_retention_threshold_sweep_single_host.sh \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
-```
+========================================
+KV RETENTION MICROBENCH CONTRACT
+========================================
+Contract file: contracts/kv_retention_microbenchmark.contract.sh
+Contract doc: contracts/kv_retention_microbenchmark.contract.md
+Mode: sweep
+Model: Qwen/Qwen2.5-Coder-7B-Instruct
+Machine profile: gh200
+Schema version: 1
 
-## 4. Compare `light` vs `precise`
+Public wrapper:
+  /home/central/ojaiyeob/kv_cache_offloading/agentbench/run_kv_retention_microbenchmark_single_host.sh
 
-Use the same sweep twice:
+Internal helpers:
+  probe=/home/central/ojaiyeob/kv_cache_offloading/agentbench/run_kv_retention_probe_single_host.sh
+  sweep=/home/central/ojaiyeob/kv_cache_offloading/agentbench/run_kv_retention_threshold_sweep_single_host.sh
 
-- once with `RETENTION_ATTRIBUTION_MODE=light`
-- once with `RETENTION_ATTRIBUTION_MODE=precise`
+Runtime stack:
+  dynamo_source_dir=/home/central/ojaiyeob/kv_cache_offloading/upstream/dynamo
+  sglang_source_image=lmsysorg/sglang:v0.5.11-cu129-runtime
+  sglang_source_dir=/home/central/ojaiyeob/kv_cache_offloading/upstream/sglang
+  frontend_image=local/dynamo-frontend:runtime-json-logs-gh200
+  worker_image=local/dynamo-sglang:runtime-json-logs-gh200
 
-Goal:
+Control defaults:
+  control_hint=none
+  protected_hints=high-priority
+  control_cache_control=off
+  protected_cache_control=off
 
-- see whether the conclusion changes
-- see whether the runtime overhead is worth it
+Workload defaults:
+  kv_tier_modes=gpu_only
+  distractor_count=100
+  distractor_counts=25 50 75 100 125 150
+  protected_input_len=400
+  distractor_input_len=400
+  random_output_len=1
+  max_context_tokens=17146
 
-## 5. Compare `high-priority` vs `high-reuse`
+Runtime defaults:
+  attribution_mode=precise
+  request_context_mode=auto
+  top_level_priority_mode=auto
+  experiment_reset_mode=restart
+  transfer_log_profile=full
+  worker_base_args=--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority
 
-Try the same sweep with:
-
-```bash
-PROTECTED_HINT_PROFILES="high-priority"
-```
-
-and then:
-
-```bash
-PROTECTED_HINT_PROFILES="high-reuse"
-```
-
-Goal:
-
-- check whether priority hints and reuse hints behave differently
-- see which one shows stronger retention separation
-
-## 6. Push the eviction threshold harder
-
-If `2 10 20` is too gentle, try:
-
-```bash
-DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200"
-```
-
-Goal:
-
-- find the exact point where control loses reuse
-- see whether protected survives deeper into the sweep
-
-## 7. Try a more cache-sensitive prompt size
-
-If the run is too easy, increase:
-
-```bash
-PROTECTED_INPUT_LEN=8000
-DISTRACTOR_INPUT_LEN=2000
-```
-
-If the run is too harsh, reduce:
-
-```bash
-PROTECTED_INPUT_LEN=200
-DISTRACTOR_INPUT_LEN=200
-```
-
-Goal:
-
-- find the “middle pressure” regime where hints have room to matter
-
-## 8. Check whether SGLang actually acted on priority
-
-After a retention sweep, look for these columns in:
-
-```text
-experiments/reports/retention_threshold_matrix.csv
-```
-
-Most useful columns:
-
-- `frontend_top_level_priority_compatibility`
-- `worker_hint_status`
-- `worker_priority_mechanism_ready`
-- `worker_priority_path_status`
-- `hint_runtime_effect_status`
-
-What you want to see:
-
-- frontend compatibility is not `unsupported`
-- worker hint status is `full`
-- mechanism ready is `true`
-- priority path status becomes `applied`
-
-## 9. Run the sweep in the background
-
-Useful for long runs.
-
-```bash
-cd ~/kv_cache_offloading
-
-RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=precise \
-DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=200 \
-DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-RETENTION_TOP_LEVEL_PRIORITY_MODE=auto \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+Readiness defaults:
+  MODEL_READY_RETRIES=900
+  MODEL_READY_DELAY_SECS=3
+  MODEL_READY_STABLE_HITS=2
+  MODEL_SMOKE_RETRIES=180
+  MODEL_SMOKE_DELAY_SECS=15
+  MODEL_COOLDOWN_SECS=60
+========================================
+KV RETENTION MICROBENCH SWEEP
+========================================
+Retention threshold sweep ID: kv_retention_microbenchmark_20260706_161337__sweep
+Attribution mode: precise
+Models: 1
   Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-Then monitor:
-
-```bash
-LATEST_THRESHOLD_SWEEP="$(ls -td experiments/reports/retention_threshold_sweeps/* | head -1)"
-echo "$LATEST_THRESHOLD_SWEEP"
-
-tail -f "$LATEST_THRESHOLD_SWEEP/nohup.log"
-cat "$LATEST_THRESHOLD_SWEEP/retention_threshold_matrix.csv"
-```
-
-## 10. Try the same sweep on another machine
-
-Best cross-machine comparison knobs:
-
-- same model
-- same `DISTRACTOR_COUNTS`
-- same `PROTECTED_INPUT_LEN`
-- same `DISTRACTOR_INPUT_LEN`
-- same `GPU_ONLY_MEM_FRACTION_STATIC`
-- same `WORKER_BASE_ARGS`
-
-Then compare:
-
-- `worker_kv_capacity_tokens`
-- `a_replay_latency_ms`
-- `a_replay_cached_tokens`
-- `hint_runtime_effect_status`
-
-## 11. Good questions to keep asking
-
-- Does the frontend accept top-level `priority` on this machine?
-- Did the worker actually receive the hint?
-- Did the worker’s priority path apply it?
-- Did replay stay faster than first A?
-- Did cached tokens increase on replay?
-- Did protected survive deeper than control?
-
-## 12. GH200 priority regression checklist
-
-Use this when `priority` worked yesterday on GH200, but fails today.
-
-Most likely meaning:
-
-- you are not running the same frontend image today
-- or you restarted Dynamo without the instrumented local images
-- or the local Dynamo source / rebuild path drifted
-
-### A. Check which images are actually running
-
-```bash
-docker ps --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
-```
-
-What you want:
-
-- `dynamo-frontend` should point to `local/dynamo-frontend:runtime-json-logs`
-- `dynamo-sglang-worker` should point to `local/dynamo-sglang:runtime-json-logs`
-
-If you see stock images instead, that is probably the problem.
-
-### B. Check that the local images exist
-
-```bash
-docker images | grep -E 'dynamo-frontend|dynamo-sglang'
-```
-
-You want to see:
-
-- `local/dynamo-frontend:runtime-json-logs`
-- `local/dynamo-sglang:runtime-json-logs`
-
-### C. Re-prepare instrumented Dynamo source
-
-```bash
-cd ~/kv_cache_offloading
-
-./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
-```
-
-This makes sure:
-
-- upstream Dynamo source exists
-- the source is checked out to a known-compatible pinned Dynamo revision
-- the hint-preservation patch is applied
-- runtime JSON logging support is present
-
-If it says `Patch could not be applied cleanly`, that does not automatically
-mean failure. The prepare script now repairs known upstream Dynamo drift after
-the patch step. The real pass condition is the final line:
-
-- `Instrumented Dynamo source is ready.`
-
-The new summary is easier to read:
-
-- `applied_or_already_present` = nothing to worry about
-- `drift_repaired` = upstream changed, repair succeeded
-- `Safe to continue: yes` = go ahead and build images
-
-### D. Rebuild instrumented images for GH200
-
-```bash
-cd ~/kv_cache_offloading
-
-DOCKER_BUILD_PLATFORM=linux/arm64 \
-DYN_RUNTIME_JSON_LOGS=1 \
-./runtime_instrumentation/build_instrumented_dynamo_images.sh
-```
-
-This is the safest rebuild path for GH200 / ARM.
-
-### E. Restart Dynamo with the local images explicitly
-
-```bash
-./run_dynamo_single_host.sh stop
-
-DYN_RUNTIME_JSON_LOGS=1 \
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-./run_dynamo_single_host.sh start
-```
-
-Then immediately watch the worker:
-
-```bash
-docker logs -f dynamo-sglang-worker
-```
-
-### F. Re-run the direct top-level priority smoke test
-
-```bash
-cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import json
-import urllib.request
-
-url = "http://127.0.0.1:8000/v1/chat/completions"
-payload = {
-    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "messages": [{"role": "user", "content": "Say hello in one word."}],
-    "max_tokens": 4,
-    "temperature": 0,
-    "priority": 10,
-}
-req = urllib.request.Request(
-    url,
-    data=json.dumps(payload).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-
-try:
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        body = resp.read().decode("utf-8")
-        print("STATUS:", resp.status)
-        print(body[:1000])
-except Exception as e:
-    print("REQUEST_FAILED:", e)
-    if hasattr(e, "read"):
-        try:
-            print(e.read().decode("utf-8"))
-        except Exception:
-            pass
-PY
-```
-
-Interpretation:
-
-- if this succeeds, the frontend currently accepts top-level `priority`
-- if this fails with `Unsupported parameter(s): priority`, the frontend path is still wrong
-
-### G. If the smoke test passes, force the retention run to use priority
-
-```bash
-export RETENTION_TOP_LEVEL_PRIORITY_MODE=force
-```
-
-Why:
-
-- `force` makes the experiment fail loudly if priority breaks again
-- that is better than silently falling back when you are explicitly testing priority behavior
-
-### H. If the smoke test still fails
-
-Then the problem is not “GH200 cannot do it”.
-It more likely means:
-
-- the frontend build on this machine is not the same as the one that worked yesterday
-- or the runtime patch path changed
-- or you are not actually launching the rebuilt local frontend image
-
-At that point, compare:
-
-```bash
-docker ps --format 'table {{.Names}}\t{{.Image}}'
-docker inspect dynamo-frontend --format '{{.Config.Image}}'
-docker inspect dynamo-sglang-worker --format '{{.Config.Image}}'
-```
-
-and keep the output with the run notes.
-
-Goal:
-
-- confirm which images are actually running
-- confirm whether you started with the instrumented frontend
-- confirm whether the frontend still accepts top-level `priority`
-
-### A. Check the running Dynamo images
-
-```bash
-docker ps --format 'table {{.Names}}\t{{.Image}}'
-```
-
-What you want to see:
-
-- `dynamo-frontend` using `local/dynamo-frontend:runtime-json-logs`
-- `dynamo-sglang-worker` using `local/dynamo-sglang:runtime-json-logs`
-
-### B. Check image creation times
-
-```bash
-docker image inspect local/dynamo-frontend:runtime-json-logs \
-  --format 'frontend created={{.Created}} id={{.Id}}'
-
-docker image inspect local/dynamo-sglang:runtime-json-logs \
-  --format 'worker created={{.Created}} id={{.Id}}'
-```
-
-This helps you see whether today you are actually running the same build you expected.
-
-### C. Check that the local Dynamo source exists
-
-```bash
-cd ~/kv_cache_offloading
-
-ls -ld upstream/dynamo
-git -C upstream/dynamo rev-parse --short HEAD
-```
-
-### D. Prepare the instrumented Dynamo source again
-
-```bash
-cd ~/kv_cache_offloading
-
-./runtime_instrumentation/prepare_instrumented_dynamo_source.sh
-```
-
-### E. Rebuild the instrumented images for GH200
-
-```bash
-cd ~/kv_cache_offloading
-
-DOCKER_BUILD_PLATFORM=linux/arm64 \
-DYN_RUNTIME_JSON_LOGS=1 \
-./runtime_instrumentation/build_instrumented_dynamo_images.sh
-```
-
-### F. Restart Dynamo with the explicit local images
-
-```bash
-./run_dynamo_single_host.sh stop
-
-DYN_RUNTIME_JSON_LOGS=1 \
-DYN_TOOL_CALL_PARSER=hermes \
-DYNAMO_MODEL_PATH="$MODEL_NAME" \
-DYNAMO_SERVED_MODEL_NAME="$MODEL_NAME" \
-FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs \
-WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs \
-./run_dynamo_single_host.sh start
-```
-
-Then watch the worker:
-
-```bash
-docker logs -f dynamo-sglang-worker
-```
-
-### G. Re-run the direct top-level priority smoke test
-
-```bash
-cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import json
-import urllib.request
-
-url = "http://127.0.0.1:8000/v1/chat/completions"
-payload = {
-    "model": "Qwen/Qwen2.5-Coder-7B-Instruct",
-    "messages": [{"role": "user", "content": "Say hello in one word."}],
-    "max_tokens": 4,
-    "temperature": 0,
-    "priority": 10,
-}
-req = urllib.request.Request(
-    url,
-    data=json.dumps(payload).encode("utf-8"),
-    headers={"Content-Type": "application/json"},
-    method="POST",
-)
-
-try:
-    with urllib.request.urlopen(req, timeout=120) as resp:
-        body = resp.read().decode("utf-8")
-        print("STATUS:", resp.status)
-        print(body[:1000])
-except Exception as e:
-    print("REQUEST_FAILED:", e)
-    if hasattr(e, "read"):
-        try:
-            print(e.read().decode("utf-8"))
-        except Exception:
-            pass
-PY
-```
-
-Interpretation:
-
-- if this succeeds, the frontend accepts top-level `priority`
-- if this fails with `Unsupported parameter(s): priority`, then the frontend path you are running today still does not support it
-
-### H. Once the smoke test passes, force the retention experiment to use priority
-
-```bash
-export RETENTION_TOP_LEVEL_PRIORITY_MODE=force
-```
-
-Why `force`?
-
-- `auto` is a compatibility fallback
-- `force` is better once the frontend is fixed, because it fails loudly if priority breaks again
-
-### I. Compare the worker runtime across machines
-
-If `--radix-eviction-policy priority` worked on one machine but fails on
-another, capture the actual worker runtime on both machines and compare them:
-
-```bash
-cd ~/kv_cache_offloading
-
-export DYNAMO_MACHINE_PROFILE=ec2   # or gh200
-source runtime_instrumentation/dynamo_machine_profile.sh
-
-./runtime_instrumentation/probe_worker_runtime.sh
-```
-
-This writes a report under:
-
-```bash
-experiments/reports/runtime_probe/
-```
-
-Compare these fields between the two machines:
-
-- `worker_image`
-- `architecture`
-- package versions for `dynamo` / `sglang`
-- whether `probe_value=priority` is accepted or rejected
-- the `Help Snippet` section around `radix-eviction-policy`
-
-
-```bash
-cd ~/kv_cache_offloading
-
-export RETENTION_TOP_LEVEL_PRIORITY_MODE=disable
-
-RETENTION_SWEEP_ID="retention_threshold_sweep_$(date +%Y%m%d_%H%M%S)" \
-RETENTION_ATTRIBUTION_MODE=precise \
-DISTRACTOR_COUNTS="2 10 20 40 60 80 100 200" \
-KV_TIER_MODES="gpu_only" \
-CONTROL_HINT_PROFILE=none \
-PROTECTED_HINT_PROFILES="high-priority" \
-PROTECTED_INPUT_LEN=200 \
-DISTRACTOR_INPUT_LEN=200 \
-GPU_ONLY_MEM_FRACTION_STATIC=0.7 \
-RANDOM_OUTPUT_LEN=1 \
-MAX_CONTEXT_TOKENS=17146 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
-WORKER_BASE_ARGS="--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority" \
-./agentbench/run_kv_retention_threshold_sweep_nohup.sh \
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor counts: 25 50 75 100 125 150
+Retention probe seed: 42
+Retention sweep seed mode: fixed
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+GPU-only mem fraction static: 0.7
+Default cache-control TTL: 1h
+SGLang transfer log profile: full
+Output dir: experiments/reports/retention_threshold_sweeps/kv_retention_microbenchmark_20260706_161337__sweep
+
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=25
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Extracting SGLang source for precise KV attribution...
+Using pinned/selected SGLang source image: local/dynamo-sglang:runtime-json-logs-gh200
+Resolving installed sglang package path in image: local/dynamo-sglang:runtime-json-logs-gh200
+Package path: /sgl-workspace/sglang/python/sglang
+Destination: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Extracted sglang source to /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Potential instrumentation targets:
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hicache_storage.py
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/multimodal_gen/benchmarks/bench_serving.py
+  /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/bench_serving.py
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+patched transfer functions:
+  - backup_from_device_all_layer (6 occurrences)
+  - load_to_device_per_layer (6 occurrences)
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+patched HiRadix semantic context/cache event functions:
+  - write_backup (1 occurrence)
+  - load_back (1 occurrence)
+  - match_prefix cache event (1 occurrence)
+  - insert cache event (1 occurrence)
+  - evict cache event (1 occurrence)
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+patched async transfer context propagation:
+  - CacheOperation context capture
+  - CacheOperation merge context
+  - write-back transfer context (1 call)
+  - load-back transfer context (1 call)
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+patched request context around cache insertion:
+  - cache_finished_req request context (1 occurrence)
+  - cache_unfinished_req request context (1 occurrence)
+  - match_prefix cache event (1 occurrence)
+  - insert cache event (1 occurrence)
+  - cache_finished_req cache event (1 occurrence)
+  - cache_unfinished_req cache event (1 occurrence)
+  - evict cache event (1 occurrence)
+  - evict priority event (1 occurrence)
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
   Qwen/Qwen2.5-Coder-7B-Instruct
-```
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 25
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d25
 
-```bash
-LATEST=$(ls -td experiments/raw/agentbench/results/* | head -1)
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=50
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d50
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Reusing extracted SGLang source root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+no transfer functions patched; they may already be instrumented or absent
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+no HiRadix semantic/cache functions patched; they may already be instrumented or absent
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+no cache-controller propagation patched; it may already be instrumented or unsupported
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+no radix-cache request context patched; it may already be instrumented or unsupported
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d50
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 50
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d50
 
-python3 experiments/scripts/agentbench_report/build_run_report.py \
-  --agentbench-result-dir "$LATEST" \
-  --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
-```
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=75
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d75
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Reusing extracted SGLang source root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+no transfer functions patched; they may already be instrumented or absent
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+no HiRadix semantic/cache functions patched; they may already be instrumented or absent
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+no cache-controller propagation patched; it may already be instrumented or unsupported
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+no radix-cache request context patched; it may already be instrumented or unsupported
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d75
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 75
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d75
 
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=100
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d100
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Reusing extracted SGLang source root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+no transfer functions patched; they may already be instrumented or absent
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+no HiRadix semantic/cache functions patched; they may already be instrumented or absent
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+no cache-controller propagation patched; it may already be instrumented or unsupported
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+no radix-cache request context patched; it may already be instrumented or unsupported
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d100
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 100
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d100
 
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=125
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d125
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Reusing extracted SGLang source root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+no transfer functions patched; they may already be instrumented or absent
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+no HiRadix semantic/cache functions patched; they may already be instrumented or absent
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+no cache-controller propagation patched; it may already be instrumented or unsupported
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+no radix-cache request context patched; it may already be instrumented or unsupported
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d125
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 125
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d125
 
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
+===== Sweep cell =====
+model=Qwen/Qwen2.5-Coder-7B-Instruct
+kv_tier_mode=gpu_only
+distractor_count=150
+retention_probe_seed=42
+retention_probe_id=kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d150
+Ensuring machine-specific precise runtime images...
+Using machine profile: gh200
+FRONTEND_IMAGE=local/dynamo-frontend:runtime-json-logs-gh200
+WORKER_IMAGE=local/dynamo-sglang:runtime-json-logs-gh200
+frontend image ok
+worker image ok
+========================================
+(1/6) PRECISE RUNTIME IMAGE READY (the machine-specific Dynamo images are there)
+========================================
+Reusing extracted SGLang source root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Refreshing SGLang transfer logging patch for precise KV attribution...
+memory_pool_host: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/memory_pool_host.py
+transfer_logging: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/transfer_logging.py
+no transfer functions patched; they may already be instrumented or absent
+hiradix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/hiradix_cache.py
+no HiRadix semantic/cache functions patched; they may already be instrumented or absent
+cache_controller: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/cache_controller.py
+no cache-controller propagation patched; it may already be instrumented or unsupported
+radix_cache: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/mem_cache/radix_cache.py
+no radix-cache request context patched; it may already be instrumented or unsupported
+schedule_batch: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_batch.py
+no schedule-batch request context patched; it may already be instrumented or unsupported
+schedule_policy: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang/srt/managers/schedule_policy.py
+no schedule-policy request context patched; it may already be instrumented or unsupported
+========================================
+(2/6) PRECISE LOCAL READY (the local extracted/patched SGLang source is good)
+========================================
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Local transfer markers: ok
+Ready to start Dynamo: yes
+Retention probe ID: kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d150
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:runtime-json-logs-gh200
+Worker image: local/dynamo-sglang:runtime-json-logs-gh200
+Auto-build precise images: 1
+Attribution mode: precise
+Models: 1
+  Qwen/Qwen2.5-Coder-7B-Instruct
+KV tier modes: gpu_only
+Control hint profile: none
+Protected hint profiles: high-priority
+Control cache-control profile: off
+Protected cache-control profiles: off
+Distractor cache-control profile: off
+Distractor count: 150
+Protected input len: 400
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: auto
+Default cache-control TTL: 1h
+Cache-control doc mode: 1
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: off
+HiCache write policy: off
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: full
+SGLang root: /home/central/ojaiyeob/kv_cache_offloading/upstream/sglang/python/sglang
+Output dir: experiments/reports/retention_probe_batches/kv_retention_microbenchmark_20260706_161337__sweep_Qwen_Qwen2_5-Coder-7B-Instruct__gpu_only__d150
 
+===== Model: Qwen/Qwen2.5-Coder-7B-Instruct | KV tier: gpu_only =====
+Worker args: --enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority --mem-fraction-static 0.7
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen2.5-Coder-7B-Instruct with KV tier gpu_only...
 
+Retention threshold sweep complete.
+Progress CSV:    experiments/reports/retention_threshold_sweeps/kv_retention_microbenchmark_20260706_161337__sweep/retention_threshold_sweep_progress.csv
+Sweep matrix:    experiments/reports/retention_threshold_sweeps/kv_retention_microbenchmark_20260706_161337__sweep/retention_threshold_matrix.csv
+Comparison CSV:  experiments/reports/retention_threshold_sweeps/kv_retention_microbenchmark_20260706_161337__sweep/retention_threshold_comparison.csv
+Summary Markdown:experiments/reports/retention_threshold_sweeps/kv_retention_microbenchmark_20260706_161337__sweep/retention_threshold_summary.md
+Latest progress: experiments/reports/retention_threshold_sweep_progress.csv
+Latest matrix:   experiments/reports/retention_threshold_matrix.csv
+Latest compare:  experiments/reports/retention_threshold_comparison.csv
+Latest summary:  experiments/reports/retention_threshold_summary.md
+matrix: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_matrix.csv
+summary csv: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_summary.csv
+summary md: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_summary.md
+run contract: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/run_contract.json
+Final cleanup: stopping Dynamo once after KV retention microbenchmark.
+========================================
+KV RETENTION MICROBENCH PHASE 4 READY
+========================================
+Run directory: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337
+Run contract: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/run_contract.json
+Microbenchmark matrix: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_matrix.csv
+Microbenchmark summary: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_summary.csv
+Microbenchmark summary md: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/microbenchmark_summary.md
+Replay latency chart: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/charts/replay_latency.svg
+Replay cached chart: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/charts/replay_cached_tokens.svg
+Survival chart: experiments/reports/kv_retention_microbenchmark/kv_retention_microbenchmark_20260706_161337/charts/survival_curve.svg
+Last probe run id: <none>
+Last sweep run id: kv_retention_microbenchmark_20260706_161337__sweep
 
-Here’s a concise version you can use.
-What We Have Achieved
-Built a realistic agentic benchmark stack: SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo -> SGLang
-Automated 12 experiment types for:prompt evolution
-KV reuse / retention
-KV host-device transfer attribution
-priority scheduling
-speculative prefill
-multi-task / multi-model sweeps
-GPU-only, GPU+CPU, GPU+CPU+storage studies
-
-Added precise runtime instrumentation so we can separate:hint sent
-worker saw hint
-runtime behavior changed
-
-What We Can Measure
-TTFT / latency
-cached tokens / reuse ratio
-KV transfer activity
-retention / eviction boundary
-scheduling order under priority
-logging overhead
-cross-model and cross-hardware comparisons
-What Is Working
-priority works as a real control
-speculative_prefill works as a real control
-osl / expected_output_tokens work as routing/resource signals
-full design-space sweeps are working
-What Is Still Open
-prove whether cache_control is a true retention control in this stack
-strengthen direct proof inside SGLang decision paths
-expand support for more hint types beyond current live controls
-Why This Matters
-We are characterizing resource usage for a high-profile agentic workload
-We are recreating realistic agentic use cases on Nvidia systems
-We are using the results to guide roadmap decisions with:Storage
-AIG-SHARKS
-DESG
-GPU Architecture
-
-Core Research Value
-connects realistic agent behavior to memory/storage usage
-exposes where latency, KV movement, and retention bottlenecks come from
-gives concrete data to drive architectural enhancements
-If you want, I can compress this further into:
-one intro slide
-one achievements slide
-one open-questions slide.
-
-
-
-
-
-# salloc --nodelist=radha1 -t 3:59:00
-docker container rm pytorch-vllm -f	
-docker run -it \
-	--network=host --ipc=host --device=/dev/kfd --device=/dev/dri --group-add video  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined -v $HOME/dockerx:/dockerx --shm-size=64G \
-	-v /data/ojaiyeob:/workspace/data \
-	-w /var/lib/jenkins/dlrm/FAMBench/benchmarks/dlrm/ootb/bench \
-	--name pytorch-vllm \
-	--rm rocm/pytorch:latest \
-	-lc '
-			pwd
-			cd /workspace/dlrm/FAMBench/benchmarks/dlrm/ootb/bench
-			ls -l
-			./dlrm_s_benchmark.sh
-		'
+Current status:
+  - public wrapper: ready
+  - contract-driven defaults: ready
+  - helper orchestration: ready
+  - consolidated microbenchmark report: ready
+  - plotting: ready
