@@ -219,9 +219,9 @@ The `validate` run above is the first-time bring-up for Experiment `10` because
 it will prepare the isolated cache-pinning Dynamo/SGLang sources and build the
 machine-specific cache-pinning images if they are missing.
 
-On `gh200`, the cache-pinning image helper now also repairs the NATS download
-step automatically so ARM builds use the real `arm64` release asset name rather
-than a broken `linux/arm64` path.
+On `gh200`, the cache-pinning image helper now also repairs the `NATS` and
+`etcd` download steps automatically so ARM builds use the real `arm64`
+release asset names rather than broken `linux/arm64` paths.
 
 Source-of-truth table:
 

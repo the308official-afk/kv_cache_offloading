@@ -159,6 +159,43 @@ if updated != text:
 PY
 }
 
+repair_rendered_etcd_install_block() {
+  local path="${1:-container/rendered.Dockerfile}"
+  if [[ ! -f "${path}" ]]; then
+    echo "Rendered Dockerfile not found for ETCD repair: ${path}" >&2
+    exit 1
+  fi
+  python3 - "${path}" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+start = text.find("# Install etcd\n")
+end = text.find("ENV PATH=/usr/local/bin/etcd/:$PATH\n", start)
+if start < 0 or end < 0:
+    raise SystemExit(f"Could not find etcd install block in {path}")
+end += len("ENV PATH=/usr/local/bin/etcd/:$PATH\n")
+replacement = """# Install etcd
+ARG ETCD_VERSION
+RUN ETCD_ARCH="${TARGETARCH:-${ARCH:-}}" && \\
+    ETCD_ARCH="${ETCD_ARCH#linux/}" && \\
+    if [ "$ETCD_ARCH" = "aarch64" ]; then ETCD_ARCH="arm64"; fi && \\
+    if [ "$ETCD_ARCH" != "amd64" ] && [ "$ETCD_ARCH" != "arm64" ]; then \\
+        echo "Unsupported ETCD arch: $ETCD_ARCH" >&2; exit 1; \\
+    fi && \\
+    wget --tries=3 --waitretry=5 https://github.com/etcd-io/etcd/releases/download/$ETCD_VERSION/etcd-$ETCD_VERSION-linux-${ETCD_ARCH}.tar.gz -O /tmp/etcd.tar.gz && \\
+    mkdir -p /usr/local/bin/etcd && \\
+    tar -xvf /tmp/etcd.tar.gz -C /usr/local/bin/etcd --strip-components=1 && \\
+    rm /tmp/etcd.tar.gz
+ENV PATH=/usr/local/bin/etcd/:$PATH
+"""
+updated = text[:start] + replacement + text[end:]
+if updated != text:
+    path.write_text(updated)
+PY
+}
+
 require_valid_source_repo
 check_build_disk_space
 
@@ -204,6 +241,8 @@ path.write_text(updated)
 PY
   echo "Normalizing rendered NATS install block for amd64/arm64 asset names"
   repair_rendered_nats_install_block "container/rendered.Dockerfile"
+  echo "Normalizing rendered ETCD install block for amd64/arm64 asset names"
+  repair_rendered_etcd_install_block "container/rendered.Dockerfile"
   if [[ "${LEAN_FRONTEND}" == "1" ]]; then
     echo "Applying lean frontend Dockerfile adjustment: skip benchmark package install"
     python3 - <<'PY'
@@ -246,6 +285,8 @@ if [[ "${SKIP_WORKER}" != "1" ]]; then
   python3 container/render.py "${_render_platform_args[@]}" --framework=sglang --output-short-filename
   echo "Normalizing rendered NATS install block for amd64/arm64 asset names"
   repair_rendered_nats_install_block "container/rendered.Dockerfile"
+  echo "Normalizing rendered ETCD install block for amd64/arm64 asset names"
+  repair_rendered_etcd_install_block "container/rendered.Dockerfile"
   build_image "${WORKER_IMAGE_TAG}" "container/rendered.Dockerfile"
 fi
 

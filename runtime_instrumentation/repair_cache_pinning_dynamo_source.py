@@ -243,10 +243,45 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \\
     write_if_changed(path, updated)
 
 
+def repair_etcd_install_block() -> None:
+    path = SOURCE_DIR / "container/templates/dynamo_base.Dockerfile"
+    text = path.read_text()
+
+    start = text.find("# Install etcd\n")
+    end = text.find("ENV PATH=/usr/local/bin/etcd/:$PATH\n", start)
+    if start < 0 or end < 0:
+        raise SystemExit(f"Could not find etcd install block in {path}")
+    end += len("ENV PATH=/usr/local/bin/etcd/:$PATH\n")
+
+    replacement = """# Install etcd
+ARG ETCD_VERSION
+RUN ETCD_ARCH="${TARGETARCH:-${ARCH:-}}" && \\
+    ETCD_ARCH="${ETCD_ARCH#linux/}" && \\
+    if [ "$ETCD_ARCH" = "aarch64" ]; then ETCD_ARCH="arm64"; fi && \\
+    if [ "$ETCD_ARCH" != "amd64" ] && [ "$ETCD_ARCH" != "arm64" ]; then \\
+        echo "Unsupported ETCD arch: $ETCD_ARCH" >&2; exit 1; \\
+    fi && \\
+    wget --tries=3 --waitretry=5 https://github.com/etcd-io/etcd/releases/download/$ETCD_VERSION/etcd-$ETCD_VERSION-linux-${ETCD_ARCH}.tar.gz -O /tmp/etcd.tar.gz && \\
+    mkdir -p /usr/local/bin/etcd && \\
+    tar -xvf /tmp/etcd.tar.gz -C /usr/local/bin/etcd --strip-components=1 && \\
+    rm /tmp/etcd.tar.gz
+ENV PATH=/usr/local/bin/etcd/:$PATH
+"""
+    updated = text[:start] + replacement + text[end:]
+    updated = re.sub(
+        r'etcd-\$ETCD_VERSION-linux-\$\{(?:TARGETARCH|ARCH)\}\.tar\.gz',
+        'etcd-$ETCD_VERSION-linux-${ETCD_ARCH}.tar.gz',
+        updated,
+    )
+
+    write_if_changed(path, updated)
+
+
 def main() -> None:
     repair_push_router()
     repair_init_llm()
     repair_dynamo_base_template()
+    repair_etcd_install_block()
     print("Cache-pinning Dynamo source repair complete.")
 
 
