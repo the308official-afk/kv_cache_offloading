@@ -1,3 +1,4 @@
-cd ~/kv_cache_offloading
-source runtime_instrumentation/cache_pinning_profile.sh
-docker rmi "$CACHE_PINNING_FRONTEND_IMAGE" "$CACHE_PINNING_WORKER_IMAGE" 2>/dev/null || true
+status	run_id	model	kv_tier	arm	cache_control	distractors	first_http_status	replay_http_status	first_ms	replay_ms	delta_ms	speedup_x	replay_cached	replay_reuse	warm	warm_source	reuse_signal	req_cache_status	req_cache_values	worker_cache_status	worker_cache_values	replay_evicts	replay_evict_cache	replay_evict_cache_match	replay_evict_status	result
+complete	cache_pinning_microbenchmark_20260707_004059__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	60	200	200	189	127	-62	1.488	1216	0.976	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
+complete	cache_pinning_microbenchmark_20260707_004059__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	60	200	200	189	128	-61	1.477	1216	0.976	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
+
