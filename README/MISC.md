@@ -11,3 +11,8 @@ CACHE_PINNING_MODE=validate \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
+
+
+run_id	model	ttl	frontend_flag	turn1_status	turn2_status	turn1_ms	turn2_ms	turn1_cached	turn2_cached	turn2_cache	router_pin	router_ttls	router_skip	worker_pin	worker_ttls	worker_pin_refreshes	result
+cache_pinning_microbenchmark_20260707_010545__validate	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	1h	#NAME?	200	200	770	1250		128	hit	spawned	3600	cache_control_ttl_missing	applied	3600	0	pin_path_applied_and_cache_reused
+
