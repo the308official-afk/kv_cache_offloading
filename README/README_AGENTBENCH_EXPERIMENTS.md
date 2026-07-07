@@ -1820,6 +1820,17 @@ PROTECTED_INPUT_LEN=2000 \
 DISTRACTOR_INPUT_LEN=2000 \
 ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+CACHE_PINNING_MODE=sweep \
+DISTRACTOR_COUNTS="60" \
+PROTECTED_INPUT_LEN=1200 \
+DISTRACTOR_INPUT_LEN=1200 \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
 ```bash
