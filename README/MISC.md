@@ -1,41 +1,27 @@
-status	run_id	model	kv_tier	arm	cache_control	distractors	first_http_status	replay_http_status	first_ms	replay_ms	delta_ms	speedup_x	replay_cached	replay_reuse	warm	warm_source	reuse_signal	req_cache_status	req_cache_values	worker_cache_status	worker_cache_values	replay_evicts	replay_evict_cache	replay_evict_cache_match	replay_evict_status	result
-complete	cache_pinning_microbenchmark_20260707_004059__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	60	200	200	189	127	-62	1.488	1216	0.976	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
-complete	cache_pinning_microbenchmark_20260707_004059__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	60	200	200	189	128	-61	1.477	1216	0.976	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
-
 ```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=validate \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+docker logs -f dynamo-sglang-worker | egrep -i "prefill|cache|evict|hicache|warn|error"
 ```
 
 
-run_id	model	ttl	frontend_flag	turn1_status	turn2_status	turn1_ms	turn2_ms	turn1_cached	turn2_cached	turn2_cache	router_pin	router_ttls	router_skip	worker_pin	worker_ttls	worker_pin_refreshes	result
-cache_pinning_microbenchmark_20260707_010545__validate	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	1h	#NAME?	200	200	770	1250		128	hit	spawned	3600	cache_control_ttl_missing	applied	3600	0	pin_path_applied_and_cache_reused
+```bash
+while true; do
+  date
+  nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader
+  sleep 2
+done
+```
 
-# Cache-Pinning Doc Validation
 
-- run_id: `cache_pinning_microbenchmark_20260707_010545__validate`
-- model: `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8`
-- ttl: `1h`
-- frontend_flag: `--enable-cache-control`
-- turn1_status: `200`
-- turn2_status: `200`
-- turn1_ms: `770`
-- turn2_ms: `1250`
-- turn1_cached: ``
-- turn2_cached: `128`
-- turn2_cache: `hit`
-- router_pin: `spawned`
-- router_ttls: `3600`
-- router_skip: `cache_control_ttl_missing`
-- worker_pin: `applied`
-- worker_ttls: `3600`
-- worker_pin_refreshes: `0`
-- result: `pin_path_applied_and_cache_reused`
+```bash
+while true; do
+  date
+  docker stats --no-stream dynamo-sglang-worker
+  echo
+  vmstat 1 2 | tail -1
+  echo "----------------------------------------"
+  sleep 2
+done
+```
 
 
 ```bash
@@ -43,50 +29,120 @@ cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=sweep \
+RETENTION_PROBE_ID="cachepin_debug_control_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+KV_TIER_MODES=gpu_cpu \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=off \
+PROTECTED_CACHE_CONTROL_PROFILES=off \
+DISTRACTOR_COUNT=800 \
+PROTECTED_INPUT_LEN=4000 \
+DISTRACTOR_INPUT_LEN=400 \
 EXPERIMENT_RESET_MODE=restart \
-DISTRACTOR_COUNTS="120 240" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+STOP_ON_PROBE_FAILURE=1 \
+./agentbench/run_kv_retention_probe_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-
-```bash
-ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=sweep \
-EXPERIMENT_RESET_MODE=restart \
-DISTRACTOR_COUNTS="120 240" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-
-```
 
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+RETENTION_PROBE_ID="cachepin_debug_ephemeral_$(date +%Y%m%d_%H%M%S)" \
+RETENTION_ATTRIBUTION_MODE=light \
+KV_TIER_MODES=gpu_cpu \
+CONTROL_HINT_PROFILE=none \
+PROTECTED_HINT_PROFILES=none \
+CONTROL_CACHE_CONTROL_PROFILE=ephemeral:1h \
+PROTECTED_CACHE_CONTROL_PROFILES=ephemeral:1h \
+DISTRACTOR_COUNT=800 \
+PROTECTED_INPUT_LEN=4000 \
+DISTRACTOR_INPUT_LEN=400 \
+EXPERIMENT_RESET_MODE=restart \
+STOP_ON_PROBE_FAILURE=1 \
+./agentbench/run_kv_retention_probe_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+
+```bash
+
+```
+
+
+
+
+benchmark_id	part	row_kind	run_id	model	kv_tier	arm	turn	distractors	cache_control	ttl	http_status	latency_ms	prompt_tokens	cached_tokens	cache_hit	reuse_ratio	warm	first_ms	replay_ms	delta_ms	speedup_x	router_pin	worker_pin	worker_refreshes	req_cache_status	worker_cache_status	replay_evicts	replay_evict_status	result	reuse_signal
+cache_pinning_microbenchmark_20260707_021550	validate	validate_turn	cache_pinning_microbenchmark_20260707_021550__validate	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8		protected	turn1		ephemeral:1h	1h	200	762	30		miss							spawned	applied	0					pin_path_applied_and_cache_reused	
+cache_pinning_microbenchmark_20260707_021550	validate	validate_turn	cache_pinning_microbenchmark_20260707_021550__validate	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8		protected	turn2		ephemeral:1h	1h	200	1245	175	128	hit							spawned	applied	0					pin_path_applied_and_cache_reused	
+cache_pinning_microbenchmark_20260707_021550	validate	validate_summary	cache_pinning_microbenchmark_20260707_021550__validate	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8		protected	turn2		ephemeral:1h	1h	200	1245		128	hit			762	1245			spawned	applied	0					pin_path_applied_and_cache_reused	doc_validation
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	replay	60	off		200	75		1984	hit	0.97	TRUE	201	75	-126	2.68				full	missing_runtime_json	0	no_evict_seen	control_row	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	replay	60	ephemeral:1h		200	74		1984	hit	0.97	TRUE	201	74	-127	2.716				full	missing_runtime_json	0	no_evict_seen	not_sent	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	replay	120	off		200	74		1984	hit	0.97	TRUE	198	74	-124	2.676				full	missing_runtime_json	0	no_evict_seen	control_row	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	replay	120	ephemeral:1h		200	78		1984	hit	0.97	TRUE	198	78	-120	2.538				full	missing_runtime_json	0	no_evict_seen	not_sent	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	replay	200	off		200	76		1984	hit	0.97	TRUE	201	76	-125	2.645				full	missing_runtime_json	0	no_evict_seen	control_row	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	replay	200	ephemeral:1h		200	74		1984	hit	0.97	TRUE	201	74	-127	2.716				full	missing_runtime_json	0	no_evict_seen	not_sent	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	replay	240	off		200	74		1984	hit	0.97	TRUE	200	74	-126	2.703				full	missing_runtime_json	0	no_evict_seen	control_row	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	replay	240	ephemeral:1h		200	78		1984	hit	0.97	TRUE	204	78	-126	2.615				full	missing_runtime_json	0	no_evict_seen	not_sent	true_reuse_hit
+cache_pinning_microbenchmark_20260707_021550	sweep	sweep_compare	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	compare			ephemeral:1h		complete												missing_runtime_json			missing_runtime_json			not_sent	inconclusive
+
+
+
+
+
+
+
+
+
+```bash
 python3 - <<'PY'
 import csv
 from pathlib import Path
 
-p = Path("experiments/reports/latest_cache_pinning_retention_threshold_matrix.csv")
-with p.open() as f:
-    rows = list(csv.DictReader(f))
+path = Path("experiments/reports/latest_retention_probe_requests.csv")
+rows = list(csv.DictReader(path.open()))
 
-for row in rows:
+distractors = [r for r in rows if str(r.get("request_role","")).startswith("distractor_")]
+reused = [r for r in distractors if str(r.get("cached_prompt_tokens","")).strip() not in {"", "0"}]
+
+print("total_distractors:", len(distractors))
+print("reused_distractors:", len(reused))
+
+for r in reused[:20]:
     print(
-        row.get("arm"),
-        row.get("cache_control"),
-        row.get("distractors"),
-        row.get("warm"),
-        row.get("replay_ms"),
-        row.get("replay_cached"),
+        r["request_role"],
+        "cached_prompt_tokens=", r.get("cached_prompt_tokens",""),
+        "cache_reuse_ratio=", r.get("cache_reuse_ratio",""),
+        "prompt_hash=", r.get("prompt_hash",""),
     )
+PY
+```
+
+
+
+
+
+```bash
+python3 - <<'PY'
+import csv
+from pathlib import Path
+from collections import Counter
+
+path = Path("experiments/reports/latest_retention_probe_requests.csv")
+rows = list(csv.DictReader(path.open()))
+
+distractors = [r for r in rows if str(r.get("request_role","")).startswith("distractor_")]
+hashes = [r.get("prompt_hash","") for r in distractors]
+
+print("total_distractors:", len(distractors))
+print("unique_prompt_hashes:", len(set(hashes)))
+
+dups = [item for item, count in Counter(hashes).items() if count > 1]
+print("repeated_hashes:", len(dups))
+if dups:
+    print("example_repeated_hashes:", dups[:10])
 PY
 ```
