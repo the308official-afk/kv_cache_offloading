@@ -1,25 +1,2027 @@
-status	run_id	model	kv_tier	arm	cache_control	distractors	first_http_status	replay_http_status	first_ms	replay_ms	delta_ms	speedup_x	replay_cached	replay_reuse	warm	warm_source	reuse_signal	req_cache_status	req_cache_values	worker_cache_status	worker_cache_values	replay_evicts	replay_evict_cache	replay_evict_cache_match	replay_evict_status	result
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	60	200	200	201	75	-126	2.68	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	60	200	200	201	74	-127	2.716	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	120	200	200	198	74	-124	2.676	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	120	200	200	198	78	-120	2.538	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	200	200	200	201	76	-125	2.645	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	200	200	200	201	74	-127	2.716	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	control	off	240	200	200	200	74	-126	2.703	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:off|a_replay:off	missing_runtime_json		0		FALSE	no_evict_seen	control_row
-complete	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	protected	ephemeral:1h	240	200	200	204	78	-126	2.615	1984	0.97	TRUE	response_usage_cached_tokens	true_reuse_hit	full	a_first:ephemeral:1h|a_replay:ephemeral:1h	missing_runtime_json		0		FALSE	no_evict_seen	not_sent
+[33/402] distractor_0031 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[34/402] distractor_0032 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[35/402] distractor_0033 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[36/402] distractor_0034 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[37/402] distractor_0035 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[38/402] distractor_0036 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[39/402] distractor_0037 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[40/402] distractor_0038 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[41/402] distractor_0039 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[42/402] distractor_0040 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[43/402] distractor_0041 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[44/402] distractor_0042 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[45/402] distractor_0043 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[46/402] distractor_0044 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[47/402] distractor_0045 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[48/402] distractor_0046 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[49/402] distractor_0047 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[50/402] distractor_0048 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[51/402] distractor_0049 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[52/402] distractor_0050 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[53/402] distractor_0051 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[54/402] distractor_0052 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[55/402] distractor_0053 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[56/402] distractor_0054 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[57/402] distractor_0055 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[58/402] distractor_0056 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[59/402] distractor_0057 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[60/402] distractor_0058 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[61/402] distractor_0059 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[62/402] distractor_0060 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[63/402] distractor_0061 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[64/402] distractor_0062 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[65/402] distractor_0063 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[66/402] distractor_0064 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[67/402] distractor_0065 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[68/402] distractor_0066 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[69/402] distractor_0067 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[70/402] distractor_0068 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[71/402] distractor_0069 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[72/402] distractor_0070 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[73/402] distractor_0071 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[74/402] distractor_0072 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[75/402] distractor_0073 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[76/402] distractor_0074 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[77/402] distractor_0075 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[78/402] distractor_0076 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[79/402] distractor_0077 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[80/402] distractor_0078 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[81/402] distractor_0079 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[82/402] distractor_0080 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[83/402] distractor_0081 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[84/402] distractor_0082 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[85/402] distractor_0083 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[86/402] distractor_0084 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[87/402] distractor_0085 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[88/402] distractor_0086 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[89/402] distractor_0087 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[90/402] distractor_0088 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[91/402] distractor_0089 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[92/402] distractor_0090 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[93/402] distractor_0091 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[94/402] distractor_0092 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[95/402] distractor_0093 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[96/402] distractor_0094 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[97/402] distractor_0095 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[98/402] distractor_0096 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[99/402] distractor_0097 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[100/402] distractor_0098 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[101/402] distractor_0099 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[102/402] distractor_0100 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[103/402] distractor_0101 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[104/402] distractor_0102 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[105/402] distractor_0103 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[106/402] distractor_0104 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[107/402] distractor_0105 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[108/402] distractor_0106 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[109/402] distractor_0107 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[110/402] distractor_0108 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[111/402] distractor_0109 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[112/402] distractor_0110 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[113/402] distractor_0111 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[114/402] distractor_0112 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[115/402] distractor_0113 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[116/402] distractor_0114 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[117/402] distractor_0115 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[118/402] distractor_0116 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[119/402] distractor_0117 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[120/402] distractor_0118 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[121/402] distractor_0119 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[122/402] distractor_0120 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[123/402] distractor_0121 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[124/402] distractor_0122 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[125/402] distractor_0123 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[126/402] distractor_0124 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[127/402] distractor_0125 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[128/402] distractor_0126 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[129/402] distractor_0127 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[130/402] distractor_0128 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[131/402] distractor_0129 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[132/402] distractor_0130 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[133/402] distractor_0131 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[134/402] distractor_0132 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[135/402] distractor_0133 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[136/402] distractor_0134 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[137/402] distractor_0135 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[138/402] distractor_0136 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[139/402] distractor_0137 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[140/402] distractor_0138 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[141/402] distractor_0139 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[142/402] distractor_0140 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[143/402] distractor_0141 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[144/402] distractor_0142 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[145/402] distractor_0143 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[146/402] distractor_0144 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[147/402] distractor_0145 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[148/402] distractor_0146 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[149/402] distractor_0147 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[150/402] distractor_0148 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[151/402] distractor_0149 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[152/402] distractor_0150 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[153/402] distractor_0151 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[154/402] distractor_0152 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[155/402] distractor_0153 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[156/402] distractor_0154 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[157/402] distractor_0155 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[158/402] distractor_0156 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[159/402] distractor_0157 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[160/402] distractor_0158 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[161/402] distractor_0159 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[162/402] distractor_0160 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[163/402] distractor_0161 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[164/402] distractor_0162 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[165/402] distractor_0163 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[166/402] distractor_0164 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[167/402] distractor_0165 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[168/402] distractor_0166 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[169/402] distractor_0167 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[170/402] distractor_0168 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[171/402] distractor_0169 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[172/402] distractor_0170 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[173/402] distractor_0171 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[174/402] distractor_0172 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[175/402] distractor_0173 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[176/402] distractor_0174 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[177/402] distractor_0175 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[178/402] distractor_0176 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[179/402] distractor_0177 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[180/402] distractor_0178 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[181/402] distractor_0179 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[182/402] distractor_0180 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[183/402] distractor_0181 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[184/402] distractor_0182 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[185/402] distractor_0183 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[186/402] distractor_0184 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[187/402] distractor_0185 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[188/402] distractor_0186 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[189/402] distractor_0187 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[190/402] distractor_0188 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[191/402] distractor_0189 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[192/402] distractor_0190 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[193/402] distractor_0191 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[194/402] distractor_0192 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[195/402] distractor_0193 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[196/402] distractor_0194 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[197/402] distractor_0195 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[198/402] distractor_0196 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[199/402] distractor_0197 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[200/402] distractor_0198 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[201/402] distractor_0199 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[202/402] distractor_0200 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[203/402] distractor_0201 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[204/402] distractor_0202 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[205/402] distractor_0203 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[206/402] distractor_0204 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[207/402] distractor_0205 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[208/402] distractor_0206 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[209/402] distractor_0207 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[210/402] distractor_0208 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[211/402] distractor_0209 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[212/402] distractor_0210 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[213/402] distractor_0211 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[214/402] distractor_0212 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[215/402] distractor_0213 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[216/402] distractor_0214 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[217/402] distractor_0215 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[218/402] distractor_0216 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[219/402] distractor_0217 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[220/402] distractor_0218 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[221/402] distractor_0219 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[222/402] distractor_0220 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[223/402] distractor_0221 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[224/402] distractor_0222 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[225/402] distractor_0223 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[226/402] distractor_0224 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[227/402] distractor_0225 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[228/402] distractor_0226 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[229/402] distractor_0227 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[230/402] distractor_0228 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[231/402] distractor_0229 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[232/402] distractor_0230 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[233/402] distractor_0231 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[234/402] distractor_0232 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[235/402] distractor_0233 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[236/402] distractor_0234 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[237/402] distractor_0235 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[238/402] distractor_0236 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[239/402] distractor_0237 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[240/402] distractor_0238 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[241/402] distractor_0239 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[242/402] distractor_0240 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[243/402] distractor_0241 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[244/402] distractor_0242 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[245/402] distractor_0243 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[246/402] distractor_0244 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[247/402] distractor_0245 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[248/402] distractor_0246 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[249/402] distractor_0247 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[250/402] distractor_0248 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[251/402] distractor_0249 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[252/402] distractor_0250 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[253/402] distractor_0251 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[254/402] distractor_0252 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[255/402] distractor_0253 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[256/402] distractor_0254 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[257/402] distractor_0255 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[258/402] distractor_0256 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[259/402] distractor_0257 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[260/402] distractor_0258 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[261/402] distractor_0259 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[262/402] distractor_0260 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[263/402] distractor_0261 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[264/402] distractor_0262 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[265/402] distractor_0263 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[266/402] distractor_0264 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[267/402] distractor_0265 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[268/402] distractor_0266 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[269/402] distractor_0267 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[270/402] distractor_0268 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[271/402] distractor_0269 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[272/402] distractor_0270 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[273/402] distractor_0271 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[274/402] distractor_0272 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[275/402] distractor_0273 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[276/402] distractor_0274 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[277/402] distractor_0275 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[278/402] distractor_0276 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[279/402] distractor_0277 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[280/402] distractor_0278 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[281/402] distractor_0279 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[282/402] distractor_0280 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[283/402] distractor_0281 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[284/402] distractor_0282 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[285/402] distractor_0283 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[286/402] distractor_0284 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[287/402] distractor_0285 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[288/402] distractor_0286 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[289/402] distractor_0287 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[290/402] distractor_0288 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[291/402] distractor_0289 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[292/402] distractor_0290 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[293/402] distractor_0291 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[294/402] distractor_0292 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[295/402] distractor_0293 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[296/402] distractor_0294 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[297/402] distractor_0295 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[298/402] distractor_0296 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[299/402] distractor_0297 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[300/402] distractor_0298 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[301/402] distractor_0299 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[302/402] distractor_0300 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[303/402] distractor_0301 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[304/402] distractor_0302 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[305/402] distractor_0303 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[306/402] distractor_0304 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[307/402] distractor_0305 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[308/402] distractor_0306 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[309/402] distractor_0307 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[310/402] distractor_0308 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[311/402] distractor_0309 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[312/402] distractor_0310 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[313/402] distractor_0311 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[314/402] distractor_0312 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[315/402] distractor_0313 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[316/402] distractor_0314 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[317/402] distractor_0315 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[318/402] distractor_0316 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[319/402] distractor_0317 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[320/402] distractor_0318 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[321/402] distractor_0319 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[322/402] distractor_0320 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[323/402] distractor_0321 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[324/402] distractor_0322 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[325/402] distractor_0323 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[326/402] distractor_0324 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[327/402] distractor_0325 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[328/402] distractor_0326 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[329/402] distractor_0327 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[330/402] distractor_0328 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[331/402] distractor_0329 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[332/402] distractor_0330 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[333/402] distractor_0331 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[334/402] distractor_0332 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[335/402] distractor_0333 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[336/402] distractor_0334 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[337/402] distractor_0335 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[338/402] distractor_0336 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[339/402] distractor_0337 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[340/402] distractor_0338 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[341/402] distractor_0339 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[342/402] distractor_0340 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[343/402] distractor_0341 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[344/402] distractor_0342 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[345/402] distractor_0343 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[346/402] distractor_0344 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[347/402] distractor_0345 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[348/402] distractor_0346 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[349/402] distractor_0347 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[350/402] distractor_0348 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[351/402] distractor_0349 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[352/402] distractor_0350 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[353/402] distractor_0351 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[354/402] distractor_0352 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[355/402] distractor_0353 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[356/402] distractor_0354 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[357/402] distractor_0355 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[358/402] distractor_0356 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[359/402] distractor_0357 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[360/402] distractor_0358 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[361/402] distractor_0359 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[362/402] distractor_0360 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[363/402] distractor_0361 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[364/402] distractor_0362 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[365/402] distractor_0363 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[366/402] distractor_0364 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[367/402] distractor_0365 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[368/402] distractor_0366 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[369/402] distractor_0367 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[370/402] distractor_0368 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[371/402] distractor_0369 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[372/402] distractor_0370 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[373/402] distractor_0371 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[374/402] distractor_0372 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[375/402] distractor_0373 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[376/402] distractor_0374 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[377/402] distractor_0375 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[378/402] distractor_0376 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[379/402] distractor_0377 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[380/402] distractor_0378 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[381/402] distractor_0379 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[382/402] distractor_0380 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[383/402] distractor_0381 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[384/402] distractor_0382 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[385/402] distractor_0383 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[386/402] distractor_0384 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[387/402] distractor_0385 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[388/402] distractor_0386 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[389/402] distractor_0387 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[390/402] distractor_0388 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[391/402] distractor_0389 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[392/402] distractor_0390 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[393/402] distractor_0391 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[394/402] distractor_0392 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[395/402] distractor_0393 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[396/402] distractor_0394 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[397/402] distractor_0395 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[398/402] distractor_0396 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[399/402] distractor_0397 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[400/402] distractor_0398 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[401/402] distractor_0399 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[402/402] a_replay hint_profile=none cache_control_profile=ephemeral:1h
+  status=200 latency_ms=94 cached=4032 reuse=0.997
+Request rows: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_requests.csv
+Run summary:  /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_summary.csv
+Public CSV:   /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_public_summary.csv
+Summary md:   /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_summary.md
+Matrix:       /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/design_space_retention_matrix.csv
+Postprocessing retention probe with worker runtime log: experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h__worker_runtime.log
+Request rows: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_requests.csv
+Run summary:  /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_summary.csv
+Public CSV:   /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_public_summary.csv
+Summary md:   /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__ephemeral_1h_/retention_probe_summary.md
+Matrix:       /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/design_space_retention_matrix.csv
 
-
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=sweep \
-EXPERIMENT_RESET_MODE=restart \
-DISTRACTOR_COUNTS="400 800 1200 1600" \
-PROTECTED_INPUT_LEN=4000 \
-DISTRACTOR_INPUT_LEN=400 \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+Retention probe complete.
+Batch summary: experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/retention_probe_batch_summary.md
+Progress CSV:   experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/retention_probe_progress.csv
+Batch matrix:   experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d400/design_space_retention_matrix.csv
+Latest matrix:  experiments/reports/design_space_retention_matrix.csv
+Latest probe progress: experiments/reports/latest_retention_probe_progress.csv
+Latest probe matrix:   experiments/reports/latest_retention_probe_matrix.csv
+Latest probe requests: experiments/reports/latest_retention_probe_requests.csv
+Latest probe summary:  experiments/reports/latest_retention_probe_summary.md
+===== Sweep cell =====
+model=Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+kv_tier_mode=gpu_cpu
+distractor_count=800
+retention_probe_seed=42
+retention_probe_id=cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d800
+Retention probe ID: cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d800
+Machine profile: gh200
+Frontend image: local/dynamo-frontend:cache-pinning-gh200
+Worker image: local/dynamo-sglang:cache-pinning-gh200
+Auto-build precise images: 1
+Attribution mode: light
+Models: 1
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
+KV tier modes: gpu_cpu
+Control hint profile: none
+Protected hint profiles: none
+Control cache-control profile: off
+Protected cache-control profiles: ephemeral:1h
+Distractor cache-control profile: off
+Distractor count: 800
+Protected input len: 4000
+Distractor input len: 400
+Random output len: 1
+Max context tokens: 17146
+Context reserve tokens: 2048
+Top-level priority mode: disable
+Default cache-control TTL: 1h
+Cache-control doc mode: 0
+Cache-control frontend flag status: disabled
+Cache-control source pin-path status: not_requested
+Cache-control pinned ratio: 0.1
+HiCache write policy: write_through
+Mem fraction static: 0.7
+GPU-only mem fraction static: 0.7
+SGLang transfer log profile: disabled in light mode
+SGLang root: not required in light mode
+Output dir: experiments/reports/retention_probe_batches/cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d800
+
+Note:
+  cache_control is enabled in this run.
+  Doc-aligned prerequisites now attempt to turn on:
+    - hierarchical cache
+    - HiCache write-through
+    - nonzero HiCache pinned ratio
+    - frontend --enable-cache-control when supported by the pinned source
+
+  Current source checks for this run:
+    - frontend flag status: disabled
+    - source pin path status: not_requested
+
+  Treat this run as:
+    - metadata receipt / forwarding proof
+    - worker-side observability proof
+    - empirical behavior check
+  and only treat it as confirmed TTL pinning proof if the runtime under test
+  also exposes a real cache-pin execution path.
+
+===== Model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 | KV tier: gpu_cpu =====
+Worker args: --enable-cache-report --radix-eviction-policy lru --mem-fraction-static 0.7 --enable-hierarchical-cache --hicache-ratio 1 --hicache-write-policy write_through
+Each hint profile below gets an isolated runtime reset so cache state stays isolated.
+--- Arm role: control | Hint profile: none | Cache-control profile: off (reset mode: restart) ---
+Stopping Dynamo...
+========================================
+(3/6) MODEL READINESS ACTIVE (extended model wait and smoke timing are active)
+========================================
+MODEL_READY_RETRIES=900
+MODEL_READY_DELAY_SECS=3
+MODEL_READY_STABLE_HITS=2
+MODEL_SMOKE_RETRIES=180
+MODEL_SMOKE_DELAY_SECS=15
+MODEL_COOLDOWN_SECS=60
+Starting Dynamo for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 with KV tier gpu_cpu...
+Smoke test 1/180 for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+Smoke test passed for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+========================================
+(5/6) MODEL READINESS GO (model registration and smoke test both passed)
+========================================
+Cooldown: 60s
+Running retention probe: model=Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 kv_tier=gpu_cpu hint_profile=none cache_control_profile=off arm_role=control run_id=cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d800_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__off__control
+KV retention probe run_id=cache_pinning_microbenchmark_20260707_045046__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__d800_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_cpu__none__off__control
+model=Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+prompt_generator_version=cache-word-v2
+requests=802 protected_hint_profile=none protected_cache_control_profile=off
+[1/802] a_first hint_profile=none cache_control_profile=off
+  status=200 latency_ms=228 cached= reuse=
+[2/802] distractor_0000 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=792 cached= reuse=
+[3/802] distractor_0001 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[4/802] distractor_0002 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[5/802] distractor_0003 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[6/802] distractor_0004 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[7/802] distractor_0005 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[8/802] distractor_0006 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[9/802] distractor_0007 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[10/802] distractor_0008 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[11/802] distractor_0009 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[12/802] distractor_0010 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[13/802] distractor_0011 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[14/802] distractor_0012 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[15/802] distractor_0013 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[16/802] distractor_0014 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[17/802] distractor_0015 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[18/802] distractor_0016 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[19/802] distractor_0017 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[20/802] distractor_0018 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[21/802] distractor_0019 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[22/802] distractor_0020 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[23/802] distractor_0021 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[24/802] distractor_0022 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[25/802] distractor_0023 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[26/802] distractor_0024 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[27/802] distractor_0025 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[28/802] distractor_0026 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[29/802] distractor_0027 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[30/802] distractor_0028 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[31/802] distractor_0029 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[32/802] distractor_0030 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[33/802] distractor_0031 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[34/802] distractor_0032 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[35/802] distractor_0033 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[36/802] distractor_0034 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[37/802] distractor_0035 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[38/802] distractor_0036 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[39/802] distractor_0037 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[40/802] distractor_0038 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[41/802] distractor_0039 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[42/802] distractor_0040 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[43/802] distractor_0041 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[44/802] distractor_0042 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[45/802] distractor_0043 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[46/802] distractor_0044 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[47/802] distractor_0045 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[48/802] distractor_0046 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[49/802] distractor_0047 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[50/802] distractor_0048 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[51/802] distractor_0049 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[52/802] distractor_0050 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[53/802] distractor_0051 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[54/802] distractor_0052 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[55/802] distractor_0053 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[56/802] distractor_0054 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[57/802] distractor_0055 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[58/802] distractor_0056 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[59/802] distractor_0057 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[60/802] distractor_0058 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[61/802] distractor_0059 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[62/802] distractor_0060 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[63/802] distractor_0061 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[64/802] distractor_0062 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[65/802] distractor_0063 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[66/802] distractor_0064 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[67/802] distractor_0065 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[68/802] distractor_0066 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[69/802] distractor_0067 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[70/802] distractor_0068 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[71/802] distractor_0069 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[72/802] distractor_0070 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[73/802] distractor_0071 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[74/802] distractor_0072 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[75/802] distractor_0073 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[76/802] distractor_0074 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[77/802] distractor_0075 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[78/802] distractor_0076 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[79/802] distractor_0077 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[80/802] distractor_0078 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[81/802] distractor_0079 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[82/802] distractor_0080 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[83/802] distractor_0081 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[84/802] distractor_0082 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[85/802] distractor_0083 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[86/802] distractor_0084 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[87/802] distractor_0085 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[88/802] distractor_0086 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[89/802] distractor_0087 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[90/802] distractor_0088 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[91/802] distractor_0089 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[92/802] distractor_0090 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[93/802] distractor_0091 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[94/802] distractor_0092 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[95/802] distractor_0093 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[96/802] distractor_0094 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[97/802] distractor_0095 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[98/802] distractor_0096 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[99/802] distractor_0097 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[100/802] distractor_0098 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[101/802] distractor_0099 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[102/802] distractor_0100 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[103/802] distractor_0101 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[104/802] distractor_0102 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[105/802] distractor_0103 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[106/802] distractor_0104 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[107/802] distractor_0105 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[108/802] distractor_0106 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[109/802] distractor_0107 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[110/802] distractor_0108 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[111/802] distractor_0109 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[112/802] distractor_0110 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[113/802] distractor_0111 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[114/802] distractor_0112 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[115/802] distractor_0113 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[116/802] distractor_0114 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[117/802] distractor_0115 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[118/802] distractor_0116 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[119/802] distractor_0117 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[120/802] distractor_0118 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[121/802] distractor_0119 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[122/802] distractor_0120 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[123/802] distractor_0121 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[124/802] distractor_0122 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[125/802] distractor_0123 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[126/802] distractor_0124 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[127/802] distractor_0125 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[128/802] distractor_0126 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[129/802] distractor_0127 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[130/802] distractor_0128 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[131/802] distractor_0129 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[132/802] distractor_0130 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[133/802] distractor_0131 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[134/802] distractor_0132 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[135/802] distractor_0133 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[136/802] distractor_0134 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[137/802] distractor_0135 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[138/802] distractor_0136 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[139/802] distractor_0137 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[140/802] distractor_0138 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[141/802] distractor_0139 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[142/802] distractor_0140 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[143/802] distractor_0141 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[144/802] distractor_0142 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[145/802] distractor_0143 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[146/802] distractor_0144 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[147/802] distractor_0145 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[148/802] distractor_0146 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[149/802] distractor_0147 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[150/802] distractor_0148 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[151/802] distractor_0149 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[152/802] distractor_0150 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[153/802] distractor_0151 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[154/802] distractor_0152 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[155/802] distractor_0153 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[156/802] distractor_0154 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[157/802] distractor_0155 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[158/802] distractor_0156 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[159/802] distractor_0157 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[160/802] distractor_0158 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[161/802] distractor_0159 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[162/802] distractor_0160 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[163/802] distractor_0161 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[164/802] distractor_0162 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[165/802] distractor_0163 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[166/802] distractor_0164 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[167/802] distractor_0165 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[168/802] distractor_0166 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[169/802] distractor_0167 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[170/802] distractor_0168 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[171/802] distractor_0169 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[172/802] distractor_0170 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[173/802] distractor_0171 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[174/802] distractor_0172 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[175/802] distractor_0173 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[176/802] distractor_0174 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[177/802] distractor_0175 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[178/802] distractor_0176 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[179/802] distractor_0177 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[180/802] distractor_0178 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[181/802] distractor_0179 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[182/802] distractor_0180 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[183/802] distractor_0181 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[184/802] distractor_0182 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[185/802] distractor_0183 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[186/802] distractor_0184 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[187/802] distractor_0185 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[188/802] distractor_0186 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[189/802] distractor_0187 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[190/802] distractor_0188 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[191/802] distractor_0189 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[192/802] distractor_0190 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[193/802] distractor_0191 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[194/802] distractor_0192 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[195/802] distractor_0193 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[196/802] distractor_0194 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[197/802] distractor_0195 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[198/802] distractor_0196 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[199/802] distractor_0197 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[200/802] distractor_0198 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[201/802] distractor_0199 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[202/802] distractor_0200 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[203/802] distractor_0201 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[204/802] distractor_0202 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[205/802] distractor_0203 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[206/802] distractor_0204 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[207/802] distractor_0205 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[208/802] distractor_0206 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[209/802] distractor_0207 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[210/802] distractor_0208 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[211/802] distractor_0209 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[212/802] distractor_0210 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[213/802] distractor_0211 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[214/802] distractor_0212 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[215/802] distractor_0213 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[216/802] distractor_0214 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[217/802] distractor_0215 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[218/802] distractor_0216 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[219/802] distractor_0217 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[220/802] distractor_0218 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[221/802] distractor_0219 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[222/802] distractor_0220 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[223/802] distractor_0221 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[224/802] distractor_0222 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[225/802] distractor_0223 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[226/802] distractor_0224 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[227/802] distractor_0225 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[228/802] distractor_0226 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[229/802] distractor_0227 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[230/802] distractor_0228 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[231/802] distractor_0229 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[232/802] distractor_0230 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[233/802] distractor_0231 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[234/802] distractor_0232 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[235/802] distractor_0233 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[236/802] distractor_0234 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[237/802] distractor_0235 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[238/802] distractor_0236 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[239/802] distractor_0237 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[240/802] distractor_0238 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[241/802] distractor_0239 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[242/802] distractor_0240 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[243/802] distractor_0241 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[244/802] distractor_0242 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[245/802] distractor_0243 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[246/802] distractor_0244 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[247/802] distractor_0245 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[248/802] distractor_0246 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[249/802] distractor_0247 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[250/802] distractor_0248 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[251/802] distractor_0249 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[252/802] distractor_0250 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[253/802] distractor_0251 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[254/802] distractor_0252 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[255/802] distractor_0253 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[256/802] distractor_0254 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=96 cached= reuse=
+[257/802] distractor_0255 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[258/802] distractor_0256 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[259/802] distractor_0257 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[260/802] distractor_0258 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[261/802] distractor_0259 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[262/802] distractor_0260 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[263/802] distractor_0261 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[264/802] distractor_0262 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[265/802] distractor_0263 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[266/802] distractor_0264 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[267/802] distractor_0265 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[268/802] distractor_0266 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[269/802] distractor_0267 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[270/802] distractor_0268 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[271/802] distractor_0269 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[272/802] distractor_0270 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[273/802] distractor_0271 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[274/802] distractor_0272 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[275/802] distractor_0273 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[276/802] distractor_0274 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[277/802] distractor_0275 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[278/802] distractor_0276 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[279/802] distractor_0277 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[280/802] distractor_0278 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[281/802] distractor_0279 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[282/802] distractor_0280 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[283/802] distractor_0281 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[284/802] distractor_0282 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[285/802] distractor_0283 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[286/802] distractor_0284 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[287/802] distractor_0285 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[288/802] distractor_0286 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[289/802] distractor_0287 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[290/802] distractor_0288 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[291/802] distractor_0289 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[292/802] distractor_0290 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[293/802] distractor_0291 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[294/802] distractor_0292 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[295/802] distractor_0293 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[296/802] distractor_0294 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[297/802] distractor_0295 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[298/802] distractor_0296 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[299/802] distractor_0297 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[300/802] distractor_0298 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[301/802] distractor_0299 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[302/802] distractor_0300 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[303/802] distractor_0301 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[304/802] distractor_0302 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[305/802] distractor_0303 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[306/802] distractor_0304 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[307/802] distractor_0305 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[308/802] distractor_0306 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[309/802] distractor_0307 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[310/802] distractor_0308 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[311/802] distractor_0309 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[312/802] distractor_0310 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[313/802] distractor_0311 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[314/802] distractor_0312 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[315/802] distractor_0313 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[316/802] distractor_0314 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[317/802] distractor_0315 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[318/802] distractor_0316 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[319/802] distractor_0317 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[320/802] distractor_0318 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[321/802] distractor_0319 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[322/802] distractor_0320 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[323/802] distractor_0321 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[324/802] distractor_0322 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[325/802] distractor_0323 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[326/802] distractor_0324 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[327/802] distractor_0325 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[328/802] distractor_0326 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[329/802] distractor_0327 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[330/802] distractor_0328 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[331/802] distractor_0329 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[332/802] distractor_0330 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[333/802] distractor_0331 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[334/802] distractor_0332 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=86 cached= reuse=
+[335/802] distractor_0333 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[336/802] distractor_0334 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[337/802] distractor_0335 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[338/802] distractor_0336 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[339/802] distractor_0337 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[340/802] distractor_0338 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[341/802] distractor_0339 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[342/802] distractor_0340 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[343/802] distractor_0341 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[344/802] distractor_0342 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[345/802] distractor_0343 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[346/802] distractor_0344 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[347/802] distractor_0345 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[348/802] distractor_0346 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[349/802] distractor_0347 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[350/802] distractor_0348 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[351/802] distractor_0349 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[352/802] distractor_0350 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[353/802] distractor_0351 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[354/802] distractor_0352 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[355/802] distractor_0353 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[356/802] distractor_0354 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[357/802] distractor_0355 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[358/802] distractor_0356 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[359/802] distractor_0357 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[360/802] distractor_0358 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[361/802] distractor_0359 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[362/802] distractor_0360 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[363/802] distractor_0361 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[364/802] distractor_0362 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[365/802] distractor_0363 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[366/802] distractor_0364 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[367/802] distractor_0365 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[368/802] distractor_0366 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[369/802] distractor_0367 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[370/802] distractor_0368 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[371/802] distractor_0369 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[372/802] distractor_0370 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[373/802] distractor_0371 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[374/802] distractor_0372 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[375/802] distractor_0373 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[376/802] distractor_0374 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[377/802] distractor_0375 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[378/802] distractor_0376 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[379/802] distractor_0377 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[380/802] distractor_0378 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[381/802] distractor_0379 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[382/802] distractor_0380 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[383/802] distractor_0381 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[384/802] distractor_0382 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[385/802] distractor_0383 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[386/802] distractor_0384 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[387/802] distractor_0385 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[388/802] distractor_0386 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[389/802] distractor_0387 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[390/802] distractor_0388 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[391/802] distractor_0389 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[392/802] distractor_0390 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[393/802] distractor_0391 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[394/802] distractor_0392 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[395/802] distractor_0393 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[396/802] distractor_0394 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[397/802] distractor_0395 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[398/802] distractor_0396 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[399/802] distractor_0397 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[400/802] distractor_0398 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[401/802] distractor_0399 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[402/802] distractor_0400 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[403/802] distractor_0401 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[404/802] distractor_0402 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[405/802] distractor_0403 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[406/802] distractor_0404 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[407/802] distractor_0405 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[408/802] distractor_0406 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[409/802] distractor_0407 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[410/802] distractor_0408 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[411/802] distractor_0409 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[412/802] distractor_0410 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[413/802] distractor_0411 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[414/802] distractor_0412 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[415/802] distractor_0413 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[416/802] distractor_0414 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[417/802] distractor_0415 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[418/802] distractor_0416 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[419/802] distractor_0417 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[420/802] distractor_0418 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[421/802] distractor_0419 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[422/802] distractor_0420 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[423/802] distractor_0421 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[424/802] distractor_0422 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[425/802] distractor_0423 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[426/802] distractor_0424 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[427/802] distractor_0425 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[428/802] distractor_0426 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[429/802] distractor_0427 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[430/802] distractor_0428 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[431/802] distractor_0429 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[432/802] distractor_0430 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[433/802] distractor_0431 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[434/802] distractor_0432 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[435/802] distractor_0433 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[436/802] distractor_0434 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[437/802] distractor_0435 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[438/802] distractor_0436 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[439/802] distractor_0437 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[440/802] distractor_0438 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[441/802] distractor_0439 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[442/802] distractor_0440 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[443/802] distractor_0441 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[444/802] distractor_0442 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[445/802] distractor_0443 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[446/802] distractor_0444 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[447/802] distractor_0445 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[448/802] distractor_0446 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[449/802] distractor_0447 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[450/802] distractor_0448 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[451/802] distractor_0449 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[452/802] distractor_0450 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[453/802] distractor_0451 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[454/802] distractor_0452 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[455/802] distractor_0453 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[456/802] distractor_0454 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[457/802] distractor_0455 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[458/802] distractor_0456 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[459/802] distractor_0457 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[460/802] distractor_0458 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[461/802] distractor_0459 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[462/802] distractor_0460 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[463/802] distractor_0461 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[464/802] distractor_0462 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[465/802] distractor_0463 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[466/802] distractor_0464 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[467/802] distractor_0465 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[468/802] distractor_0466 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[469/802] distractor_0467 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[470/802] distractor_0468 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[471/802] distractor_0469 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[472/802] distractor_0470 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[473/802] distractor_0471 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[474/802] distractor_0472 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[475/802] distractor_0473 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[476/802] distractor_0474 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[477/802] distractor_0475 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[478/802] distractor_0476 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[479/802] distractor_0477 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[480/802] distractor_0478 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[481/802] distractor_0479 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[482/802] distractor_0480 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[483/802] distractor_0481 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[484/802] distractor_0482 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[485/802] distractor_0483 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[486/802] distractor_0484 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[487/802] distractor_0485 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[488/802] distractor_0486 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[489/802] distractor_0487 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[490/802] distractor_0488 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[491/802] distractor_0489 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[492/802] distractor_0490 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[493/802] distractor_0491 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[494/802] distractor_0492 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[495/802] distractor_0493 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=81 cached= reuse=
+[496/802] distractor_0494 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[497/802] distractor_0495 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[498/802] distractor_0496 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[499/802] distractor_0497 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[500/802] distractor_0498 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[501/802] distractor_0499 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[502/802] distractor_0500 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[503/802] distractor_0501 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[504/802] distractor_0502 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[505/802] distractor_0503 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[506/802] distractor_0504 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[507/802] distractor_0505 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[508/802] distractor_0506 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[509/802] distractor_0507 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[510/802] distractor_0508 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[511/802] distractor_0509 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[512/802] distractor_0510 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[513/802] distractor_0511 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[514/802] distractor_0512 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[515/802] distractor_0513 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[516/802] distractor_0514 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[517/802] distractor_0515 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[518/802] distractor_0516 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[519/802] distractor_0517 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[520/802] distractor_0518 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[521/802] distractor_0519 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[522/802] distractor_0520 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[523/802] distractor_0521 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[524/802] distractor_0522 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[525/802] distractor_0523 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[526/802] distractor_0524 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[527/802] distractor_0525 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[528/802] distractor_0526 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[529/802] distractor_0527 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[530/802] distractor_0528 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[531/802] distractor_0529 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[532/802] distractor_0530 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[533/802] distractor_0531 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[534/802] distractor_0532 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[535/802] distractor_0533 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[536/802] distractor_0534 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[537/802] distractor_0535 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[538/802] distractor_0536 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[539/802] distractor_0537 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[540/802] distractor_0538 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[541/802] distractor_0539 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[542/802] distractor_0540 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[543/802] distractor_0541 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[544/802] distractor_0542 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[545/802] distractor_0543 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[546/802] distractor_0544 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[547/802] distractor_0545 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[548/802] distractor_0546 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[549/802] distractor_0547 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[550/802] distractor_0548 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[551/802] distractor_0549 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[552/802] distractor_0550 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[553/802] distractor_0551 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[554/802] distractor_0552 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[555/802] distractor_0553 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[556/802] distractor_0554 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[557/802] distractor_0555 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[558/802] distractor_0556 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[559/802] distractor_0557 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[560/802] distractor_0558 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[561/802] distractor_0559 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[562/802] distractor_0560 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[563/802] distractor_0561 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[564/802] distractor_0562 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[565/802] distractor_0563 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[566/802] distractor_0564 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[567/802] distractor_0565 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=82 cached= reuse=
+[568/802] distractor_0566 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=91 cached= reuse=
+[569/802] distractor_0567 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=87 cached= reuse=
+[570/802] distractor_0568 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=84 cached= reuse=
+[571/802] distractor_0569 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[572/802] distractor_0570 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[573/802] distractor_0571 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[574/802] distractor_0572 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[575/802] distractor_0573 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[576/802] distractor_0574 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=85 cached= reuse=
+[577/802] distractor_0575 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[578/802] distractor_0576 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=83 cached= reuse=
+[579/802] distractor_0577 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=2662 cached= reuse=
+[580/802] distractor_0578 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=209726 cached= reuse=
+[581/802] distractor_0579 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=8463 cached= reuse=
+[582/802] distractor_0580 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=9576 cached= reuse=
+[583/802] distractor_0581 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=9576 cached= reuse=
+[584/802] distractor_0582 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=9987 cached= reuse=
+[585/802] distractor_0583 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=9255 cached= reuse=
+[586/802] distractor_0584 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=166907 cached= reuse=
+[587/802] distractor_0585 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=158968 cached= reuse=
+[588/802] distractor_0586 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=194435 cached= reuse=
+[589/802] distractor_0587 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=168594 cached= reuse=
+[590/802] distractor_0588 hint_profile=none cache_control_profile=off
+  status=200 latency_ms=174641 cached= reuse=
+[591/802] distractor_0589 hint_profile=none cache_control_profile=off
+ojaiyeob@gracehopper:~/kv_cache_offloading$
