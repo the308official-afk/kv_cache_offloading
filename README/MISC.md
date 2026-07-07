@@ -6,17 +6,21 @@ docker logs -f dynamo-sglang-worker | egrep -i "prefill|cache|evict|hicache|warn
 ```bash
 while true; do
   date
-  docker stats --no-stream dynamo-sglang-worker dynamo-frontend
-  echo
-  nvidia-smi --query-gpu=timestamp,utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader
-  echo "----------------------------------------"
+  nvidia-smi --query-gpu=utilization.gpu,utilization.memory,memory.used,memory.total --format=csv,noheader
   sleep 2
 done
 ```
 
 
 ```bash
-vmstat 1
+while true; do
+  date
+  docker stats --no-stream dynamo-sglang-worker
+  echo
+  vmstat 1 2 | tail -1
+  echo "----------------------------------------"
+  sleep 2
+done
 ```
 
 
