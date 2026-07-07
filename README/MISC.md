@@ -67,3 +67,26 @@ DISTRACTOR_INPUT_LEN=2000 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 
 ```
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+p = Path("experiments/reports/latest_cache_pinning_retention_threshold_matrix.csv")
+with p.open() as f:
+    rows = list(csv.DictReader(f))
+
+for row in rows:
+    print(
+        row.get("arm"),
+        row.get("cache_control"),
+        row.get("distractors"),
+        row.get("warm"),
+        row.get("replay_ms"),
+        row.get("replay_cached"),
+    )
+PY
+```
