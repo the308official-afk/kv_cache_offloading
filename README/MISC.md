@@ -97,7 +97,7 @@ cache_pinning_microbenchmark_20260707_021550	sweep	sweep_compare	cache_pinning_m
 
 
 
-
+```bash
 python3 - <<'PY'
 import csv
 from pathlib import Path
@@ -119,13 +119,13 @@ for r in reused[:20]:
         "prompt_hash=", r.get("prompt_hash",""),
     )
 PY
+```
 
 
 
 
 
-
-
+```bash
 python3 - <<'PY'
 import csv
 from pathlib import Path
@@ -145,3 +145,4 @@ print("repeated_hashes:", len(dups))
 if dups:
     print("example_repeated_hashes:", dups[:10])
 PY
+```
