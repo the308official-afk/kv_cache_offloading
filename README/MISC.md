@@ -90,3 +90,58 @@ cache_pinning_microbenchmark_20260707_021550	sweep	sweep_arm	cache_pinning_micro
 cache_pinning_microbenchmark_20260707_021550	sweep	sweep_compare	cache_pinning_microbenchmark_20260707_021550__sweep	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	gpu_cpu	compare			ephemeral:1h		complete												missing_runtime_json			missing_runtime_json			not_sent	inconclusive
 
 
+
+
+
+
+
+
+
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+path = Path("experiments/reports/latest_retention_probe_requests.csv")
+rows = list(csv.DictReader(path.open()))
+
+distractors = [r for r in rows if str(r.get("request_role","")).startswith("distractor_")]
+reused = [r for r in distractors if str(r.get("cached_prompt_tokens","")).strip() not in {"", "0"}]
+
+print("total_distractors:", len(distractors))
+print("reused_distractors:", len(reused))
+
+for r in reused[:20]:
+    print(
+        r["request_role"],
+        "cached_prompt_tokens=", r.get("cached_prompt_tokens",""),
+        "cache_reuse_ratio=", r.get("cache_reuse_ratio",""),
+        "prompt_hash=", r.get("prompt_hash",""),
+    )
+PY
+
+
+
+
+
+
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+from collections import Counter
+
+path = Path("experiments/reports/latest_retention_probe_requests.csv")
+rows = list(csv.DictReader(path.open()))
+
+distractors = [r for r in rows if str(r.get("request_role","")).startswith("distractor_")]
+hashes = [r.get("prompt_hash","") for r in distractors]
+
+print("total_distractors:", len(distractors))
+print("unique_prompt_hashes:", len(set(hashes)))
+
+dups = [item for item, count in Counter(hashes).items() if count > 1]
+print("repeated_hashes:", len(dups))
+if dups:
+    print("example_repeated_hashes:", dups[:10])
+PY
