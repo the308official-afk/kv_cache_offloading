@@ -1808,6 +1808,21 @@ CACHE_PINNING_MODE=validate \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+=== This works on EC2? ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=ec2 \
+PRECISE_START_MODE=clean \
+CACHE_PINNING_MODE=all \
+EXPERIMENT_RESET_MODE=restart \
+DISTRACTOR_COUNTS="120 160 200 240" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=200 \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
+```
+
 === This works on GH200? ===
 ```bash
 cd ~/kv_cache_offloading
