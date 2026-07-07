@@ -1808,18 +1808,54 @@ CACHE_PINNING_MODE=validate \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
+=== This works on EC2? ===
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="cache_pinning_all_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/cache_pinning_microbenchmark_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  DYNAMO_MACHINE_PROFILE=ec2 \
+  PRECISE_START_MODE=clean \
+  CACHE_PINNING_MODE=all \
+  EXPERIMENT_RESET_MODE=restart \
+  DISTRACTOR_COUNTS="60 120 200 240" \
+  PROTECTED_INPUT_LEN=800 \
+  DISTRACTOR_INPUT_LEN=200 \
+  ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+    Qwen/Qwen2.5-Coder-7B-Instruct \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
+```
+
 === This works on GH200? ===
 ```bash
 cd ~/kv_cache_offloading
 
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-CACHE_PINNING_MODE=sweep \
-DISTRACTOR_COUNTS="200" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+RUN_ID="cache_pinning_all_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/cache_pinning_microbenchmark_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  PRECISE_START_MODE=clean \
+  CACHE_PINNING_MODE=all \
+  EXPERIMENT_RESET_MODE=restart \
+  DISTRACTOR_COUNTS="60 120 200 240" \
+  PROTECTED_INPUT_LEN=2000 \
+  DISTRACTOR_INPUT_LEN=200 \
+  ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
 ```
 
 ```bash
