@@ -382,12 +382,12 @@ require_retention_probe_script_ready() {
     echo "Retention probe script not found: ${probe_script}" >&2
     exit 1
   fi
-  if ! grep -q 'PROMPT_GENERATOR_VERSION = "cache-word-v2"' "${probe_script}"; then
+  if ! grep -q 'PROMPT_GENERATOR_VERSION = "cache-word-v3"' "${probe_script}"; then
     cat >&2 <<EOF
 Retention probe script is stale:
   ${probe_script}
 
-Expected prompt generator version: cache-word-v2.
+Expected prompt generator version: cache-word-v3.
 Sync the latest repo changes to EC2 before running this experiment.
 EOF
     exit 1

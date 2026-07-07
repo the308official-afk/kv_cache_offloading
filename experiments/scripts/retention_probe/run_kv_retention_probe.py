@@ -29,7 +29,7 @@ DEFAULT_CACHE_EVENT_LOG = (
     / "sglang_transfer_logs"
     / "latest_sglang_transfer_events.jsonl"
 )
-PROMPT_GENERATOR_VERSION = "cache-word-v2"
+PROMPT_GENERATOR_VERSION = "cache-word-v3"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
 RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -59,6 +59,33 @@ HINT_PROFILES: dict[str, dict[str, Any]] = {
 
 NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
 CACHE_CONTROL_OFF_PROFILES = {"", "none", "off", "disable", "disabled", "no-cache-control", "no_cache_control"}
+
+# Tokenizer-friendly common words used to build highly divergent distractor
+# prompts. The goal is to make distractor prefixes differ early so they do not
+# accidentally enjoy KV reuse from one another.
+DISTRACTOR_WORD_BANK = [
+    "amber", "anchor", "apple", "arch", "ash", "aster", "atlas", "autumn",
+    "bamboo", "barley", "bay", "beacon", "berry", "birch", "blossom", "brook",
+    "cabin", "cactus", "canal", "canyon", "cedar", "chalk", "cinder", "clay",
+    "cliff", "cloud", "cobalt", "comet", "coral", "cove", "crater", "creek",
+    "crystal", "dawn", "delta", "desert", "dove", "drift", "dune", "echo",
+    "elm", "ember", "falcon", "field", "finch", "fjord", "flint", "flora",
+    "foam", "forest", "fossil", "fox", "frost", "garden", "glacier", "glade",
+    "grain", "granite", "grove", "harbor", "harvest", "hazel", "heather", "heron",
+    "hollow", "horizon", "iceberg", "iris", "island", "ivy", "jade", "juniper",
+    "lagoon", "lake", "laurel", "lava", "leaf", "lilac", "linen", "lotus",
+    "lumen", "magnet", "maple", "marble", "marsh", "meadow", "mercury", "mesa",
+    "meteor", "mint", "mist", "monsoon", "moon", "moss", "mountain", "nectar",
+    "night", "north", "oasis", "oak", "ocean", "onyx", "opal", "orchard",
+    "otter", "owl", "palm", "pearl", "pebble", "petal", "pine", "planet",
+    "plaza", "plum", "pond", "prairie", "quartz", "quill", "rain", "raven",
+    "reed", "reef", "ridge", "river", "robin", "saffron", "sage", "sand",
+    "satin", "scarlet", "sea", "shadow", "shell", "shore", "silver", "sky",
+    "slate", "snow", "solstice", "sparrow", "spruce", "spring", "star", "stone",
+    "storm", "stream", "summer", "sun", "surf", "swift", "terra", "thistle",
+    "thunder", "tide", "timber", "topaz", "trail", "trellis", "tulip", "valley",
+    "velvet", "violet", "water", "wave", "willow", "wind", "winter", "wren",
+]
 
 
 REQUEST_COLUMNS = [
@@ -343,7 +370,42 @@ def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def make_distractor_prompt(*, role: str, target_len: int, seed: int) -> str:
+    rng = random.Random(f"{role}:{seed}:{target_len}:distractor")
+    vocab = list(DISTRACTOR_WORD_BANK)
+    rng.shuffle(vocab)
+
+    # Force early divergence across distractors. This is more important for KV
+    # pressure than changing only tail words, because prefix overlap is what the
+    # cache matches first.
+    prefix_len = min(48, target_len)
+    prefix_words = vocab[:prefix_len]
+    cycle_words = vocab[prefix_len:] or vocab
+    stride = (rng.randrange(5, len(cycle_words), 2) if len(cycle_words) > 5 else 1)
+    offset = rng.randrange(len(cycle_words)) if cycle_words else 0
+
+    body_words: list[str] = []
+    for idx in range(target_len):
+        if idx < prefix_len:
+            body_words.append(prefix_words[idx])
+            continue
+        cycle_idx = (offset + (idx - prefix_len) * stride) % len(cycle_words)
+        body_words.append(cycle_words[cycle_idx])
+
+    nonce_words = prefix_words[: min(8, len(prefix_words))]
+    header = (
+        f"{role} " +
+        " ".join(nonce_words) + ". "
+        "Return exactly one short answer token. "
+        "This distractor uses a role-specific word stream so its prefix diverges early. "
+    )
+    return header + " ".join(body_words)
+
+
 def make_prompt(*, role: str, target_len: int, seed: int) -> str:
+    if role.startswith("distractor_"):
+        return make_distractor_prompt(role=role, target_len=target_len, seed=seed)
+
     rng = random.Random(f"{role}:{seed}:{target_len}")
     header = (
         f"KV cache retention probe prompt role={role}. "
