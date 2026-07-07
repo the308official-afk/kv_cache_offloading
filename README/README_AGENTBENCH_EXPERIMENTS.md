@@ -1846,7 +1846,7 @@ nohup env \
   PRECISE_START_MODE=clean \
   CACHE_PINNING_MODE=sweep \
   EXPERIMENT_RESET_MODE=restart \
-  DISTRACTOR_COUNTS="400 800 1200 1600" \
+  DISTRACTOR_COUNTS="400 600 1200 1600" \
   PROTECTED_INPUT_LEN=4000 \
   DISTRACTOR_INPUT_LEN=400 \
   ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
