@@ -36,3 +36,18 @@ cache_pinning_microbenchmark_20260707_010545__validate	Qwen/Qwen3-Coder-30B-A3B-
 - worker_ttls: `3600`
 - worker_pin_refreshes: `0`
 - result: `pin_path_applied_and_cache_reused`
+
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+CACHE_PINNING_MODE=sweep \
+EXPERIMENT_RESET_MODE=restart \
+DISTRACTOR_COUNTS="120 160 200 240" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
+./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
