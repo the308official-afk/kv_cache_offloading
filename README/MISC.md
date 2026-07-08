@@ -179,58 +179,82 @@ cache_pinning_microbenchmark_20260707_165021	sweep	sweep_compare	cache_pinning_m
 
 
 
-2026-07-08T22:28:35.423499Z  WARN dynamo_llm::hub: Cannot connect to ModelExpress server: Transport error: transport error. Using direct download.
-2026-07-08T22:28:35.423516Z  INFO modelexpress_common::download: Downloading model 'Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8' using provider: Hugging Face
-2026-07-08T22:28:35.423543Z  INFO modelexpress_common::providers::huggingface: Using cache directory: "/home/dynamo/.cache/huggingface/hub"
-2026-07-08T22:28:35.499385Z  INFO modelexpress_common::providers::huggingface: Downloaded model files for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-2026-07-08T22:28:35.499429Z  INFO dynamo_llm::hub: ModelExpress download completed successfully for model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-2026-07-08T22:28:35.504331Z  INFO _core: Registered base model 'Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8' MDC
-2026-07-08T22:28:35.504441Z  INFO register._register_model_with_runtime_config: Successfully registered LLM with runtime config
-2026-07-08T22:28:35.504473Z  INFO register.register_model_with_readiness_gate: Model registration succeeded; processing queued requests
-2026-07-08T22:28:40.951251Z  INFO handle_payload: dynamo_runtime::pipeline::network::ingress::push_handler: request received request_id=a7d0086e-9a5b-4940-8b98-0026e75182df request_id="a7d0086e-9a5b-4940-8b98-0026e75182df" component="backend" endpoint="generate" namespace="dynamo" instance_id=7587894972260893829
-2026-07-08T22:28:40.952068Z  INFO runtime_logging.emit_runtime_event: [RUNTIME_JSON] {"agent_hints":null,"agent_hints_keys":[],"agent_hints_source":"missing","cache_control":null,"cache_control_source":"missing","cache_control_ttl":null,"cache_control_type":null,"component":"worker.decode","event_type":"worker.decode.request_received","external_request_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","hint_probe_id":null,"model":"Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8","request_context":null,"runtime_context_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","serving_mode":"DisaggregationMode.AGGREGATED"}
-2026-07-08T22:28:40.952194Z  WARN engine._resolve_routed_dp_rank: routed_dp_rank=0 is ignored because dp_size=1
-[SGLANG_TRANSFER_JSON] {"action": "match_prefix", "cache_page_size": 64, "event": "sglang.cache", "function": "match_prefix", "semantic_token_count": 0, "semantic_token_ids_preview": [], "semantic_token_source": null, "timestamp": "2026-07-08T22:28:41.074279Z", "timestamp_ns": 1783549721074291795, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-[SGLANG_TRANSFER_JSON] {"action": "insert", "cache_page_size": 64, "cache_prefix_len": 0, "event": "sglang.cache", "function": "insert", "request_context_function": "cache_unfinished_req", "request_metadata_source": "attached_object.rid", "semantic_token_count": 0, "semantic_token_ids_preview": [], "semantic_token_source": null, "sglang_request_id": "9ebc9560bd924d128f72b8e8e5322ea0", "timestamp": "2026-07-08T22:28:50.272373Z", "timestamp_ns": 1783549730272388473, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-[SGLANG_TRANSFER_JSON] {"action": "insert", "cache_page_size": 64, "cache_prefix_len": 0, "event": "sglang.cache", "function": "insert", "request_context_function": "cache_unfinished_req", "request_metadata_source": "attached_object.rid", "semantic_token_count": 0, "semantic_token_ids_preview": [], "semantic_token_source": null, "sglang_request_id": "9ebc9560bd924d128f72b8e8e5322ea0", "timestamp": "2026-07-08T22:28:50.272373Z", "timestamp_ns": 1783549730272388473, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-[SGLANG_TRANSFER_JSON] {"action": "insert", "cache_new_prefix_len": 0, "cache_page_size": 64, "cache_prefix_len": 0, "event": "sglang.cache", "function": "insert", "request_context_function": "cache_unfinished_req", "request_metadata_source": "attached_object.rid", "semantic_context_function": "cache_unfinished_req", "semantic_token_count": 0, "semantic_token_ids_preview": [151644, 872, 198, 20841, 448, 6896, 25, 10402], "semantic_token_ids_sha256": "582803443087648e871d787968d9ccac01f126552930405fdc8ced9c4342a038", "semantic_token_preview_count": 8, "semantic_token_source": "cache_unfinished_req.req.origin_input_ids", "sglang_request_id": "9ebc9560bd924d128f72b8e8e5322ea0", "timestamp": "2026-07-08T22:28:50.272373Z", "timestamp_ns": 1783549730272388473, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-2026-07-08T22:28:50.274739Z  INFO scheduler_metrics_mixin.report_prefill_stats: Prefill batch, #new-seq: 1, #new-token: 64, #cached-token: 0, token usage: 0.00, #running-req: 0, #queue-req: 0, #pending-token: 0, cuda graph: True, input throughput (token/s): 0.23
-2026-07-08T22:28:50.275896Z  INFO runtime_logging.emit_runtime_event: [RUNTIME_JSON] {"agent_hints":null,"agent_hints_keys":[],"agent_hints_source":"missing","cache_control":null,"cache_control_source":"missing","cache_control_ttl":null,"cache_control_type":null,"component":"worker.decode","event_type":"worker.decode.request_attached","external_request_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","hint_probe_id":null,"model":"Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8","request_context":null,"runtime_context_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","sglang_request_id":"9ebc9560bd924d128f72b8e8e5322ea0"}
-[SGLANG_TRANSFER_JSON] {"action": "insert", "cache_new_prefix_len": 0, "cache_page_size": 64, "cache_prefix_len": 0, "event": "sglang.cache", "function": "insert", "request_context_function": "cache_finished_req", "request_metadata_source": "attached_object.rid", "semantic_context_function": "cache_unfinished_req", "semantic_token_count": 0, "semantic_token_ids_preview": [151644, 872, 198, 20841, 448, 6896, 25, 10402], "semantic_token_ids_sha256": "582803443087648e871d787968d9ccac01f126552930405fdc8ced9c4342a038", "semantic_token_preview_count": 8, "semantic_token_source": "cache_unfinished_req.req.origin_input_ids", "sglang_request_id": "9ebc9560bd924d128f72b8e8e5322ea0", "timestamp": "2026-07-08T22:28:50.272373Z", "timestamp_ns": 1783549730272388473, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-[SGLANG_TRANSFER_JSON] {"action": "insert", "cache_new_prefix_len": 0, "cache_page_size": 64, "cache_prefix_len": 0, "event": "sglang.cache", "function": "insert", "request_context_function": "cache_finished_req", "request_metadata_source": "attached_object.rid", "semantic_context_function": "cache_unfinished_req", "semantic_token_count": 0, "semantic_token_ids_preview": [151644, 872, 198, 20841, 448, 6896, 25, 10402], "semantic_token_ids_sha256": "582803443087648e871d787968d9ccac01f126552930405fdc8ced9c4342a038", "semantic_token_preview_count": 8, "semantic_token_source": "cache_unfinished_req.req.origin_input_ids", "sglang_request_id": "9ebc9560bd924d128f72b8e8e5322ea0", "timestamp": "2026-07-08T22:28:50.272373Z", "timestamp_ns": 1783549730272388473, "transfer_log_profile": "full", "worker_cache_control_seen": false, "worker_priority_seen": false}
-2026-07-08T22:28:50.279528Z  INFO runtime_logging.emit_runtime_event: [RUNTIME_JSON] {"agent_hints":null,"agent_hints_keys":[],"agent_hints_source":"missing","cache_control":null,"cache_control_source":"missing","cache_control_ttl":null,"cache_control_type":null,"completion_usage":{"completion_tokens":2,"prompt_tokens":13,"prompt_tokens_details":null,"total_tokens":15},"component":"worker.decode","event_type":"worker.decode.request_completed","external_request_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","finish_reason":"stop","hint_probe_id":null,"model":"Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8","request_context":null,"runtime_context_id":"a7d0086e-9a5b-4940-8b98-0026e75182df","serving_mode":"DisaggregationMode.AGGREGATED","sglang_request_id":"9ebc9560bd924d128f72b8e8e5322ea0","stop_reason":null}
-2026-07-08T22:28:50.279781Z  INFO handle_payload: dynamo_runtime::pipeline::network::ingress::push_handler: request completed request_id=a7d0086e-9a5b-4940-8b98-0026e75182df request_id="a7d0086e-9a5b-4940-8b98-0026e75182df" component="backend" endpoint="generate" namespace="dynamo" instance_id=7587894972260893829
-2026-07-08T22:30:17.098475Z  INFO handle_payload: dynamo_runtime::pipeline::network::ingress::push_handler: request received request_id=7c07e700-edde-49d8-bec1-a333947266a3 request_id="7c07e700-edde-49d8-bec1-a333947266a3" component="backend" endpoint="clear_kv_blocks" namespace="dynamo" instance_id=7587894972260893829
-2026-07-08T22:30:17.100278Z  INFO scheduler.flush_cache: Cache flushed successfully!
+```bash
+cd ~/kv_cache_offloading
 
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+from pathlib import Path
+import inspect
+import json
 
+out = {}
 
+def read_text(path_str):
+    p = Path(path_str)
+    out[path_str] = {"exists": p.exists()}
+    if not p.exists():
+        return None
+    try:
+        text = p.read_text()
+        out[path_str]["readable"] = True
+        return text
+    except Exception as e:
+        out[path_str]["readable"] = False
+        out[path_str]["error"] = repr(e)
+        return None
 
+handler_path = "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py"
+publisher_path = "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py"
+kv_rust_path = "/usr/local/lib/python3.12/dist-packages/dynamo/lib/bindings/python/rust/llm/kv.rs"
 
+handler_text = read_text(handler_path)
+publisher_text = read_text(publisher_path)
+kv_rust_text = read_text(kv_rust_path)
 
-Dynamo decode handler markers: {"attach_logged = False": true, "path": "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/llm/decode_handler.py", "request: Dict[str, Any]": true, "worker.decode.request_attached": true}
-/usr/local/lib/python3.12/dist-packages/torchao/quantization/quant_api.py:1731: SyntaxWarning: invalid escape sequence '\.'
-  """Configuration class for applying different quantization configs to modules or parameters based on their fully qualified names (FQNs).
-SGLang transfer markers: {"_sgl_log_transfer_event": true, "path": "/workspace/sglang_transfer_overlay/sglang/srt/mem_cache/memory_pool_host.py"}
-========================================
-(4/6) PRECISE ATTRIBUTION READY (the live running worker really has the instrumentation)
-========================================
-PASS: precise transfer attribution is ready
-========================================
-(5/6) MODEL READINESS GO (model registration and smoke test both passed)
-========================================
-========================================
-(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)
-========================================
-Machine profile: gh200
-Attribution mode: transfer
-Smoke test: ok
-Live attribution check: ok
-Requests may now start.
-Cooldown: 60s
-Checking live KV cache flush endpoint before requests...
-clear_kv_blocks did not fully invalidate runtime state: [{"flush_cache_status": "success", "kv_clear_event_status": "unavailable", "name": "dynamo/backend-instance-7587894972260893829", "response": {"flush_cache_status": "success", "http_worker_ipc": null, "kv_clear_event_publishers": 0, "kv_clear_event_status": "unavailable", "message": "", "rid": null, "status": "partial_success", "success": true}}]
-Stopping threshold sweep because STOP_ON_PROBE_FAILURE=1
-ojaiyeob@gracehopper:~/kv_cache_offloading$
+if handler_text is not None:
+    out[handler_path]["markers"] = {
+        "self.kv_publishers": "self.kv_publishers" in handler_text,
+        "self.kv_publisher": "self.kv_publisher" in handler_text,
+        "publish_cleared()": "publish_cleared()" in handler_text,
+        "kv_clear_event_status": "kv_clear_event_status" in handler_text,
+        'register_engine_route("clear_kv_blocks"': 'register_engine_route("clear_kv_blocks"' in handler_text,
+        'call_tokenizer_manager({"method": "flush_cache"})': 'call_tokenizer_manager({"method": "flush_cache"})' in handler_text,
+    }
 
-2026-07-08T22:30:17.100806Z  INFO handle_payload: dynamo_runtime::pipeline::network::ingress::push_handler: request completed request_id=7c07e700-edde-49d8-bec1-a333947266a3 request_id="7c07e700-edde-49d8-bec1-a333947266a3" component="backend" endpoint="clear_kv_blocks" namespace="dynamo" instance_id=7587894972260893829
+if publisher_text is not None:
+    out[publisher_path]["markers"] = {
+        "self.kv_publishers": "self.kv_publishers" in publisher_text,
+        "self.kv_publisher": "self.kv_publisher" in publisher_text,
+        "return self.kv_publishers": "return self.kv_publishers" in publisher_text,
+    }
+
+if kv_rust_text is not None:
+    out[kv_rust_path]["markers"] = {
+        "fn publish_cleared": "fn publish_cleared" in kv_rust_text,
+        "KvCacheEventData::Cleared": "KvCacheEventData::Cleared" in kv_rust_text,
+    }
+
+so_files = sorted(str(p) for p in Path("/usr/local/lib/python3.12/dist-packages/dynamo").glob("_core*.so"))
+out["compiled_core"] = {
+    "count": len(so_files),
+    "files": so_files,
+}
+
+try:
+    from dynamo.sglang.request_handlers import handler_base
+    src = inspect.getsource(handler_base.WorkerHandlerBase.clear_kv_blocks)
+    out["live_python_method"] = {
+        "loaded": True,
+        "publish_cleared()": "publish_cleared()" in src,
+        "kv_clear_event_status": "kv_clear_event_status" in src,
+        "flush_cache": "flush_cache" in src,
+    }
+except Exception as e:
+    out["live_python_method"] = {
+        "loaded": False,
+        "error": repr(e),
+    }
+
+print(json.dumps(out, indent=2, sort_keys=True))
+PY
+```
