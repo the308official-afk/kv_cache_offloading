@@ -35,7 +35,7 @@ SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-}"
 SGLANG_TRANSFER_LOG_DIR="${SGLANG_TRANSFER_LOG_DIR:-${SCRIPT_DIR}/experiments/raw/sglang_transfer_logs}"
 SGLANG_TRANSFER_LOG_BASENAME="${SGLANG_TRANSFER_LOG_BASENAME:-sglang_transfer_events_$(date +%Y%m%d_%H%M%S)_$$}"
-SGLANG_TRANSFER_LOG_PATH="${SGLANG_TRANSFER_LOG_PATH:-/transfer-logs/${SGLANG_TRANSFER_LOG_BASENAME}.jsonl}"
+SGLANG_TRANSFER_LOG_PATH="${SGLANG_TRANSFER_LOG_PATH:-}"
 SGLANG_TRANSFER_LOG_FULL_TOKENS="${SGLANG_TRANSFER_LOG_FULL_TOKENS:-}"
 SGLANG_TRANSFER_LOG_TOKEN_PREVIEW="${SGLANG_TRANSFER_LOG_TOKEN_PREVIEW:-}"
 SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS="${SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS:-}"
@@ -102,7 +102,7 @@ Environment overrides:
   SGLANG_TRANSFER_LOG_PROFILE Default: ${SGLANG_TRANSFER_LOG_PROFILE:-<unset>} (off, light, timing, full)
   SGLANG_TRANSFER_LOG_DIR Default: ${SGLANG_TRANSFER_LOG_DIR}
   SGLANG_TRANSFER_LOG_BASENAME Default: ${SGLANG_TRANSFER_LOG_BASENAME}
-  SGLANG_TRANSFER_LOG_PATH Default: ${SGLANG_TRANSFER_LOG_PATH}
+  SGLANG_TRANSFER_LOG_PATH Default: ${SGLANG_TRANSFER_LOG_PATH:-<stderr only>}
   SGLANG_TRANSFER_LOG_FULL_TOKENS Default: ${SGLANG_TRANSFER_LOG_FULL_TOKENS:-<unset>}
   SGLANG_TRANSFER_LOG_TOKEN_PREVIEW Default: ${SGLANG_TRANSFER_LOG_TOKEN_PREVIEW}
   SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS Default: ${SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS}
@@ -171,7 +171,7 @@ ensure_dirs() {
     sudo mkdir -p "${HICACHE_STORAGE_HOST_PATH}"
     sudo chmod 777 "${HICACHE_STORAGE_HOST_PATH}" || true
   fi
-  if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
+  if [[ "${SGLANG_TRANSFER_LOG}" = "1" && -n "${SGLANG_TRANSFER_LOG_PATH}" ]]; then
     sudo mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
     sudo chmod 777 "${SGLANG_TRANSFER_LOG_DIR}" || true
     if [[ "${SGLANG_TRANSFER_LOG_PATH}" == /transfer-logs/* ]]; then
@@ -183,6 +183,8 @@ ensure_dirs() {
     else
       echo "SGLang transfer log path is outside /transfer-logs: ${SGLANG_TRANSFER_LOG_PATH}"
     fi
+  elif [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
+    echo "SGLang transfer file logging disabled; patched transfer events will go to container stderr only."
   fi
 }
 
@@ -311,7 +313,7 @@ start_worker() {
     worker_pythonpath_prefix="/workspace/sglang_transfer_overlay:${worker_pythonpath_prefix}"
   fi
 
-  if [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
+  if [[ "${SGLANG_TRANSFER_LOG}" = "1" && "${SGLANG_TRANSFER_LOG_PATH}" == /transfer-logs/* ]]; then
     docker_args+=(
       -v "${SGLANG_TRANSFER_LOG_DIR}:/transfer-logs"
     )
@@ -414,6 +416,7 @@ dev mode:  ${WORKER_DEV_MODE}
 sglang dev: ${WORKER_SGLANG_DEV_MODE}
 transfer log: ${SGLANG_TRANSFER_LOG:-off}
 transfer profile: ${SGLANG_TRANSFER_LOG_PROFILE:-auto}
+transfer log path: ${SGLANG_TRANSFER_LOG_PATH:-<stderr only>}
 sync timing: ${SGLANG_TRANSFER_LOG_SYNC_TIMING:-auto}
 semantic tokens: ${SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS:-auto}
 overhead timing: ${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-off}

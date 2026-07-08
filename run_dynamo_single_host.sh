@@ -72,7 +72,7 @@ Environment overrides:
   SGLANG_TRANSFER_LOG_PROFILE Default: ${SGLANG_TRANSFER_LOG_PROFILE:-<unset>} (off, light, timing, full)
   SGLANG_TRANSFER_LOG_DIR  Default: ${SGLANG_TRANSFER_LOG_DIR:-<unset>}
   SGLANG_TRANSFER_LOG_BASENAME Default: ${SGLANG_TRANSFER_LOG_BASENAME:-<unset>}
-  SGLANG_TRANSFER_LOG_PATH Default: ${SGLANG_TRANSFER_LOG_PATH:-<unset>}
+  SGLANG_TRANSFER_LOG_PATH Default: ${SGLANG_TRANSFER_LOG_PATH:-<stderr only>}
   SGLANG_TRANSFER_LOG_FULL_TOKENS Default: ${SGLANG_TRANSFER_LOG_FULL_TOKENS:-<unset>}
   SGLANG_TRANSFER_LOG_TOKEN_PREVIEW Default: ${SGLANG_TRANSFER_LOG_TOKEN_PREVIEW:-<unset>}
   SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS Default: ${SGLANG_TRANSFER_LOG_MAX_TENSOR_DETAILS:-<unset>}
@@ -88,6 +88,8 @@ Notes:
   - This mode is intended for single-host GH200 or similar development setups.
   - It is good for functional testing, HintBench, and live-shim iteration.
   - It is not a substitute for a real multi-worker research deployment.
+  - Patched SGLang transfer events go to worker stderr by default; set
+    SGLANG_TRANSFER_LOG_PATH to a real path if you explicitly want file output.
 EOF
 }
 
