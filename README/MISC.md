@@ -1,3 +1,18 @@
+=== RESTART ===
+first_ms	replay_ms
+293	38
+296	38
+298	187
+298	39
+
+=== FLUSH ===
+first_ms	replay_ms
+296	38
+71	37
+70	184
+74	37
+
+
 ```bash
 docker logs -f dynamo-sglang-worker | egrep -i "prefill|cache|evict|hicache|warn|error"
 ```
