@@ -1833,6 +1833,31 @@ echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
 ```
 
+=== Cache pinning path works here GH200 (as seen from the csv report), but the sweep did not create enough pressure tp seperate control from protected ===
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="cache_pinning_all_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/cache_pinning_microbenchmark_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  PRECISE_START_MODE=clean \
+  CACHE_PINNING_MODE=all \
+  EXPERIMENT_RESET_MODE=restart \
+  DISTRACTOR_COUNTS="600 800 1000" \
+  PROTECTED_INPUT_LEN=800 \
+  DISTRACTOR_INPUT_LEN=200 \
+  ./agentbench/run_cache_pinning_microbenchmark_single_host.sh \
+    Qwen/Qwen2.5-Coder-7B-Instruct \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
+```
+
 === This works on GH200? ===
 ```bash
 cd ~/kv_cache_offloading
