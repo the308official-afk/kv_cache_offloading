@@ -31,6 +31,13 @@ WORKER_SGLANG_DEV_MODE="${WORKER_SGLANG_DEV_MODE:-0}"
 WORKER_SGLANG_SOURCE_ROOT="${WORKER_SGLANG_SOURCE_ROOT:-${SCRIPT_DIR}/upstream/sglang/python/sglang}"
 HICACHE_STORAGE_HOST_PATH="${HICACHE_STORAGE_HOST_PATH:-${HOST_FILE_STORAGE_PATH:-}}"
 HICACHE_STORAGE_CONTAINER_PATH="${HICACHE_STORAGE_CONTAINER_PATH:-${FILE_STORAGE_PATH:-/hicache-storage}}"
+SGLANG_KV_EVENTS_AUTO_CONFIG="${SGLANG_KV_EVENTS_AUTO_CONFIG:-1}"
+SGLANG_KV_EVENTS_PUBLISHER="${SGLANG_KV_EVENTS_PUBLISHER:-zmq}"
+SGLANG_KV_EVENTS_TOPIC="${SGLANG_KV_EVENTS_TOPIC:-kv-events}"
+SGLANG_KV_EVENTS_ENDPOINT="${SGLANG_KV_EVENTS_ENDPOINT:-tcp://*:5557}"
+SGLANG_KV_EVENTS_CONFIG="${SGLANG_KV_EVENTS_CONFIG:-}"
+SGLANG_KV_EVENTS_STATUS="off"
+SGLANG_KV_EVENTS_EFFECTIVE_CONFIG=""
 SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-}"
 SGLANG_TRANSFER_LOG_DIR="${SGLANG_TRANSFER_LOG_DIR:-${SCRIPT_DIR}/experiments/raw/sglang_transfer_logs}"
@@ -98,6 +105,11 @@ Environment overrides:
   WORKER_SGLANG_SOURCE_ROOT Default: ${WORKER_SGLANG_SOURCE_ROOT}
   HICACHE_STORAGE_HOST_PATH Default: ${HICACHE_STORAGE_HOST_PATH:-<unset>} (host dir for file-backed HiCache storage)
   HICACHE_STORAGE_CONTAINER_PATH Default: ${HICACHE_STORAGE_CONTAINER_PATH}
+  SGLANG_KV_EVENTS_AUTO_CONFIG Default: ${SGLANG_KV_EVENTS_AUTO_CONFIG} (auto-add kv-events-config when cache report is enabled)
+  SGLANG_KV_EVENTS_PUBLISHER Default: ${SGLANG_KV_EVENTS_PUBLISHER}
+  SGLANG_KV_EVENTS_TOPIC Default: ${SGLANG_KV_EVENTS_TOPIC}
+  SGLANG_KV_EVENTS_ENDPOINT Default: ${SGLANG_KV_EVENTS_ENDPOINT}
+  SGLANG_KV_EVENTS_CONFIG Default: ${SGLANG_KV_EVENTS_CONFIG:-<auto>}
   SGLANG_TRANSFER_LOG   Default: ${SGLANG_TRANSFER_LOG:-<unset>} (set to 1 to enable patched transfer logs)
   SGLANG_TRANSFER_LOG_PROFILE Default: ${SGLANG_TRANSFER_LOG_PROFILE:-<unset>} (off, light, timing, full)
   SGLANG_TRANSFER_LOG_DIR Default: ${SGLANG_TRANSFER_LOG_DIR}
@@ -205,6 +217,37 @@ initialize_endpoints() {
   fi
 }
 
+configure_worker_kv_events() {
+  SGLANG_KV_EVENTS_STATUS="off"
+  SGLANG_KV_EVENTS_EFFECTIVE_CONFIG=""
+
+  if [[ "${WORKER_EXTRA_ARGS}" == *"--kv-events-config"* ]]; then
+    SGLANG_KV_EVENTS_STATUS="explicit"
+    return
+  fi
+
+  if [[ "${SGLANG_KV_EVENTS_AUTO_CONFIG}" != "1" ]]; then
+    return
+  fi
+
+  if [[ "${WORKER_EXTRA_ARGS}" != *"--enable-cache-report"* ]]; then
+    return
+  fi
+
+  if [[ -z "${SGLANG_KV_EVENTS_CONFIG}" ]]; then
+    printf -v SGLANG_KV_EVENTS_CONFIG \
+      '{"publisher":"%s","topic":"%s","endpoint":"%s","enable_kv_cache_events":true}' \
+      "${SGLANG_KV_EVENTS_PUBLISHER}" \
+      "${SGLANG_KV_EVENTS_TOPIC}" \
+      "${SGLANG_KV_EVENTS_ENDPOINT}"
+  fi
+
+  WORKER_EXTRA_ARGS="${WORKER_EXTRA_ARGS} --kv-events-config '${SGLANG_KV_EVENTS_CONFIG}'"
+  SGLANG_KV_EVENTS_EFFECTIVE_CONFIG="${SGLANG_KV_EVENTS_CONFIG}"
+  SGLANG_KV_EVENTS_STATUS="auto"
+  echo "Auto-configured SGLang KV events for cache report: ${SGLANG_KV_EVENTS_EFFECTIVE_CONFIG}"
+}
+
 validate_worker_dev_source() {
   local common_dir="${WORKER_DEV_SOURCE_ROOT}/common"
   local sglang_dir="${WORKER_DEV_SOURCE_ROOT}/sglang"
@@ -261,6 +304,7 @@ start_worker() {
   require_docker
   check_gpu_compatibility
   initialize_endpoints
+  configure_worker_kv_events
   ensure_dirs
 
   local -a docker_args
@@ -421,6 +465,8 @@ sync timing: ${SGLANG_TRANSFER_LOG_SYNC_TIMING:-auto}
 semantic tokens: ${SGLANG_TRANSFER_LOG_SEMANTIC_TOKENS:-auto}
 overhead timing: ${SGLANG_TRANSFER_LOG_OVERHEAD_TIMING:-off}
 verbose log: ${SGLANG_TRANSFER_LOG_VERBOSE:-auto}
+kv events config: ${SGLANG_KV_EVENTS_STATUS}
+kv events payload: ${SGLANG_KV_EVENTS_EFFECTIVE_CONFIG:-<none>}
 hicache max pinned ratio: ${SGLANG_HICACHE_MAX_PINNED_RATIO:-off}
 hicache storage host path: ${HICACHE_STORAGE_HOST_PATH:-off}
 hicache storage container path: ${HICACHE_STORAGE_CONTAINER_PATH}

@@ -68,6 +68,11 @@ Environment overrides:
   WORKER_SGLANG_SOURCE_ROOT Default: ${WORKER_SGLANG_SOURCE_ROOT:-<unset>}
   HICACHE_STORAGE_HOST_PATH Default: ${HICACHE_STORAGE_HOST_PATH:-${HOST_FILE_STORAGE_PATH:-<unset>}}
   HICACHE_STORAGE_CONTAINER_PATH Default: ${HICACHE_STORAGE_CONTAINER_PATH:-${FILE_STORAGE_PATH:-/hicache-storage}}
+  SGLANG_KV_EVENTS_AUTO_CONFIG Default: ${SGLANG_KV_EVENTS_AUTO_CONFIG:-1}
+  SGLANG_KV_EVENTS_PUBLISHER Default: ${SGLANG_KV_EVENTS_PUBLISHER:-zmq}
+  SGLANG_KV_EVENTS_TOPIC Default: ${SGLANG_KV_EVENTS_TOPIC:-kv-events}
+  SGLANG_KV_EVENTS_ENDPOINT Default: ${SGLANG_KV_EVENTS_ENDPOINT:-tcp://*:5557}
+  SGLANG_KV_EVENTS_CONFIG Default: ${SGLANG_KV_EVENTS_CONFIG:-<auto>}
   SGLANG_TRANSFER_LOG      Default: ${SGLANG_TRANSFER_LOG:-<unset>}
   SGLANG_TRANSFER_LOG_PROFILE Default: ${SGLANG_TRANSFER_LOG_PROFILE:-<unset>} (off, light, timing, full)
   SGLANG_TRANSFER_LOG_DIR  Default: ${SGLANG_TRANSFER_LOG_DIR:-<unset>}
@@ -88,6 +93,9 @@ Notes:
   - This mode is intended for single-host GH200 or similar development setups.
   - It is good for functional testing, HintBench, and live-shim iteration.
   - It is not a substitute for a real multi-worker research deployment.
+  - If cache report is enabled and no explicit kv-events-config is provided,
+    the worker launcher now auto-injects a ZMQ kv-events-config so flush-based
+    experiment resets can publish KV-cleared barriers.
   - Patched SGLang transfer events go to worker stderr by default; set
     SGLANG_TRANSFER_LOG_PATH to a real path if you explicitly want file output.
 EOF
