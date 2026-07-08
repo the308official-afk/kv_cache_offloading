@@ -320,3 +320,54 @@ PY
 }
 ojaiyeob@gracehopper:~/kv_cache_offloading$
 ```
+
+
+```bash
+cd ~/kv_cache_offloading
+
+docker exec -i dynamo-sglang-worker python3 - <<'PY'
+from pathlib import Path
+import json
+
+paths = [
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/init_llm.py",
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py",
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py",
+]
+
+checks = {
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/init_llm.py": [
+        "clear_kv_blocks_endpoint = runtime.endpoint(",
+        "clear_kv_blocks_endpoint.serve_endpoint(",
+        "publisher =",
+        "handler =",
+    ],
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py": [
+        "self.kv_publishers = []",
+        "self.kv_publisher = self.kv_publishers[0] if self.kv_publishers else None",
+        "return self.kv_publishers",
+        "KvEventPublisher(",
+    ],
+    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py": [
+        "self.kv_publishers = list(getattr(publisher, \"kv_publishers\", []) or [])",
+        "self.kv_publisher = publisher.kv_publisher",
+        "publish_cleared()",
+    ],
+}
+
+out = {}
+for path in paths:
+    p = Path(path)
+    text = p.read_text() if p.exists() else ""
+    out[path] = {
+        "exists": p.exists(),
+        "markers": {marker: (marker in text) for marker in checks[path]},
+    }
+
+print(json.dumps(out, indent=2, sort_keys=True))
+PY
+```
+
+```bash
+docker logs dynamo-sglang-worker 2>&1 | grep -niE 'kv_publisher|kv_publishers|cache report|publisher'
+```
