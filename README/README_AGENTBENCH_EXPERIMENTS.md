@@ -1549,6 +1549,9 @@ cd ~/kv_cache_offloading
 
 SGLANG_TRANSFER_LOG=1 \
 SGLANG_TRANSFER_LOG_PROFILE=full \
+SGLANG_TRANSFER_LOG_DIR="$PWD/experiments/raw/sglang_transfer_logs" \
+SGLANG_TRANSFER_LOG_BASENAME="gh200_transfer_$(date +%Y%m%d_%H%M%S)" \
+SGLANG_TRANSFER_LOG_PATH="/transfer-logs/${SGLANG_TRANSFER_LOG_BASENAME}.jsonl" \
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 KV_RETENTION_MODE=sweep \
