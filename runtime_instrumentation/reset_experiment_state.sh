@@ -170,6 +170,28 @@ if not cleared:
         "clear_kv_blocks did not report any cleared workers: "
         + json.dumps(payload, sort_keys=True)
     )
+
+incomplete = []
+for worker in cleared:
+    response = worker.get("response") or {}
+    flush_status = response.get("flush_cache_status")
+    clear_event_status = response.get("kv_clear_event_status")
+    if flush_status != "success" or clear_event_status != "published":
+        incomplete.append(
+            {
+                "name": worker.get("name"),
+                "flush_cache_status": flush_status,
+                "kv_clear_event_status": clear_event_status,
+                "response": response,
+            }
+        )
+
+if incomplete:
+    raise SystemExit(
+        "clear_kv_blocks did not fully invalidate runtime state: "
+        + json.dumps(incomplete, sort_keys=True)
+    )
+
 print(
     os.environ["SUCCESS_PREFIX"] + ": "
     + json.dumps(

@@ -9,7 +9,8 @@ This keeps the fix small and idempotent:
 - expose saved model-card instance keys from ModelManager
 - rewrite the frontend flush route to match the pinned Dynamo API
 - register/serve `clear_kv_blocks` in SGLang init paths
-- add `clear_kv_blocks()` handler that calls `flush_cache()`
+- add `clear_kv_blocks()` handler that calls `flush_cache()` and publishes a
+  KV-cleared barrier event so router/indexer state is invalidated too
 - register the engine route so frontend clear_kv_blocks can reach workers
 """
 
@@ -481,7 +482,25 @@ def repair_init_llm() -> None:
     write_if_changed(path, text)
 
 
-CLEAR_KV_METHOD = """
+OLD_HANDLER_PUBLISHER_BLOCK = """        self.metrics_publisher: Optional[WorkerMetricsPublisher] = None
+        self.kv_publisher: Optional[KvEventPublisher] = None
+        if publisher is not None:
+            self.metrics_publisher = publisher.metrics_publisher
+            self.kv_publisher = publisher.kv_publisher
+"""
+
+
+NEW_HANDLER_PUBLISHER_BLOCK = """        self.metrics_publisher: Optional[WorkerMetricsPublisher] = None
+        self.kv_publisher: Optional[KvEventPublisher] = None
+        self.kv_publishers: list[KvEventPublisher] = []
+        if publisher is not None:
+            self.metrics_publisher = publisher.metrics_publisher
+            self.kv_publisher = publisher.kv_publisher
+            self.kv_publishers = list(getattr(publisher, "kv_publishers", []) or [])
+"""
+
+
+OLD_CLEAR_KV_METHOD = """
     async def clear_kv_blocks(self, request=None, context=None):
         \"\"\"Clear the SGLang worker KV cache via tokenizer_manager.flush_cache().\"\"\"
         try:
@@ -498,9 +517,101 @@ CLEAR_KV_METHOD = """
 """
 
 
+NEW_CLEAR_KV_METHOD = """
+    async def clear_kv_blocks(self, request=None, context=None):
+        \"\"\"Clear the SGLang worker KV cache and publish a router clear barrier.\"\"\"
+        try:
+            result = await self.call_tokenizer_manager({\"method\": \"flush_cache\"})
+            if not isinstance(result, dict):
+                result = {\"result\": result}
+
+            publishers = list(getattr(self, \"kv_publishers\", []) or [])
+            if not publishers and self.kv_publisher is not None:
+                publishers = [self.kv_publisher]
+
+            published_count = 0
+            publish_errors = []
+            for publisher in publishers:
+                try:
+                    publisher.publish_cleared()
+                    published_count += 1
+                except Exception as publisher_exc:
+                    publish_errors.append(str(publisher_exc))
+                    logging.error(
+                        f\"Failed to publish KV cleared event: {publisher_exc}\"
+                    )
+
+            result.setdefault(\"message\", \"KV cache cleared\")
+            result[\"flush_cache_status\"] = \"success\"
+            result[\"kv_clear_event_publishers\"] = published_count
+            if publish_errors:
+                result[\"status\"] = \"partial_success\"
+                result[\"kv_clear_event_status\"] = (
+                    \"partial\" if published_count > 0 else \"publish_failed\"
+                )
+                result[\"kv_clear_event_errors\"] = publish_errors
+            elif published_count > 0:
+                result.setdefault(\"status\", \"success\")
+                result[\"kv_clear_event_status\"] = \"published\"
+            else:
+                result.setdefault(\"status\", \"partial_success\")
+                result[\"kv_clear_event_status\"] = \"unavailable\"
+            yield result
+        except Exception as e:
+            logging.error(f\"Failed to clear KV cache: {e}\")
+            yield {
+                \"status\": \"error\",
+                \"message\": str(e),
+                \"flush_cache_status\": \"error\",
+                \"kv_clear_event_status\": \"not_attempted\",
+            }
+
+"""
+
+
+def repair_kv_python_binding() -> None:
+    path = SOURCE_DIR / "lib/bindings/python/rust/llm/kv.rs"
+    text = path.read_text()
+
+    publish_cleared_method = """
+    fn publish_cleared(&self, py: Python) -> PyResult<()> {
+        let dp_rank = self.dp_rank;
+        let inner = self.inner.clone();
+
+        let event_id = inner.next_event_id();
+
+        py.allow_threads(|| {
+            let event = KvCacheEvent {
+                event_id,
+                data: KvCacheEventData::Cleared,
+                dp_rank,
+            };
+
+            inner.publish(event).map_err(to_pyerr)
+        })
+    }
+
+"""
+    if "fn publish_cleared(&self, py: Python) -> PyResult<()>" not in text:
+        anchor = """    fn shutdown(&mut self) {
+"""
+        idx = text.find(anchor)
+        if idx < 0:
+            raise SystemExit(f"Could not find KvEventPublisher shutdown anchor in {path}")
+        text = text[:idx] + publish_cleared_method + text[idx:]
+
+    write_if_changed(path, text)
+
+
 def repair_handler_base() -> None:
     path = SOURCE_DIR / "components/src/dynamo/sglang/request_handlers/handler_base.py"
     text = path.read_text()
+
+    if OLD_HANDLER_PUBLISHER_BLOCK in text and NEW_HANDLER_PUBLISHER_BLOCK not in text:
+        text = text.replace(OLD_HANDLER_PUBLISHER_BLOCK, NEW_HANDLER_PUBLISHER_BLOCK, 1)
+
+    if OLD_CLEAR_KV_METHOD in text and NEW_CLEAR_KV_METHOD not in text:
+        text = text.replace(OLD_CLEAR_KV_METHOD, NEW_CLEAR_KV_METHOD, 1)
 
     if "async def clear_kv_blocks(self, request=None, context=None):" not in text:
         anchor = """    def register_engine_routes(self, runtime: DistributedRuntime) -> None:
@@ -508,7 +619,7 @@ def repair_handler_base() -> None:
         idx = text.find(anchor)
         if idx < 0:
             raise SystemExit(f"Could not find register_engine_routes anchor in {path}")
-        text = text[:idx] + CLEAR_KV_METHOD + text[idx:]
+        text = text[:idx] + NEW_CLEAR_KV_METHOD + text[idx:]
 
     route_line = '        runtime.register_engine_route("clear_kv_blocks", self.clear_kv_blocks)\n'
     if route_line not in text:
@@ -531,6 +642,7 @@ def main() -> None:
     repair_http_entrypoint()
     repair_clear_kv_route()
     repair_init_llm()
+    repair_kv_python_binding()
     repair_handler_base()
     print("Dynamo clear_kv_blocks source repair complete.")
 

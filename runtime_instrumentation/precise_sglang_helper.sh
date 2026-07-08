@@ -145,8 +145,11 @@ _precise_dynamo_require_markers() {
       grep -q "clear_kv_blocks_router(state.clone(), None)" "${root}/lib/llm/src/http/service/service_v2.rs" 2>/dev/null && \
       grep -q "clear_kv_blocks_endpoint = runtime.endpoint(" "${root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null && \
       grep -q "clear_kv_blocks_endpoint.serve_endpoint(" "${root}/components/src/dynamo/sglang/init_llm.py" 2>/dev/null && \
+      grep -q "fn publish_cleared(&self, py: Python)" "${root}/lib/bindings/python/rust/llm/kv.rs" 2>/dev/null && \
       grep -q "async def clear_kv_blocks" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
       grep -q "flush_cache" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
+      grep -q "kv_clear_event_status" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
+      grep -q "publish_cleared()" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null && \
       grep -q "register_engine_route(\"clear_kv_blocks\"" "${root}/components/src/dynamo/sglang/request_handlers/handler_base.py" 2>/dev/null
       ;;
     specprefill)
@@ -178,6 +181,7 @@ precise_dynamo_source_signature() {
     "lib/llm/src/http/service.rs"
     "lib/llm/src/http/service/service_v2.rs"
     "lib/llm/src/http/service/clear_kv_blocks.rs"
+    "lib/bindings/python/rust/llm/kv.rs"
     "components/src/dynamo/sglang/init_llm.py"
     "components/src/dynamo/sglang/request_handlers/handler_base.py"
   )

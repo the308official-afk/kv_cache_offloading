@@ -78,8 +78,11 @@ required_markers=(
   "lib/llm/src/http/service/service_v2.rs:super::clear_kv_blocks::clear_kv_blocks_router(state.clone(), None),"
   "components/src/dynamo/sglang/init_llm.py:clear_kv_blocks_endpoint = runtime.endpoint("
   "components/src/dynamo/sglang/init_llm.py:clear_kv_blocks_endpoint.serve_endpoint("
+  "lib/bindings/python/rust/llm/kv.rs:fn publish_cleared(&self, py: Python)"
   "components/src/dynamo/sglang/request_handlers/handler_base.py:async def clear_kv_blocks"
   "components/src/dynamo/sglang/request_handlers/handler_base.py:flush_cache"
+  "components/src/dynamo/sglang/request_handlers/handler_base.py:publish_cleared()"
+  "components/src/dynamo/sglang/request_handlers/handler_base.py:kv_clear_event_status"
   "components/src/dynamo/sglang/request_handlers/handler_base.py:runtime.register_engine_route(\"clear_kv_blocks\""
 )
 
