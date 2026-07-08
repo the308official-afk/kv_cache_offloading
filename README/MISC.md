@@ -272,3 +272,51 @@ except Exception as e:
 print(json.dumps(out, indent=2, sort_keys=True))
 PY
 ```
+
+
+```bash
+/usr/local/lib/python3.12/dist-packages/torchao/quantization/quant_api.py:1731: SyntaxWarning: invalid escape sequence '\.'
+  """Configuration class for applying different quantization configs to modules or parameters based on their fully qualified names (FQNs).
+2026-07-08T22:55:41.164291Z  WARN __init__: dynamo.nixl_connect: Failed to load CuPy for GPU acceleration, utilizing numpy to provide CPU based operations.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.runtime module instead.
+<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please switch to use the cuda.bindings.nvrtc module instead.
+2026-07-08T22:55:44.734711Z  WARN encode_worker_handler: Failed to import cupy, falling back to numpy: No module named 'cupy'.
+2026-07-08T22:55:44.735262Z  WARN worker_handler: Failed to import cupy, falling back to numpy: No module named 'cupy'.
+{
+  "/usr/local/lib/python3.12/dist-packages/dynamo/lib/bindings/python/rust/llm/kv.rs": {
+    "exists": false
+  },
+  "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py": {
+    "exists": true,
+    "markers": {
+      "return self.kv_publishers": true,
+      "self.kv_publisher": true,
+      "self.kv_publishers": true
+    },
+    "readable": true
+  },
+  "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py": {
+    "exists": true,
+    "markers": {
+      "call_tokenizer_manager({\"method\": \"flush_cache\"})": true,
+      "kv_clear_event_status": true,
+      "publish_cleared()": true,
+      "register_engine_route(\"clear_kv_blocks\"": true,
+      "self.kv_publisher": true,
+      "self.kv_publishers": true
+    },
+    "readable": true
+  },
+  "compiled_core": {
+    "count": 1,
+    "files": [
+      "/usr/local/lib/python3.12/dist-packages/dynamo/_core.abi3.so"
+    ]
+  },
+  "live_python_method": {
+    "error": "AttributeError(\"module 'dynamo.sglang.request_handlers.handler_base' has no attribute 'WorkerHandlerBase'\")",
+    "loaded": false
+  }
+}
+ojaiyeob@gracehopper:~/kv_cache_offloading$
+```
