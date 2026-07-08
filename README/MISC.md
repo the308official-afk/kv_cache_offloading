@@ -373,81 +373,28 @@ docker logs dynamo-sglang-worker 2>&1 | grep -niE 'kv_publisher|kv_publishers|ca
 ```
 
 ```bash
-ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
+cd ~/kv_cache_offloading
 
 docker exec -i dynamo-sglang-worker python3 - <<'PY'
-from pathlib import Path
 import json
+from dynamo.sglang.args import Config
+from dynamo.sglang.main import build_parser
 
-paths = [
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/init_llm.py",
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py",
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py",
-]
+parser = build_parser()
+args = parser.parse_args([])
 
-checks = {
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/init_llm.py": [
-        "clear_kv_blocks_endpoint = runtime.endpoint(",
-        "clear_kv_blocks_endpoint.serve_endpoint(",
-        "publisher =",
-        "handler =",
-    ],
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py": [
-        "self.kv_publishers = []",
-        "self.kv_publisher = self.kv_publishers[0] if self.kv_publishers else None",
-        "return self.kv_publishers",
-        "KvEventPublisher(",
-    ],
-    "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py": [
-        "self.kv_publishers = list(getattr(publisher, \"kv_publishers\", []) or [])",
-        "self.kv_publisher = publisher.kv_publisher",
-        "publish_cleared()",
-    ],
+out = {
+    "parsed_default_enable_cache_report": getattr(args, "enable_cache_report", None),
+    "parsed_default_kv_events_config": getattr(args, "kv_events_config", None),
 }
-
-out = {}
-for path in paths:
-    p = Path(path)
-    text = p.read_text() if p.exists() else ""
-    out[path] = {
-        "exists": p.exists(),
-        "markers": {marker: (marker in text) for marker in checks[path]},
-    }
-
 print(json.dumps(out, indent=2, sort_keys=True))
 PY
-{
-  "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/init_llm.py": {
-    "exists": true,
-    "markers": {
-      "clear_kv_blocks_endpoint = runtime.endpoint(": true,
-      "clear_kv_blocks_endpoint.serve_endpoint(": true,
-      "handler =": true,
-      "publisher =": false
-    }
-  },
-  "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/publisher.py": {
-    "exists": true,
-    "markers": {
-      "KvEventPublisher(": true,
-      "return self.kv_publishers": true,
-      "self.kv_publisher = self.kv_publishers[0] if self.kv_publishers else None": true,
-      "self.kv_publishers = []": false
-    }
-  },
-  "/usr/local/lib/python3.12/dist-packages/dynamo/sglang/request_handlers/handler_base.py": {
-    "exists": true,
-    "markers": {
-      "publish_cleared()": true,
-      "self.kv_publisher = publisher.kv_publisher": true,
-      "self.kv_publishers = list(getattr(publisher, \"kv_publishers\", []) or [])": true
-    }
-  }
-}
-ojaiyeob@gracehopper:~/kv_cache_offloading$ docker logs dynamo-sglang-worker 2>&1 | grep -niE 'kv_publisher|kv_publishers|cache report|publisher'
-153:2026-07-08T22:55:02.254806Z  INFO publisher.init_engine_metrics_publish: Sending dummy metrics to initialize
-154:2026-07-08T22:55:02.254901Z  INFO publisher.setup_sgl_metrics: SGLang metrics loop started
-157:2026-07-08T22:55:02.255578Z  INFO dynamo_runtime::transports::event_plane: EventPublisher registered with discovery topic=kv_metrics transport=Nats instance_id=7587894972260894432
-ojaiyeob@gracehopper:~/kv_cache_offloading$
+```
 
+```bash
+docker logs dynamo-sglang-worker 2>&1 | grep -niE 'kv_events_config|enable-cache-report|cache-report|zmq kv event|Setting up ZMQ kv event subscriber'
+```
+
+```bash
+docker exec -i dynamo-sglang-worker sh -lc 'ps -ef | grep "python3 -m dynamo.sglang" | grep -v grep'
 ```
