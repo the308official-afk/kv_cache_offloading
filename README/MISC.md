@@ -182,6 +182,20 @@ cache_pinning_microbenchmark_20260707_165021	sweep	sweep_compare	cache_pinning_m
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+DYNAMO_MODEL_PATH="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8" \
+DYNAMO_SERVED_MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8" \
+./run_dynamo_single_host.sh start
+```
+
+
+
+```bash
+cd ~/kv_cache_offloading
+
 docker exec -i dynamo-sglang-worker python3 - <<'PY'
 from pathlib import Path
 import inspect
