@@ -25,6 +25,7 @@ BASE_ID="${SPEC_PREFILL_ID:-speculative_prefill_microbenchmark_$(date +%Y%m%d_%H
 PYTHON_BIN="${PYTHON_BIN:-}"
 SPEC_PREFILL_SEED="${SPEC_PREFILL_SEED:-42}"
 SPEC_PREFILL_SWEEP_SEED_MODE="${SPEC_PREFILL_SWEEP_SEED_MODE:-fixed}"
+RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-strict}"
 PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_speculative_prefill_microbenchmark"
@@ -193,6 +194,7 @@ Runtime defaults:
   worker_base_args=${WORKER_BASE_ARGS}
   probe_seed=${SPEC_PREFILL_SEED}
   sweep_seed_mode=${SPEC_PREFILL_SWEEP_SEED_MODE}
+  retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 EOF
   printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"

@@ -1511,6 +1511,10 @@ Supported modes:
 - `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
+Default prompt-isolation policy:
+
+- `RETENTION_PROMPT_ISOLATION_MODE=strict`
+
 ### Run
 
 ```bash
@@ -1802,6 +1806,7 @@ Recommended flow:
 Direct wrapper default:
 
 - `EXPERIMENT_RESET_MODE=restart`
+- `RETENTION_PROMPT_ISOLATION_MODE=strict`
 
 ### Run
 
@@ -2479,6 +2484,10 @@ Use this when you want one long run across the public microbenchmarks for:
 - Experiment 10: cache pinning
 - Experiment 11: priority scheduling
 - Experiment 12: speculative prefill
+
+Default prompt-isolation policy:
+
+- `RETENTION_PROMPT_ISOLATION_MODE=strict`
 
 Public wrappers:
 

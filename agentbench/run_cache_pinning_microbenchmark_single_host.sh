@@ -26,6 +26,7 @@ BASE_ID="${CACHE_PINNING_ID:-cache_pinning_microbenchmark_$(date +%Y%m%d_%H%M%S)
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
 RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED:-42}"
 RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE:-fixed}"
+RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-strict}"
 PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_cache_pinning_microbenchmark"
@@ -232,6 +233,7 @@ Shared pinning knobs:
   development_branch_stack=${CACHE_PINNING_DEVELOPMENT_BRANCH_STACK}
   retention_probe_seed=${RETENTION_PROBE_SEED}
   retention_sweep_seed_mode=${RETENTION_SWEEP_SEED_MODE}
+  retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 EOF
   if [[ -f "${CONTRACT_PATH}" ]]; then
     printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
@@ -316,6 +318,7 @@ run_sweep_mode() {
     EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE}" \
     RETENTION_PROBE_SEED="${RETENTION_PROBE_SEED}" \
     RETENTION_SWEEP_SEED_MODE="${RETENTION_SWEEP_SEED_MODE}" \
+    RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}" \
     SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE}" \
     WORKER_BASE_ARGS="${WORKER_BASE_ARGS}" \
     ./agentbench/run_cache_pinning_retention_threshold_sweep_single_host.sh "${MODEL}"

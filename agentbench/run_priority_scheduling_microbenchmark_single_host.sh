@@ -25,6 +25,7 @@ BASE_ID="${PRIORITY_SCHEDULING_ID:-priority_scheduling_microbenchmark_$(date +%Y
 PYTHON_BIN="${PYTHON_BIN:-}"
 PRIORITY_PROBE_SEED="${PRIORITY_PROBE_SEED:-42}"
 PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${PRIORITY_SCHEDULING_SWEEP_SEED_MODE:-fixed}"
+RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-strict}"
 PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_priority_scheduling_microbenchmark"
@@ -199,6 +200,7 @@ Runtime defaults:
   worker_base_args=${WORKER_BASE_ARGS}
   probe_seed=${PRIORITY_PROBE_SEED}
   sweep_seed_mode=${PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
+  retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 EOF
   printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
