@@ -2064,7 +2064,7 @@ This is a synthetic scheduling experiment. It does **not** use SWE-bench.
 
 ### Run
 
-=== This works on GH200? ===
+=== This works on GH200 ===
 ```bash
 cd ~/kv_cache_offloading
 
