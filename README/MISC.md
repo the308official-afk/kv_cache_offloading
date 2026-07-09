@@ -459,11 +459,26 @@ ojaiyeob@gracehopper:~/kv_cache_offloading$
 
 
 ```bash
-first_ms	replay_ms
-300	41
-87	40
-91	229
-93	41
-<img width="163" height="116" alt="image" src="https://github.com/user-attachments/assets/a492250b-e209-41cd-a35d-2c0d2de4e0b2" />
+cd ~/kv_cache_offloading
 
+RUN_PREFIX="kv_retention_microbenchmark_20260708_231032__sweep"
+
+python3 - <<'PY'
+from pathlib import Path
+import csv
+
+run_prefix = "kv_retention_microbenchmark_20260708_231032__sweep"
+root = Path("experiments/reports/retention_probe")
+
+print("cell\thint_profile\tprompt_hash\tlatency_ms\tcached_prompt_tokens\tcache_reuse_ratio\tstatus")
+for path in sorted(root.glob(f"{run_prefix}*/retention_probe_requests.csv")):
+    with path.open() as f:
+        for row in csv.DictReader(f):
+            if row["request_role"] == "a_first":
+                print(
+                    f"{path.parent.name}\t{row['hint_profile']}\t{row['prompt_hash']}\t"
+                    f"{row['latency_ms']}\t{row['cached_prompt_tokens']}\t"
+                    f"{row['cache_reuse_ratio']}\t{row['status']}"
+                )
+PY
 ```
