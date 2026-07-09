@@ -152,6 +152,7 @@ require_contract_vars() {
     PROTECTED_INPUT_LEN
     DISTRACTOR_INPUT_LEN
     RANDOM_OUTPUT_LEN
+    RETENTION_PROMPT_ISOLATION_MODE
     MAX_CONTEXT_TOKENS
     CONTROL_HINT_PROFILE
     PROTECTED_HINT_PROFILES
@@ -236,6 +237,7 @@ Workload defaults:
   protected_input_len=${PROTECTED_INPUT_LEN}
   distractor_input_len=${DISTRACTOR_INPUT_LEN}
   random_output_len=${RANDOM_OUTPUT_LEN}
+  prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
   max_context_tokens=${MAX_CONTEXT_TOKENS}
 
 Runtime defaults:

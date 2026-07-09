@@ -31,6 +31,7 @@ MAX_CONTEXT_TOKENS="${MAX_CONTEXT_TOKENS:-17146}"
 CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
+RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-strict}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 CACHE_CONTROL_DOC_MODE="${CACHE_CONTROL_DOC_MODE:-1}"
 CACHE_CONTROL_STRICT_DOC_MODE="${CACHE_CONTROL_STRICT_DOC_MODE:-0}"
@@ -382,12 +383,12 @@ require_retention_probe_script_ready() {
     echo "Retention probe script not found: ${probe_script}" >&2
     exit 1
   fi
-  if ! grep -q 'PROMPT_GENERATOR_VERSION = "cache-word-v3"' "${probe_script}"; then
+  if ! grep -q 'PROMPT_GENERATOR_VERSION = "cache-word-v4"' "${probe_script}"; then
     cat >&2 <<EOF
 Retention probe script is stale:
   ${probe_script}
 
-Expected prompt generator version: cache-word-v3.
+Expected prompt generator version: cache-word-v4.
 Sync the latest repo changes to EC2 before running this experiment.
 EOF
     exit 1
@@ -672,6 +673,7 @@ run_probe() {
     --distractor-count "${DISTRACTOR_COUNT}"
     --random-output-len "${RANDOM_OUTPUT_LEN}"
     --seed "${RETENTION_PROBE_SEED}"
+    --prompt-isolation-mode "${RETENTION_PROMPT_ISOLATION_MODE}"
     --request-timeout "${REQUEST_TIMEOUT}"
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
@@ -730,6 +732,7 @@ postprocess_probe() {
     --distractor-count "${DISTRACTOR_COUNT}"
     --random-output-len "${RANDOM_OUTPUT_LEN}"
     --seed "${RETENTION_PROBE_SEED}"
+    --prompt-isolation-mode "${RETENTION_PROMPT_ISOLATION_MODE}"
     --request-timeout "${REQUEST_TIMEOUT}"
     --max-context-tokens "${MAX_CONTEXT_TOKENS}"
     --context-reserve-tokens "${CONTEXT_RESERVE_TOKENS}"
@@ -1215,6 +1218,7 @@ reset_latest_probe_reports
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"
+  echo "Retention prompt isolation mode: ${RETENTION_PROMPT_ISOLATION_MODE}"
   echo "Random output len: ${RANDOM_OUTPUT_LEN}"
   echo "Max context tokens: ${MAX_CONTEXT_TOKENS}"
   echo "Context reserve tokens: ${CONTEXT_RESERVE_TOKENS}"

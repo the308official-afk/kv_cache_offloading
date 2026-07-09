@@ -29,7 +29,7 @@ DEFAULT_CACHE_EVENT_LOG = (
     / "sglang_transfer_logs"
     / "latest_sglang_transfer_events.jsonl"
 )
-PROMPT_GENERATOR_VERSION = "cache-word-v3"
+PROMPT_GENERATOR_VERSION = "cache-word-v4"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
 RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -284,6 +284,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--distractor-count", type=int, default=10)
     parser.add_argument("--random-output-len", type=int, default=1)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument(
+        "--prompt-isolation-mode",
+        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "strict"),
+        choices=("standard", "strict"),
+        help=(
+            "How strongly to isolate protected prompts across sweep cells. "
+            "'standard' keeps the older mostly-uniform protected prompt template. "
+            "'strict' makes protected prompts diverge early across different seeds "
+            "while still keeping a_first and a_replay identical within each cell."
+        ),
+    )
     parser.add_argument("--protected-hint-profile", default="high-priority")
     parser.add_argument("--distractor-hint-profile", default="none")
     parser.add_argument(
@@ -402,10 +413,59 @@ def make_distractor_prompt(*, role: str, target_len: int, seed: int) -> str:
     return header + " ".join(body_words)
 
 
-def make_prompt(*, role: str, target_len: int, seed: int) -> str:
+def make_prompt(*, role: str, target_len: int, seed: int, isolation_mode: str = "strict") -> str:
     if role.startswith("distractor_"):
         return make_distractor_prompt(role=role, target_len=target_len, seed=seed)
 
+    return make_protected_prompt(
+        role=role,
+        target_len=target_len,
+        seed=seed,
+        isolation_mode=isolation_mode,
+    )
+
+
+def make_protected_prompt(*, role: str, target_len: int, seed: int, isolation_mode: str) -> str:
+    if isolation_mode == "standard":
+        return make_standard_prompt(role=role, target_len=target_len, seed=seed)
+    if isolation_mode != "strict":
+        raise ValueError(f"Unknown prompt isolation mode: {isolation_mode}")
+
+    rng = random.Random(f"{role}:{seed}:{target_len}:strict")
+    vocab = list(DISTRACTOR_WORD_BANK)
+    rng.shuffle(vocab)
+
+    # For protected prompts, make different sweep cells diverge early too.
+    # This preserves within-cell comparability because a_first and a_replay
+    # still use the same seed and therefore the same prompt text.
+    prefix_len = min(64, target_len)
+    prefix_words = vocab[:prefix_len]
+    cycle_words = vocab[prefix_len:] or vocab
+    stride = (rng.randrange(5, len(cycle_words), 2) if len(cycle_words) > 5 else 1)
+    offset = rng.randrange(len(cycle_words)) if cycle_words else 0
+
+    body_words: list[str] = []
+    for idx in range(target_len):
+        if idx < prefix_len:
+            body_words.append(prefix_words[idx])
+            continue
+        cycle_idx = (offset + (idx - prefix_len) * stride) % len(cycle_words)
+        body_words.append(cycle_words[cycle_idx])
+
+    nonce_words = prefix_words[: min(10, len(prefix_words))]
+    header = (
+        f"{role} "
+        + " ".join(nonce_words)
+        + ". "
+        + "KV cache retention probe prompt. "
+        f"seed marker {rng.randrange(1_000_000):06d}. "
+        "Return exactly one short answer token. "
+        "This protected prompt uses a seed-specific early prefix so different sweep cells do not overlap too much. "
+    )
+    return header + " ".join(body_words)
+
+
+def make_standard_prompt(*, role: str, target_len: int, seed: int) -> str:
     rng = random.Random(f"{role}:{seed}:{target_len}")
     header = (
         f"KV cache retention probe prompt role={role}. "
@@ -1567,7 +1627,12 @@ def main() -> int:
         if not rows:
             raise SystemExit(f"No existing request rows found for postprocess-only mode: {requests_csv}")
     else:
-        protected_prompt = make_prompt(role="protected_A", target_len=args.protected_input_len, seed=args.seed)
+        protected_prompt = make_protected_prompt(
+            role="protected_A",
+            target_len=args.protected_input_len,
+            seed=args.seed,
+            isolation_mode=args.prompt_isolation_mode,
+        )
         rows: list[dict[str, Any]] = []
 
         sequence: list[tuple[str, str, str, str]] = [
@@ -1592,6 +1657,7 @@ def main() -> int:
         print(f"KV retention probe run_id={run_id}")
         print(f"model={args.model}")
         print(f"prompt_generator_version={PROMPT_GENERATOR_VERSION}")
+        print(f"prompt_isolation_mode={args.prompt_isolation_mode}")
         print(
             "requests="
             f"{len(sequence)} protected_hint_profile={args.protected_hint_profile} "

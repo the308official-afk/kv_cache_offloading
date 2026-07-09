@@ -106,6 +106,7 @@ The shell contract currently exposes:
   - `PROTECTED_INPUT_LEN`
   - `DISTRACTOR_INPUT_LEN`
   - `RANDOM_OUTPUT_LEN`
+  - `RETENTION_PROMPT_ISOLATION_MODE`
   - `MAX_CONTEXT_TOKENS`
 - runtime shape:
   - `KV_TIER_MODES`
