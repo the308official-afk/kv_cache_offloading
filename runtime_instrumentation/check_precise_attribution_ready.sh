@@ -184,16 +184,24 @@ if root_spec is None or not root_spec.origin:
     raise SystemExit("could not locate sglang package inside worker")
 root = Path(root_spec.origin).resolve().parent
 targets = [
-    root / "srt" / "mem_cache" / "transfer_logging.py",
-    root / "srt" / "managers" / "cache_controller.py",
-    root / "srt" / "mem_cache" / "hiradix_cache.py",
+    root / "srt" / "mem_cache",
+    root / "srt" / "managers",
 ]
 combined = ""
 present_files = []
-for path in targets:
-    if path.exists():
-        combined += path.read_text(encoding="utf-8") + "\n"
-        present_files.append(str(path))
+for target in targets:
+    if target.is_file() and target.suffix == ".py":
+        combined += target.read_text(encoding="utf-8") + "\n"
+        present_files.append(str(target))
+        continue
+    if not target.is_dir():
+        continue
+    for path in sorted(target.rglob("*.py")):
+        try:
+            combined += path.read_text(encoding="utf-8") + "\n"
+            present_files.append(str(path))
+        except Exception:
+            continue
 checks = {
     "files": present_files,
     "_sgl_log_priority_event": "_sgl_log_priority_event" in combined,
