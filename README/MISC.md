@@ -456,3 +456,14 @@ kv_retention_microbenchmark_20260708_231032__sweep_Qwen_Qwen3-Coder-30B-A3B-Inst
 ojaiyeob@gracehopper:~/kv_cache_offloading$
 
 ```
+
+
+```bash
+first_ms	replay_ms
+300	41
+87	40
+91	229
+93	41
+<img width="163" height="116" alt="image" src="https://github.com/user-attachments/assets/a492250b-e209-41cd-a35d-2c0d2de4e0b2" />
+
+```
