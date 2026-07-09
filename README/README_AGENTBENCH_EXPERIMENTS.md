@@ -2067,6 +2067,24 @@ This is a synthetic scheduling experiment. It does **not** use SWE-bench.
 ```bash
 cd ~/kv_cache_offloading
 
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+PRIORITY_SCHEDULING_MODE=all \
+EXPERIMENT_RESET_MODE=flush \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+```bash
+cd ~/kv_cache_offloading
+
 DYNAMO_MACHINE_PROFILE=ec2 \
 PRIORITY_SCHEDULING_MODE=probe \
 ./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
