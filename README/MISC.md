@@ -809,6 +809,26 @@ kv_retention_microbenchmark_20260708_231032__sweep_Qwen_Qwen3-Coder-30B-A3B-Inst
 
 
 ```
-ojaiyeob@gracehopper:~/kv_cache_offloading$
+cd ~/kv_cache_offloading
 
+RUN_PREFIX="kv_retention_microbenchmark_20260708_231032__sweep"
+
+python3 - <<'PY'
+from pathlib import Path
+import csv
+
+run_prefix = "kv_retention_microbenchmark_20260708_231032__sweep"
+root = Path("experiments/reports/retention_probe")
+
+print("cell\thint_profile\tprompt_hash\tlatency_ms\tcached_prompt_tokens\tcache_reuse_ratio\tstatus")
+for path in sorted(root.glob(f"{run_prefix}*/retention_probe_requests.csv")):
+    with path.open() as f:
+        for row in csv.DictReader(f):
+            if row["request_role"] == "a_first":
+                print(
+                    f"{path.parent.name}\t{row['hint_profile']}\t{row['prompt_hash']}\t"
+                    f"{row['latency_ms']}\t{row['cached_prompt_tokens']}\t"
+                    f"{row['cache_reuse_ratio']}\t{row['status']}"
+                )
+PY
 ```
