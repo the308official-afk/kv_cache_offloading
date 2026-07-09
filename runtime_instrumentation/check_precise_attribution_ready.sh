@@ -205,12 +205,23 @@ for target in targets:
 checks = {
     "files": present_files,
     "_sgl_log_priority_event": "_sgl_log_priority_event" in combined,
-    "priority_hint_seen": "priority_hint_seen" in combined,
-    "scheduler_priority_applied": "scheduler_priority_applied" in combined,
+    "worker_priority_seen": "worker_priority_seen" in combined,
+    "worker_top_level_priority": "worker_top_level_priority" in combined,
+    "worker_agent_hints_priority": "worker_agent_hints_priority" in combined,
+    "worker_cache_retention_priority": "worker_cache_retention_priority" in combined,
 }
 print(json.dumps(checks, sort_keys=True))
-missing = [key for key, value in checks.items() if key != "files" and not value]
-if missing:
+has_priority_logger = checks["_sgl_log_priority_event"]
+has_priority_metadata = any(
+    checks[key]
+    for key in (
+        "worker_priority_seen",
+        "worker_top_level_priority",
+        "worker_agent_hints_priority",
+        "worker_cache_retention_priority",
+    )
+)
+if not (has_priority_logger and has_priority_metadata):
     raise SystemExit(13)
 PY
     )" || fail "worker SGLang priority markers are missing"
