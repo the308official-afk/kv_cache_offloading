@@ -28,6 +28,10 @@ drwxr-xr-x 4 root root 4.0K Jul  6 16:13 ..
 /mnt/docker-data/dynamo_cache
 ojaiyeob@gracehopper:~/kv_cache_offloading$
 
+
+export DYNAMO_CACHE_DIR="$HOME/dynamo_model_cache"
+mkdir -p "$DYNAMO_CACHE_DIR"
+
 ```
 
 ```bash
