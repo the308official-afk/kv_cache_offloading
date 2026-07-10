@@ -1,9 +1,16 @@
 
 
 ```bash
-turn_a_ms	turn_b_ms
-571	291
-451	337
+benchmark_id	part	sweep_axis	sweep_value	run_id	model	arm	spec_prefill	turn_a_ms	turn_b_ms	turn_b_gain_ms	turn_b_cached	turn_b_reuse	hint_status	prefill_wrap	prefill_spawned	prefill_sent	prefill_done	prefill_target_seen	prefill_tokens	effect
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260710_171732__sweep_1	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	563	498	0	8128	0.564	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260710_171732__sweep_1	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	450	562	-64	8128	0.564	on	inferred_on	TRUE	TRUE	TRUE	TRUE	8155	direct_no_visible_gain
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260710_171732__sweep_2	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	431	497	0	8128	0.564	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260710_171732__sweep_2	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	449	561	-64	8128	0.564	on	inferred_on	TRUE	TRUE	TRUE	TRUE	8155	direct_no_visible_gain
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	1000	speculative_prefill_microbenchmark_20260710_171732__sweep_3	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	433	497	0	8128	0.564	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	1000	speculative_prefill_microbenchmark_20260710_171732__sweep_3	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	451	559	-62	8128	0.564	on	inferred_on	TRUE	TRUE	TRUE	TRUE	8155	direct_no_visible_gain
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	2000	speculative_prefill_microbenchmark_20260710_171732__sweep_4	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	435	503	0	8128	0.564	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260710_171732	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	2000	speculative_prefill_microbenchmark_20260710_171732__sweep_4	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	449	562	-59	8128	0.564	on	inferred_on	TRUE	TRUE	TRUE	TRUE	8155	direct_no_visible_gain
+
 
 ```
 
