@@ -13,28 +13,9 @@ first_ms	replay_ms
 74	37
 
 ```bash
-CUDA Version 12.9.1
-
-Container image Copyright (c) 2016-2023, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-
-This container image and its contents are governed by the NVIDIA Deep Learning Container License.
-By pulling and using the container, you accept the terms and conditions of this license:
-https://developer.nvidia.com/ngc/nvidia-deep-learning-container-license
-
-A copy of this license is made available in this container at /NGC-DL-CONTAINER-LICENSE for your convenience.
-
-/usr/local/lib/python3.12/dist-packages/torchao/quantization/quant_api.py:1731: SyntaxWarning: invalid escape sequence '\.'
-  """Configuration class for applying different quantization configs to modules or parameters based on their fully qualified names (FQNs).
-2026-07-10T15:50:52.723441Z  WARN __init__: dynamo.nixl_connect: Failed to load CuPy for GPU acceleration, utilizing numpy to provide CPU based             operations.
-<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.cudart module is deprecated and will be removed in a future release, pleas            e switch to use the cuda.bindings.runtime module instead.
-<frozen importlib._bootstrap_external>:1297: FutureWarning: The cuda.nvrtc module is deprecated and will be removed in a future release, please             switch to use the cuda.bindings.nvrtc module instead.
-2026-07-10T15:50:56.304832Z  WARN encode_worker_handler: Failed to import cupy, falling back to numpy: No module named 'cupy'.
-2026-07-10T15:50:56.305412Z  WARN worker_handler: Failed to import cupy, falling back to numpy: No module named 'cupy'.
-2026-07-10T15:50:56.753442Z  WARN dynamo_llm::hub: Cannot connect to ModelExpress server: Transport error: transport error. Using direct downlo            ad.
-2026-07-10T15:50:56.753474Z  INFO modelexpress_common::download: Downloading model 'Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8' using provider: Hugg            ing Face
-2026-07-10T15:50:56.753606Z  INFO modelexpress_common::providers::huggingface: Using cache directory: "/home/dynamo/.cache/huggingface/hub"
-
-
+ls -lah /mnt/docker-data/dynamo_cache | head
+du -sh /mnt/docker-data/dynamo_cache
+find /mnt/docker-data/dynamo_cache -maxdepth 3 | head -50
 ```
 
 ```bash
