@@ -96,7 +96,7 @@ Usage:
 Environment:
   DYNAMO_MACHINE_PROFILE=ec2|gh200
   SUITE_EXPERIMENTS="9 10 11 12"        # or "retention cache_pinning priority spec_prefill"
-  SUITE_ISOLATION_MODE=clean|fast       # clean=restarts sweep values, fast=reuses runtime within experiments without flush
+  SUITE_ISOLATION_MODE=clean|flush|fast # clean=restarts sweep values, flush=flushes sweep values, fast=reuses runtime within experiments without flush
   SUITE_CONTINUE_ON_ERROR=0|1
   SUITE_DEFAULT_MODE=sweep
   SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
@@ -130,6 +130,15 @@ case "${SUITE_ISOLATION_MODE}" in
     EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="fixed"
     EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="fixed"
     ;;
+  flush)
+    EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
+    EFFECTIVE_EXPERIMENT_RESET_MODE="flush"
+    EFFECTIVE_KV_RETENTION_RESET_MODE="flush"
+    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
+    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
+    ;;
   fast)
     EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
     EFFECTIVE_EXPERIMENT_RESET_MODE="none"
@@ -141,7 +150,7 @@ case "${SUITE_ISOLATION_MODE}" in
     ;;
   *)
     echo "Unknown SUITE_ISOLATION_MODE: ${SUITE_ISOLATION_MODE}" >&2
-    echo "Valid values: clean fast" >&2
+    echo "Valid values: clean flush fast" >&2
     exit 2
     ;;
 esac
@@ -168,8 +177,17 @@ KV_RETENTION_MODE='${KV_RETENTION_MODE:-}'
 KV_RETENTION_RESET_MODE='${EFFECTIVE_KV_RETENTION_RESET_MODE}'
 RETENTION_SWEEP_SEED_MODE='${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}'
 RETENTION_PROMPT_ISOLATION_MODE='${RETENTION_PROMPT_ISOLATION_MODE}'
+RETENTION_ATTRIBUTION_MODE='${RETENTION_ATTRIBUTION_MODE:-}'
+RETENTION_REQUEST_CONTEXT_MODE='${RETENTION_REQUEST_CONTEXT_MODE:-}'
+RETENTION_TOP_LEVEL_PRIORITY_MODE='${RETENTION_TOP_LEVEL_PRIORITY_MODE:-}'
 KV_RETENTION_SWEEP_AXIS='${KV_RETENTION_SWEEP_AXIS:-}'
 KV_RETENTION_SWEEP_VALUES='${KV_RETENTION_SWEEP_VALUES:-}'
+DISTRACTOR_COUNTS='${DISTRACTOR_COUNTS:-}'
+PROTECTED_INPUT_LEN='${PROTECTED_INPUT_LEN:-}'
+DISTRACTOR_INPUT_LEN='${DISTRACTOR_INPUT_LEN:-}'
+PROTECTED_HINT_PROFILES='${PROTECTED_HINT_PROFILES:-}'
+SGLANG_TRANSFER_LOG='${SGLANG_TRANSFER_LOG:-}'
+SGLANG_TRANSFER_LOG_PROFILE='${SGLANG_TRANSFER_LOG_PROFILE:-}'
 CACHE_PINNING_MODE='${CACHE_PINNING_MODE:-}'
 CACHE_PINNING_SWEEP_SEED_MODE='${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}'
 CACHE_PINNING_VALIDATE_TTL='${CACHE_PINNING_VALIDATE_TTL:-}'
@@ -181,11 +199,19 @@ PRIORITY_SCHEDULING_MODE='${PRIORITY_SCHEDULING_MODE:-}'
 PRIORITY_SCHEDULING_SWEEP_SEED_MODE='${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}'
 PRIORITY_SCHEDULING_SWEEP_AXIS='${PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
 PRIORITY_SCHEDULING_SWEEP_VALUES='${PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
+LOW_PRIORITY_COUNT='${LOW_PRIORITY_COUNT:-}'
+HIGH_PRIORITY_COUNT='${HIGH_PRIORITY_COUNT:-}'
+PRIORITY_INPUT_LEN='${PRIORITY_INPUT_LEN:-}'
+PRIORITY_OUTPUT_LEN='${PRIORITY_OUTPUT_LEN:-}'
+PRIORITY_INTER_REQUEST_GAP_MS='${PRIORITY_INTER_REQUEST_GAP_MS:-}'
 SPEC_PREFILL_MODE='${SPEC_PREFILL_MODE:-}'
 SPEC_PREFILL_PROMPT_ISOLATION_MODE='${SPEC_PREFILL_PROMPT_ISOLATION_MODE}'
 SPEC_PREFILL_SWEEP_SEED_MODE='${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}'
 SPEC_PREFILL_SWEEP_AXIS='${SPEC_PREFILL_SWEEP_AXIS:-}'
 SPEC_PREFILL_SWEEP_VALUES='${SPEC_PREFILL_SWEEP_VALUES:-}'
+SPEC_PREFILL_TURN_A_WORDS='${SPEC_PREFILL_TURN_A_WORDS:-}'
+SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
+SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
 EOF
 
 log() {
@@ -617,13 +643,20 @@ log "Retention prompt isolation mode: ${RETENTION_PROMPT_ISOLATION_MODE}"
 log "Speculative-prefill prompt isolation mode: ${SPEC_PREFILL_PROMPT_ISOLATION_MODE}"
 log "Experiment reset mode: ${EFFECTIVE_EXPERIMENT_RESET_MODE}"
 log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
-if [[ "${SUITE_ISOLATION_MODE}" = "clean" ]]; then
-  log "Suite runtime policy: restart between experiments, restart between sweep values"
-  log "Sweep prompt policy: fixed prompts across sweep values"
-else
-  log "Suite runtime policy: restart between experiments, no restart between sweep values"
-  log "Sweep prompt policy: different prompts across sweep values"
-fi
+case "${SUITE_ISOLATION_MODE}" in
+  clean)
+    log "Suite runtime policy: restart between experiments, restart between sweep values"
+    log "Sweep prompt policy: fixed prompts across sweep values"
+    ;;
+  flush)
+    log "Suite runtime policy: restart between experiments, flush between sweep values"
+    log "Sweep prompt policy: different prompts across sweep values"
+    ;;
+  fast)
+    log "Suite runtime policy: restart between experiments, no restart between sweep values"
+    log "Sweep prompt policy: different prompts across sweep values"
+    ;;
+esac
 log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 

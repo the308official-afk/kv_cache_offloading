@@ -2736,7 +2736,8 @@ Use this when you want one long run across the public microbenchmarks for:
 
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=strict`
+- `RETENTION_PROMPT_ISOLATION_MODE=strict` for Experiments 9, 10, and 11
+- `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 Public wrappers:
 
@@ -2744,6 +2745,45 @@ Public wrappers:
 - [`agentbench/run_agentic_hint_sweeps_suite_nohup.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_nohup.sh)
 
 ### Run
+
+=== This works on GH200 for Experiments 9, 11, and 12 ===
+```bash
+cd ~/kv_cache_offloading
+
+SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+DYNAMO_MACHINE_PROFILE=gh200 \
+SUITE_ISOLATION_MODE=flush \
+SUITE_EXPERIMENTS="9 11 12" \
+KV_RETENTION_MODE=sweep \
+PRIORITY_SCHEDULING_MODE=all \
+SPEC_PREFILL_MODE=all \
+RETENTION_ATTRIBUTION_MODE=precise \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
+RETENTION_SWEEP_SEED_MODE=per_cell \
+RETENTION_PROMPT_ISOLATION_MODE=strict \
+DISTRACTOR_COUNTS="100 110 120 130 140 150 160 170 180 190 200" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
+PROTECTED_HINT_PROFILES="high-priority" \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint \
+SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=2048 \
+SPEC_PREFILL_OUTPUT_TOKENS=128 \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
 
 ```bash
 cd ~/kv_cache_offloading
@@ -2771,6 +2811,45 @@ SPEC_PREFILL_OUTPUT_TOKENS=64 \
 ```
 
 ### Nohup
+
+=== This works on GH200 for Experiments 9, 11, and 12 ===
+```bash
+cd ~/kv_cache_offloading
+
+SGLANG_TRANSFER_LOG=1 \
+SGLANG_TRANSFER_LOG_PROFILE=full \
+DYNAMO_MACHINE_PROFILE=gh200 \
+SUITE_ISOLATION_MODE=flush \
+SUITE_EXPERIMENTS="9 11 12" \
+KV_RETENTION_MODE=sweep \
+PRIORITY_SCHEDULING_MODE=all \
+SPEC_PREFILL_MODE=all \
+RETENTION_ATTRIBUTION_MODE=precise \
+RETENTION_REQUEST_CONTEXT_MODE=auto \
+RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
+RETENTION_SWEEP_SEED_MODE=per_cell \
+RETENTION_PROMPT_ISOLATION_MODE=strict \
+DISTRACTOR_COUNTS="100 110 120 130 140 150 160 170 180 190 200" \
+PROTECTED_INPUT_LEN=2000 \
+DISTRACTOR_INPUT_LEN=2000 \
+PROTECTED_HINT_PROFILES="high-priority" \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint \
+SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=2048 \
+SPEC_PREFILL_OUTPUT_TOKENS=128 \
+./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
 
 ```bash
 cd ~/kv_cache_offloading
@@ -2823,6 +2902,8 @@ SUITE_ISOLATION_MODE
 SUITE_DEFAULT_MODE
 SUITE_INTERACTIVE_BUILD_PROGRESS
 SUITE_ENSURE_PRECISE_RUNTIME
+RETENTION_PROMPT_ISOLATION_MODE
+SPEC_PREFILL_PROMPT_ISOLATION_MODE
 ```
 
 `SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
@@ -2862,6 +2943,10 @@ once at suite startup, before Experiment 9 begins.
   - restart between experiments
   - restart between sweep values
   - keep the same prompts across sweep values
+- `flush`:
+  - restart between experiments
+  - flush between sweep values
+  - vary prompts across sweep values with the suite's per-cell / per-value defaults
 - `fast`:
   - restart between experiments
   - no restart between sweep values
@@ -2875,6 +2960,9 @@ Default behavior:
 So the suite now defaults to the main sweep for each experiment instead of quietly running probe/validate work first. If you want a different mode for one experiment, set that experiment's mode explicitly, for example `KV_RETENTION_MODE=plot`.
 
 Use `clean` for the careful runs you want to trust for conclusions.
+
+Use `flush` for the GH200-style runs where the flush endpoint is working and you
+want a good balance between trust and speed.
 
 Use `fast` for quick debugging and iteration when you want to avoid the long wait inside an experiment.
 
