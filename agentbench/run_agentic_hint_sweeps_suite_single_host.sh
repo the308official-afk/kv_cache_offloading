@@ -314,10 +314,66 @@ ensure_suite_precise_runtime_if_needed() {
 sync_latest_matrices_to_shared_charts() {
   local charts_dir="experiments/charts"
   mkdir -p "${charts_dir}"
-  [[ -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" "${charts_dir}/exp9_kvretention_matrix.csv"
-  [[ -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
-  [[ -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
-  [[ -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+  has_selected_experiment 9 && [[ -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" "${charts_dir}/exp9_kvretention_matrix.csv"
+  has_selected_experiment 10 && [[ -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
+  has_selected_experiment 11 && [[ -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
+  has_selected_experiment 12 && [[ -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+}
+
+prune_shared_chart_dir_for_suite_selection() {
+  local charts_dir="experiments/charts"
+  mkdir -p "${charts_dir}"
+
+  prune_one_experiment() {
+    local experiment_id="$1"
+    shift
+    if has_selected_experiment "${experiment_id}"; then
+      return 0
+    fi
+    rm -f "$@"
+  }
+
+  prune_one_experiment 9 \
+    "${charts_dir}/exp9_kvretention_matrix.csv" \
+    "${charts_dir}/exp9_kvretention_latency_vs_distractors.svg" \
+    "${charts_dir}/exp9_kvretention_cache_vs_distractors.svg" \
+    "${charts_dir}/exp9_kvretention_latency_gain_vs_distractors.svg" \
+    "${charts_dir}/exp9_kvretention_cache_gain_vs_distractors.svg" \
+    "${charts_dir}/exp9_kvretention_survival_vs_distractors.svg" \
+    "${charts_dir}/latest_kv_retention_microbenchmark_matrix.csv"
+
+  prune_one_experiment 10 \
+    "${charts_dir}/exp10_cachepinning_matrix.csv" \
+    "${charts_dir}/exp10_cachepinning_validation_latency.svg" \
+    "${charts_dir}/exp10_cachepinning_validation_cache.svg" \
+    "${charts_dir}/exp10_cachepinning_latency_vs_distractors.svg" \
+    "${charts_dir}/exp10_cachepinning_cache_vs_distractors.svg" \
+    "${charts_dir}/exp10_cachepinning_latency_gain_vs_distractors.svg" \
+    "${charts_dir}/exp10_cachepinning_cache_gain_vs_distractors.svg" \
+    "${charts_dir}/latest_cache_pinning_microbenchmark_matrix.csv" \
+    "${charts_dir}/latest_cache_pinning_microbenchmark_validation_latency.svg" \
+    "${charts_dir}/latest_cache_pinning_microbenchmark_validation_cached_tokens.svg" \
+    "${charts_dir}/latest_cache_pinning_microbenchmark_sweep_replay_latency.svg" \
+    "${charts_dir}/latest_cache_pinning_microbenchmark_sweep_replay_cached_tokens.svg"
+
+  prune_one_experiment 11 \
+    "${charts_dir}/exp11_prioritysched_matrix.csv" \
+    "${charts_dir}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg" \
+    "${charts_dir}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
+    "${charts_dir}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
+    "${charts_dir}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg" \
+    "${charts_dir}/exp11_prioritysched_latency_vs_arrival_gap.svg" \
+    "${charts_dir}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg" \
+    "${charts_dir}/latest_priority_scheduling_microbenchmark_matrix.csv"
+
+  prune_one_experiment 12 \
+    "${charts_dir}/exp12_specprefill_matrix.csv" \
+    "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_cache_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_turna_latency_vs_warmup_wait.svg" \
+    "${charts_dir}/latest_speculative_prefill_microbenchmark_matrix.csv"
 }
 
 sync_shared_assets_for_experiment() {
@@ -391,6 +447,20 @@ canonical_experiment() {
     12|spec_prefill|speculative_prefill) echo "12" ;;
     *) return 1 ;;
   esac
+}
+
+has_selected_experiment() {
+  local target
+  target="$(canonical_experiment "$1")" || return 1
+  local token=""
+  local exp=""
+  for token in ${SUITE_EXPERIMENTS}; do
+    exp="$(canonical_experiment "${token}")" || continue
+    if [[ "${exp}" = "${target}" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 append_result_json() {
@@ -914,6 +984,7 @@ log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 
 ensure_suite_experiment_dirs_ready
+prune_shared_chart_dir_for_suite_selection
 ensure_suite_precise_runtime_if_needed
 
 suite_ok=1
@@ -951,6 +1022,7 @@ done
 
 build_suite_outputs
 
+prune_shared_chart_dir_for_suite_selection
 sync_latest_matrices_to_shared_charts
 
 banner "AGENTIC HINT SWEEPS SUITE READY" | tee -a "${SUITE_DRIVER_LOG}"

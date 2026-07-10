@@ -1969,6 +1969,10 @@ Recommended:
 
 Charts are copied into [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you can inspect them before the full suite completes.
 
+The suite also removes chart files for experiments that are not in the current
+`SUITE_EXPERIMENTS` selection, so stale `exp10_*` files do not linger when you
+run only `9 11 12`.
+
 Top-level suite outputs:
 
 ```bash
