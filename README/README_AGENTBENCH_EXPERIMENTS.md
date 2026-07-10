@@ -1632,22 +1632,6 @@ PROTECTED_HINT_PROFILES="high-priority" \
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
-KV_RETENTION_MODE=all \
-RETENTION_ATTRIBUTION_MODE=flush \
-KV_RETENTION_RESET_MODE=restart \
-STOP_ON_PROBE_FAILURE=1 \
-DISTRACTOR_COUNTS="25 50 75 100 125 150" \
-PROTECTED_INPUT_LEN=400 \
-DISTRACTOR_INPUT_LEN=400 \
-PROTECTED_HINT_PROFILES="high-priority" \
-./agentbench/run_kv_retention_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
 KV_RETENTION_MODE=plot \
 KV_RETENTION_PLOT_MATRIX_CSV=experiments/reports/latest_kv_retention_microbenchmark_matrix.csv \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
@@ -2238,51 +2222,6 @@ PRIORITY_INTER_REQUEST_GAP_MS=20 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_MODE=probe \
-./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_MODE=sweep \
-PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
-PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
-./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_MODE=all \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-PRIORITY_ARRIVAL_GAP_MS=200 \
-PRIORITY_INTER_REQUEST_GAP_MS=20 \
-./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-PRIORITY_SCHEDULING_MODE=plot \
-PRIORITY_SCHEDULING_PLOT_MATRIX_CSV=experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv \
-./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
 ### Core Contract Knobs
 
 ```text
@@ -2537,30 +2476,6 @@ cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=ec2 \
 SPEC_PREFILL_MODE=probe \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SPEC_PREFILL_MODE=sweep \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SPEC_PREFILL_MODE=all \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=512 \
-SPEC_PREFILL_OUTPUT_TOKENS=64 \
-SPEC_PREFILL_WARMUP_WAIT_MS=500 \
 ./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
   Qwen/Qwen2.5-Coder-7B-Instruct
 ```
