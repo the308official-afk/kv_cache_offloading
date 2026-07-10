@@ -1529,6 +1529,22 @@ The question is simple:
 - under the same distractor pressure, does the protected arm keep request `A`
   warm longer than the control arm?
 
+### What `sweep` Means Here
+
+One sweep cell means:
+
+- pick one distractor count
+- run the control arm at that distractor count
+- run the protected arm at that same distractor count
+- compare the two rows
+
+Across the sweep:
+
+- the main knob that changes is `distractors`
+- the workload shape stays the same unless you override it
+- the important question is where control turns cold while protected still
+  stays warm
+
 ### What Counts As Success
 
 - the protected arm carries the hint you intended
@@ -1859,6 +1875,22 @@ So the first question is not "did latency improve?" The first question is:
 
 Only after that do we care about whether the protected arm stays warm longer.
 
+### What `sweep` Means Here
+
+One sweep cell means:
+
+- pick one distractor count
+- run the control arm with `cache_control=off`
+- run the protected arm with `cache_control=ephemeral:1h`
+- compare the two rows at that same distractor count
+
+Across the sweep:
+
+- the main knob that changes is `distractors`
+- the TTL and cache-pinning setup stay fixed unless you override them
+- the important question is where control turns cold while protected still
+  stays warm
+
 ### What Counts As Success
 
 Validation success:
@@ -2151,6 +2183,21 @@ The question is:
 - when the queue is busy, do the high-priority requests get attached and
   completed sooner?
 
+### What `sweep` Means Here
+
+One sweep cell means:
+
+- run one mixed burst of low-priority and high-priority requests
+- keep the burst shape the same inside that run
+- summarize how the two priority classes behaved
+
+Across the sweep:
+
+- one public scheduling knob changes between runs
+- most commonly that knob is `PRIORITY_ARRIVAL_GAP_MS`
+- the important question is whether the high-priority class keeps getting lower
+  wait time and more leapfrogs as you move across sweep values
+
 ### What Counts As Success
 
 - the worker really saw the priority hint
@@ -2426,6 +2473,22 @@ The real question is:
 
 It is **not** asking whether control turn B should be a total cache miss.
 Control turn B can still reuse normal conversation state.
+
+### What `sweep` Means Here
+
+One sweep cell means:
+
+- run one control two-turn conversation
+- run one protected two-turn conversation
+- compare control turn B against protected turn B
+
+Across the sweep:
+
+- one public knob changes between runs
+- most commonly that knob is `SPEC_PREFILL_WARMUP_WAIT_MS`
+- the turn structure stays the same unless you override it
+- the important question is whether protected turn B gets faster once the
+  speculative warmup has more time to help
 
 ### What Counts As Success
 
