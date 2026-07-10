@@ -1136,29 +1136,16 @@ semantic token count
 unique semantic token hashes
 ```
 
-## Experiment 6: Multi-Task Batch
-
-Use this to scan many SWE-bench tasks and find runs where the model actually
-edits files and creates patches.
-
-```bash
-cd ~/kv_cache_offloading
-
-export AGENTBENCH_EXECUTION_LOOP=0
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=1
-
-START_INDEX=0 \
-END_INDEX=5 \
-HINT_PROFILE=high-reuse \
-./agentbench/run_swebench_batch_single_host.sh
-```
-
-### Prompt Evolution Batch
+## Experiment 6: Prompt Evolution Batch
 
 Use this when your main goal is to generate prompt-evolution reports across a
-range of SWE-bench Pro tasks.
+range of SWE-bench Pro tasks, including:
+
+- the exact model-facing request
+- tool-capable runtime context
+- tool calls made during the task
+- per-phase planning / execution / review summaries
+- final model behavior for each SWE-bench task
 
 Manual version:
 
@@ -1295,11 +1282,11 @@ What each file means:
 - `tool_call_details.md`: the exact tools called, with arguments when available
 - `phase_summary.md`: the per-phase behavior summary across planning/execution/review
 
-## Experiment 7: Multi-Model Multi-Task Batch
+## Experiment 7: Multi-Model Prompt Evolution Batch
 
 Use this to run Experiment 6 across multiple LLMs. Dynamo is restarted once per
 model, waits for the model to register, then runs a real smoke-test request
-before sending AgentBench requests.
+before sending the prompt-evolution SWE-bench batch.
 
 Pass models directly to the script:
 
