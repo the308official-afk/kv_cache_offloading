@@ -13,15 +13,20 @@ first_ms	replay_ms
 74	37
 
 ```bash
-benchmark_id	part	sweep_axis	sweep_value	run_id	model	arm	spec_prefill	turn_a_ms	turn_b_ms	turn_b_gain_ms	turn_b_cached	turn_b_reuse	hint_status	prefill_wrap	prefill_spawned	prefill_sent	prefill_done	prefill_target_seen	prefill_tokens	effect
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260710_151225__sweep_1	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	566	292	0	8128	0.834	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260710_151225__sweep_1	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	451	336	-44	8128	0.834	on	missing	FALSE	FALSE	FALSE	FALSE		inferred_no_visible_gain
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	250	speculative_prefill_microbenchmark_20260710_151225__sweep_2	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	433	290	0	8128	0.834	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	250	speculative_prefill_microbenchmark_20260710_151225__sweep_2	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	450	336	-46	8128	0.834	on	missing	FALSE	FALSE	FALSE	FALSE		inferred_no_visible_gain
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260710_151225__sweep_3	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	control	FALSE	432	290	0	8128	0.834	off	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
-speculative_prefill_microbenchmark_20260710_151225	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260710_151225__sweep_3	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	protected	TRUE	450	336	-46	8128	0.834	on	missing	FALSE	FALSE	FALSE	FALSE		inferred_no_visible_gain
+cd ~/kv_cache_offloading
 
+RUN_ID="speculative_prefill_microbenchmark_20260710_151225__sweep_1"
 
+grep -n "worker.spec_prefill" \
+  "experiments/reports/speculative_prefill/${RUN_ID}/speculative_prefill_worker_runtime.log" || true
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+grep -Rni "worker.spec_prefill" \
+  experiments/reports/speculative_prefill/speculative_prefill_microbenchmark_20260710_151225__sweep_* \
+  || true
 ```
 
 ```bash
