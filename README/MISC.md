@@ -15,17 +15,11 @@ first_ms	replay_ms
 ```bash
 cd ~/kv_cache_offloading
 
-RUN_ID_ROOT="speculative_prefill_microbenchmark_20260710_151225"
-
-find experiments/reports/speculative_prefill -maxdepth 2 -type f | grep "${RUN_ID_ROOT}" | sort
-
-echo
-echo "=== any runtime json at all? ==="
-grep -Rni "RUNTIME_JSON" experiments/reports/speculative_prefill | grep "${RUN_ID_ROOT}" | head -40 || true
-
-echo
-echo "=== any spec-prefill text at all? ==="
-grep -Rni "spec_prefill" experiments/reports/speculative_prefill | grep "${RUN_ID_ROOT}" | head -80 || true
+docker exec -i dynamo-sglang-worker sh -lc '
+strings /usr/local/lib/python3.12/dist-packages/dynamo/_core.abi3.so \
+  | grep "worker.spec_prefill" \
+  | sort -u
+'
 ```
 
 ```bash
