@@ -33,3 +33,19 @@ turn_a_ms	turn_b_ms
 - Overall effect verdict: `direct_no_visible_gain`
 
 ```
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+SPEC_PREFILL_MODE=all \
+EXPERIMENT_RESET_MODE=flush \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=2048 \
+SPEC_PREFILL_OUTPUT_TOKENS=128 \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
