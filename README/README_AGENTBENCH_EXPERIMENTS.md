@@ -1516,6 +1516,45 @@ Default prompt-isolation policy:
 - `RETENTION_PROMPT_ISOLATION_MODE=strict` for Experiments 9, 10, and 11
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
+### What This Test Really Does
+
+This experiment runs the same `A first -> distractors -> A replay` pattern for
+two arms:
+
+- control: no retention hint
+- protected: retention hint enabled
+
+The question is simple:
+
+- under the same distractor pressure, does the protected arm keep request `A`
+  warm longer than the control arm?
+
+### What Counts As Success
+
+- the protected arm carries the hint you intended
+- at the same distractor count, control goes cold but protected stays warm
+- protected replay is faster than control replay
+
+Columns to check first:
+
+- hint identity: `hint_profile`
+- pressure level: `distractors`
+- survival: `warm`, `warm_source`
+- replay benefit: `replay_ms`, `replay_cached`, `replay_reuse`
+- summary verdict: `result`
+
+If you want the signal-rich proof that the hint was really passed and seen, also
+check:
+
+- `req_prio_status`
+- `worker_prio_status`
+
+### Worked Success Example
+
+Start here when the matrix feels confusing:
+
+- [`contracts/examples/exp9_kv_retention_success.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/examples/exp9_kv_retention_success.md)
+
 ### Run
 
 ```bash
@@ -1806,6 +1845,45 @@ Direct wrapper default:
 - `EXPERIMENT_RESET_MODE=restart`
 - `RETENTION_PROMPT_ISOLATION_MODE=strict`
 
+### What This Test Really Does
+
+Experiment 10 has two stages:
+
+- `validate`: prove the cache-pinning path is actually alive
+- `sweep`: test whether `ephemeral:1h` survives deeper than plain `off`
+
+So the first question is not "did latency improve?" The first question is:
+
+- did the router spawn the pin path?
+- did the worker apply it?
+
+Only after that do we care about whether the protected arm stays warm longer.
+
+### What Counts As Success
+
+Validation success:
+
+- `router_pin=spawned`
+- `worker_pin=applied`
+- turn 2 reused cache
+
+Sweep success:
+
+- at the same distractor count, control turns cold first
+- protected `ephemeral:1h` stays warm longer
+- protected replay is faster than control replay
+
+Columns to check first:
+
+- setup proof: `cache_control`, `router_pin`, `worker_pin`, `result`
+- retention effect: `warm`, `replay_ms`, `replay_cached`, `reuse_signal`
+
+### Worked Success Example
+
+Use this as the stable reference for both validation success and sweep success:
+
+- [`contracts/examples/exp10_cache_pinning_success.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/examples/exp10_cache_pinning_success.md)
+
 ### Run
 
 ```bash
@@ -2063,6 +2141,35 @@ Supported modes:
 
 This is a synthetic scheduling experiment. It does **not** use SWE-bench.
 
+### What This Test Really Does
+
+This experiment sends a mixed burst of low-priority and high-priority requests
+into the same runtime.
+
+The question is:
+
+- when the queue is busy, do the high-priority requests get attached and
+  completed sooner?
+
+### What Counts As Success
+
+- the worker really saw the priority hint
+- high-priority requests wait less than low-priority requests
+- high-priority requests leapfrog low-priority requests in the queue
+
+Columns to check first:
+
+- hint proof: `worker_hint_status`, `sglang_prio_status`
+- queue benefit: `low_wait_ms`, `high_wait_ms`
+- ordering proof: `high_attach_leapfrogs`, `high_complete_leapfrogs`
+- summary verdict: `effect`
+
+### Worked Success Example
+
+Use this when you want a one-row example of a clear scheduling win:
+
+- [`contracts/examples/exp11_priority_scheduling_success.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/examples/exp11_priority_scheduling_success.md)
+
 ### Run
 
 === This works on GH200 ===
@@ -2304,6 +2411,42 @@ Supported modes:
 - `plot`: rebuild charts from one existing matrix CSV
 
 This is a synthetic two-turn experiment. It does **not** use SWE-bench.
+
+### What This Test Really Does
+
+This experiment compares two two-turn conversations:
+
+- control: normal turn A, then normal turn B
+- protected: turn A asks Dynamo to warm up turn B speculatively in the
+  background
+
+The real question is:
+
+- did speculative prefill make turn B faster than the control arm?
+
+It is **not** asking whether control turn B should be a total cache miss.
+Control turn B can still reuse normal conversation state.
+
+### What Counts As Success
+
+- the speculative-prefill hint is on for the protected arm
+- Dynamo really spawned and sent the warmup
+- the warmup completed for the intended target
+- protected turn B is faster than control turn B
+
+Columns to check first:
+
+- hint identity: `spec_prefill`
+- runtime proof: `prefill_spawned`, `prefill_sent`, `prefill_done`, `prefill_target_seen`
+- isolation proof: `prompt_isolation_mode`
+- performance effect: `turn_b_ms`, `turn_b_gain_ms`, `effect`
+
+### Worked Success Example
+
+Use this when you want a direct-runtime proof example, not just a latency
+change:
+
+- [`contracts/examples/exp12_speculative_prefill_success.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/examples/exp12_speculative_prefill_success.md)
 
 ### Run
 
