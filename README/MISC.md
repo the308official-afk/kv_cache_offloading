@@ -25,9 +25,14 @@ strings /usr/local/lib/python3.12/dist-packages/dynamo/_core.abi3.so \
 ```bash
 cd ~/kv_cache_offloading
 
-grep -Rni "worker.spec_prefill" \
-  experiments/reports/speculative_prefill/speculative_prefill_microbenchmark_20260710_151225__sweep_* \
-  || true
+export DYNAMO_MACHINE_PROFILE=gh200
+source runtime_instrumentation/dynamo_machine_profile.sh
+
+DYNAMO_MODEL_PATH="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8" \
+DYNAMO_SERVED_MODEL_NAME="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8" \
+FRONTEND_IMAGE="$FRONTEND_IMAGE" \
+WORKER_IMAGE="$WORKER_IMAGE" \
+./run_dynamo_single_host.sh start
 ```
 
 ```bash
