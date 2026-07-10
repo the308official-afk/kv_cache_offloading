@@ -2669,7 +2669,6 @@ Instead, it:
 - reads the shared suite settings
 - reads the Experiment 9 block
 - runs the Experiment 9 wrapper and waits for it to finish
-- reads the Experiment 10 block if `10` is in `SUITE_EXPERIMENTS`
 - reads the Experiment 11 block
 - reads the Experiment 12 block
 
@@ -2685,7 +2684,6 @@ Edit the suite config file directly. It is already split into sections:
 
 - shared suite settings
 - Experiment 9: KV retention
-- Experiment 10: cache pinning
 - Experiment 11: priority scheduling
 - Experiment 12: speculative prefill
 
@@ -2693,11 +2691,9 @@ The default selection is:
 
 - `SUITE_EXPERIMENTS="9 11 12"`
 
-So cache pinning stays opt-in unless you add `10`.
-
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9, 10, and 11
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9 and 11
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 ### Run
@@ -2796,21 +2792,18 @@ The suite banners now show the actual selected count, for example `1/3`, `2/3`, 
 When a wrapper uses `MODE=all`, the banner also shows the resolved behavior, for example:
 
 - Experiment 9: `all (resolved to sweep + plot)`
-- Experiment 10: `all (resolved to validate + sweep + plot)`
 - Experiment 11: `all (resolved to sweep + plot)`
 - Experiment 12: `all (resolved to sweep + plot)`
 
 The suite terminal output and nohup log now print very clear start/end banners
-for each experiment block, so you can easily see when 9, 10, 11, or 12 begins
+for each experiment block, so you can easily see when 9, 11, or 12 begins
 and ends.
 
-If a precise or cache-pinning image rebuild happens, you will also now see
+If a precise image rebuild happens, you will also now see
 clear build banners such as:
 
 - `PRECISE IMAGE BUILD START`
 - `PRECISE IMAGE BUILD DONE`
-- `CACHE PINNING IMAGE BUILD START`
-- `CACHE PINNING IMAGE BUILD DONE`
 
 These appear in both the live terminal run and the nohup log.
 
