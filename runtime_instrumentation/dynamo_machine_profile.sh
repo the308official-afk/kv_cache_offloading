@@ -24,6 +24,10 @@ _dynamo_apply_machine_profile() {
       : "${FRONTEND_IMAGE:=${FRONTEND_IMAGE_TAG}}"
       : "${WORKER_IMAGE:=${WORKER_IMAGE_TAG}}"
       : "${DOCKER_BUILD_PLATFORM:=linux/arm64}"
+      # GH200 setups in this repo commonly lack a useful pre-created
+      # /mnt/docker-data model cache mount, so default to a persistent cache
+      # under the user's home directory unless they explicitly override it.
+      : "${DYNAMO_CACHE_DIR:=${HOME}/dynamo_model_cache}"
       ;;
     *)
       echo "Unknown DYNAMO_MACHINE_PROFILE: ${profile}" >&2
@@ -43,7 +47,7 @@ _dynamo_apply_machine_profile() {
   export WORKER_IMAGE
   export DOCKER_BUILD_PLATFORM
   export TARGET_PLATFORM
+  export DYNAMO_CACHE_DIR
 }
 
 _dynamo_apply_machine_profile
-
