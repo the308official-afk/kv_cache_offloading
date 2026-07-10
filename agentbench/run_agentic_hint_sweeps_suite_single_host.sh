@@ -175,6 +175,7 @@ SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXP
 SUITE_DEFAULT_MODE='${SUITE_DEFAULT_MODE}'
 SUITE_INTERACTIVE_BUILD_PROGRESS='${SUITE_INTERACTIVE_BUILD_PROGRESS}'
 SUITE_ENSURE_PRECISE_RUNTIME='${SUITE_ENSURE_PRECISE_RUNTIME}'
+PRECISE_START_MODE='${PRECISE_START_MODE:-}'
 EXPERIMENT_RESET_MODE='${EFFECTIVE_EXPERIMENT_RESET_MODE}'
 WRAPPER_STOP_DYNAMO_WHEN_DONE='${WRAPPER_STOP_DYNAMO_WHEN_DONE}'
 KV_RETENTION_MODE='${KV_RETENTION_MODE:-}'
@@ -220,6 +221,7 @@ EXP9_MODE='${EXP9_MODE:-}'
 EXP9_RETENTION_ATTRIBUTION_MODE='${EXP9_RETENTION_ATTRIBUTION_MODE:-}'
 EXP9_RETENTION_REQUEST_CONTEXT_MODE='${EXP9_RETENTION_REQUEST_CONTEXT_MODE:-}'
 EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE='${EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE:-}'
+EXP9_STOP_ON_PROBE_FAILURE='${EXP9_STOP_ON_PROBE_FAILURE:-}'
 EXP9_DISTRACTOR_COUNTS='${EXP9_DISTRACTOR_COUNTS:-}'
 EXP9_PROTECTED_INPUT_LEN='${EXP9_PROTECTED_INPUT_LEN:-}'
 EXP9_DISTRACTOR_INPUT_LEN='${EXP9_DISTRACTOR_INPUT_LEN:-}'
@@ -543,9 +545,11 @@ run_experiment_9() {
   local exp9_protected_input_len
   local exp9_distractor_input_len
   local exp9_protected_hint_profiles
+  local exp9_stop_on_probe_failure
   exp9_retention_attribution_mode="$(resolve_value EXP9_RETENTION_ATTRIBUTION_MODE RETENTION_ATTRIBUTION_MODE)"
   exp9_retention_request_context_mode="$(resolve_value EXP9_RETENTION_REQUEST_CONTEXT_MODE RETENTION_REQUEST_CONTEXT_MODE)"
   exp9_retention_top_level_priority_mode="$(resolve_value EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE RETENTION_TOP_LEVEL_PRIORITY_MODE)"
+  exp9_stop_on_probe_failure="$(resolve_value EXP9_STOP_ON_PROBE_FAILURE STOP_ON_PROBE_FAILURE)"
   exp9_distractor_counts="$(resolve_value EXP9_DISTRACTOR_COUNTS DISTRACTOR_COUNTS)"
   exp9_protected_input_len="$(resolve_value EXP9_PROTECTED_INPUT_LEN PROTECTED_INPUT_LEN)"
   exp9_distractor_input_len="$(resolve_value EXP9_DISTRACTOR_INPUT_LEN DISTRACTOR_INPUT_LEN)"
@@ -563,6 +567,10 @@ retention_top_level_priority_mode=${exp9_retention_top_level_priority_mode}
 retention_reset_mode=${EFFECTIVE_KV_RETENTION_RESET_MODE}
 retention_sweep_seed_mode=${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+precise_start_mode=${PRECISE_START_MODE:-clean}
+sglang_transfer_log=${SGLANG_TRANSFER_LOG}
+sglang_transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
+stop_on_probe_failure=${exp9_stop_on_probe_failure}
 distractor_counts=${exp9_distractor_counts}
 protected_input_len=${exp9_protected_input_len}
 distractor_input_len=${exp9_distractor_input_len}
@@ -573,6 +581,9 @@ EOF
     DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
     EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
     INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
+    SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
+    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
     EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
     KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}"
     RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}"
@@ -583,6 +594,7 @@ EOF
   [[ -n "${exp9_retention_attribution_mode}" ]] && env_args+=(RETENTION_ATTRIBUTION_MODE="${exp9_retention_attribution_mode}")
   [[ -n "${exp9_retention_request_context_mode}" ]] && env_args+=(RETENTION_REQUEST_CONTEXT_MODE="${exp9_retention_request_context_mode}")
   [[ -n "${exp9_retention_top_level_priority_mode}" ]] && env_args+=(RETENTION_TOP_LEVEL_PRIORITY_MODE="${exp9_retention_top_level_priority_mode}")
+  [[ -n "${exp9_stop_on_probe_failure}" ]] && env_args+=(STOP_ON_PROBE_FAILURE="${exp9_stop_on_probe_failure}")
   [[ -n "${exp9_distractor_counts}" ]] && env_args+=(DISTRACTOR_COUNTS="${exp9_distractor_counts}")
   [[ -n "${exp9_protected_input_len}" ]] && env_args+=(PROTECTED_INPUT_LEN="${exp9_protected_input_len}")
   [[ -n "${exp9_distractor_input_len}" ]] && env_args+=(DISTRACTOR_INPUT_LEN="${exp9_distractor_input_len}")
@@ -641,6 +653,9 @@ mode=${display_mode}
 experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
 retention_sweep_seed_mode=${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+precise_start_mode=${PRECISE_START_MODE:-clean}
+sglang_transfer_log=${SGLANG_TRANSFER_LOG}
+sglang_transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
 distractor_counts=${exp10_distractor_counts}
 protected_input_len=${exp10_protected_input_len}
 distractor_input_len=${exp10_distractor_input_len}
@@ -653,6 +668,9 @@ EOF
     DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
     EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
     INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
+    SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
+    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
     EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
     RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}"
     RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
@@ -721,6 +739,9 @@ mode=${display_mode}
 experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
 priority_scheduling_sweep_seed_mode=${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+precise_start_mode=${PRECISE_START_MODE:-clean}
+sglang_transfer_log=${SGLANG_TRANSFER_LOG}
+sglang_transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
 priority_scheduling_sweep_axis=${exp11_sweep_axis}
 priority_scheduling_sweep_values=${exp11_sweep_values}
 low_priority_count=${exp11_low_priority_count}
@@ -734,6 +755,9 @@ EOF
     DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
     EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
     INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
+    SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
+    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
     EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
     RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
     PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}"
@@ -805,6 +829,9 @@ spec_prefill_request_context_mode=${exp12_request_context_mode}
 experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
 spec_prefill_prompt_isolation_mode=${SPEC_PREFILL_PROMPT_ISOLATION_MODE}
 spec_prefill_sweep_seed_mode=${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}
+precise_start_mode=${PRECISE_START_MODE:-clean}
+sglang_transfer_log=${SGLANG_TRANSFER_LOG}
+sglang_transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
 spec_prefill_sweep_axis=${exp12_sweep_axis}
 spec_prefill_sweep_values=${exp12_sweep_values}
 spec_prefill_turn_a_words=${exp12_turn_a_words}
@@ -816,6 +843,9 @@ EOF
     DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
     EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
     INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
+    SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
+    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
     EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
     RETENTION_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE}"
     SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}"

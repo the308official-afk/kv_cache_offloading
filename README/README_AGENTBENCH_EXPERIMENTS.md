@@ -2733,6 +2733,9 @@ after another.
 This suite now works from a config file with clearly separated blocks for each
 experiment instead of one huge mixed environment command.
 
+The default values in that config are now tuned to match the current GH200 trio
+for Experiments 9, 11, and 12.
+
 Public files:
 
 - suite config:
