@@ -43,6 +43,18 @@ DEFAULT_HINTS: dict[str, Any] = {}
 
 NO_HINT_PROFILES = {"", "none", "off", "no-hints", "no_hints"}
 
+ISOLATION_WORD_BANK = [
+    "anchor", "apex", "arc", "aster", "atlas", "aurora", "axis", "blaze",
+    "bloom", "cinder", "cobalt", "comet", "cosmos", "crystal", "delta",
+    "ember", "falcon", "flare", "flux", "frost", "glacier", "harbor",
+    "helios", "horizon", "ion", "jade", "keystone", "lagoon", "lattice",
+    "lumen", "marble", "matrix", "meridian", "meteor", "nova", "onyx",
+    "orbit", "photon", "pixel", "plasma", "prism", "pulse", "quartz",
+    "quasar", "radar", "rift", "sable", "shadow", "signal", "solar",
+    "spark", "spiral", "summit", "tangent", "tensor", "thunder", "topaz",
+    "vector", "vertex", "violet", "wave", "zenith", "zircon",
+]
+
 REQUEST_COLUMNS = [
     "run_id",
     "request_id",
@@ -196,6 +208,17 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("PRIORITY_INTER_REQUEST_GAP_MS", "20")),
     )
     parser.add_argument("--seed", type=int, default=int(os.environ.get("PRIORITY_PROBE_SEED", "42")))
+    parser.add_argument(
+        "--prompt-isolation-mode",
+        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
+        choices=("standard", "strict", "disjoint"),
+        help=(
+            "Prompt-isolation mode for synthetic priority prompts. "
+            "'standard' keeps the older mostly-uniform repeated-word prompt. "
+            "'strict' makes seeded runs diverge early while keeping token counts stable. "
+            "'disjoint' makes seeded runs use clearly separated prompt families."
+        ),
+    )
     parser.add_argument("--request-timeout", type=float, default=float(os.environ.get("REQUEST_TIMEOUT", "600")))
     parser.add_argument(
         "--top-level-priority-mode",
@@ -501,17 +524,65 @@ def usage_prompt_tokens(usage: dict[str, Any]) -> tuple[int | None, int | None]:
     return prompt_tokens, cached_tokens
 
 
-def make_prompt(*, request_role: str, target_len: int, seed: int) -> str:
+def build_prompt_body(*, request_role: str, target_len: int, seed: int, isolation_mode: str) -> tuple[list[str], str]:
+    family_key = f"{request_role}:{seed}:{target_len}:{isolation_mode}"
+    family_id = short_hash(family_key)
+    if isolation_mode == "standard":
+        words = ["priority"] * target_len
+        for idx in range(0, target_len, 256):
+            words[idx] = f"marker{idx}"
+        return words, f"standard:{family_id}"
+    if isolation_mode == "disjoint":
+        rng = random.Random(family_key)
+        vocab = list(ISOLATION_WORD_BANK)
+        rng.shuffle(vocab)
+        prefix_len = min(64, target_len, len(vocab))
+        prefix_words = [f"{word}{family_id[:4]}" for word in vocab[:prefix_len]]
+        cycle_words = prefix_words or [f"prio{family_id[:4]}"]
+        body_words: list[str] = []
+        for idx in range(target_len):
+            if idx < prefix_len:
+                body_words.append(prefix_words[idx])
+                continue
+            cycle_idx = (idx - prefix_len) % len(cycle_words)
+            body_words.append(cycle_words[cycle_idx])
+        return body_words, f"disjoint:{family_id}"
+    if isolation_mode != "strict":
+        raise ValueError(f"Unknown prompt isolation mode: {isolation_mode}")
+
+    rng = random.Random(family_key)
+    vocab = list(ISOLATION_WORD_BANK)
+    rng.shuffle(vocab)
+    prefix_len = min(48, target_len, len(vocab))
+    prefix_words = vocab[:prefix_len]
+    cycle_words = vocab[prefix_len:] or vocab
+    stride = rng.randrange(3, len(cycle_words), 2) if len(cycle_words) > 3 else 1
+    offset = rng.randrange(len(cycle_words)) if cycle_words else 0
+    body_words: list[str] = []
+    for idx in range(target_len):
+        if idx < prefix_len:
+            body_words.append(prefix_words[idx])
+            continue
+        cycle_idx = (offset + (idx - prefix_len) * stride) % len(cycle_words)
+        body_words.append(cycle_words[cycle_idx])
+    return body_words, f"strict:{family_id}"
+
+
+def make_prompt(*, request_role: str, target_len: int, seed: int, isolation_mode: str) -> str:
+    words, family_id = build_prompt_body(
+        request_role=request_role,
+        target_len=target_len,
+        seed=seed,
+        isolation_mode=isolation_mode,
+    )
     marker = short_hash(f"{request_role}:{seed}:{target_len}")
     header = (
         f"Priority scheduling probe request {request_role}. "
         f"Marker {marker}. "
+        f"Prompt family {family_id}. "
         "Return a concise answer. "
         "The repeated words below create queueing pressure only. "
     )
-    words = ["priority"] * target_len
-    for idx in range(0, target_len, 256):
-        words[idx] = f"marker{idx}"
     return header + " ".join(words)
 
 
@@ -532,6 +603,7 @@ def build_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
                     request_role=request_role,
                     target_len=args.input_len_words,
                     seed=args.seed + idx,
+                    isolation_mode=args.prompt_isolation_mode,
                 ),
             )
         )
@@ -552,6 +624,7 @@ def build_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
                     request_role=request_role,
                     target_len=args.input_len_words,
                     seed=args.seed + 10_000 + idx,
+                    isolation_mode=args.prompt_isolation_mode,
                 ),
             )
         )

@@ -1513,7 +1513,7 @@ Supported modes:
 
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=strict` for Experiments 9, 10, and 11
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9, 10, and 11
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 ### What This Test Really Does
@@ -1593,7 +1593,7 @@ PRECISE_START_MODE=clean \
 KV_RETENTION_MODE=sweep \
 RETENTION_ATTRIBUTION_MODE=precise \
 KV_RETENTION_RESET_MODE=flush \
-RETENTION_PROMPT_ISOLATION_MODE=strict \
+RETENTION_PROMPT_ISOLATION_MODE=disjoint \
 RETENTION_SWEEP_SEED_MODE=per_cell \
 STOP_ON_PROBE_FAILURE=1 \
 DISTRACTOR_COUNTS="25 50 75 100 125 150" \
@@ -1618,7 +1618,7 @@ RETENTION_REQUEST_CONTEXT_MODE=auto \
 RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
 KV_RETENTION_RESET_MODE=flush \
 RETENTION_SWEEP_SEED_MODE=per_cell \
-RETENTION_PROMPT_ISOLATION_MODE=strict \
+RETENTION_PROMPT_ISOLATION_MODE=disjoint \
 STOP_ON_PROBE_FAILURE=1 \
 DISTRACTOR_COUNTS="100 110 120 130 140 150 160 170 180 190 200" \
 PROTECTED_INPUT_LEN=2000 \
@@ -1859,7 +1859,7 @@ Recommended flow:
 Direct wrapper default:
 
 - `EXPERIMENT_RESET_MODE=restart`
-- `RETENTION_PROMPT_ISOLATION_MODE=strict`
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint`
 
 ### What This Test Really Does
 
@@ -2727,271 +2727,144 @@ SPEC_PREFILL_REQUEST_CONTEXT_MODE
 
 ## Experiment Suite: Agentic Hint Sweeps
 
-Use this when you want one long run across the public microbenchmarks for:
+Use this when you want one readable script that runs the experiment wrappers one
+after another.
 
+This suite now works from a config file with clearly separated blocks for each
+experiment instead of one huge mixed environment command.
+
+Public files:
+
+- suite config:
+  - [`agentbench/agentic_hint_sweeps_suite.conf.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/agentic_hint_sweeps_suite.conf.sh)
+- foreground runner:
+  - [`agentbench/run_agentic_hint_sweeps_suite_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_single_host.sh)
+- nohup runner:
+  - [`agentbench/run_agentic_hint_sweeps_suite_nohup.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_nohup.sh)
+
+### What This Really Does
+
+The suite does not try to merge all experiments into one runtime command.
+
+Instead, it:
+
+- reads the shared suite settings
+- reads the Experiment 9 block
+- runs the Experiment 9 wrapper and waits for it to finish
+- reads the Experiment 10 block if `10` is in `SUITE_EXPERIMENTS`
+- reads the Experiment 11 block
+- reads the Experiment 12 block
+
+So adding another experiment later is simple:
+
+- add a new section to the config
+- add its experiment id to `SUITE_EXPERIMENTS`
+- wire one more wrapper call into the suite script
+
+### Config Layout
+
+Edit the suite config file directly. It is already split into sections:
+
+- shared suite settings
 - Experiment 9: KV retention
 - Experiment 10: cache pinning
 - Experiment 11: priority scheduling
 - Experiment 12: speculative prefill
 
+The default selection is:
+
+- `SUITE_EXPERIMENTS="9 11 12"`
+
+So cache pinning stays opt-in unless you add `10`.
+
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=strict` for Experiments 9, 10, and 11
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9, 10, and 11
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
-
-Public wrappers:
-
-- [`agentbench/run_agentic_hint_sweeps_suite_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_single_host.sh)
-- [`agentbench/run_agentic_hint_sweeps_suite_nohup.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_agentic_hint_sweeps_suite_nohup.sh)
 
 ### Run
 
-=== This works on GH200 for Experiments 9, 11, and 12 ===
 ```bash
 cd ~/kv_cache_offloading
 
-SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
 DYNAMO_MACHINE_PROFILE=gh200 \
-SUITE_ISOLATION_MODE=flush \
-SUITE_EXPERIMENTS="9 11 12" \
-KV_RETENTION_MODE=sweep \
-PRIORITY_SCHEDULING_MODE=all \
-SPEC_PREFILL_MODE=all \
-RETENTION_ATTRIBUTION_MODE=precise \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
-RETENTION_SWEEP_SEED_MODE=per_cell \
-RETENTION_PROMPT_ISOLATION_MODE=strict \
-DISTRACTOR_COUNTS="100 110 120 130 140 150 160 170 180 190 200" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-PROTECTED_HINT_PROFILES="high-priority" \
-PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
-PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-PRIORITY_INTER_REQUEST_GAP_MS=20 \
-SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint \
-SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=2048 \
-SPEC_PREFILL_OUTPUT_TOKENS=128 \
 ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+If you want a separate config file:
+
 ```bash
 cd ~/kv_cache_offloading
 
-DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_ISOLATION_MODE=fast \
-SUITE_EXPERIMENTS="9 11 12" \
-DISTRACTOR_COUNTS="25 50 75 100" \
-PROTECTED_INPUT_LEN=400 \
-DISTRACTOR_INPUT_LEN=400 \
-PROTECTED_HINT_PROFILES="high-priority" \
-PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
-PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=512 \
-SPEC_PREFILL_OUTPUT_TOKENS=64 \
+SUITE_CONFIG_PATH=agentbench/agentic_hint_sweeps_suite.conf.sh \
+DYNAMO_MACHINE_PROFILE=gh200 \
 ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
 ### Nohup
 
-=== This works on GH200 for Experiments 9, 11, and 12 ===
 ```bash
 cd ~/kv_cache_offloading
 
-SGLANG_TRANSFER_LOG=1 \
-SGLANG_TRANSFER_LOG_PROFILE=full \
 DYNAMO_MACHINE_PROFILE=gh200 \
-SUITE_ISOLATION_MODE=flush \
-SUITE_EXPERIMENTS="9 11 12" \
-KV_RETENTION_MODE=sweep \
-PRIORITY_SCHEDULING_MODE=all \
-SPEC_PREFILL_MODE=all \
-RETENTION_ATTRIBUTION_MODE=precise \
-RETENTION_REQUEST_CONTEXT_MODE=auto \
-RETENTION_TOP_LEVEL_PRIORITY_MODE=disable \
-RETENTION_SWEEP_SEED_MODE=per_cell \
-RETENTION_PROMPT_ISOLATION_MODE=strict \
-DISTRACTOR_COUNTS="100 110 120 130 140 150 160 170 180 190 200" \
-PROTECTED_INPUT_LEN=2000 \
-DISTRACTOR_INPUT_LEN=2000 \
-PROTECTED_HINT_PROFILES="high-priority" \
-PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
-PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-PRIORITY_INTER_REQUEST_GAP_MS=20 \
-SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint \
-SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=2048 \
-SPEC_PREFILL_OUTPUT_TOKENS=128 \
 ./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_ISOLATION_MODE=fast \
-SUITE_EXPERIMENTS="9 11 12" \
-DISTRACTOR_COUNTS="25 50 75 100" \
-PROTECTED_INPUT_LEN=400 \
-DISTRACTOR_INPUT_LEN=400 \
-PROTECTED_HINT_PROFILES="high-priority" \
-PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
-PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
-LOW_PRIORITY_COUNT=8 \
-HIGH_PRIORITY_COUNT=4 \
-PRIORITY_INPUT_LEN=4000 \
-PRIORITY_OUTPUT_LEN=128 \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=512 \
-SPEC_PREFILL_OUTPUT_TOKENS=64 \
-./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SUITE_INTERACTIVE_BUILD_PROGRESS=0 \
-SUITE_ISOLATION_MODE=clean \
-SUITE_EXPERIMENTS="10" \
-CACHE_PINNING_MODE=all \
-DISTRACTOR_COUNTS="40 80 120 160 200 240" \
-PROTECTED_INPUT_LEN=500 \
-DISTRACTOR_INPUT_LEN=200 \
-./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-### Core Suite Knobs
+### Main Suite Knobs
 
 ```text
+SUITE_CONFIG_PATH
 DYNAMO_MACHINE_PROFILE
-SUITE_MODEL
 SUITE_EXPERIMENTS
-SUITE_CONTINUE_ON_ERROR
 SUITE_ISOLATION_MODE
-SUITE_DEFAULT_MODE
+SUITE_CONTINUE_ON_ERROR
 SUITE_INTERACTIVE_BUILD_PROGRESS
 SUITE_ENSURE_PRECISE_RUNTIME
 RETENTION_PROMPT_ISOLATION_MODE
 SPEC_PREFILL_PROMPT_ISOLATION_MODE
 ```
 
-`SUITE_INTERACTIVE_BUILD_PROGRESS=1` keeps Docker's live progress UI for foreground runs when an image rebuild happens. On nohup runs, logs stay plain because there is no TTY.
+### Main Runtime Policy Knob
 
-Charts are published to [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you do not need to wait for the whole suite before the first chart files appear.
+`SUITE_ISOLATION_MODE` is still the main runtime policy setting:
 
-[`aws/download.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/aws/download.sh) now downloads both:
-
-- [`experiments/reports/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports)
-- [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts)
-
-`SUITE_ENSURE_PRECISE_RUNTIME` controls a one-time suite preflight before the first experiment:
-
-- `auto` (default): run `ensure_precise_runtime_ready.sh --build-if-missing` only when `DYNAMO_MACHINE_PROFILE=gh200`
-- `1`: always run that suite-level preflight
-- `0`: never run that suite-level preflight
-
-Recommended behavior:
-
-- `gh200`: leave `SUITE_ENSURE_PRECISE_RUNTIME=auto`
-- `ec2`: leave `SUITE_ENSURE_PRECISE_RUNTIME=auto` and it will skip the extra suite-level prebuild
-
-So on GH200, the suite now automatically does the equivalent of:
-
-```bash
-DYNAMO_MACHINE_PROFILE=gh200 \
-./runtime_instrumentation/ensure_precise_runtime_ready.sh \
-  --machine-profile gh200 \
-  --build-if-missing
-```
-
-once at suite startup, before Experiment 9 begins.
-
-`SUITE_ISOLATION_MODE` is the main runtime policy knob:
-
-- `clean`:
+- `clean`
   - restart between experiments
   - restart between sweep values
-  - keep the same prompts across sweep values
-- `flush`:
+- `flush`
   - restart between experiments
   - flush between sweep values
-  - vary prompts across sweep values with the suite's per-cell / per-value defaults
-- `fast`:
+- `fast`
   - restart between experiments
   - no restart between sweep values
   - no flush between sweep values
-  - change prompts across sweep values so runs do not reuse the exact same token sequence
 
-Default behavior:
+Recommended:
 
-- `SUITE_DEFAULT_MODE=sweep`
+- `clean`: slowest, most conservative
+- `flush`: best default balance when flush works
+- `fast`: quickest for iteration
 
-So the suite now defaults to the main sweep for each experiment instead of quietly running probe/validate work first. If you want a different mode for one experiment, set that experiment's mode explicitly, for example `KV_RETENTION_MODE=plot`.
+### Outputs
 
-Use `clean` for the careful runs you want to trust for conclusions.
+Charts are copied into [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you can inspect them before the full suite completes.
 
-Use `flush` for the GH200-style runs where the flush endpoint is working and you
-want a good balance between trust and speed.
-
-Use `fast` for quick debugging and iteration when you want to avoid the long wait inside an experiment.
-
-For nohup runs, `suite_nohup.log` is created immediately, so you can tail it right away:
-
-```bash
-tail -n 20 -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
-tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
-tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_driver.log
-```
-
-Per-experiment sweep knobs still pass through unchanged. Examples:
-
-```text
-KV_RETENTION_SWEEP_VALUES
-CACHE_PINNING_TTL
-CACHE_PINNING_HICACHE_RATIO
-PRIORITY_SCHEDULING_SWEEP_AXIS
-PRIORITY_SCHEDULING_SWEEP_VALUES
-SPEC_PREFILL_SWEEP_AXIS
-SPEC_PREFILL_SWEEP_VALUES
-```
-
-### Top-Level Outputs
+Top-level suite outputs:
 
 ```bash
 cat experiments/reports/latest_agentic_hint_sweeps_suite_summary.md
 cat experiments/reports/latest_agentic_hint_sweeps_suite_manifest.json
 cat experiments/reports/latest_agentic_hint_sweeps_suite_driver.log
+```
+
+For nohup runs:
+
+```bash
+tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_nohup.log
+tail -n 200 -f experiments/reports/latest_agentic_hint_sweeps_suite_driver.log
 ```
 
 Main outputs:

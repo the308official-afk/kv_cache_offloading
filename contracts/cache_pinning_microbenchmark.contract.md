@@ -127,7 +127,7 @@ Worker/runtime prerequisites:
 - `CACHE_PINNING_TTL_MIN_SECONDS=300`
 - `CACHE_PINNING_TTL_MAX_SECONDS=3600`
 - `CACHE_PINNING_DEVELOPMENT_BRANCH_STACK=1`
-- `RETENTION_PROMPT_ISOLATION_MODE=strict`
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint`
 
 So if someone edits the shell contract, the public microbenchmark wrapper now
 changes behavior directly from those values.

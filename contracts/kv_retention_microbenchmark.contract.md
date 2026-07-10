@@ -106,6 +106,7 @@ The shell contract currently exposes:
   - `PROTECTED_INPUT_LEN`
   - `DISTRACTOR_INPUT_LEN`
   - `RANDOM_OUTPUT_LEN`
+  - `RETENTION_SWEEP_SEED_MODE`
   - `RETENTION_PROMPT_ISOLATION_MODE`
   - `MAX_CONTEXT_TOKENS`
 - runtime shape:
@@ -121,6 +122,14 @@ The shell contract currently exposes:
   - `RETENTION_MATCH_EVENT_MIN`
   - `RETENTION_MIN_SPEEDUP_RATIO`
   - `RETENTION_MIN_LATENCY_GAIN_MS`
+
+Default proof settings
+----------------------
+
+- sweep seed mode:
+  - `per_cell`
+- prompt isolation mode:
+  - `disjoint`
 
 So if someone edits the shell contract, the future public microbenchmark wrapper
 will change behavior directly from those values.

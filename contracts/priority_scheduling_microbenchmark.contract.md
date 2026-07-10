@@ -64,6 +64,8 @@ Public control surface
 - `PRIORITY_INTER_REQUEST_GAP_MS`
 - `PRIORITY_SCHEDULING_SWEEP_AXIS`
 - `PRIORITY_SCHEDULING_SWEEP_VALUES`
+- `PRIORITY_SCHEDULING_SWEEP_SEED_MODE`
+- `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
 
@@ -76,6 +78,10 @@ Default proof settings
   - `auto`
 - top-level priority mode:
   - `auto`
+- sweep seed mode:
+  - `per_value`
+- prompt isolation mode:
+  - `disjoint`
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 

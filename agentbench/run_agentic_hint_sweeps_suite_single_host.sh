@@ -4,6 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 source agentbench/model_config.sh
+SUITE_CONFIG_PATH="${SUITE_CONFIG_PATH:-agentbench/agentic_hint_sweeps_suite.conf.sh}"
+if [[ -f "${SUITE_CONFIG_PATH}" ]]; then
+  # shellcheck disable=SC1090
+  source "${SUITE_CONFIG_PATH}"
+fi
 if [[ -f runtime_instrumentation/dynamo_machine_profile.sh ]]; then
   # shellcheck disable=SC1091
   source runtime_instrumentation/dynamo_machine_profile.sh
@@ -12,7 +17,7 @@ EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensu
 
 MODEL="${1:-${SUITE_MODEL:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}}"
 SUITE_ID="${AGENTIC_HINT_SUITE_ID:-agentic_hint_sweeps_suite_$(date +%Y%m%d_%H%M%S)}"
-SUITE_EXPERIMENTS="${SUITE_EXPERIMENTS:-9 10 11 12}"
+SUITE_EXPERIMENTS="${SUITE_EXPERIMENTS:-9 11 12}"
 SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-sweep}"
@@ -20,16 +25,16 @@ SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
 SUITE_ENSURE_PRECISE_RUNTIME="${SUITE_ENSURE_PRECISE_RUNTIME:-auto}"
 SUITE_ISOLATION_MODE="${SUITE_ISOLATION_MODE:-clean}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
-RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-strict}"
+RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
 SPEC_PREFILL_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE:-disjoint}"
 
 EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
 EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
 EFFECTIVE_KV_RETENTION_RESET_MODE="restart"
-EFFECTIVE_RETENTION_SWEEP_SEED_MODE="fixed"
-EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="fixed"
-EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="fixed"
-EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="fixed"
+EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
+EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
+EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
+EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
 WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
 
 SUITE_ROOT_DIR="experiments/reports/agentic_hint_sweeps_suite/${SUITE_ID}"
@@ -93,20 +98,18 @@ usage() {
 Usage:
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh [model]
 
-Environment:
+Recommended flow:
+  1. Edit agentbench/agentic_hint_sweeps_suite.conf.sh
+  2. Run this script with one model argument
+
+Main knobs:
+  SUITE_CONFIG_PATH=path/to/alternate_suite.conf.sh
   DYNAMO_MACHINE_PROFILE=ec2|gh200
-  SUITE_EXPERIMENTS="9 10 11 12"        # or "retention cache_pinning priority spec_prefill"
+  SUITE_EXPERIMENTS="9 11 12"           # add 10 when needed
   SUITE_ISOLATION_MODE=clean|flush|fast # clean=restarts sweep values, flush=flushes sweep values, fast=reuses runtime within experiments without flush
   SUITE_CONTINUE_ON_ERROR=0|1
-  SUITE_DEFAULT_MODE=sweep
-  SUITE_INTERACTIVE_BUILD_PROGRESS=1    # keep live Docker progress UI for foreground runs
-  SUITE_ENSURE_PRECISE_RUNTIME=auto|0|1 # auto => run once only for gh200
-
-This suite calls the public wrappers for:
-  9  = KV retention microbenchmark
-  10 = Cache-pinning microbenchmark
-  11 = Priority scheduling microbenchmark
-  12 = Speculative prefill microbenchmark
+  SUITE_INTERACTIVE_BUILD_PROGRESS=1
+  SUITE_ENSURE_PRECISE_RUNTIME=auto|0|1
 EOF
 }
 
@@ -125,10 +128,10 @@ case "${SUITE_ISOLATION_MODE}" in
     EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
     EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
     EFFECTIVE_KV_RETENTION_RESET_MODE="restart"
-    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="fixed"
-    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="fixed"
-    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="fixed"
-    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="fixed"
+    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
+    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
     ;;
   flush)
     EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
@@ -162,6 +165,7 @@ rm -f "${LATEST_SUMMARY_MD}" "${LATEST_MANIFEST_JSON}" "${LATEST_DRIVER_LOG}"
 
 cat > "${SUITE_ENV_SNAPSHOT}" <<EOF
 AGENTIC_HINT_SUITE_ID='${SUITE_ID}'
+SUITE_CONFIG_PATH='${SUITE_CONFIG_PATH}'
 DYNAMO_MACHINE_PROFILE='${DYNAMO_MACHINE_PROFILE:-}'
 SUITE_MODEL='${MODEL}'
 SUITE_EXPERIMENTS='${SUITE_EXPERIMENTS}'
@@ -212,10 +216,52 @@ SPEC_PREFILL_SWEEP_VALUES='${SPEC_PREFILL_SWEEP_VALUES:-}'
 SPEC_PREFILL_TURN_A_WORDS='${SPEC_PREFILL_TURN_A_WORDS:-}'
 SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
 SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
+EXP9_MODE='${EXP9_MODE:-}'
+EXP9_RETENTION_ATTRIBUTION_MODE='${EXP9_RETENTION_ATTRIBUTION_MODE:-}'
+EXP9_RETENTION_REQUEST_CONTEXT_MODE='${EXP9_RETENTION_REQUEST_CONTEXT_MODE:-}'
+EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE='${EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE:-}'
+EXP9_DISTRACTOR_COUNTS='${EXP9_DISTRACTOR_COUNTS:-}'
+EXP9_PROTECTED_INPUT_LEN='${EXP9_PROTECTED_INPUT_LEN:-}'
+EXP9_DISTRACTOR_INPUT_LEN='${EXP9_DISTRACTOR_INPUT_LEN:-}'
+EXP9_PROTECTED_HINT_PROFILES='${EXP9_PROTECTED_HINT_PROFILES:-}'
+EXP10_MODE='${EXP10_MODE:-}'
+EXP10_DISTRACTOR_COUNTS='${EXP10_DISTRACTOR_COUNTS:-}'
+EXP10_PROTECTED_INPUT_LEN='${EXP10_PROTECTED_INPUT_LEN:-}'
+EXP10_DISTRACTOR_INPUT_LEN='${EXP10_DISTRACTOR_INPUT_LEN:-}'
+EXP10_CACHE_PINNING_TTL='${EXP10_CACHE_PINNING_TTL:-}'
+EXP10_CACHE_PINNING_PINNED_RATIO='${EXP10_CACHE_PINNING_PINNED_RATIO:-}'
+EXP10_CACHE_PINNING_HICACHE_RATIO='${EXP10_CACHE_PINNING_HICACHE_RATIO:-}'
+EXP11_MODE='${EXP11_MODE:-}'
+EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS='${EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
+EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES='${EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
+EXP11_LOW_PRIORITY_COUNT='${EXP11_LOW_PRIORITY_COUNT:-}'
+EXP11_HIGH_PRIORITY_COUNT='${EXP11_HIGH_PRIORITY_COUNT:-}'
+EXP11_PRIORITY_INPUT_LEN='${EXP11_PRIORITY_INPUT_LEN:-}'
+EXP11_PRIORITY_OUTPUT_LEN='${EXP11_PRIORITY_OUTPUT_LEN:-}'
+EXP11_PRIORITY_INTER_REQUEST_GAP_MS='${EXP11_PRIORITY_INTER_REQUEST_GAP_MS:-}'
+EXP12_MODE='${EXP12_MODE:-}'
+EXP12_SPEC_PREFILL_ATTRIBUTION_MODE='${EXP12_SPEC_PREFILL_ATTRIBUTION_MODE:-}'
+EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE='${EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE:-}'
+EXP12_SPEC_PREFILL_SWEEP_AXIS='${EXP12_SPEC_PREFILL_SWEEP_AXIS:-}'
+EXP12_SPEC_PREFILL_SWEEP_VALUES='${EXP12_SPEC_PREFILL_SWEEP_VALUES:-}'
+EXP12_SPEC_PREFILL_TURN_A_WORDS='${EXP12_SPEC_PREFILL_TURN_A_WORDS:-}'
+EXP12_SPEC_PREFILL_TURN_B_WORDS='${EXP12_SPEC_PREFILL_TURN_B_WORDS:-}'
+EXP12_SPEC_PREFILL_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_OUTPUT_TOKENS:-}'
 EOF
 
 log() {
   echo "$@" | tee -a "${SUITE_DRIVER_LOG}"
+}
+
+resolve_value() {
+  local var_name=""
+  for var_name in "$@"; do
+    if [[ -n "${!var_name:-}" ]]; then
+      printf '%s' "${!var_name}"
+      return 0
+    fi
+  done
+  return 0
 }
 
 run_and_log() {
@@ -482,7 +528,7 @@ prepare_fresh_runtime_for_experiment() {
 run_experiment_9() {
   local index="$1"
   local total="$2"
-  local mode="${KV_RETENTION_MODE:-${SUITE_DEFAULT_MODE}}"
+  local mode="${EXP9_MODE:-${KV_RETENTION_MODE:-${SUITE_DEFAULT_MODE}}}"
   local display_mode
   display_mode="$(resolved_mode_display "9" "${mode}")"
   local wrapper="./agentbench/run_kv_retention_microbenchmark_single_host.sh"
@@ -490,13 +536,58 @@ run_experiment_9() {
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
+  local exp9_retention_attribution_mode
+  local exp9_retention_request_context_mode
+  local exp9_retention_top_level_priority_mode
+  local exp9_distractor_counts
+  local exp9_protected_input_len
+  local exp9_distractor_input_len
+  local exp9_protected_hint_profiles
+  exp9_retention_attribution_mode="$(resolve_value EXP9_RETENTION_ATTRIBUTION_MODE RETENTION_ATTRIBUTION_MODE)"
+  exp9_retention_request_context_mode="$(resolve_value EXP9_RETENTION_REQUEST_CONTEXT_MODE RETENTION_REQUEST_CONTEXT_MODE)"
+  exp9_retention_top_level_priority_mode="$(resolve_value EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE RETENTION_TOP_LEVEL_PRIORITY_MODE)"
+  exp9_distractor_counts="$(resolve_value EXP9_DISTRACTOR_COUNTS DISTRACTOR_COUNTS)"
+  exp9_protected_input_len="$(resolve_value EXP9_PROTECTED_INPUT_LEN PROTECTED_INPUT_LEN)"
+  exp9_distractor_input_len="$(resolve_value EXP9_DISTRACTOR_INPUT_LEN DISTRACTOR_INPUT_LEN)"
+  exp9_protected_hint_profiles="$(resolve_value EXP9_PROTECTED_HINT_PROFILES PROTECTED_HINT_PROFILES)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
-  log "Wrapper: ${wrapper}"
-  log "Mode: ${display_mode}"
-  log "KV retention reset mode: ${EFFECTIVE_KV_RETENTION_RESET_MODE}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}" RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" KV_RETENTION_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+--- Experiment 9 parameters ---
+wrapper=${wrapper}
+mode=${display_mode}
+retention_attribution_mode=${exp9_retention_attribution_mode}
+retention_request_context_mode=${exp9_retention_request_context_mode}
+retention_top_level_priority_mode=${exp9_retention_top_level_priority_mode}
+retention_reset_mode=${EFFECTIVE_KV_RETENTION_RESET_MODE}
+retention_sweep_seed_mode=${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}
+retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+distractor_counts=${exp9_distractor_counts}
+protected_input_len=${exp9_protected_input_len}
+distractor_input_len=${exp9_distractor_input_len}
+protected_hint_profiles=${exp9_protected_hint_profiles}
+EOF
+  local -a env_args=(
+    env
+    DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
+    EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
+    INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}"
+    RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}"
+    RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
+    STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+    KV_RETENTION_MODE="${mode}"
+  )
+  [[ -n "${exp9_retention_attribution_mode}" ]] && env_args+=(RETENTION_ATTRIBUTION_MODE="${exp9_retention_attribution_mode}")
+  [[ -n "${exp9_retention_request_context_mode}" ]] && env_args+=(RETENTION_REQUEST_CONTEXT_MODE="${exp9_retention_request_context_mode}")
+  [[ -n "${exp9_retention_top_level_priority_mode}" ]] && env_args+=(RETENTION_TOP_LEVEL_PRIORITY_MODE="${exp9_retention_top_level_priority_mode}")
+  [[ -n "${exp9_distractor_counts}" ]] && env_args+=(DISTRACTOR_COUNTS="${exp9_distractor_counts}")
+  [[ -n "${exp9_protected_input_len}" ]] && env_args+=(PROTECTED_INPUT_LEN="${exp9_protected_input_len}")
+  [[ -n "${exp9_distractor_input_len}" ]] && env_args+=(DISTRACTOR_INPUT_LEN="${exp9_distractor_input_len}")
+  [[ -n "${exp9_protected_hint_profiles}" ]] && env_args+=(PROTECTED_HINT_PROFILES="${exp9_protected_hint_profiles}")
+  if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 9 wrapper failed"
   fi
@@ -520,7 +611,7 @@ run_experiment_9() {
 run_experiment_10() {
   local index="$1"
   local total="$2"
-  local mode="${CACHE_PINNING_MODE:-${SUITE_DEFAULT_MODE}}"
+  local mode="${EXP10_MODE:-${CACHE_PINNING_MODE:-${SUITE_DEFAULT_MODE}}}"
   local display_mode
   display_mode="$(resolved_mode_display "10" "${mode}")"
   local wrapper="./agentbench/run_cache_pinning_microbenchmark_single_host.sh"
@@ -528,12 +619,53 @@ run_experiment_10() {
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
+  local exp10_distractor_counts
+  local exp10_protected_input_len
+  local exp10_distractor_input_len
+  local exp10_cache_pinning_ttl
+  local exp10_cache_pinning_pinned_ratio
+  local exp10_cache_pinning_hicache_ratio
+  exp10_distractor_counts="$(resolve_value EXP10_DISTRACTOR_COUNTS DISTRACTOR_COUNTS)"
+  exp10_protected_input_len="$(resolve_value EXP10_PROTECTED_INPUT_LEN PROTECTED_INPUT_LEN)"
+  exp10_distractor_input_len="$(resolve_value EXP10_DISTRACTOR_INPUT_LEN DISTRACTOR_INPUT_LEN)"
+  exp10_cache_pinning_ttl="$(resolve_value EXP10_CACHE_PINNING_TTL CACHE_PINNING_TTL)"
+  exp10_cache_pinning_pinned_ratio="$(resolve_value EXP10_CACHE_PINNING_PINNED_RATIO CACHE_PINNING_PINNED_RATIO)"
+  exp10_cache_pinning_hicache_ratio="$(resolve_value EXP10_CACHE_PINNING_HICACHE_RATIO CACHE_PINNING_HICACHE_RATIO)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "10" "cache_pinning" "${display_mode}"
-  log "Wrapper: ${wrapper}"
-  log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}" RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" CACHE_PINNING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+--- Experiment 10 parameters ---
+wrapper=${wrapper}
+mode=${display_mode}
+experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+retention_sweep_seed_mode=${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}
+retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+distractor_counts=${exp10_distractor_counts}
+protected_input_len=${exp10_protected_input_len}
+distractor_input_len=${exp10_distractor_input_len}
+cache_pinning_ttl=${exp10_cache_pinning_ttl}
+cache_pinning_pinned_ratio=${exp10_cache_pinning_pinned_ratio}
+cache_pinning_hicache_ratio=${exp10_cache_pinning_hicache_ratio}
+EOF
+  local -a env_args=(
+    env
+    DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
+    EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
+    INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE}"
+    RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
+    STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+    CACHE_PINNING_MODE="${mode}"
+  )
+  [[ -n "${exp10_distractor_counts}" ]] && env_args+=(DISTRACTOR_COUNTS="${exp10_distractor_counts}")
+  [[ -n "${exp10_protected_input_len}" ]] && env_args+=(PROTECTED_INPUT_LEN="${exp10_protected_input_len}")
+  [[ -n "${exp10_distractor_input_len}" ]] && env_args+=(DISTRACTOR_INPUT_LEN="${exp10_distractor_input_len}")
+  [[ -n "${exp10_cache_pinning_ttl}" ]] && env_args+=(CACHE_PINNING_TTL="${exp10_cache_pinning_ttl}")
+  [[ -n "${exp10_cache_pinning_pinned_ratio}" ]] && env_args+=(CACHE_PINNING_PINNED_RATIO="${exp10_cache_pinning_pinned_ratio}")
+  [[ -n "${exp10_cache_pinning_hicache_ratio}" ]] && env_args+=(CACHE_PINNING_HICACHE_RATIO="${exp10_cache_pinning_hicache_ratio}")
+  if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 10 wrapper failed"
   fi
@@ -557,7 +689,7 @@ run_experiment_10() {
 run_experiment_11() {
   local index="$1"
   local total="$2"
-  local mode="${PRIORITY_SCHEDULING_MODE:-${SUITE_DEFAULT_MODE}}"
+  local mode="${EXP11_MODE:-${PRIORITY_SCHEDULING_MODE:-${SUITE_DEFAULT_MODE}}}"
   local display_mode
   display_mode="$(resolved_mode_display "11" "${mode}")"
   local wrapper="./agentbench/run_priority_scheduling_microbenchmark_single_host.sh"
@@ -565,12 +697,57 @@ run_experiment_11() {
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
+  local exp11_sweep_axis
+  local exp11_sweep_values
+  local exp11_low_priority_count
+  local exp11_high_priority_count
+  local exp11_priority_input_len
+  local exp11_priority_output_len
+  local exp11_priority_inter_request_gap_ms
+  exp11_sweep_axis="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
+  exp11_sweep_values="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
+  exp11_low_priority_count="$(resolve_value EXP11_LOW_PRIORITY_COUNT LOW_PRIORITY_COUNT)"
+  exp11_high_priority_count="$(resolve_value EXP11_HIGH_PRIORITY_COUNT HIGH_PRIORITY_COUNT)"
+  exp11_priority_input_len="$(resolve_value EXP11_PRIORITY_INPUT_LEN PRIORITY_INPUT_LEN)"
+  exp11_priority_output_len="$(resolve_value EXP11_PRIORITY_OUTPUT_LEN PRIORITY_OUTPUT_LEN)"
+  exp11_priority_inter_request_gap_ms="$(resolve_value EXP11_PRIORITY_INTER_REQUEST_GAP_MS PRIORITY_INTER_REQUEST_GAP_MS)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
-  log "Wrapper: ${wrapper}"
-  log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}" PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" PRIORITY_SCHEDULING_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+--- Experiment 11 parameters ---
+wrapper=${wrapper}
+mode=${display_mode}
+experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+priority_scheduling_sweep_seed_mode=${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
+retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+priority_scheduling_sweep_axis=${exp11_sweep_axis}
+priority_scheduling_sweep_values=${exp11_sweep_values}
+low_priority_count=${exp11_low_priority_count}
+high_priority_count=${exp11_high_priority_count}
+priority_input_len=${exp11_priority_input_len}
+priority_output_len=${exp11_priority_output_len}
+priority_inter_request_gap_ms=${exp11_priority_inter_request_gap_ms}
+EOF
+  local -a env_args=(
+    env
+    DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
+    EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
+    INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
+    PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}"
+    STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+    PRIORITY_SCHEDULING_MODE="${mode}"
+  )
+  [[ -n "${exp11_sweep_axis}" ]] && env_args+=(PRIORITY_SCHEDULING_SWEEP_AXIS="${exp11_sweep_axis}")
+  [[ -n "${exp11_sweep_values}" ]] && env_args+=(PRIORITY_SCHEDULING_SWEEP_VALUES="${exp11_sweep_values}")
+  [[ -n "${exp11_low_priority_count}" ]] && env_args+=(LOW_PRIORITY_COUNT="${exp11_low_priority_count}")
+  [[ -n "${exp11_high_priority_count}" ]] && env_args+=(HIGH_PRIORITY_COUNT="${exp11_high_priority_count}")
+  [[ -n "${exp11_priority_input_len}" ]] && env_args+=(PRIORITY_INPUT_LEN="${exp11_priority_input_len}")
+  [[ -n "${exp11_priority_output_len}" ]] && env_args+=(PRIORITY_OUTPUT_LEN="${exp11_priority_output_len}")
+  [[ -n "${exp11_priority_inter_request_gap_ms}" ]] && env_args+=(PRIORITY_INTER_REQUEST_GAP_MS="${exp11_priority_inter_request_gap_ms}")
+  if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
   fi
@@ -594,7 +771,7 @@ run_experiment_11() {
 run_experiment_12() {
   local index="$1"
   local total="$2"
-  local mode="${SPEC_PREFILL_MODE:-${SUITE_DEFAULT_MODE}}"
+  local mode="${EXP12_MODE:-${SPEC_PREFILL_MODE:-${SUITE_DEFAULT_MODE}}}"
   local display_mode
   display_mode="$(resolved_mode_display "12" "${mode}")"
   local wrapper="./agentbench/run_speculative_prefill_microbenchmark_single_host.sh"
@@ -602,12 +779,57 @@ run_experiment_12() {
   started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   local status="passed"
   local error_message=""
+  local exp12_sweep_axis
+  local exp12_sweep_values
+  local exp12_turn_a_words
+  local exp12_turn_b_words
+  local exp12_output_tokens
+  local exp12_attribution_mode
+  local exp12_request_context_mode
+  exp12_sweep_axis="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_AXIS SPEC_PREFILL_SWEEP_AXIS)"
+  exp12_sweep_values="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_VALUES SPEC_PREFILL_SWEEP_VALUES)"
+  exp12_turn_a_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_WORDS SPEC_PREFILL_TURN_A_WORDS)"
+  exp12_turn_b_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_WORDS SPEC_PREFILL_TURN_B_WORDS)"
+  exp12_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_OUTPUT_TOKENS SPEC_PREFILL_OUTPUT_TOKENS)"
+  exp12_attribution_mode="$(resolve_value EXP12_SPEC_PREFILL_ATTRIBUTION_MODE SPEC_PREFILL_ATTRIBUTION_MODE)"
+  exp12_request_context_mode="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE SPEC_PREFILL_REQUEST_CONTEXT_MODE)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
-  log "Wrapper: ${wrapper}"
-  log "Mode: ${display_mode}"
-  if ! run_and_log env DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}" INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}" EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}" RETENTION_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE}" SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}" STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}" SPEC_PREFILL_MODE="${mode}" "${wrapper}" "${MODEL}"; then
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+--- Experiment 12 parameters ---
+wrapper=${wrapper}
+mode=${display_mode}
+spec_prefill_attribution_mode=${exp12_attribution_mode}
+spec_prefill_request_context_mode=${exp12_request_context_mode}
+experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+spec_prefill_prompt_isolation_mode=${SPEC_PREFILL_PROMPT_ISOLATION_MODE}
+spec_prefill_sweep_seed_mode=${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}
+spec_prefill_sweep_axis=${exp12_sweep_axis}
+spec_prefill_sweep_values=${exp12_sweep_values}
+spec_prefill_turn_a_words=${exp12_turn_a_words}
+spec_prefill_turn_b_words=${exp12_turn_b_words}
+spec_prefill_output_tokens=${exp12_output_tokens}
+EOF
+  local -a env_args=(
+    env
+    DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
+    EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
+    INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    RETENTION_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE}"
+    SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}"
+    STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+    SPEC_PREFILL_MODE="${mode}"
+  )
+  [[ -n "${exp12_attribution_mode}" ]] && env_args+=(SPEC_PREFILL_ATTRIBUTION_MODE="${exp12_attribution_mode}")
+  [[ -n "${exp12_request_context_mode}" ]] && env_args+=(SPEC_PREFILL_REQUEST_CONTEXT_MODE="${exp12_request_context_mode}")
+  [[ -n "${exp12_sweep_axis}" ]] && env_args+=(SPEC_PREFILL_SWEEP_AXIS="${exp12_sweep_axis}")
+  [[ -n "${exp12_sweep_values}" ]] && env_args+=(SPEC_PREFILL_SWEEP_VALUES="${exp12_sweep_values}")
+  [[ -n "${exp12_turn_a_words}" ]] && env_args+=(SPEC_PREFILL_TURN_A_WORDS="${exp12_turn_a_words}")
+  [[ -n "${exp12_turn_b_words}" ]] && env_args+=(SPEC_PREFILL_TURN_B_WORDS="${exp12_turn_b_words}")
+  [[ -n "${exp12_output_tokens}" ]] && env_args+=(SPEC_PREFILL_OUTPUT_TOKENS="${exp12_output_tokens}")
+  if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
   fi
@@ -630,6 +852,7 @@ run_experiment_12() {
 
 banner "AGENTIC HINT SWEEPS SUITE" | tee -a "${SUITE_DRIVER_LOG}"
 log "Suite id: ${SUITE_ID}"
+log "Suite config path: ${SUITE_CONFIG_PATH}"
 log "Model: ${MODEL}"
 log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}"
 log "Experiments: ${SUITE_EXPERIMENTS}"

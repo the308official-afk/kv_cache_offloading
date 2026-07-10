@@ -286,12 +286,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
         "--prompt-isolation-mode",
-        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "strict"),
-        choices=("standard", "strict"),
+        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
+        choices=("standard", "strict", "disjoint"),
         help=(
             "How strongly to isolate protected prompts across sweep cells. "
             "'standard' keeps the older mostly-uniform protected prompt template. "
             "'strict' makes protected prompts diverge early across different seeds "
+            "while still keeping a_first and a_replay identical within each cell. "
+            "'disjoint' makes sweep cells use radically different early prompt families "
             "while still keeping a_first and a_replay identical within each cell."
         ),
     )
@@ -425,9 +427,43 @@ def make_prompt(*, role: str, target_len: int, seed: int, isolation_mode: str = 
     )
 
 
+def make_disjoint_prompt(*, role: str, target_len: int, seed: int) -> str:
+    family_key = f"{role}:{seed}:{target_len}:disjoint"
+    family_id = short_hash(family_key)
+    rng = random.Random(family_key)
+    vocab = list(DISTRACTOR_WORD_BANK)
+    rng.shuffle(vocab)
+
+    prefix_len = min(64, target_len, len(vocab))
+    prefix_words = [f"{word}{family_id[:4]}" for word in vocab[:prefix_len]]
+    cycle_words = prefix_words or [f"cache{family_id[:4]}"]
+
+    body_words: list[str] = []
+    for idx in range(target_len):
+        if idx < prefix_len:
+            body_words.append(prefix_words[idx])
+            continue
+        cycle_idx = (idx - prefix_len) % len(cycle_words)
+        body_words.append(cycle_words[cycle_idx])
+
+    nonce_words = prefix_words[: min(10, len(prefix_words))]
+    header = (
+        f"{role} "
+        + " ".join(nonce_words)
+        + ". "
+        + "KV cache retention probe prompt. "
+        + f"family marker {family_id[:8]}. "
+        + "Return exactly one short answer token. "
+        + "This protected prompt uses a disjoint early family so different sweep cells stay clearly separated. "
+    )
+    return header + " ".join(body_words)
+
+
 def make_protected_prompt(*, role: str, target_len: int, seed: int, isolation_mode: str) -> str:
     if isolation_mode == "standard":
         return make_standard_prompt(role=role, target_len=target_len, seed=seed)
+    if isolation_mode == "disjoint":
+        return make_disjoint_prompt(role=role, target_len=target_len, seed=seed)
     if isolation_mode != "strict":
         raise ValueError(f"Unknown prompt isolation mode: {isolation_mode}")
 
