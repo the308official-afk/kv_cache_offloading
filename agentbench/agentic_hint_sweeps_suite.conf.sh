@@ -2,7 +2,7 @@
 
 # Readable suite config for the sequential agentic-hint wrappers.
 # Edit this file when you want one place with clearly separated settings
-# for Experiments 9, 10, 11, and 12.
+# for Experiments 9, 11, and 12.
 #
 # Run with:
 #   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh <model>
@@ -47,19 +47,6 @@
 : "${EXP9_PROTECTED_INPUT_LEN:=2000}"
 : "${EXP9_DISTRACTOR_INPUT_LEN:=2000}"
 : "${EXP9_PROTECTED_HINT_PROFILES:=high-priority}"
-
-###############################################################################
-# Experiment 10: Cache pinning
-###############################################################################
-
-# Add 10 to SUITE_EXPERIMENTS when you want this block active.
-: "${EXP10_MODE:=all}"
-: "${EXP10_DISTRACTOR_COUNTS:=40 80 120 160}"
-: "${EXP10_PROTECTED_INPUT_LEN:=500}"
-: "${EXP10_DISTRACTOR_INPUT_LEN:=200}"
-: "${EXP10_CACHE_PINNING_TTL:=1h}"
-: "${EXP10_CACHE_PINNING_PINNED_RATIO:=0.1}"
-: "${EXP10_CACHE_PINNING_HICACHE_RATIO:=1}"
 
 ###############################################################################
 # Experiment 11: Priority scheduling

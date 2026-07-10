@@ -1513,7 +1513,7 @@ Supported modes:
 
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9, 10, and 11
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9 and 11
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 ### What This Test Really Does
