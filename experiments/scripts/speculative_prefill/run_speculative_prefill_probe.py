@@ -716,6 +716,47 @@ def infer_anonymous_warmup(
     return {"seen": bool(candidates), "count": len(candidates)}
 
 
+def infer_child_prefill_request(
+    request_records: dict[str, dict[str, Any]],
+    *,
+    turn_a: dict[str, Any],
+    turn_b: dict[str, Any],
+) -> dict[str, Any]:
+    turn_a_id = str(turn_a.get("request_id") or "")
+    child_id = f"{turn_a_id}::spec_prefill" if turn_a_id else ""
+    info = request_records.get(child_id)
+    if not info:
+        return {
+            "seen": False,
+            "completed": False,
+            "prompt_tokens": "",
+            "cached_tokens": "",
+        }
+
+    received_dt = info.get("received_dt")
+    completed_dt = info.get("completed_dt")
+    turn_a_done = parse_dt(str(turn_a.get("worker_done_ts") or ""))
+    turn_b_req = parse_dt(str(turn_b.get("worker_req_ts") or ""))
+
+    seen = True
+    completed = isinstance(completed_dt, datetime)
+    if isinstance(turn_a_done, datetime) and isinstance(received_dt, datetime) and received_dt < turn_a_done:
+        seen = False
+    if isinstance(turn_b_req, datetime) and isinstance(received_dt, datetime) and received_dt > turn_b_req:
+        seen = False
+    if isinstance(turn_b_req, datetime) and isinstance(completed_dt, datetime) and completed_dt > turn_b_req:
+        completed = False
+
+    prompt_tokens = info.get("prompt_tokens")
+    cached_tokens = info.get("cached_tokens")
+    return {
+        "seen": seen,
+        "completed": seen and completed,
+        "prompt_tokens": prompt_tokens if prompt_tokens is not None else "",
+        "cached_tokens": cached_tokens if cached_tokens is not None else "",
+    }
+
+
 def arm_prefill_status(
     events: list[dict[str, Any]],
     request_records: dict[str, dict[str, Any]],
@@ -745,6 +786,13 @@ def arm_prefill_status(
     wrap_status = "missing"
     if isinstance(wrap_event, dict):
         wrap_status = "on" if truthy(wrap_event.get("enabled")) else "off"
+    child_prefill = infer_child_prefill_request(
+        request_records,
+        turn_a=turn_a,
+        turn_b=turn_b,
+    )
+    if wrap_status == "missing" and child_prefill["seen"]:
+        wrap_status = "inferred_on"
     anonymous_warmup = infer_anonymous_warmup(
         request_records,
         turn_a=turn_a,
@@ -757,6 +805,7 @@ def arm_prefill_status(
         "worker.spec_prefill.prefill_completed" in event_types
         or "worker.spec_prefill.prefill_sent" in event_types
         or "worker.spec_prefill.task_spawned" in event_types
+        or child_prefill["seen"]
     ):
         evidence_status = "direct_prefill_seen"
     elif anonymous_warmup["seen"]:
@@ -766,15 +815,15 @@ def arm_prefill_status(
     return {
         "prefill_evidence_status": evidence_status,
         "prefill_wrap": wrap_status,
-        "prefill_spawned": "worker.spec_prefill.task_spawned" in event_types,
-        "prefill_sent": "worker.spec_prefill.prefill_sent" in event_types,
-        "prefill_done": "worker.spec_prefill.prefill_completed" in event_types,
+        "prefill_spawned": "worker.spec_prefill.task_spawned" in event_types or child_prefill["seen"],
+        "prefill_sent": "worker.spec_prefill.prefill_sent" in event_types or child_prefill["seen"],
+        "prefill_done": "worker.spec_prefill.prefill_completed" in event_types or child_prefill["completed"],
         "prefill_failed": "worker.spec_prefill.prefill_failed" in event_types,
         "prefill_target_seen": any(
             str(event.get("spec_prefill_target_request_id") or "") == turn_b_id for event in matching
-        ),
+        ) or child_prefill["seen"],
         "anonymous_warmup_seen": anonymous_warmup["seen"],
-        "prefill_tokens": prompt_tokens,
+        "prefill_tokens": prompt_tokens or child_prefill["prompt_tokens"],
     }
 
 
