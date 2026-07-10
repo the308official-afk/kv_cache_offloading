@@ -16,6 +16,18 @@ first_ms	replay_ms
 ls -lah /mnt/docker-data/dynamo_cache | head
 du -sh /mnt/docker-data/dynamo_cache
 find /mnt/docker-data/dynamo_cache -maxdepth 3 | head -50
+
+
+ojaiyeob@gracehopper:~/kv_cache_offloading$ ls -lah /mnt/docker-data/dynamo_cache | head
+du -sh /mnt/docker-data/dynamo_cache
+find /mnt/docker-data/dynamo_cache -maxdepth 3 | head -50
+total 8.0K
+drwxrwxrwx 2 root root 4.0K May 20 17:12 .
+drwxr-xr-x 4 root root 4.0K Jul  6 16:13 ..
+4.0K    /mnt/docker-data/dynamo_cache
+/mnt/docker-data/dynamo_cache
+ojaiyeob@gracehopper:~/kv_cache_offloading$
+
 ```
 
 ```bash
