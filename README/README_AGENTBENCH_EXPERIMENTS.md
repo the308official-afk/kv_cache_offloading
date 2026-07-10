@@ -1513,7 +1513,8 @@ Supported modes:
 
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=strict`
+- `RETENTION_PROMPT_ISOLATION_MODE=strict` for Experiments 9, 10, and 11
+- `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 ### Run
 
@@ -2492,6 +2493,11 @@ Component report names now use compact fields such as:
 - `turn_b_gain_ms`
 - `turn_b_cached`
 - `turn_b_reuse`
+- `prompt_isolation_mode`
+- `turn_a_prompt_family`
+- `turn_b_prompt_family`
+- `turn_a_prompt_hash`
+- `turn_b_prompt_hash`
 - `hint_status`
 - `prefill_wrap`
 - `prefill_spawned`

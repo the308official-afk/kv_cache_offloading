@@ -60,6 +60,8 @@ Public control surface
 - `SPEC_PREFILL_WARMUP_WAIT_MS`
 - `SPEC_PREFILL_SWEEP_AXIS`
 - `SPEC_PREFILL_SWEEP_VALUES`
+- `SPEC_PREFILL_SWEEP_SEED_MODE`
+- `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
 
@@ -70,6 +72,10 @@ Default proof settings
   - `precise`
 - request context mode:
   - `auto`
+- sweep seed mode:
+  - `per_value`
+- prompt isolation mode:
+  - `disjoint`
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 
@@ -107,6 +113,11 @@ Recommended matrix columns
 - `turn_b_gain_ms`
 - `turn_b_cached`
 - `turn_b_reuse`
+- `prompt_isolation_mode`
+- `turn_a_prompt_family`
+- `turn_b_prompt_family`
+- `turn_a_prompt_hash`
+- `turn_b_prompt_hash`
 - `hint_status`
 - `prefill_wrap`
 - `prefill_spawned`

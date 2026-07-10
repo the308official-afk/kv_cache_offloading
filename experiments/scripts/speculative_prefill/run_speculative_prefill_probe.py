@@ -30,6 +30,9 @@ REQUEST_COLUMNS = [
     "arm",
     "request",
     "spec_prefill",
+    "prompt_isolation_mode",
+    "prompt_family",
+    "prompt_hash",
     "request_id",
     "hint_probe_id",
     "latency_ms",
@@ -52,11 +55,16 @@ MATRIX_COLUMNS = [
     "run_id",
     "arm",
     "spec_prefill",
+    "prompt_isolation_mode",
     "turn_a_ms",
     "turn_b_ms",
     "turn_b_latency_gain_ms",
     "turn_b_cached",
     "turn_b_reuse",
+    "turn_a_prompt_family",
+    "turn_b_prompt_family",
+    "turn_a_prompt_hash",
+    "turn_b_prompt_hash",
     "hint_status",
     "prefill_evidence_status",
     "prefill_wrap",
@@ -74,6 +82,7 @@ SUMMARY_COLUMNS = [
     "run_id",
     "model",
     "mode",
+    "prompt_isolation_mode",
     "turn_a_words",
     "turn_b_words",
     "output_tokens",
@@ -96,6 +105,12 @@ SUMMARY_COLUMNS = [
 class ArmSpec:
     arm: str
     spec_prefill: bool
+
+
+@dataclass(frozen=True)
+class PromptSpec:
+    text: str
+    family: str
 
 
 def now_run_id() -> str:
@@ -146,13 +161,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=int(os.environ.get("SPEC_PREFILL_SEED", "42")))
     parser.add_argument(
         "--prompt-isolation-mode",
-        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "strict"),
-        choices=("standard", "strict"),
+        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
+        choices=("standard", "strict", "disjoint"),
         help=(
             "Prompt-isolation mode for synthetic speculative-prefill prompts. "
             "'strict' makes different sweep cells diverge early across seeds while "
-            "preserving within-cell turn-A to turn-B reuse."
+            "preserving within-cell turn-A to turn-B reuse. "
+            "'disjoint' makes sweep cells use radically different prompt families "
+            "with sweep-specific early prefixes while preserving within-cell reuse."
         ),
+    )
+    parser.add_argument(
+        "--sweep-axis-context",
+        default=os.environ.get("SPEC_PREFILL_CURRENT_SWEEP_AXIS", ""),
+    )
+    parser.add_argument(
+        "--sweep-value-context",
+        default=os.environ.get("SPEC_PREFILL_CURRENT_SWEEP_VALUE", ""),
     )
     parser.add_argument("--request-timeout", type=float, default=float(os.environ.get("REQUEST_TIMEOUT", "600")))
     args = parser.parse_args()
@@ -359,18 +384,59 @@ ISOLATION_WORD_BANK = [
 ]
 
 
-def build_isolated_body(*, label: str, target_len: int, seed: int, isolation_mode: str) -> list[str]:
+def prompt_family_key(
+    *,
+    label: str,
+    target_len: int,
+    seed: int,
+    isolation_mode: str,
+    sweep_axis: str,
+    sweep_value: str,
+) -> str:
+    parts = [label, str(target_len), str(seed), isolation_mode]
+    if sweep_axis or sweep_value:
+        parts.extend([sweep_axis or "no_axis", sweep_value or "no_value"])
+    return "|".join(parts)
+
+
+def build_isolated_body(
+    *,
+    label: str,
+    target_len: int,
+    seed: int,
+    isolation_mode: str,
+    sweep_axis: str,
+    sweep_value: str,
+) -> tuple[list[str], str]:
+    family_key = prompt_family_key(
+        label=label,
+        target_len=target_len,
+        seed=seed,
+        isolation_mode=isolation_mode,
+        sweep_axis=sweep_axis,
+        sweep_value=sweep_value,
+    )
+    family_id = f"{isolation_mode}:{short_hash(family_key)}"
     if isolation_mode == "standard":
         base = f"{label}_token"
         words = [base] * target_len
         step = 256 if "turn_a" in label else 128
         for idx in range(0, target_len, step):
             words[idx] = f"{label}_marker_{idx}"
-        return words
+        return words, family_id
+    if isolation_mode == "disjoint":
+        early_nonce_len = min(64, target_len)
+        body_words: list[str] = []
+        for idx in range(target_len):
+            if idx < early_nonce_len:
+                body_words.append(f"fh_{family_id}_{idx:03d}")
+            else:
+                body_words.append(f"fv_{family_id}_{(idx - early_nonce_len):04d}")
+        return body_words, family_id
     if isolation_mode != "strict":
         raise ValueError(f"Unknown prompt isolation mode: {isolation_mode}")
 
-    rng = random.Random(f"{label}:{seed}:{target_len}:strict")
+    rng = random.Random(family_key)
     vocab = list(ISOLATION_WORD_BANK)
     rng.shuffle(vocab)
     prefix_len = min(64, target_len, len(vocab))
@@ -386,43 +452,76 @@ def build_isolated_body(*, label: str, target_len: int, seed: int, isolation_mod
         cycle_idx = (offset + (idx - prefix_len) * stride) % len(cycle_vocab)
         family = cycle_vocab[cycle_idx]
         body_words.append(f"{label}_{family}_{idx % 17}")
-    return body_words
+    return body_words, family_id
 
 
-def make_turn_a_prompt(*, arm: str, target_len: int, seed: int, isolation_mode: str) -> str:
+def make_turn_a_prompt(
+    *,
+    arm: str,
+    target_len: int,
+    seed: int,
+    isolation_mode: str,
+    sweep_axis: str,
+    sweep_value: str,
+) -> PromptSpec:
     marker = short_hash(f"turn_a:{arm}:{seed}:{target_len}")
-    words = build_isolated_body(
+    words, family = build_isolated_body(
         label=f"{arm}_turn_a",
         target_len=target_len,
         seed=seed,
         isolation_mode=isolation_mode,
+        sweep_axis=sweep_axis,
+        sweep_value=sweep_value,
     )
+    nonce = " ".join(words[: min(8, len(words))])
     header = (
+        f"{nonce}. "
         f"Speculative prefill probe arm {arm}. "
         f"Marker {marker}. "
         "Reply in one short sentence. "
         "The repeated words below are synthetic prefix material. "
     )
-    return header + " ".join(words)
+    return PromptSpec(text=header + " ".join(words), family=family)
 
 
-def make_turn_b_user_prompt(*, arm: str, target_len: int, seed: int, isolation_mode: str) -> str:
+def make_turn_b_user_prompt(
+    *,
+    arm: str,
+    target_len: int,
+    seed: int,
+    isolation_mode: str,
+    sweep_axis: str,
+    sweep_value: str,
+) -> PromptSpec:
     marker = short_hash(f"turn_b:{arm}:{seed}:{target_len}")
-    words = build_isolated_body(
+    words, family = build_isolated_body(
         label=f"{arm}_turn_b",
         target_len=target_len,
         seed=seed,
         isolation_mode=isolation_mode,
+        sweep_axis=sweep_axis,
+        sweep_value=sweep_value,
     )
+    nonce = " ".join(words[: min(8, len(words))])
     header = (
+        f"{nonce}. "
         f"Follow-up request for arm {arm}. "
         f"Marker {marker}. "
         "Answer briefly. "
     )
-    return header + " ".join(words)
+    return PromptSpec(text=header + " ".join(words), family=family)
 
 
-def request_context(*, run_id: str, arm: str, request_role: str, step_index: int, prompt_hash: str) -> dict[str, Any]:
+def request_context(
+    *,
+    run_id: str,
+    arm: str,
+    request_role: str,
+    step_index: int,
+    prompt_hash: str,
+    prompt_family: str,
+    prompt_isolation_mode: str,
+) -> dict[str, Any]:
     return {
         "request_id": f"{run_id}::{arm}::{request_role}",
         "parent_run_id": run_id,
@@ -433,6 +532,8 @@ def request_context(*, run_id: str, arm: str, request_role: str, step_index: int
         "app_variant": "synthetic_speculative_prefill_probe",
         "arm": arm,
         "prompt_hash": prompt_hash,
+        "prompt_family": prompt_family,
+        "prompt_isolation_mode": prompt_isolation_mode,
     }
 
 
@@ -448,6 +549,8 @@ def build_annotations(context: dict[str, Any]) -> list[str]:
         "app_variant",
         "arm",
         "prompt_hash",
+        "prompt_family",
+        "prompt_isolation_mode",
     ):
         value = context.get(key)
         if value in (None, ""):
@@ -486,6 +589,7 @@ def send_request(
     run_id: str,
     arm: str,
     request_name: str,
+    prompt_family: str,
     messages: list[dict[str, str]],
     step_index: int,
     spec_prefill: bool,
@@ -499,6 +603,8 @@ def send_request(
         request_role=request_name,
         step_index=step_index,
         prompt_hash=prompt_hash,
+        prompt_family=prompt_family,
+        prompt_isolation_mode=args.prompt_isolation_mode,
     )
     hint_probe_id = f"{run_id}::{arm}::{request_name}"
     hints = build_agent_hints(
@@ -554,6 +660,9 @@ def send_request(
         "arm": arm,
         "request": request_name,
         "spec_prefill": spec_prefill,
+        "prompt_isolation_mode": args.prompt_isolation_mode,
+        "prompt_family": prompt_family,
+        "prompt_hash": prompt_hash,
         "request_id": context["request_id"],
         "hint_probe_id": hint_probe_id,
         "latency_ms": round_ms(latency_ms),
@@ -587,12 +696,16 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             target_len=args.turn_a_words,
             seed=args.seed + idx,
             isolation_mode=args.prompt_isolation_mode,
+            sweep_axis=args.sweep_axis_context,
+            sweep_value=args.sweep_value_context,
         )
         turn_b_user_prompt = make_turn_b_user_prompt(
             arm=arm.arm,
             target_len=args.turn_b_words,
             seed=args.seed + 100 + idx,
             isolation_mode=args.prompt_isolation_mode,
+            sweep_axis=args.sweep_axis_context,
+            sweep_value=args.sweep_value_context,
         )
         target_request_id = f"{run_id}::{arm.arm}::turn_b"
         target_hint_probe_id = f"{run_id}::{arm.arm}::turn_b"
@@ -601,7 +714,8 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             run_id=run_id,
             arm=arm.arm,
             request_name="turn_a",
-            messages=[{"role": "user", "content": turn_a_prompt}],
+            prompt_family=turn_a_prompt.family,
+            messages=[{"role": "user", "content": turn_a_prompt.text}],
             step_index=0,
             spec_prefill=arm.spec_prefill,
             target_request_id=target_request_id,
@@ -615,6 +729,9 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                     "arm": arm.arm,
                     "request": "turn_b",
                     "spec_prefill": arm.spec_prefill,
+                    "prompt_isolation_mode": args.prompt_isolation_mode,
+                    "prompt_family": turn_b_user_prompt.family,
+                    "prompt_hash": "",
                     "request_id": target_request_id,
                     "hint_probe_id": target_hint_probe_id,
                     "latency_ms": "",
@@ -648,10 +765,11 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             run_id=run_id,
             arm=arm.arm,
             request_name="turn_b",
+            prompt_family=turn_b_user_prompt.family,
             messages=[
-                {"role": "user", "content": turn_a_prompt},
+                {"role": "user", "content": turn_a_prompt.text},
                 {"role": "assistant", "content": turn_a.get("response_text") or ""},
-                {"role": "user", "content": turn_b_user_prompt},
+                {"role": "user", "content": turn_b_user_prompt.text},
             ],
             step_index=1,
             spec_prefill=arm.spec_prefill,
@@ -964,11 +1082,19 @@ def build_matrix_rows(
                 "run_id": turn_a.get("run_id") or turn_b.get("run_id") or "",
                 "arm": arm,
                 "spec_prefill": turn_a.get("spec_prefill", turn_b.get("spec_prefill", "")),
+                "prompt_isolation_mode": turn_a.get(
+                    "prompt_isolation_mode",
+                    turn_b.get("prompt_isolation_mode", ""),
+                ),
                 "turn_a_ms": turn_a.get("latency_ms", ""),
                 "turn_b_ms": turn_b.get("latency_ms", ""),
                 "turn_b_latency_gain_ms": latency_gain_ms if latency_gain_ms is not None else "",
                 "turn_b_cached": turn_b.get("cached_tokens", ""),
                 "turn_b_reuse": turn_b.get("reuse_ratio", ""),
+                "turn_a_prompt_family": turn_a.get("prompt_family", ""),
+                "turn_b_prompt_family": turn_b.get("prompt_family", ""),
+                "turn_a_prompt_hash": turn_a.get("prompt_hash", ""),
+                "turn_b_prompt_hash": turn_b.get("prompt_hash", ""),
                 "hint_status": hint_status,
                 "prefill_evidence_status": prefill_evidence_status,
                 "prefill_wrap": prefill["prefill_wrap"],
@@ -1008,6 +1134,7 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "run_id": run_id,
         "model": args.model,
         "mode": args.attribution_mode,
+        "prompt_isolation_mode": args.prompt_isolation_mode,
         "turn_a_words": args.turn_a_words,
         "turn_b_words": args.turn_b_words,
         "output_tokens": args.output_len_tokens,
@@ -1032,6 +1159,7 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         "",
         f"- Model: `{summary['model']}`",
         f"- Attribution mode: `{summary['mode']}`",
+        f"- Prompt isolation mode: `{summary['prompt_isolation_mode']}`",
         f"- Turn A words: `{summary['turn_a_words']}`",
         f"- Turn B words: `{summary['turn_b_words']}`",
         f"- Output tokens: `{summary['output_tokens']}`",
