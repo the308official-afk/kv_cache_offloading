@@ -1,21 +1,43 @@
 
 
 ```bash
-cd ~/kv_cache_offloading
+========================================
+(6/6) PRECISE EXPERIMENT GO (smoke test passed and requests are about to start)
+========================================
+Machine profile: gh200
+Attribution mode: priority
+Smoke test: ok
+Live attribution check: ok
+Requests may now start.
+Cooldown: 60s
+Checking live KV cache flush endpoint before requests...
+KV cache flush endpoint ready: {"cleared_workers": 1, "failed_workers": 0}
+========================================
+LIVE FLUSH READY (the current runtime serves /clear_kv_blocks)
+========================================
+Running priority scheduling probe...
+Traceback (most recent call last):
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 1511, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 1479, in main
+    rows = run_requests(args, run_id)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 1455, in run_requests
+    specs = build_request_specs(args)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 602, in build_request_specs
+    prompt=make_prompt(
+           ^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 572, in make_prompt
+    words, family_id = build_prompt_body(
+                       ^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py", line 536, in build_prompt_body
+    rng = random.Random(family_key)
+          ^^^^^^
+NameError: name 'random' is not defined
+ojaiyeob@gracehopper:~/kv_cache_offloading$
 
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-SPEC_PREFILL_MODE=all \
-EXPERIMENT_RESET_MODE=flush \
-RETENTION_PROMPT_ISOLATION_MODE=disjoint \
-SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
-SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=2048 \
-SPEC_PREFILL_OUTPUT_TOKENS=128 \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 
 ```
 
