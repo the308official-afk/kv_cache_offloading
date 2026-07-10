@@ -1003,7 +1003,10 @@ start_dynamo_for_profile() {
     -u HICACHE_STORAGE_CONTAINER_PATH
   )
 
-  "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1
+  if ! "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${BATCH_LOG}" 2>&1; then
+    precise_report_runtime_start_failure "KV retention probe" "${BATCH_LOG}"
+    exit 1
+  fi
 
   smoke_test_model "${model}" "${smoke_log}"
   check_precise_kv_runtime_ready "${smoke_log}"

@@ -416,7 +416,10 @@ if [[ "${RUNTIME_RESTART_REQUIRED:-0}" = "1" ]]; then
       )
     fi
   fi
-  "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
+  if ! "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1; then
+    precise_report_runtime_start_failure "Speculative prefill microbenchmark" "${DRIVER_LOG}"
+    exit 1
+  fi
 
   smoke_test_model "${MODEL}" "${SMOKE_LOG}"
   check_precise_specprefill_runtime_ready

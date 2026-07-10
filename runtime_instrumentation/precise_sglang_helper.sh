@@ -82,6 +82,30 @@ precise_banner_numbered() {
   precise_banner "$(precise_numbered_title "${step}" "${total}" "${title}")" "${log_file}"
 }
 
+precise_report_runtime_start_failure() {
+  local label="${1:-experiment}"
+  local log_file="${2:-}"
+  local tail_lines="${3:-120}"
+
+  {
+    echo "========================================"
+    echo "DYNAMO START FAILED (${label})"
+    echo "========================================"
+    echo "The runtime did not finish starting, so the experiment stopped before smoke test / requests."
+    if [[ -n "${log_file}" ]]; then
+      echo "Driver log: ${log_file}"
+      echo "Recent driver log tail:"
+      if [[ -f "${log_file}" ]]; then
+        tail -n "${tail_lines}" "${log_file}" || true
+      else
+        echo "<driver log not found>"
+      fi
+    else
+      echo "Driver log: <not provided>"
+    fi
+  } >&2
+}
+
 _precise_sglang_run() {
   local log_file="$1"
   shift

@@ -176,18 +176,15 @@ EOF
 }
 
 ensure_dirs() {
-  sudo mkdir -p "${DYNAMO_CACHE_DIR}"
-  sudo chmod 777 "${DYNAMO_CACHE_DIR}"
+  ensure_dir_writable "${DYNAMO_CACHE_DIR}"
   if [[ "${WORKER_PROFILE_MODE}" = "nsys" || "${WORKER_PROFILE_MODE}" = "ncu" ]]; then
     mkdir -p "${WORKER_PROFILE_DIR}"
   fi
   if [[ -n "${HICACHE_STORAGE_HOST_PATH}" ]]; then
-    sudo mkdir -p "${HICACHE_STORAGE_HOST_PATH}"
-    sudo chmod 777 "${HICACHE_STORAGE_HOST_PATH}" || true
+    ensure_dir_writable "${HICACHE_STORAGE_HOST_PATH}"
   fi
   if [[ "${SGLANG_TRANSFER_LOG}" = "1" && -n "${SGLANG_TRANSFER_LOG_PATH}" ]]; then
-    sudo mkdir -p "${SGLANG_TRANSFER_LOG_DIR}"
-    sudo chmod 777 "${SGLANG_TRANSFER_LOG_DIR}" || true
+    ensure_dir_writable "${SGLANG_TRANSFER_LOG_DIR}"
     if [[ "${SGLANG_TRANSFER_LOG_PATH}" == /transfer-logs/* ]]; then
       local transfer_log_name
       transfer_log_name="$(basename "${SGLANG_TRANSFER_LOG_PATH}")"
@@ -200,6 +197,46 @@ ensure_dirs() {
   elif [[ "${SGLANG_TRANSFER_LOG}" = "1" ]]; then
     echo "SGLang transfer file logging disabled; patched transfer events will go to container stderr only."
   fi
+}
+
+ensure_dir_writable() {
+  local dir="$1"
+  local parent
+  parent="$(dirname "${dir}")"
+
+  if mkdir -p "${dir}" 2>/dev/null; then
+    chmod 777 "${dir}" 2>/dev/null || true
+    return 0
+  fi
+
+  if [[ -d "${dir}" && -w "${dir}" ]]; then
+    chmod 777 "${dir}" 2>/dev/null || true
+    return 0
+  fi
+
+  if command -v sudo >/dev/null 2>&1; then
+    if sudo mkdir -p "${dir}" 2>/dev/null; then
+      sudo chmod 777 "${dir}" 2>/dev/null || true
+      return 0
+    fi
+  fi
+
+  cat >&2 <<EOF
+Could not create writable directory:
+  ${dir}
+
+Parent:
+  ${parent}
+
+Try one of these:
+  mkdir -p "${dir}"
+  chmod u+rwx "${dir}" "${parent}" 2>/dev/null || true
+  export DYNAMO_CACHE_DIR="\$HOME/dynamo_model_cache"
+
+If this path is on a shared or root-squashed filesystem, user-space mkdir may work
+while sudo mkdir fails.
+EOF
+  exit 1
 }
 
 initialize_endpoints() {
