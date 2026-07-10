@@ -1240,12 +1240,23 @@ cat experiments/reports/prompt_evolution_task_summary.csv
 cat experiments/reports/prompt_evolution_run_overview.csv
 ```
 
+It now also produces a per-task trace index that points straight to the
+prompt-evolution, tool-call, and phase-summary artifacts for each SWE-bench
+task in the batch:
+
+```bash
+cat experiments/reports/latest_prompt_evolution_trace_index.md
+cat experiments/reports/latest_prompt_evolution_trace_index.csv
+```
+
 Batch outputs:
 
 ```text
 experiments/reports/batches/<batch_id>/
   progress.log
   progress_overview.csv
+  task_trace_index.md
+  task_trace_index.csv
 ```
 
 Global summaries:
@@ -1258,6 +1269,31 @@ cat experiments/reports/all_runs_overview.csv
 cat experiments/reports/all_runs_task_summary.csv
 cat experiments/reports/all_runs_execution_prompts.csv
 ```
+
+If you want the slide-style trace for one specific task, inspect:
+
+```bash
+LATEST_TRACE=experiments/reports/latest_prompt_evolution_trace_index.md
+cat "$LATEST_TRACE"
+
+LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
+LATEST_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
+
+cat "$LATEST_RESULT/prompt_evolution_report.md"
+cat "$LATEST_RESULT/prompt_evolution_values/03_final_model_request.json"
+cat "$LATEST_RESULT/prompt_evolution_values/05_tool_runtime_context.json"
+cat "$LATEST_RESULT/prompt_evolution_values/07_model_behavior.json"
+cat "$LATEST_REPORT/tool_call_details.md"
+cat "$LATEST_REPORT/phase_summary.md"
+```
+
+What each file means:
+
+- `03_final_model_request.json`: the exact model-facing request payload
+- `05_tool_runtime_context.json`: the tool-capable runtime context before execution
+- `07_model_behavior.json`: the response/tool-orchestration behavior summary
+- `tool_call_details.md`: the exact tools called, with arguments when available
+- `phase_summary.md`: the per-phase behavior summary across planning/execution/review
 
 ## Experiment 7: Multi-Model Multi-Task Batch
 
