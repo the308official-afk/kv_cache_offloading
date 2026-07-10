@@ -2306,6 +2306,23 @@ This is a synthetic two-turn experiment. It does **not** use SWE-bench.
 
 ### Run
 
+=== This works on GH200? ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+SPEC_PREFILL_MODE=sweep \
+EXPERIMENT_RESET_MODE=flush \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 250 500" \
+SPEC_PREFILL_TURN_A_WORDS=4000 \
+SPEC_PREFILL_TURN_B_WORDS=512 \
+SPEC_PREFILL_OUTPUT_TOKENS=64 \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
 ```bash
 cd ~/kv_cache_offloading
 
