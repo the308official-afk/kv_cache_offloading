@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import os
+import random
 import re
 import sys
 import time
@@ -143,6 +144,16 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("SPEC_PREFILL_WARMUP_WAIT_MS", "500")),
     )
     parser.add_argument("--seed", type=int, default=int(os.environ.get("SPEC_PREFILL_SEED", "42")))
+    parser.add_argument(
+        "--prompt-isolation-mode",
+        default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "strict"),
+        choices=("standard", "strict"),
+        help=(
+            "Prompt-isolation mode for synthetic speculative-prefill prompts. "
+            "'strict' makes different sweep cells diverge early across seeds while "
+            "preserving within-cell turn-A to turn-B reuse."
+        ),
+    )
     parser.add_argument("--request-timeout", type=float, default=float(os.environ.get("REQUEST_TIMEOUT", "600")))
     args = parser.parse_args()
     if not args.model:
@@ -337,30 +348,77 @@ def response_text_from_chat_completion(response_json: dict[str, Any] | None) -> 
     return ""
 
 
-def make_turn_a_prompt(*, arm: str, target_len: int, seed: int) -> str:
+ISOLATION_WORD_BANK = [
+    "amber", "apex", "atlas", "aurora", "axiom", "binary", "bravo", "cinder",
+    "cipher", "comet", "crystal", "delta", "echo", "ember", "falcon", "fathom",
+    "flux", "glacier", "helix", "horizon", "ion", "jade", "kepler", "lattice",
+    "matrix", "meridian", "meteor", "nova", "onyx", "orbit", "photon", "pixel",
+    "plasma", "prism", "pulse", "quartz", "quasar", "radar", "rift", "sable",
+    "shadow", "signal", "solar", "spark", "spiral", "summit", "tangent", "tensor",
+    "thunder", "topaz", "vector", "vertex", "violet", "wave", "zenith", "zircon",
+]
+
+
+def build_isolated_body(*, label: str, target_len: int, seed: int, isolation_mode: str) -> list[str]:
+    if isolation_mode == "standard":
+        base = f"{label}_token"
+        words = [base] * target_len
+        step = 256 if "turn_a" in label else 128
+        for idx in range(0, target_len, step):
+            words[idx] = f"{label}_marker_{idx}"
+        return words
+    if isolation_mode != "strict":
+        raise ValueError(f"Unknown prompt isolation mode: {isolation_mode}")
+
+    rng = random.Random(f"{label}:{seed}:{target_len}:strict")
+    vocab = list(ISOLATION_WORD_BANK)
+    rng.shuffle(vocab)
+    prefix_len = min(64, target_len, len(vocab))
+    prefix_words = [f"{label}_{word}" for word in vocab[:prefix_len]]
+    cycle_vocab = vocab[prefix_len:] or vocab
+    stride = rng.randrange(3, len(cycle_vocab), 2) if len(cycle_vocab) > 3 else 1
+    offset = rng.randrange(len(cycle_vocab)) if cycle_vocab else 0
+    body_words: list[str] = []
+    for idx in range(target_len):
+        if idx < prefix_len:
+            body_words.append(prefix_words[idx])
+            continue
+        cycle_idx = (offset + (idx - prefix_len) * stride) % len(cycle_vocab)
+        family = cycle_vocab[cycle_idx]
+        body_words.append(f"{label}_{family}_{idx % 17}")
+    return body_words
+
+
+def make_turn_a_prompt(*, arm: str, target_len: int, seed: int, isolation_mode: str) -> str:
     marker = short_hash(f"turn_a:{arm}:{seed}:{target_len}")
+    words = build_isolated_body(
+        label=f"{arm}_turn_a",
+        target_len=target_len,
+        seed=seed,
+        isolation_mode=isolation_mode,
+    )
     header = (
         f"Speculative prefill probe arm {arm}. "
         f"Marker {marker}. "
         "Reply in one short sentence. "
-        "The repeated words below are just to create a long prefix. "
+        "The repeated words below are synthetic prefix material. "
     )
-    words = [f"{arm}_prefix"] * target_len
-    for idx in range(0, target_len, 256):
-        words[idx] = f"{arm}_marker_{idx}"
     return header + " ".join(words)
 
 
-def make_turn_b_user_prompt(*, arm: str, target_len: int, seed: int) -> str:
+def make_turn_b_user_prompt(*, arm: str, target_len: int, seed: int, isolation_mode: str) -> str:
     marker = short_hash(f"turn_b:{arm}:{seed}:{target_len}")
+    words = build_isolated_body(
+        label=f"{arm}_turn_b",
+        target_len=target_len,
+        seed=seed,
+        isolation_mode=isolation_mode,
+    )
     header = (
         f"Follow-up request for arm {arm}. "
         f"Marker {marker}. "
         "Answer briefly. "
     )
-    words = [f"{arm}_followup"] * target_len
-    for idx in range(0, target_len, 128):
-        words[idx] = f"{arm}_followup_marker_{idx}"
     return header + " ".join(words)
 
 
@@ -524,8 +582,18 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     arms = [ArmSpec("control", False), ArmSpec("protected", True)]
     for idx, arm in enumerate(arms):
-        turn_a_prompt = make_turn_a_prompt(arm=arm.arm, target_len=args.turn_a_words, seed=args.seed + idx)
-        turn_b_user_prompt = make_turn_b_user_prompt(arm=arm.arm, target_len=args.turn_b_words, seed=args.seed + 100 + idx)
+        turn_a_prompt = make_turn_a_prompt(
+            arm=arm.arm,
+            target_len=args.turn_a_words,
+            seed=args.seed + idx,
+            isolation_mode=args.prompt_isolation_mode,
+        )
+        turn_b_user_prompt = make_turn_b_user_prompt(
+            arm=arm.arm,
+            target_len=args.turn_b_words,
+            seed=args.seed + 100 + idx,
+            isolation_mode=args.prompt_isolation_mode,
+        )
         target_request_id = f"{run_id}::{arm.arm}::turn_b"
         target_hint_probe_id = f"{run_id}::{arm.arm}::turn_b"
         turn_a = send_request(
