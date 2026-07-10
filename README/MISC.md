@@ -17,7 +17,15 @@ grep -niE "error|failed|traceback|timed out|permission|no such|exception" \
 
 ```bash
 cd ~/kv_cache_offloading
-mkdir -p "$HOME/dynamo_model_cache"
-ls -ld "$HOME/dynamo_model_cache"
 
+RUN_ID="$(cat experiments/reports/latest_speculative_prefill_microbenchmark_last_probe_run_id.txt 2>/dev/null || true)"
+echo "RUN_ID=$RUN_ID"
+
+RUN_DIR="experiments/reports/speculative_prefill/${RUN_ID}"
+
+grep -n "worker.spec_prefill" "$RUN_DIR/speculative_prefill_worker_runtime.log" || true
+echo
+grep -n "speculative_prefill" "$RUN_DIR/speculative_prefill_worker_runtime.log" | head -50 || true
+echo
+tail -n 120 "$RUN_DIR/speculative_prefill_worker_runtime.log"
 ```
