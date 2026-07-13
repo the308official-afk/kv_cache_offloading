@@ -24,6 +24,11 @@ PROGRESS_CSV="${BATCH_DIR}/progress_overview.csv"
 PROGRESS_LOG="${BATCH_DIR}/progress.log"
 TRACE_INDEX_CSV="${BATCH_DIR}/task_trace_index.csv"
 TRACE_INDEX_MD="${BATCH_DIR}/task_trace_index.md"
+REAL_REQUEST_UNITS_DIR="${BATCH_DIR}/swebench_real_request_units"
+REAL_REQUEST_UNITS_CSV="${REAL_REQUEST_UNITS_DIR}/request_units.csv"
+REAL_REQUEST_UNITS_SUMMARY_MD="${REAL_REQUEST_UNITS_DIR}/request_units_summary.md"
+REAL_TASK_SELECTION_CSV="${REAL_REQUEST_UNITS_DIR}/task_selection.csv"
+REAL_TASK_SELECTION_MD="${REAL_REQUEST_UNITS_DIR}/task_selection.md"
 LATEST_TRACE_INDEX_CSV="experiments/reports/latest_prompt_evolution_trace_index.csv"
 LATEST_TRACE_INDEX_MD="experiments/reports/latest_prompt_evolution_trace_index.md"
 mkdir -p "${BATCH_DIR}"
@@ -230,8 +235,25 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
   fi
 done
 
+if [[ -f "${TRACE_INDEX_CSV}" ]]; then
+  "${PYTHON_BIN}" experiments/scripts/swebench_real_task/build_request_units.py \
+    --trace-index-csv "${TRACE_INDEX_CSV}" \
+    --out-dir "${REAL_REQUEST_UNITS_DIR}" >/dev/null 2>&1 || true
+
+  if [[ -f "${REAL_REQUEST_UNITS_CSV}" ]]; then
+    "${PYTHON_BIN}" experiments/scripts/swebench_real_task/select_real_tasks.py \
+      --request-units-csv "${REAL_REQUEST_UNITS_CSV}" \
+      --out-csv "${REAL_TASK_SELECTION_CSV}" \
+      --out-md "${REAL_TASK_SELECTION_MD}" >/dev/null 2>&1 || true
+  fi
+fi
+
 echo "Batch finished." | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Trace index CSV: ${TRACE_INDEX_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Trace index MD: ${TRACE_INDEX_MD}" | tee -a "${PROGRESS_LOG}"
+echo "Real request units CSV: ${REAL_REQUEST_UNITS_CSV}" | tee -a "${PROGRESS_LOG}"
+echo "Real request units summary: ${REAL_REQUEST_UNITS_SUMMARY_MD}" | tee -a "${PROGRESS_LOG}"
+echo "Real task selection CSV: ${REAL_TASK_SELECTION_CSV}" | tee -a "${PROGRESS_LOG}"
+echo "Real task selection MD: ${REAL_TASK_SELECTION_MD}" | tee -a "${PROGRESS_LOG}"

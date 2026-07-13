@@ -32,6 +32,12 @@ CONTEXT_RESERVE_TOKENS="${CONTEXT_RESERVE_TOKENS:-2048}"
 RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
 RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
+RETENTION_REQUEST_SOURCE="${RETENTION_REQUEST_SOURCE:-synthetic}"
+RETENTION_REAL_REQUEST_UNITS_CSV="${RETENTION_REAL_REQUEST_UNITS_CSV:-experiments/reports/latest_swebench_real_request_units.csv}"
+RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID="${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID:-}"
+RETENTION_REAL_PROTECTED_PHASE_GROUPS="${RETENTION_REAL_PROTECTED_PHASE_GROUPS:-plan act patch review}"
+RETENTION_REAL_DISTRACTOR_PHASE_GROUPS="${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS:-plan act patch review}"
+RETENTION_REAL_ALLOW_DISTRACTOR_REUSE="${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE:-0}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 CACHE_CONTROL_DOC_MODE="${CACHE_CONTROL_DOC_MODE:-1}"
 CACHE_CONTROL_STRICT_DOC_MODE="${CACHE_CONTROL_STRICT_DOC_MODE:-0}"
@@ -663,6 +669,11 @@ run_probe() {
     --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions"
     --model "${model}"
     --run-id "${run_id}"
+    --request-source "${RETENTION_REQUEST_SOURCE}"
+    --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
+    --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
+    --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
+    --real-distractor-phase-groups "${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -691,6 +702,9 @@ run_probe() {
   )
   if [[ "${IGNORE_EOS}" = "1" ]]; then
     command+=(--ignore-eos)
+  fi
+  if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--real-allow-distractor-reuse)
   fi
 
   echo "Running retention probe: model=${model} kv_tier=${kv_tier_mode} hint_profile=${hint_profile} cache_control_profile=${cache_control_profile} arm_role=${arm_role} run_id=${run_id}" | tee -a "${BATCH_LOG}"
@@ -722,6 +736,11 @@ postprocess_probe() {
     --frontend-url "http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions"
     --model "${model}"
     --run-id "${run_id}"
+    --request-source "${RETENTION_REQUEST_SOURCE}"
+    --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
+    --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
+    --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
+    --real-distractor-phase-groups "${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -751,6 +770,9 @@ postprocess_probe() {
   )
   if [[ "${IGNORE_EOS}" = "1" ]]; then
     command+=(--ignore-eos)
+  fi
+  if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--real-allow-distractor-reuse)
   fi
 
   echo "Postprocessing retention probe with worker runtime log: ${worker_runtime_log}" | tee -a "${BATCH_LOG}"
@@ -1218,6 +1240,12 @@ reset_latest_probe_reports
   echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor cache-control profile: ${DISTRACTOR_CACHE_CONTROL_PROFILE}"
+  echo "Request source: ${RETENTION_REQUEST_SOURCE}"
+  echo "Real request units CSV: ${RETENTION_REAL_REQUEST_UNITS_CSV}"
+  echo "Real protected request_unit_id: ${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID:-auto}"
+  echo "Real protected phase groups: ${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
+  echo "Real distractor phase groups: ${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
+  echo "Real distractor reuse allowed: ${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}"
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"

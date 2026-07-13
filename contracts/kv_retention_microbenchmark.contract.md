@@ -89,6 +89,13 @@ The shell contract currently exposes:
 
 - experiment mode:
   - `KV_RETENTION_MODE`
+- request source:
+  - `RETENTION_REQUEST_SOURCE`
+  - `RETENTION_REAL_REQUEST_UNITS_CSV`
+  - `RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID`
+  - `RETENTION_REAL_PROTECTED_PHASE_GROUPS`
+  - `RETENTION_REAL_DISTRACTOR_PHASE_GROUPS`
+  - `RETENTION_REAL_ALLOW_DISTRACTOR_REUSE`
 - attribution path:
   - `RETENTION_ATTRIBUTION_MODE`
   - `RETENTION_REQUEST_CONTEXT_MODE`
@@ -133,6 +140,11 @@ Default proof settings
 
 So if someone edits the shell contract, the future public microbenchmark wrapper
 will change behavior directly from those values.
+
+Request-source defaults:
+
+- `RETENTION_REQUEST_SOURCE=synthetic`
+- `RETENTION_REAL_REQUEST_UNITS_CSV=experiments/reports/latest_swebench_real_request_units.csv`
 
 
 Machine/runtime prerequisites

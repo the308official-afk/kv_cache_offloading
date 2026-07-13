@@ -246,6 +246,8 @@ init_progress_file
   echo "Protected hint profiles: ${PROTECTED_HINT_PROFILES}"
   echo "Control cache-control profile: ${CONTROL_CACHE_CONTROL_PROFILE}"
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
+  echo "Request source: ${RETENTION_REQUEST_SOURCE:-synthetic}"
+  echo "Real request units CSV: ${RETENTION_REAL_REQUEST_UNITS_CSV:-experiments/reports/latest_swebench_real_request_units.csv}"
   echo "Distractor counts: ${DISTRACTOR_COUNTS}"
   echo "Retention probe seed: ${RETENTION_PROBE_SEED}"
   echo "Retention sweep seed mode: ${RETENTION_SWEEP_SEED_MODE}"

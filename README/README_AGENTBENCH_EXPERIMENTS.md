@@ -648,6 +648,16 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
+It now also exports a shared real-task request layer for downstream real
+SWE-bench experiments:
+
+```bash
+cat experiments/reports/latest_swebench_real_request_units.csv
+cat experiments/reports/latest_swebench_real_request_units_summary.md
+cat experiments/reports/latest_swebench_real_task_selection.csv
+cat experiments/reports/latest_swebench_real_task_selection.md
+```
+
 Batch outputs:
 
 ```text
@@ -656,6 +666,11 @@ experiments/reports/batches/<batch_id>/
   progress_overview.csv
   task_trace_index.md
   task_trace_index.csv
+  swebench_real_request_units/
+    request_units.csv
+    request_units_summary.md
+    task_selection.csv
+    task_selection.md
 ```
 
 Global summaries:
@@ -831,6 +846,25 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+=== This works on GH200 with real SWE-bench request units ===
+Use this after Experiment 6 has already produced:
+
+- `experiments/reports/latest_swebench_real_request_units.csv`
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+KV_RETENTION_MODE=sweep \
+RETENTION_REQUEST_SOURCE=swebench_real \
+KV_RETENTION_RESET_MODE=restart \
+DISTRACTOR_COUNTS="10 20 30" \
+PROTECTED_HINT_PROFILES="high-priority" \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -848,6 +882,12 @@ CONTROL_HINT_PROFILE
 PROTECTED_HINT_PROFILES
 CONTROL_CACHE_CONTROL_PROFILE
 PROTECTED_CACHE_CONTROL_PROFILES
+RETENTION_REQUEST_SOURCE
+RETENTION_REAL_REQUEST_UNITS_CSV
+RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID
+RETENTION_REAL_PROTECTED_PHASE_GROUPS
+RETENTION_REAL_DISTRACTOR_PHASE_GROUPS
+RETENTION_REAL_ALLOW_DISTRACTOR_REUSE
 KV_RETENTION_RESET_MODE
 KV_TIER_MODES
 DISTRACTOR_COUNT
