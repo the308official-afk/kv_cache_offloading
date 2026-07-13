@@ -39,6 +39,13 @@ RETENTION_SWEBENCH_INDEX="${RETENTION_SWEBENCH_INDEX:-0}"
 RETENTION_SWEBENCH_INSTANCE_ID="${RETENTION_SWEBENCH_INSTANCE_ID:-}"
 RETENTION_SWEBENCH_DISTRACTOR_START_INDEX="${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:--1}"
 RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE="${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-0}"
+RETENTION_TRAJECTORY_PROMPT_CATALOG="${RETENTION_TRAJECTORY_PROMPT_CATALOG:-experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
+RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX="${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX:-0}"
+RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID="${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-}"
+RETENTION_TRAJECTORY_PROTECTED_STAGE="${RETENTION_TRAJECTORY_PROTECTED_STAGE:-patch_generation}"
+RETENTION_TRAJECTORY_STAGES="${RETENTION_TRAJECTORY_STAGES:-planning execution patch_generation review}"
+RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX="${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:--1}"
+RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE="${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE:-0}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 CACHE_CONTROL_DOC_MODE="${CACHE_CONTROL_DOC_MODE:-1}"
 CACHE_CONTROL_STRICT_DOC_MODE="${CACHE_CONTROL_STRICT_DOC_MODE:-0}"
@@ -676,6 +683,12 @@ run_probe() {
     --swebench-index "${RETENTION_SWEBENCH_INDEX}"
     --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
     --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
+    --trajectory-prompt-catalog "${RETENTION_TRAJECTORY_PROMPT_CATALOG}"
+    --trajectory-protected-task-index "${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX}"
+    --trajectory-protected-instance-id "${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID}"
+    --trajectory-protected-stage "${RETENTION_TRAJECTORY_PROTECTED_STAGE}"
+    --trajectory-stages "${RETENTION_TRAJECTORY_STAGES}"
+    --trajectory-distractor-start-task-index "${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -708,6 +721,9 @@ run_probe() {
   if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--swebench-allow-distractor-reuse)
   fi
+  if [[ "${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--trajectory-allow-distractor-reuse)
+  fi
 
   echo "Running retention probe: model=${model} kv_tier=${kv_tier_mode} hint_profile=${hint_profile} cache_control_profile=${cache_control_profile} arm_role=${arm_role} run_id=${run_id}" | tee -a "${BATCH_LOG}"
   if "${command[@]}" 2>&1 | tee -a "${BATCH_LOG}"; then
@@ -720,7 +736,7 @@ run_probe() {
     echo "Probe failed and STOP_ON_PROBE_FAILURE=1." >&2
     exit 1
   fi
-  return 0
+  return 1
 }
 
 postprocess_probe() {
@@ -744,6 +760,12 @@ postprocess_probe() {
     --swebench-index "${RETENTION_SWEBENCH_INDEX}"
     --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
     --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
+    --trajectory-prompt-catalog "${RETENTION_TRAJECTORY_PROMPT_CATALOG}"
+    --trajectory-protected-task-index "${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX}"
+    --trajectory-protected-instance-id "${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID}"
+    --trajectory-protected-stage "${RETENTION_TRAJECTORY_PROTECTED_STAGE}"
+    --trajectory-stages "${RETENTION_TRAJECTORY_STAGES}"
+    --trajectory-distractor-start-task-index "${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -776,6 +798,9 @@ postprocess_probe() {
   fi
   if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--swebench-allow-distractor-reuse)
+  fi
+  if [[ "${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--trajectory-allow-distractor-reuse)
   fi
 
   echo "Postprocessing retention probe with worker runtime log: ${worker_runtime_log}" | tee -a "${BATCH_LOG}"
@@ -1251,6 +1276,14 @@ reset_latest_probe_reports
     echo "SWE-bench protected instance_id: ${RETENTION_SWEBENCH_INSTANCE_ID:-auto}"
     echo "SWE-bench distractor start index: ${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
     echo "SWE-bench distractor reuse allowed: ${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}"
+  elif [[ "${RETENTION_REQUEST_SOURCE}" = "swebench_trajectory" ]]; then
+    echo "SWE-bench trajectory catalog: ${RETENTION_TRAJECTORY_PROMPT_CATALOG}"
+    echo "SWE-bench trajectory protected task index: ${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX}"
+    echo "SWE-bench trajectory protected instance_id: ${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-auto}"
+    echo "SWE-bench trajectory protected stage: ${RETENTION_TRAJECTORY_PROTECTED_STAGE}"
+    echo "SWE-bench trajectory distractor stages: ${RETENTION_TRAJECTORY_STAGES}"
+    echo "SWE-bench trajectory distractor start task index: ${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX}"
+    echo "SWE-bench trajectory distractor reuse allowed: ${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE}"
   fi
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
@@ -1350,27 +1383,29 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         RUN_ID_SUFFIX="${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_control"
       fi
 
-      run_probe \
+      if run_probe \
         "${MODEL_NAME}" \
         "${KV_TIER_MODE}" \
         "${HINT_PROFILE}" \
         "${CACHE_CONTROL_PROFILE}" \
         "${ARM_ROLE}" \
         "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
-        "${WORKER_RUNTIME_LOG}"
+        "${WORKER_RUNTIME_LOG}"; then
+        sleep 2
 
-      sleep 2
-
-      if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
-        postprocess_probe \
-          "${MODEL_NAME}" \
-          "${KV_TIER_MODE}" \
-          "${HINT_PROFILE}" \
-          "${CACHE_CONTROL_PROFILE}" \
-          "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
-          "${WORKER_RUNTIME_LOG}"
+        if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
+          postprocess_probe \
+            "${MODEL_NAME}" \
+            "${KV_TIER_MODE}" \
+            "${HINT_PROFILE}" \
+            "${CACHE_CONTROL_PROFILE}" \
+            "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
+            "${WORKER_RUNTIME_LOG}"
+        else
+          echo "Warning: could not capture worker runtime log for ${HINT_PROFILE}" | tee -a "${BATCH_LOG}"
+        fi
       else
-        echo "Warning: could not capture worker runtime log for ${HINT_PROFILE}" | tee -a "${BATCH_LOG}"
+        echo "Skipping postprocess for failed probe arm: model=${MODEL_NAME} kv_tier=${KV_TIER_MODE} hint_profile=${HINT_PROFILE} cache_control_profile=${CACHE_CONTROL_PROFILE} arm_role=${ARM_ROLE}" | tee -a "${BATCH_LOG}"
       fi
     done < <(iter_probe_arms)
   done

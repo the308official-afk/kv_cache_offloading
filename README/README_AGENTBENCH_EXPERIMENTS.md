@@ -857,6 +857,38 @@ Mental model:
 - the same protected task is replayed as A again
 - the report checks whether A stayed warm after the distractors
 
+=== This uses multi-stage SWE-bench trajectory prompts ===
+
+Use this when direct task-level SWE-bench prompts do not create enough cache pressure.
+
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/prepare_swebench_trajectory_prompts.sh
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+KV_RETENTION_MODE=sweep \
+RETENTION_REQUEST_SOURCE=swebench_trajectory \
+RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
+RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0 \
+RETENTION_TRAJECTORY_PROTECTED_STAGE=patch_generation \
+RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review" \
+KV_RETENTION_RESET_MODE=restart \
+DISTRACTOR_COUNTS="100 200 400 600" \
+PROTECTED_HINT_PROFILES="high-priority" \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Mental model:
+
+- Experiment 6 captures real SWE-bench phase prompts first
+- the preparer turns those captured prompts into a replay catalog
+- one protected task stage becomes A
+- many stages from other tasks become distractors
+- Experiment 9 only replays prompts; it does not run tools/tests/code edits
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -881,6 +913,13 @@ RETENTION_SWEBENCH_INDEX
 RETENTION_SWEBENCH_INSTANCE_ID
 RETENTION_SWEBENCH_DISTRACTOR_START_INDEX
 RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE
+RETENTION_TRAJECTORY_PROMPT_CATALOG
+RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX
+RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID
+RETENTION_TRAJECTORY_PROTECTED_STAGE
+RETENTION_TRAJECTORY_STAGES
+RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX
+RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE
 KV_RETENTION_RESET_MODE
 KV_TIER_MODES
 DISTRACTOR_COUNT
@@ -1923,7 +1962,8 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 11: priority scheduling
 - Experiment 12: speculative prefill
 
-Experiment 9 can use either synthetic prompts or direct SWE-bench Pro tasks.
+Experiment 9 can use synthetic prompts, direct SWE-bench Pro tasks, or
+captured SWE-bench trajectory prompts.
 Set these in the Experiment 9 block:
 
 ```text
@@ -1934,12 +1974,32 @@ EXP9_RETENTION_SWEBENCH_INDEX=0
 EXP9_RETENTION_SWEBENCH_INSTANCE_ID=
 EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=-1
 EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=0
+EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
+EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0
+EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID=
+EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE=patch_generation
+EXP9_RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review"
+EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX=-1
+EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE=0
 ```
 
 To run Experiment 9 directly from SWE-bench Pro, change:
 
 ```text
 EXP9_RETENTION_REQUEST_SOURCE=swebench_dataset
+```
+
+To run Experiment 9 from captured trajectory prompts, first prepare the catalog:
+
+```bash
+cd ~/kv_cache_offloading
+./agentbench/prepare_swebench_trajectory_prompts.sh
+```
+
+Then change:
+
+```text
+EXP9_RETENTION_REQUEST_SOURCE=swebench_trajectory
 ```
 
 The default selection is:

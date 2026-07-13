@@ -151,6 +151,13 @@ Request-source defaults:
 - `RETENTION_SWEBENCH_INSTANCE_ID=`
 - `RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=-1`
 - `RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=0`
+- `RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv`
+- `RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0`
+- `RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID=`
+- `RETENTION_TRAJECTORY_PROTECTED_STAGE=patch_generation`
+- `RETENTION_TRAJECTORY_STAGES=planning execution patch_generation review`
+- `RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX=-1`
+- `RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE=0`
 
 For direct SWE-bench Pro runs, use:
 
@@ -161,6 +168,20 @@ That path reads the Hugging Face dataset directly and builds:
 - protected A from one SWE-bench task
 - distractors from other SWE-bench tasks
 - protected A replay from the same protected task
+
+For multi-stage SWE-bench trajectory runs, use:
+
+- `RETENTION_REQUEST_SOURCE=swebench_trajectory`
+
+That path reads a prepared prompt catalog and builds:
+
+- protected A from one captured task stage
+- distractors from multiple captured stages from other tasks
+- protected A replay from the same captured task stage
+
+Prepare that catalog with:
+
+- `./agentbench/prepare_swebench_trajectory_prompts.sh`
 
 
 Machine/runtime prerequisites

@@ -225,6 +225,13 @@ EXP9_RETENTION_SWEBENCH_INDEX='${EXP9_RETENTION_SWEBENCH_INDEX:-}'
 EXP9_RETENTION_SWEBENCH_INSTANCE_ID='${EXP9_RETENTION_SWEBENCH_INSTANCE_ID:-}'
 EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX='${EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:-}'
 EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE='${EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-}'
+EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG='${EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG:-}'
+EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX='${EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX:-}'
+EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID='${EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-}'
+EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE='${EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE:-}'
+EXP9_RETENTION_TRAJECTORY_STAGES='${EXP9_RETENTION_TRAJECTORY_STAGES:-}'
+EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX='${EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:-}'
+EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE='${EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE:-}'
 EXP9_RETENTION_ATTRIBUTION_MODE='${EXP9_RETENTION_ATTRIBUTION_MODE:-}'
 EXP9_RETENTION_REQUEST_CONTEXT_MODE='${EXP9_RETENTION_REQUEST_CONTEXT_MODE:-}'
 EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE='${EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE:-}'
@@ -623,6 +630,13 @@ run_experiment_9() {
   local exp9_retention_swebench_instance_id
   local exp9_retention_swebench_distractor_start_index
   local exp9_retention_swebench_allow_distractor_reuse
+  local exp9_retention_trajectory_prompt_catalog
+  local exp9_retention_trajectory_protected_task_index
+  local exp9_retention_trajectory_protected_instance_id
+  local exp9_retention_trajectory_protected_stage
+  local exp9_retention_trajectory_stages
+  local exp9_retention_trajectory_distractor_start_task_index
+  local exp9_retention_trajectory_allow_distractor_reuse
   local exp9_retention_request_context_mode
   local exp9_retention_top_level_priority_mode
   local exp9_distractor_counts
@@ -637,6 +651,13 @@ run_experiment_9() {
   exp9_retention_swebench_instance_id="$(resolve_value EXP9_RETENTION_SWEBENCH_INSTANCE_ID RETENTION_SWEBENCH_INSTANCE_ID)"
   exp9_retention_swebench_distractor_start_index="$(resolve_value EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX RETENTION_SWEBENCH_DISTRACTOR_START_INDEX)"
   exp9_retention_swebench_allow_distractor_reuse="$(resolve_value EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE)"
+  exp9_retention_trajectory_prompt_catalog="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG RETENTION_TRAJECTORY_PROMPT_CATALOG)"
+  exp9_retention_trajectory_protected_task_index="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX)"
+  exp9_retention_trajectory_protected_instance_id="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID)"
+  exp9_retention_trajectory_protected_stage="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE RETENTION_TRAJECTORY_PROTECTED_STAGE)"
+  exp9_retention_trajectory_stages="$(resolve_value EXP9_RETENTION_TRAJECTORY_STAGES RETENTION_TRAJECTORY_STAGES)"
+  exp9_retention_trajectory_distractor_start_task_index="$(resolve_value EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX)"
+  exp9_retention_trajectory_allow_distractor_reuse="$(resolve_value EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE)"
   exp9_retention_attribution_mode="$(resolve_value EXP9_RETENTION_ATTRIBUTION_MODE RETENTION_ATTRIBUTION_MODE)"
   exp9_retention_request_context_mode="$(resolve_value EXP9_RETENTION_REQUEST_CONTEXT_MODE RETENTION_REQUEST_CONTEXT_MODE)"
   exp9_retention_top_level_priority_mode="$(resolve_value EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE RETENTION_TOP_LEVEL_PRIORITY_MODE)"
@@ -659,6 +680,13 @@ swebench_index=${exp9_retention_swebench_index}
 swebench_instance_id=${exp9_retention_swebench_instance_id}
 swebench_distractor_start_index=${exp9_retention_swebench_distractor_start_index}
 swebench_allow_distractor_reuse=${exp9_retention_swebench_allow_distractor_reuse}
+trajectory_prompt_catalog=${exp9_retention_trajectory_prompt_catalog}
+trajectory_protected_task_index=${exp9_retention_trajectory_protected_task_index}
+trajectory_protected_instance_id=${exp9_retention_trajectory_protected_instance_id}
+trajectory_protected_stage=${exp9_retention_trajectory_protected_stage}
+trajectory_stages=${exp9_retention_trajectory_stages}
+trajectory_distractor_start_task_index=${exp9_retention_trajectory_distractor_start_task_index}
+trajectory_allow_distractor_reuse=${exp9_retention_trajectory_allow_distractor_reuse}
 retention_attribution_mode=${exp9_retention_attribution_mode}
 retention_request_context_mode=${exp9_retention_request_context_mode}
 retention_top_level_priority_mode=${exp9_retention_top_level_priority_mode}
@@ -697,6 +725,13 @@ EOF
   [[ -n "${exp9_retention_swebench_instance_id}" ]] && env_args+=(RETENTION_SWEBENCH_INSTANCE_ID="${exp9_retention_swebench_instance_id}")
   [[ -n "${exp9_retention_swebench_distractor_start_index}" ]] && env_args+=(RETENTION_SWEBENCH_DISTRACTOR_START_INDEX="${exp9_retention_swebench_distractor_start_index}")
   [[ -n "${exp9_retention_swebench_allow_distractor_reuse}" ]] && env_args+=(RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE="${exp9_retention_swebench_allow_distractor_reuse}")
+  [[ -n "${exp9_retention_trajectory_prompt_catalog}" ]] && env_args+=(RETENTION_TRAJECTORY_PROMPT_CATALOG="${exp9_retention_trajectory_prompt_catalog}")
+  [[ -n "${exp9_retention_trajectory_protected_task_index}" ]] && env_args+=(RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX="${exp9_retention_trajectory_protected_task_index}")
+  [[ -n "${exp9_retention_trajectory_protected_instance_id}" ]] && env_args+=(RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID="${exp9_retention_trajectory_protected_instance_id}")
+  [[ -n "${exp9_retention_trajectory_protected_stage}" ]] && env_args+=(RETENTION_TRAJECTORY_PROTECTED_STAGE="${exp9_retention_trajectory_protected_stage}")
+  [[ -n "${exp9_retention_trajectory_stages}" ]] && env_args+=(RETENTION_TRAJECTORY_STAGES="${exp9_retention_trajectory_stages}")
+  [[ -n "${exp9_retention_trajectory_distractor_start_task_index}" ]] && env_args+=(RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX="${exp9_retention_trajectory_distractor_start_task_index}")
+  [[ -n "${exp9_retention_trajectory_allow_distractor_reuse}" ]] && env_args+=(RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE="${exp9_retention_trajectory_allow_distractor_reuse}")
   [[ -n "${exp9_retention_request_context_mode}" ]] && env_args+=(RETENTION_REQUEST_CONTEXT_MODE="${exp9_retention_request_context_mode}")
   [[ -n "${exp9_retention_top_level_priority_mode}" ]] && env_args+=(RETENTION_TOP_LEVEL_PRIORITY_MODE="${exp9_retention_top_level_priority_mode}")
   [[ -n "${exp9_stop_on_probe_failure}" ]] && env_args+=(STOP_ON_PROBE_FAILURE="${exp9_stop_on_probe_failure}")

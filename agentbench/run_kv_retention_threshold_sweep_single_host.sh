@@ -254,6 +254,14 @@ init_progress_file
     echo "SWE-bench protected instance_id: ${RETENTION_SWEBENCH_INSTANCE_ID:-auto}"
     echo "SWE-bench distractor start index: ${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:--1}"
     echo "SWE-bench distractor reuse allowed: ${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-0}"
+  elif [[ "${RETENTION_REQUEST_SOURCE:-synthetic}" = "swebench_trajectory" ]]; then
+    echo "SWE-bench trajectory catalog: ${RETENTION_TRAJECTORY_PROMPT_CATALOG:-experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
+    echo "SWE-bench trajectory protected task index: ${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX:-0}"
+    echo "SWE-bench trajectory protected instance_id: ${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-auto}"
+    echo "SWE-bench trajectory protected stage: ${RETENTION_TRAJECTORY_PROTECTED_STAGE:-patch_generation}"
+    echo "SWE-bench trajectory distractor stages: ${RETENTION_TRAJECTORY_STAGES:-planning execution patch_generation review}"
+    echo "SWE-bench trajectory distractor start task index: ${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:--1}"
+    echo "SWE-bench trajectory distractor reuse allowed: ${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE:-0}"
   fi
   echo "Distractor counts: ${DISTRACTOR_COUNTS}"
   echo "Retention probe seed: ${RETENTION_PROBE_SEED}"
@@ -295,6 +303,20 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
 
       if RETENTION_PROBE_ID="${PROBE_ID}" \
         KV_TIER_MODES="${KV_TIER_MODE}" \
+        RETENTION_REQUEST_SOURCE="${RETENTION_REQUEST_SOURCE:-synthetic}" \
+        RETENTION_SWEBENCH_DATASET="${RETENTION_SWEBENCH_DATASET:-ScaleAI/SWE-bench_Pro}" \
+        RETENTION_SWEBENCH_SPLIT="${RETENTION_SWEBENCH_SPLIT:-test}" \
+        RETENTION_SWEBENCH_INDEX="${RETENTION_SWEBENCH_INDEX:-0}" \
+        RETENTION_SWEBENCH_INSTANCE_ID="${RETENTION_SWEBENCH_INSTANCE_ID:-}" \
+        RETENTION_SWEBENCH_DISTRACTOR_START_INDEX="${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:--1}" \
+        RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE="${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-0}" \
+        RETENTION_TRAJECTORY_PROMPT_CATALOG="${RETENTION_TRAJECTORY_PROMPT_CATALOG:-experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}" \
+        RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX="${RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX:-0}" \
+        RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID="${RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-}" \
+        RETENTION_TRAJECTORY_PROTECTED_STAGE="${RETENTION_TRAJECTORY_PROTECTED_STAGE:-patch_generation}" \
+        RETENTION_TRAJECTORY_STAGES="${RETENTION_TRAJECTORY_STAGES:-planning execution patch_generation review}" \
+        RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX="${RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:--1}" \
+        RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE="${RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE:-0}" \
         RETENTION_ATTRIBUTION_MODE="${RETENTION_ATTRIBUTION_MODE}" \
         RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE}" \
         RETENTION_PROBE_SEED="${CELL_SEED}" \

@@ -144,6 +144,11 @@ REQUEST_COLUMNS = [
     "source_instance_id",
     "source_phase",
     "source_phase_group",
+    "source_task_index",
+    "source_stage_index",
+    "source_phase_ordinal",
+    "source_catalog_id",
+    "source_catalog_prompt_hash",
     "source_prompt_chars",
     "status",
     "error",
@@ -173,6 +178,12 @@ SUMMARY_COLUMNS = [
     "protected_source_instance_id",
     "protected_source_phase",
     "protected_source_phase_group",
+    "protected_source_task_index",
+    "protected_source_stage_index",
+    "trajectory_prompt_catalog",
+    "trajectory_stages",
+    "trajectory_distractor_tasks",
+    "trajectory_distractor_stage_requests",
     "a_first_status",
     "a_replay_status",
     "a_first_latency_ms",
@@ -244,6 +255,9 @@ PUBLIC_SUMMARY_COLUMNS = [
     "pinned_ratio",
     "write_policy",
     "distractors",
+    "trajectory_tasks",
+    "trajectory_stage_requests",
+    "protected_stage",
     "first_status",
     "replay_status",
     "first_ms",
@@ -298,8 +312,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--request-source",
         default=os.environ.get("RETENTION_REQUEST_SOURCE", "synthetic"),
-        choices=("synthetic", "swebench_dataset"),
-        help="Use the synthetic prompt generator or load SWE-bench rows directly.",
+        choices=("synthetic", "swebench_dataset", "swebench_trajectory"),
+        help=(
+            "Use synthetic prompts, direct SWE-bench rows, or a prepared "
+            "SWE-bench trajectory prompt catalog."
+        ),
     )
     parser.add_argument(
         "--swebench-dataset",
@@ -337,6 +354,48 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE", "0").strip().lower()
         in {"1", "true", "yes"},
         help="Allow cycling SWE-bench distractor rows if the split is smaller than distractor_count.",
+    )
+    parser.add_argument(
+        "--trajectory-prompt-catalog",
+        default=os.environ.get(
+            "RETENTION_TRAJECTORY_PROMPT_CATALOG",
+            str(REPO_ROOT / "experiments" / "reports" / "latest_swebench_trajectory_prompt_catalog.csv"),
+        ),
+        help="Prompt catalog CSV built by prepare_swebench_trajectory_prompts.sh.",
+    )
+    parser.add_argument(
+        "--trajectory-protected-task-index",
+        type=int,
+        default=int(os.environ.get("RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX", "0")),
+        help="Task index to protect when request_source=swebench_trajectory.",
+    )
+    parser.add_argument(
+        "--trajectory-protected-instance-id",
+        default=os.environ.get("RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID", ""),
+        help="Optional protected instance_id. Takes priority over protected task index.",
+    )
+    parser.add_argument(
+        "--trajectory-protected-stage",
+        default=os.environ.get("RETENTION_TRAJECTORY_PROTECTED_STAGE", "patch_generation"),
+        help="Protected stage_name or phase to replay as A.",
+    )
+    parser.add_argument(
+        "--trajectory-stages",
+        default=os.environ.get("RETENTION_TRAJECTORY_STAGES", "planning execution patch_generation review"),
+        help="Whitespace-separated phase names to use from distractor tasks.",
+    )
+    parser.add_argument(
+        "--trajectory-distractor-start-task-index",
+        type=int,
+        default=int(os.environ.get("RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX", "-1")),
+        help="First catalog task_index to use for distractors. -1 means after protected task.",
+    )
+    parser.add_argument(
+        "--trajectory-allow-distractor-reuse",
+        action="store_true",
+        default=os.environ.get("RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE", "0").strip().lower()
+        in {"1", "true", "yes"},
+        help="Allow cycling catalog tasks when distractor_count is larger than the unique task pool.",
     )
     parser.add_argument("--postprocess-only", action="store_true")
     parser.add_argument("--protected-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
@@ -588,11 +647,229 @@ def select_swebench_dataset_workload(
     }
 
 
+def read_trajectory_catalog(path_value: str) -> list[dict[str, str]]:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(
+            f"SWE-bench trajectory prompt catalog not found: {path}\n"
+            "Run: ./agentbench/prepare_swebench_trajectory_prompts.sh"
+        )
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise SystemExit(f"SWE-bench trajectory prompt catalog is empty: {path}")
+    return rows
+
+
+def parse_stage_filter(value: str) -> set[str]:
+    return {item.strip() for item in value.split() if item.strip()}
+
+
+def catalog_int(row: dict[str, str], key: str, default: int = 0) -> int:
+    try:
+        return int(row.get(key, "") or default)
+    except ValueError:
+        return default
+
+
+def prompt_text_from_catalog_row(row: dict[str, str]) -> str:
+    raw_path = row.get("prompt_text_path") or ""
+    if not raw_path:
+        raise SystemExit(f"Catalog row is missing prompt_text_path: {row}")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(f"Catalog prompt file not found: {path}")
+    return path.read_text(encoding="utf-8")
+
+
+def trajectory_catalog_meta(row: dict[str, str], *, role: str) -> dict[str, Any]:
+    task_index = catalog_int(row, "task_index")
+    stage_index = catalog_int(row, "stage_index")
+    phase = str(row.get("phase") or row.get("stage_name") or "")
+    stage_name = str(row.get("stage_name") or phase)
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
+    return {
+        "request_unit_id": (
+            f"swebench_trajectory__task{task_index:04d}__{stage_name}__{row.get('prompt_hash', '')}"
+        ),
+        "repo": row.get("repo", ""),
+        "instance_id": instance_id,
+        "phase": stage_name,
+        "phase_group": phase,
+        "prompt_chars": row.get("prompt_chars", ""),
+        "task_index": task_index,
+        "stage_index": stage_index,
+        "phase_ordinal": row.get("phase_ordinal", ""),
+        "dataset_role": role,
+        "catalog_id": row.get("catalog_id", ""),
+        "catalog_prompt_hash": row.get("prompt_hash", ""),
+        "catalog_prompt_path": row.get("prompt_text_path", ""),
+    }
+
+
+def select_trajectory_protected_row(
+    rows: list[dict[str, str]],
+    args: argparse.Namespace,
+) -> dict[str, str]:
+    protected_rows = rows
+    if args.trajectory_protected_instance_id:
+        protected_rows = [
+            row for row in rows if str(row.get("instance_id", "")) == args.trajectory_protected_instance_id
+        ]
+        if not protected_rows:
+            raise SystemExit(
+                "RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID not found in catalog: "
+                f"{args.trajectory_protected_instance_id}"
+            )
+    else:
+        protected_rows = [
+            row for row in rows if catalog_int(row, "task_index", -1) == args.trajectory_protected_task_index
+        ]
+        if not protected_rows:
+            raise SystemExit(
+                "RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX not found in catalog: "
+                f"{args.trajectory_protected_task_index}"
+            )
+
+    stage_name = args.trajectory_protected_stage.strip()
+    if stage_name:
+        stage_matches = [
+            row
+            for row in protected_rows
+            if row.get("stage_name") == stage_name or row.get("phase") == stage_name
+        ]
+        if not stage_matches:
+            available = ", ".join(sorted({row.get("stage_name", "") for row in protected_rows if row.get("stage_name")}))
+            raise SystemExit(
+                f"Protected trajectory stage {stage_name!r} not found. Available stages: {available}"
+            )
+        protected_rows = stage_matches
+
+    return sorted(
+        protected_rows,
+        key=lambda row: (catalog_int(row, "stage_index"), str(row.get("stage_name", ""))),
+    )[-1]
+
+
+def rows_by_task(rows: list[dict[str, str]], allowed_phases: set[str]) -> dict[int, list[dict[str, str]]]:
+    grouped: dict[int, list[dict[str, str]]] = {}
+    for row in rows:
+        phase = row.get("phase") or row.get("stage_name") or ""
+        if phase not in allowed_phases and row.get("stage_name") not in allowed_phases:
+            continue
+        task_index = catalog_int(row, "task_index", -1)
+        if task_index < 0:
+            continue
+        grouped.setdefault(task_index, []).append(row)
+    for task_rows in grouped.values():
+        task_rows.sort(key=lambda row: (catalog_int(row, "stage_index"), str(row.get("stage_name", ""))))
+    return grouped
+
+
+def select_swebench_trajectory_workload(
+    args: argparse.Namespace,
+) -> tuple[list[tuple[str, str, str, str, dict[str, Any]]], dict[str, Any]]:
+    catalog_rows = read_trajectory_catalog(args.trajectory_prompt_catalog)
+    protected_row = select_trajectory_protected_row(catalog_rows, args)
+    protected_task_index = catalog_int(protected_row, "task_index")
+    protected_prompt = prompt_text_from_catalog_row(protected_row)
+    protected_meta = trajectory_catalog_meta(protected_row, role="protected")
+    protected_meta["prompt_chars"] = len(protected_prompt)
+
+    allowed_phases = parse_stage_filter(args.trajectory_stages)
+    if not allowed_phases:
+        raise SystemExit("RETENTION_TRAJECTORY_STAGES / --trajectory-stages must not be empty")
+    task_rows = rows_by_task(catalog_rows, allowed_phases)
+    task_indices = sorted(index for index in task_rows if index != protected_task_index)
+    if not task_indices and args.distractor_count > 0:
+        raise SystemExit("Trajectory catalog needs at least two tasks to provide distractors.")
+
+    start_index = args.trajectory_distractor_start_task_index
+    if start_index < 0:
+        start_index = protected_task_index + 1
+    greater_or_equal = [index for index in task_indices if index >= start_index]
+    less_than = [index for index in task_indices if index < start_index]
+    ordered_indices = greater_or_equal + less_than
+
+    selected_task_indices: list[int] = []
+    cursor = 0
+    while len(selected_task_indices) < args.distractor_count:
+        if not ordered_indices:
+            break
+        if cursor >= len(ordered_indices):
+            if not args.trajectory_allow_distractor_reuse:
+                break
+            cursor = 0
+        selected_task_indices.append(ordered_indices[cursor])
+        cursor += 1
+
+    if len(selected_task_indices) < args.distractor_count:
+        raise SystemExit(
+            "Not enough SWE-bench trajectory tasks for this distractor_count without reuse. "
+            f"need={args.distractor_count} available={len(selected_task_indices)}. "
+            "Use a smaller DISTRACTOR_COUNT or set RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE=1."
+        )
+
+    sequence: list[tuple[str, str, str, str, dict[str, Any]]] = [
+        (
+            "a_first",
+            protected_prompt,
+            args.protected_hint_profile,
+            args.protected_cache_control_profile,
+            protected_meta,
+        )
+    ]
+    distractor_request_count = 0
+    for task_position, task_index in enumerate(selected_task_indices):
+        for stage_position, row in enumerate(task_rows[task_index]):
+            prompt = prompt_text_from_catalog_row(row)
+            meta = trajectory_catalog_meta(row, role="distractor")
+            meta["prompt_chars"] = len(prompt)
+            sequence.append(
+                (
+                    f"distractor_{task_position:04d}_{stage_position:02d}",
+                    prompt,
+                    args.distractor_hint_profile,
+                    args.distractor_cache_control_profile,
+                    meta,
+                )
+            )
+            distractor_request_count += 1
+    sequence.append(
+        (
+            "a_replay",
+            protected_prompt,
+            args.protected_hint_profile,
+            args.protected_cache_control_profile,
+            protected_meta,
+        )
+    )
+
+    catalog_path = Path(args.trajectory_prompt_catalog).expanduser()
+    if not catalog_path.is_absolute():
+        catalog_path = REPO_ROOT / catalog_path
+    return sequence, {
+        "request_source": "swebench_trajectory",
+        "protected": protected_meta,
+        "distractor_pool_size": len(task_indices),
+        "trajectory_prompt_catalog": str(catalog_path),
+        "trajectory_stages": " ".join(sorted(allowed_phases)),
+        "trajectory_distractor_tasks": len(selected_task_indices),
+        "trajectory_distractor_stage_requests": distractor_request_count,
+    }
+
+
 def build_probe_sequence(
     args: argparse.Namespace,
 ) -> tuple[list[tuple[str, str, str, str, dict[str, Any] | None]], dict[str, Any]]:
     if args.request_source == "swebench_dataset":
         return select_swebench_dataset_workload(args)
+    if args.request_source == "swebench_trajectory":
+        return select_swebench_trajectory_workload(args)
 
     protected_prompt = make_protected_prompt(
         role="protected_A",
@@ -808,6 +1085,9 @@ def request_context(
     if request_source == "swebench_dataset" and source_meta:
         task_instance_id = str(source_meta.get("instance_id") or "swebench_dataset_retention_probe")
         app_variant = "swebench_dataset_retention_probe"
+    elif request_source == "swebench_trajectory" and source_meta:
+        task_instance_id = str(source_meta.get("instance_id") or "swebench_trajectory_retention_probe")
+        app_variant = "swebench_trajectory_retention_probe"
     return {
         "request_id": f"{run_id}::{request_role}::{sequence_index}",
         "parent_run_id": run_id,
@@ -822,6 +1102,8 @@ def request_context(
         "request_source": request_source,
         "source_request_unit_id": "" if not source_meta else source_meta.get("request_unit_id", ""),
         "source_phase_group": "" if not source_meta else source_meta.get("phase_group", ""),
+        "source_task_index": "" if not source_meta else source_meta.get("task_index", ""),
+        "source_stage_index": "" if not source_meta else source_meta.get("stage_index", ""),
     }
 
 
@@ -1123,6 +1405,11 @@ def send_probe_request(
         "source_instance_id": "" if not source_meta else source_meta.get("instance_id", ""),
         "source_phase": "" if not source_meta else source_meta.get("phase", ""),
         "source_phase_group": "" if not source_meta else source_meta.get("phase_group", ""),
+        "source_task_index": "" if not source_meta else source_meta.get("task_index", ""),
+        "source_stage_index": "" if not source_meta else source_meta.get("stage_index", ""),
+        "source_phase_ordinal": "" if not source_meta else source_meta.get("phase_ordinal", ""),
+        "source_catalog_id": "" if not source_meta else source_meta.get("catalog_id", ""),
+        "source_catalog_prompt_hash": "" if not source_meta else source_meta.get("catalog_prompt_hash", ""),
         "source_prompt_chars": "" if not source_meta else int_or_empty(source_meta.get("prompt_chars")),
         "status": status,
         "error": error,
@@ -1674,6 +1961,9 @@ def build_public_summary(summary: dict[str, Any]) -> dict[str, Any]:
         "pinned_ratio": summary.get("cache_control_pinned_ratio", ""),
         "write_policy": summary.get("cache_control_write_policy", ""),
         "distractors": summary.get("distractor_count", ""),
+        "trajectory_tasks": summary.get("trajectory_distractor_tasks", ""),
+        "trajectory_stage_requests": summary.get("trajectory_distractor_stage_requests", ""),
+        "protected_stage": summary.get("protected_source_phase", ""),
         "first_status": summary.get("a_first_status", ""),
         "replay_status": summary.get("a_replay_status", ""),
         "first_ms": summary.get("a_first_latency_ms", ""),
@@ -1723,6 +2013,12 @@ def build_summary(
     first = next((row for row in rows if row["request_role"] == "a_first"), {})
     replay = next((row for row in rows if row["request_role"] == "a_replay"), {})
     first_distractor = next((row for row in rows if str(row.get("request_role", "")).startswith("distractor_")), {})
+    distractor_rows = [row for row in rows if str(row.get("request_role", "")).startswith("distractor_")]
+    distractor_task_indices = {
+        str(row.get("source_task_index", ""))
+        for row in distractor_rows
+        if str(row.get("source_task_index", "")).strip()
+    }
     first_ok = request_succeeded(first)
     replay_ok = request_succeeded(replay)
     first_latency = maybe_float(first.get("latency_ms")) if first_ok else None
@@ -1789,6 +2085,20 @@ def build_summary(
         "protected_source_instance_id": first.get("source_instance_id", ""),
         "protected_source_phase": first.get("source_phase", ""),
         "protected_source_phase_group": first.get("source_phase_group", ""),
+        "protected_source_task_index": first.get("source_task_index", ""),
+        "protected_source_stage_index": first.get("source_stage_index", ""),
+        "trajectory_prompt_catalog": (
+            display_path(Path(args.trajectory_prompt_catalog))
+            if args.request_source == "swebench_trajectory"
+            else ""
+        ),
+        "trajectory_stages": args.trajectory_stages if args.request_source == "swebench_trajectory" else "",
+        "trajectory_distractor_tasks": (
+            len(distractor_task_indices) if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_distractor_stage_requests": (
+            len(distractor_rows) if args.request_source == "swebench_trajectory" else ""
+        ),
         "a_first_status": first.get("status", ""),
         "a_replay_status": replay.get("status", ""),
         "a_first_latency_ms": round_ms(first_latency),
@@ -1873,6 +2183,12 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- protected_source_instance_id: `{summary['protected_source_instance_id']}`",
         f"- protected_source_phase: `{summary['protected_source_phase']}`",
         f"- protected_source_phase_group: `{summary['protected_source_phase_group']}`",
+        f"- protected_source_task_index: `{summary['protected_source_task_index']}`",
+        f"- protected_source_stage_index: `{summary['protected_source_stage_index']}`",
+        f"- trajectory_prompt_catalog: `{summary['trajectory_prompt_catalog']}`",
+        f"- trajectory_stages: `{summary['trajectory_stages']}`",
+        f"- trajectory_distractor_tasks: `{summary['trajectory_distractor_tasks']}`",
+        f"- trajectory_distractor_stage_requests: `{summary['trajectory_distractor_stage_requests']}`",
         "",
         "## A Prompt Replay",
         "",
@@ -1964,6 +2280,23 @@ def main() -> int:
                 f"dataset_index={protected.get('dataset_index', '')}"
             )
             print(f"swebench_dataset_distractor_pool_size={workload_meta.get('distractor_pool_size', '')}")
+        elif args.request_source == "swebench_trajectory":
+            protected = workload_meta.get("protected") or {}
+            print(
+                "swebench_trajectory_protected_stage="
+                f"{protected.get('request_unit_id', '')} "
+                f"catalog={workload_meta.get('trajectory_prompt_catalog', '')} "
+                f"repo={protected.get('repo', '')} "
+                f"instance_id={protected.get('instance_id', '')} "
+                f"task_index={protected.get('task_index', '')} "
+                f"stage={protected.get('phase', '')}"
+            )
+            print(f"swebench_trajectory_distractor_task_pool_size={workload_meta.get('distractor_pool_size', '')}")
+            print(f"swebench_trajectory_distractor_tasks={workload_meta.get('trajectory_distractor_tasks', '')}")
+            print(
+                "swebench_trajectory_distractor_stage_requests="
+                f"{workload_meta.get('trajectory_distractor_stage_requests', '')}"
+            )
         print(
             "requests="
             f"{len(sequence)} protected_hint_profile={args.protected_hint_profile} "
