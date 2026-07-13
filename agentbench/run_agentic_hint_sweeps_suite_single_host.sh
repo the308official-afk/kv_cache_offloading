@@ -218,6 +218,13 @@ SPEC_PREFILL_TURN_A_WORDS='${SPEC_PREFILL_TURN_A_WORDS:-}'
 SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
 SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
 EXP9_MODE='${EXP9_MODE:-}'
+EXP9_RETENTION_REQUEST_SOURCE='${EXP9_RETENTION_REQUEST_SOURCE:-}'
+EXP9_RETENTION_SWEBENCH_DATASET='${EXP9_RETENTION_SWEBENCH_DATASET:-}'
+EXP9_RETENTION_SWEBENCH_SPLIT='${EXP9_RETENTION_SWEBENCH_SPLIT:-}'
+EXP9_RETENTION_SWEBENCH_INDEX='${EXP9_RETENTION_SWEBENCH_INDEX:-}'
+EXP9_RETENTION_SWEBENCH_INSTANCE_ID='${EXP9_RETENTION_SWEBENCH_INSTANCE_ID:-}'
+EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX='${EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:-}'
+EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE='${EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-}'
 EXP9_RETENTION_ATTRIBUTION_MODE='${EXP9_RETENTION_ATTRIBUTION_MODE:-}'
 EXP9_RETENTION_REQUEST_CONTEXT_MODE='${EXP9_RETENTION_REQUEST_CONTEXT_MODE:-}'
 EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE='${EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE:-}'
@@ -609,6 +616,13 @@ run_experiment_9() {
   local status="passed"
   local error_message=""
   local exp9_retention_attribution_mode
+  local exp9_retention_request_source
+  local exp9_retention_swebench_dataset
+  local exp9_retention_swebench_split
+  local exp9_retention_swebench_index
+  local exp9_retention_swebench_instance_id
+  local exp9_retention_swebench_distractor_start_index
+  local exp9_retention_swebench_allow_distractor_reuse
   local exp9_retention_request_context_mode
   local exp9_retention_top_level_priority_mode
   local exp9_distractor_counts
@@ -616,6 +630,13 @@ run_experiment_9() {
   local exp9_distractor_input_len
   local exp9_protected_hint_profiles
   local exp9_stop_on_probe_failure
+  exp9_retention_request_source="$(resolve_value EXP9_RETENTION_REQUEST_SOURCE RETENTION_REQUEST_SOURCE)"
+  exp9_retention_swebench_dataset="$(resolve_value EXP9_RETENTION_SWEBENCH_DATASET RETENTION_SWEBENCH_DATASET)"
+  exp9_retention_swebench_split="$(resolve_value EXP9_RETENTION_SWEBENCH_SPLIT RETENTION_SWEBENCH_SPLIT)"
+  exp9_retention_swebench_index="$(resolve_value EXP9_RETENTION_SWEBENCH_INDEX RETENTION_SWEBENCH_INDEX)"
+  exp9_retention_swebench_instance_id="$(resolve_value EXP9_RETENTION_SWEBENCH_INSTANCE_ID RETENTION_SWEBENCH_INSTANCE_ID)"
+  exp9_retention_swebench_distractor_start_index="$(resolve_value EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX RETENTION_SWEBENCH_DISTRACTOR_START_INDEX)"
+  exp9_retention_swebench_allow_distractor_reuse="$(resolve_value EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE)"
   exp9_retention_attribution_mode="$(resolve_value EXP9_RETENTION_ATTRIBUTION_MODE RETENTION_ATTRIBUTION_MODE)"
   exp9_retention_request_context_mode="$(resolve_value EXP9_RETENTION_REQUEST_CONTEXT_MODE RETENTION_REQUEST_CONTEXT_MODE)"
   exp9_retention_top_level_priority_mode="$(resolve_value EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE RETENTION_TOP_LEVEL_PRIORITY_MODE)"
@@ -631,6 +652,13 @@ run_experiment_9() {
 --- Experiment 9 parameters ---
 wrapper=${wrapper}
 mode=${display_mode}
+request_source=${exp9_retention_request_source}
+swebench_dataset=${exp9_retention_swebench_dataset}
+swebench_split=${exp9_retention_swebench_split}
+swebench_index=${exp9_retention_swebench_index}
+swebench_instance_id=${exp9_retention_swebench_instance_id}
+swebench_distractor_start_index=${exp9_retention_swebench_distractor_start_index}
+swebench_allow_distractor_reuse=${exp9_retention_swebench_allow_distractor_reuse}
 retention_attribution_mode=${exp9_retention_attribution_mode}
 retention_request_context_mode=${exp9_retention_request_context_mode}
 retention_top_level_priority_mode=${exp9_retention_top_level_priority_mode}
@@ -662,6 +690,13 @@ EOF
     KV_RETENTION_MODE="${mode}"
   )
   [[ -n "${exp9_retention_attribution_mode}" ]] && env_args+=(RETENTION_ATTRIBUTION_MODE="${exp9_retention_attribution_mode}")
+  [[ -n "${exp9_retention_request_source}" ]] && env_args+=(RETENTION_REQUEST_SOURCE="${exp9_retention_request_source}")
+  [[ -n "${exp9_retention_swebench_dataset}" ]] && env_args+=(RETENTION_SWEBENCH_DATASET="${exp9_retention_swebench_dataset}")
+  [[ -n "${exp9_retention_swebench_split}" ]] && env_args+=(RETENTION_SWEBENCH_SPLIT="${exp9_retention_swebench_split}")
+  [[ -n "${exp9_retention_swebench_index}" ]] && env_args+=(RETENTION_SWEBENCH_INDEX="${exp9_retention_swebench_index}")
+  [[ -n "${exp9_retention_swebench_instance_id}" ]] && env_args+=(RETENTION_SWEBENCH_INSTANCE_ID="${exp9_retention_swebench_instance_id}")
+  [[ -n "${exp9_retention_swebench_distractor_start_index}" ]] && env_args+=(RETENTION_SWEBENCH_DISTRACTOR_START_INDEX="${exp9_retention_swebench_distractor_start_index}")
+  [[ -n "${exp9_retention_swebench_allow_distractor_reuse}" ]] && env_args+=(RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE="${exp9_retention_swebench_allow_distractor_reuse}")
   [[ -n "${exp9_retention_request_context_mode}" ]] && env_args+=(RETENTION_REQUEST_CONTEXT_MODE="${exp9_retention_request_context_mode}")
   [[ -n "${exp9_retention_top_level_priority_mode}" ]] && env_args+=(RETENTION_TOP_LEVEL_PRIORITY_MODE="${exp9_retention_top_level_priority_mode}")
   [[ -n "${exp9_stop_on_probe_failure}" ]] && env_args+=(STOP_ON_PROBE_FAILURE="${exp9_stop_on_probe_failure}")

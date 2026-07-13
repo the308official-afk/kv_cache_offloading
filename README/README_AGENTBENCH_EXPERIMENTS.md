@@ -648,8 +648,8 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
-It now also exports a shared real-task request layer for downstream real
-SWE-bench experiments:
+It can also export a shared real-task request layer for advanced downstream
+experiments:
 
 ```bash
 cat experiments/reports/latest_swebench_real_request_units.csv
@@ -658,8 +658,8 @@ cat experiments/reports/latest_swebench_real_task_selection.csv
 cat experiments/reports/latest_swebench_real_task_selection.md
 ```
 
-If you want those real-task artifacts as a standalone prep step for
-Experiments 9, 11, and 12, use:
+If you want those prepared request-unit artifacts as a standalone advanced prep
+step, use:
 
 ```bash
 cd ~/kv_cache_offloading
@@ -862,16 +862,9 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-=== This works on GH200 with real SWE-bench request units ===
-First prepare the shared real request units:
-
-```bash
-cd ~/kv_cache_offloading
-
-./agentbench/prepare_swebench_real_request_units.sh
-```
-
-Then run the retention sweep:
+=== This works on GH200 with real SWE-bench Pro tasks ===
+This reads the Hugging Face dataset directly. You do not need to run
+Experiment 6 first.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -879,13 +872,23 @@ cd ~/kv_cache_offloading
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 KV_RETENTION_MODE=sweep \
-RETENTION_REQUEST_SOURCE=swebench_real \
+RETENTION_REQUEST_SOURCE=swebench_dataset \
+RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
+RETENTION_SWEBENCH_SPLIT=test \
+RETENTION_SWEBENCH_INDEX=0 \
 KV_RETENTION_RESET_MODE=restart \
 DISTRACTOR_COUNTS="10 20 30" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
+
+Mental model:
+
+- one SWE-bench task becomes protected prompt A
+- other SWE-bench tasks become distractors
+- the same protected task is replayed as A again
+- the report checks whether A stayed warm after the distractors
 
 ```bash
 cd ~/kv_cache_offloading
@@ -905,6 +908,12 @@ PROTECTED_HINT_PROFILES
 CONTROL_CACHE_CONTROL_PROFILE
 PROTECTED_CACHE_CONTROL_PROFILES
 RETENTION_REQUEST_SOURCE
+RETENTION_SWEBENCH_DATASET
+RETENTION_SWEBENCH_SPLIT
+RETENTION_SWEBENCH_INDEX
+RETENTION_SWEBENCH_INSTANCE_ID
+RETENTION_SWEBENCH_DISTRACTOR_START_INDEX
+RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE
 RETENTION_REAL_REQUEST_UNITS_CSV
 RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID
 RETENTION_REAL_PROTECTED_PHASE_GROUPS
@@ -1951,6 +1960,25 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 9: KV retention
 - Experiment 11: priority scheduling
 - Experiment 12: speculative prefill
+
+Experiment 9 can use either synthetic prompts or direct SWE-bench Pro tasks.
+Set these in the Experiment 9 block:
+
+```text
+EXP9_RETENTION_REQUEST_SOURCE=synthetic
+EXP9_RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
+EXP9_RETENTION_SWEBENCH_SPLIT=test
+EXP9_RETENTION_SWEBENCH_INDEX=0
+EXP9_RETENTION_SWEBENCH_INSTANCE_ID=
+EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=-1
+EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=0
+```
+
+To run Experiment 9 directly from SWE-bench Pro, change:
+
+```text
+EXP9_RETENTION_REQUEST_SOURCE=swebench_dataset
+```
 
 The default selection is:
 

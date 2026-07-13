@@ -38,6 +38,12 @@ RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID="${RETENTION_REAL_PROTECTED_REQUEST_UNI
 RETENTION_REAL_PROTECTED_PHASE_GROUPS="${RETENTION_REAL_PROTECTED_PHASE_GROUPS:-plan act patch review}"
 RETENTION_REAL_DISTRACTOR_PHASE_GROUPS="${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS:-plan act patch review}"
 RETENTION_REAL_ALLOW_DISTRACTOR_REUSE="${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE:-0}"
+RETENTION_SWEBENCH_DATASET="${RETENTION_SWEBENCH_DATASET:-ScaleAI/SWE-bench_Pro}"
+RETENTION_SWEBENCH_SPLIT="${RETENTION_SWEBENCH_SPLIT:-test}"
+RETENTION_SWEBENCH_INDEX="${RETENTION_SWEBENCH_INDEX:-0}"
+RETENTION_SWEBENCH_INSTANCE_ID="${RETENTION_SWEBENCH_INSTANCE_ID:-}"
+RETENTION_SWEBENCH_DISTRACTOR_START_INDEX="${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX:--1}"
+RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE="${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE:-0}"
 CACHE_CONTROL_EPHEMERAL_TTL="${CACHE_CONTROL_EPHEMERAL_TTL:-1h}"
 CACHE_CONTROL_DOC_MODE="${CACHE_CONTROL_DOC_MODE:-1}"
 CACHE_CONTROL_STRICT_DOC_MODE="${CACHE_CONTROL_STRICT_DOC_MODE:-0}"
@@ -670,6 +676,11 @@ run_probe() {
     --model "${model}"
     --run-id "${run_id}"
     --request-source "${RETENTION_REQUEST_SOURCE}"
+    --swebench-dataset "${RETENTION_SWEBENCH_DATASET}"
+    --swebench-split "${RETENTION_SWEBENCH_SPLIT}"
+    --swebench-index "${RETENTION_SWEBENCH_INDEX}"
+    --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
+    --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
     --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
     --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
     --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
@@ -706,6 +717,9 @@ run_probe() {
   if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--real-allow-distractor-reuse)
   fi
+  if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--swebench-allow-distractor-reuse)
+  fi
 
   echo "Running retention probe: model=${model} kv_tier=${kv_tier_mode} hint_profile=${hint_profile} cache_control_profile=${cache_control_profile} arm_role=${arm_role} run_id=${run_id}" | tee -a "${BATCH_LOG}"
   if "${command[@]}" 2>&1 | tee -a "${BATCH_LOG}"; then
@@ -737,6 +751,11 @@ postprocess_probe() {
     --model "${model}"
     --run-id "${run_id}"
     --request-source "${RETENTION_REQUEST_SOURCE}"
+    --swebench-dataset "${RETENTION_SWEBENCH_DATASET}"
+    --swebench-split "${RETENTION_SWEBENCH_SPLIT}"
+    --swebench-index "${RETENTION_SWEBENCH_INDEX}"
+    --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
+    --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
     --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
     --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
     --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
@@ -773,6 +792,9 @@ postprocess_probe() {
   fi
   if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--real-allow-distractor-reuse)
+  fi
+  if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
+    command+=(--swebench-allow-distractor-reuse)
   fi
 
   echo "Postprocessing retention probe with worker runtime log: ${worker_runtime_log}" | tee -a "${BATCH_LOG}"
@@ -1241,6 +1263,12 @@ reset_latest_probe_reports
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor cache-control profile: ${DISTRACTOR_CACHE_CONTROL_PROFILE}"
   echo "Request source: ${RETENTION_REQUEST_SOURCE}"
+  echo "SWE-bench dataset: ${RETENTION_SWEBENCH_DATASET}"
+  echo "SWE-bench split: ${RETENTION_SWEBENCH_SPLIT}"
+  echo "SWE-bench protected index: ${RETENTION_SWEBENCH_INDEX}"
+  echo "SWE-bench protected instance_id: ${RETENTION_SWEBENCH_INSTANCE_ID:-auto}"
+  echo "SWE-bench distractor start index: ${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
+  echo "SWE-bench distractor reuse allowed: ${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}"
   echo "Real request units CSV: ${RETENTION_REAL_REQUEST_UNITS_CSV}"
   echo "Real protected request_unit_id: ${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID:-auto}"
   echo "Real protected phase groups: ${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"

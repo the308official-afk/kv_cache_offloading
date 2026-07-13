@@ -10,6 +10,7 @@ import json
 import os
 import random
 import re
+import importlib
 import sys
 import time
 import urllib.error
@@ -20,6 +21,8 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 DEFAULT_OUT_ROOT = REPO_ROOT / "experiments" / "reports" / "retention_probe"
 DEFAULT_MATRIX = REPO_ROOT / "experiments" / "reports" / "design_space_retention_matrix.csv"
 DEFAULT_CACHE_EVENT_LOG = (
@@ -299,13 +302,56 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--request-source",
         default=os.environ.get("RETENTION_REQUEST_SOURCE", "synthetic"),
-        choices=("synthetic", "swebench_real"),
-        help="Use the synthetic prompt generator or load prompts from real SWE-bench request units.",
+        choices=("synthetic", "swebench_dataset", "swebench_real"),
+        help=(
+            "Use the synthetic prompt generator, load SWE-bench rows directly, "
+            "or load prompts from prepared real request units."
+        ),
+    )
+    parser.add_argument(
+        "--swebench-dataset",
+        default=os.environ.get("RETENTION_SWEBENCH_DATASET", "ScaleAI/SWE-bench_Pro"),
+        help="Hugging Face dataset name for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-split",
+        default=os.environ.get("RETENTION_SWEBENCH_SPLIT", "test"),
+        help="Dataset split for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-index",
+        type=int,
+        default=int(os.environ.get("RETENTION_SWEBENCH_INDEX", "0")),
+        help="Protected task index for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-instance-id",
+        default=os.environ.get("RETENTION_SWEBENCH_INSTANCE_ID", ""),
+        help="Optional protected SWE-bench instance_id. Takes priority over --swebench-index.",
+    )
+    parser.add_argument(
+        "--swebench-distractor-start-index",
+        type=int,
+        default=int(os.environ.get("RETENTION_SWEBENCH_DISTRACTOR_START_INDEX", "-1")),
+        help=(
+            "First dataset index to use for distractors. "
+            "Default -1 means pick rows after the protected index."
+        ),
+    )
+    parser.add_argument(
+        "--swebench-allow-distractor-reuse",
+        action="store_true",
+        default=os.environ.get("RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE", "0").strip().lower()
+        in {"1", "true", "yes"},
+        help="Allow cycling SWE-bench distractor rows if the split is smaller than distractor_count.",
     )
     parser.add_argument(
         "--real-request-units-csv",
         default=os.environ.get("RETENTION_REAL_REQUEST_UNITS_CSV", str(DEFAULT_REAL_REQUEST_UNITS_CSV)),
-        help="CSV of real SWE-bench request units generated from Experiment 6 outputs.",
+        help=(
+            "Optional CSV of prepared SWE-bench request units for swebench_real mode. "
+            "The simpler swebench_dataset mode reads the dataset directly."
+        ),
     )
     parser.add_argument(
         "--real-protected-request-unit-id",
@@ -452,6 +498,151 @@ def real_candidate_sort_key(unit: dict[str, Any]) -> tuple[Any, ...]:
         str(unit.get("phase_group", "")),
         str(unit.get("request_unit_id", "")),
     )
+
+
+def format_swebench_dataset_prompt(task: dict[str, Any]) -> str:
+    try:
+        prompts_module = importlib.import_module("agentbench.deepagents_app.src.prompts")
+    except Exception as exc:  # noqa: BLE001 - keep the missing dependency message actionable.
+        raise SystemExit(f"Could not import SWE-bench prompt formatter: {exc}") from exc
+    return str(prompts_module.format_swebench_task_prompt(task))
+
+
+def load_swebench_dataset_split(args: argparse.Namespace) -> Any:
+    try:
+        datasets_module = importlib.import_module("datasets")
+    except Exception as exc:  # noqa: BLE001 - show the exact install fix.
+        raise SystemExit(
+            "RETENTION_REQUEST_SOURCE=swebench_dataset requires the datasets package. "
+            "Install it with: python3 -m pip install -r agentbench/requirements.txt"
+        ) from exc
+    return datasets_module.load_dataset(args.swebench_dataset, split=args.swebench_split)
+
+
+def dataset_row_to_task(row: Any) -> dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    try:
+        return dict(row)
+    except Exception as exc:  # noqa: BLE001 - report malformed dataset rows clearly.
+        raise SystemExit(f"Could not convert SWE-bench dataset row to dict: {exc}") from exc
+
+
+def find_swebench_protected_index(dataset: Any, args: argparse.Namespace) -> int:
+    if args.swebench_instance_id:
+        for idx, row in enumerate(dataset):
+            task = dataset_row_to_task(row)
+            if str(task.get("instance_id", "")) == args.swebench_instance_id:
+                return idx
+        raise SystemExit(f"instance_id not found in SWE-bench dataset: {args.swebench_instance_id}")
+    if args.swebench_index < 0 or args.swebench_index >= len(dataset):
+        raise SystemExit(
+            f"RETENTION_SWEBENCH_INDEX out of range: {args.swebench_index}; split has {len(dataset)} rows"
+        )
+    return args.swebench_index
+
+
+def swebench_task_meta(task: dict[str, Any], *, dataset_index: int, role: str) -> dict[str, Any]:
+    repo = str(task.get("repo", ""))
+    instance_id = str(task.get("instance_id", f"swebench_index_{dataset_index}"))
+    return {
+        "request_unit_id": f"swebench_dataset__{dataset_index}__{instance_id}",
+        "repo": repo,
+        "instance_id": instance_id,
+        "phase": "dataset_task",
+        "phase_group": "task",
+        "prompt_chars": "",
+        "dataset_index": dataset_index,
+        "dataset_role": role,
+    }
+
+
+def select_swebench_dataset_workload(
+    args: argparse.Namespace,
+) -> tuple[list[tuple[str, str, str, str, dict[str, Any]]], dict[str, Any]]:
+    dataset = load_swebench_dataset_split(args)
+    protected_index = find_swebench_protected_index(dataset, args)
+    protected_task = dataset_row_to_task(dataset[protected_index])
+    protected_prompt = format_swebench_dataset_prompt(protected_task)
+    protected_meta = swebench_task_meta(protected_task, dataset_index=protected_index, role="protected")
+    protected_meta["prompt_chars"] = len(protected_prompt)
+
+    split_len = len(dataset)
+    if split_len <= 1 and args.distractor_count > 0:
+        raise SystemExit("SWE-bench split needs at least two rows to provide distractors.")
+
+    start_index = args.swebench_distractor_start_index
+    if start_index < 0:
+        start_index = protected_index + 1
+    if split_len > 0:
+        start_index %= split_len
+
+    selected: list[tuple[int, dict[str, Any], str, dict[str, Any]]] = []
+    cursor = start_index
+    seen_indices: set[int] = set()
+    attempts = 0
+    max_attempts = max(split_len * 2, args.distractor_count + 1)
+    while len(selected) < args.distractor_count:
+        if attempts > max_attempts and not args.swebench_allow_distractor_reuse:
+            break
+        if attempts > max_attempts * max(args.distractor_count, 1) + split_len:
+            break
+        idx = cursor % split_len
+        cursor += 1
+        attempts += 1
+        if idx == protected_index:
+            continue
+        if idx in seen_indices and not args.swebench_allow_distractor_reuse:
+            continue
+        task = dataset_row_to_task(dataset[idx])
+        prompt = format_swebench_dataset_prompt(task)
+        meta = swebench_task_meta(task, dataset_index=idx, role="distractor")
+        meta["prompt_chars"] = len(prompt)
+        selected.append((idx, task, prompt, meta))
+        seen_indices.add(idx)
+
+    if len(selected) < args.distractor_count:
+        raise SystemExit(
+            "Not enough SWE-bench dataset rows for this distractor_count without reuse. "
+            f"need={args.distractor_count} available={len(selected)}. "
+            "Use a smaller DISTRACTOR_COUNT or set RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=1."
+        )
+
+    sequence: list[tuple[str, str, str, str, dict[str, Any]]] = [
+        (
+            "a_first",
+            protected_prompt,
+            args.protected_hint_profile,
+            args.protected_cache_control_profile,
+            protected_meta,
+        )
+    ]
+    for seq_idx, (_dataset_idx, _task, prompt, meta) in enumerate(selected):
+        sequence.append(
+            (
+                f"distractor_{seq_idx:04d}",
+                prompt,
+                args.distractor_hint_profile,
+                args.distractor_cache_control_profile,
+                meta,
+            )
+        )
+    sequence.append(
+        (
+            "a_replay",
+            protected_prompt,
+            args.protected_hint_profile,
+            args.protected_cache_control_profile,
+            protected_meta,
+        )
+    )
+    return sequence, {
+        "request_source": "swebench_dataset",
+        "protected": protected_meta,
+        "distractor_pool_size": split_len - 1,
+        "dataset": args.swebench_dataset,
+        "split": args.swebench_split,
+    }
 
 
 def load_real_request_units(args: argparse.Namespace) -> list[dict[str, Any]]:
@@ -603,6 +794,8 @@ def select_real_retention_workload(
 def build_probe_sequence(
     args: argparse.Namespace,
 ) -> tuple[list[tuple[str, str, str, str, dict[str, Any] | None]], dict[str, Any]]:
+    if args.request_source == "swebench_dataset":
+        return select_swebench_dataset_workload(args)
     if args.request_source == "swebench_real":
         return select_real_retention_workload(args)
 
@@ -817,7 +1010,10 @@ def request_context(
 ) -> dict[str, Any]:
     task_instance_id = "synthetic_kv_retention_probe"
     app_variant = "synthetic_retention_probe"
-    if request_source == "swebench_real" and source_meta:
+    if request_source == "swebench_dataset" and source_meta:
+        task_instance_id = str(source_meta.get("instance_id") or "swebench_dataset_retention_probe")
+        app_variant = "swebench_dataset_retention_probe"
+    elif request_source == "swebench_real" and source_meta:
         task_instance_id = str(source_meta.get("instance_id") or "swebench_real_retention_probe")
         app_variant = "swebench_real_retention_probe"
     return {
@@ -1972,7 +2168,19 @@ def main() -> int:
         print(f"prompt_generator_version={PROMPT_GENERATOR_VERSION}")
         print(f"prompt_isolation_mode={args.prompt_isolation_mode}")
         print(f"request_source={args.request_source}")
-        if args.request_source == "swebench_real":
+        if args.request_source == "swebench_dataset":
+            protected = workload_meta.get("protected") or {}
+            print(
+                "swebench_dataset_protected_task="
+                f"{protected.get('request_unit_id', '')} "
+                f"dataset={workload_meta.get('dataset', '')} "
+                f"split={workload_meta.get('split', '')} "
+                f"repo={protected.get('repo', '')} "
+                f"instance_id={protected.get('instance_id', '')} "
+                f"dataset_index={protected.get('dataset_index', '')}"
+            )
+            print(f"swebench_dataset_distractor_pool_size={workload_meta.get('distractor_pool_size', '')}")
+        elif args.request_source == "swebench_real":
             protected = workload_meta.get("protected") or {}
             print(
                 "real_protected_unit="
