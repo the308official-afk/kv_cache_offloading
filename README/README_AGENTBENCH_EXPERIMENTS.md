@@ -1807,7 +1807,7 @@ Across the sweep:
 
 ### Run
 
-=== This works on GH200 ===
+=== This works on GH200? ===
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1826,7 +1826,7 @@ PRIORITY_INTER_REQUEST_GAP_MS=20 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-=== This works on GH200 with real SWE-bench Pro tasks ===
+=== This works on GH200 with real SWE-bench Pro tasks? ===
 ```bash
 cd ~/kv_cache_offloading
 
