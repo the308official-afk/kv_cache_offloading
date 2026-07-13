@@ -16,6 +16,7 @@ MATRIX_COLUMNS = [
     "run_id",
     "model",
     "request_source",
+    "hint_kind",
     "gap_ms",
     "low_requests",
     "high_requests",
@@ -23,8 +24,8 @@ MATRIX_COLUMNS = [
     "high_jump_ahead_count",
     "high_jump_ahead_rate",
     "high_completed_ahead_count",
-    "priority_hint_seen",
-    "priority_path_status",
+    "hint_seen",
+    "hint_path_status",
     "result",
 ]
 
@@ -47,6 +48,7 @@ SUMMARY_COLUMNS = [
     "output_tokens",
     "arrival_gap_ms",
     "inter_gap_ms",
+    "hint_kind",
     "top_prio_compat",
     "worker_hint_status",
     "worker_top_prio_status",
@@ -72,6 +74,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dir", required=True)
     parser.add_argument("--contract-sh", required=True)
     parser.add_argument("--contract-md", default="")
+    parser.add_argument("--title", default="Priority Scheduling Microbenchmark")
     parser.add_argument("--probe-run-id", default="")
     parser.add_argument("--sweep-run-ids", default="")
     parser.add_argument("--sweep-axis", default="")
@@ -124,6 +127,10 @@ def priority_hint_seen_status(value: str) -> str:
     return value
 
 
+def result_prefix(hint_kind: str) -> str:
+    return "latency_sensitivity" if hint_kind == "latency_sensitivity" else "priority"
+
+
 def load_contract_env(contract_path: Path) -> dict[str, str]:
     shell = f"""
 set -a
@@ -143,8 +150,12 @@ env
         "PRIORITY_SWEBENCH_",
         "PRIORITY_REQUEST_CONTEXT_MODE",
         "PRIORITY_TOP_LEVEL_PRIORITY_MODE",
+        "PRIORITY_HINT_KIND",
+        "LATENCY_SENSITIVITY_",
         "LOW_PRIORITY_",
         "HIGH_PRIORITY_",
+        "LOW_LATENCY_SENSITIVITY_",
+        "HIGH_LATENCY_SENSITIVITY_",
         "WORKER_BASE_ARGS",
         "MODEL_READY_",
         "MODEL_SMOKE_",
@@ -201,6 +212,7 @@ def normalize_summary(benchmark_id: str, summary_row: dict[str, str]) -> dict[st
         "output_tokens": pick(summary_row, "output_len_tokens", "output_tokens"),
         "arrival_gap_ms": pick(summary_row, "arrival_gap_ms"),
         "inter_gap_ms": pick(summary_row, "inter_request_gap_ms"),
+        "hint_kind": pick(summary_row, "hint_kind") or "priority",
         "top_prio_compat": pick(summary_row, "frontend_top_level_priority_compatibility", "top_prio_compat"),
         "worker_hint_status": pick(summary_row, "worker_high_hint_received_status", "worker_hint_status"),
         "worker_top_prio_status": pick(summary_row, "worker_high_top_level_priority_status", "worker_top_prio_status"),
@@ -225,18 +237,21 @@ def normalize_sweep_row(
     summary_row: dict[str, str],
 ) -> dict[str, Any]:
     summary = normalize_summary("", summary_row)
+    hint_kind = str(summary.get("hint_kind") or "priority")
     low_requests = to_int(summary["low_n"])
     high_requests = to_int(summary["high_n"])
     max_jump_ahead = low_requests * high_requests
     jump_count = to_int(summary["high_attach_leapfrogs"])
     completed_count = to_int(summary["high_complete_leapfrogs"])
-    result = "priority_reordered" if jump_count > 0 else "no_visible_reorder"
+    prefix = result_prefix(hint_kind)
+    result = f"{prefix}_reordered" if jump_count > 0 else "no_visible_reorder"
     if priority_hint_seen_status(str(summary["worker_hint_status"])) == "no":
-        result = "priority_hint_not_seen"
+        result = f"{prefix}_hint_not_seen"
     return {
         "run_id": run_id,
         "model": model,
         "request_source": summary["request_source"] or "synthetic",
+        "hint_kind": hint_kind,
         "gap_ms": sweep_value or summary["arrival_gap_ms"],
         "low_requests": low_requests,
         "high_requests": high_requests,
@@ -244,15 +259,15 @@ def normalize_sweep_row(
         "high_jump_ahead_count": jump_count,
         "high_jump_ahead_rate": percent_text(jump_count, max_jump_ahead),
         "high_completed_ahead_count": completed_count,
-        "priority_hint_seen": priority_hint_seen_status(str(summary["worker_hint_status"])),
-        "priority_path_status": summary["sglang_prio_status"],
+        "hint_seen": priority_hint_seen_status(str(summary["worker_hint_status"])),
+        "hint_path_status": summary["sglang_prio_status"],
         "result": result,
     }
 
 
-def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
+def write_summary_md(path: Path, summary: dict[str, Any], title: str) -> None:
     lines = [
-        "# Priority Scheduling Microbenchmark",
+        f"# {title}",
         "",
         f"- run_id: `{summary['run_id']}`",
         f"- model: `{summary['model']}`",
@@ -266,6 +281,7 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- sweep_run_count: `{summary['sweep_run_count']}`",
         f"- low_n: `{summary['low_n']}`",
         f"- high_n: `{summary['high_n']}`",
+        f"- hint_kind: `{summary['hint_kind']}`",
         f"- top_prio_compat: `{summary['top_prio_compat']}`",
         f"- worker_hint_status: `{summary['worker_hint_status']}`",
         f"- worker_top_prio_status: `{summary['worker_top_prio_status']}`",
@@ -336,7 +352,7 @@ def main() -> None:
 
     write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)
     write_csv(out_dir / "microbenchmark_summary.csv", [summary_row], SUMMARY_COLUMNS)
-    write_summary_md(out_dir / "microbenchmark_summary.md", summary_row)
+    write_summary_md(out_dir / "microbenchmark_summary.md", summary_row, args.title)
     with (out_dir / "run_contract.json").open("w", encoding="utf-8") as fh:
         json.dump(run_contract, fh, indent=2, sort_keys=True)
         fh.write("\n")

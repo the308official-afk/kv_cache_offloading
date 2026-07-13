@@ -125,6 +125,7 @@ Recommended matrix columns
 - `run_id`
 - `model`
 - `request_source`
+- `hint_kind`
 - `gap_ms`
 - `low_requests`
 - `high_requests`
@@ -132,8 +133,8 @@ Recommended matrix columns
 - `high_jump_ahead_count`
 - `high_jump_ahead_rate`
 - `high_completed_ahead_count`
-- `priority_hint_seen`
-- `priority_path_status`
+- `hint_seen`
+- `hint_path_status`
 - `result`
 
 Decision-proof code paths
@@ -153,7 +154,8 @@ Success criteria
 
 Strong scheduling evidence means:
 
-- `priority_hint_seen=yes`
+- `hint_kind=priority`
+- `hint_seen=yes`
 - `high_jump_ahead_count > 0`
 - `high_jump_ahead_rate > 0%`
 - `result=priority_reordered`

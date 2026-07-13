@@ -15,6 +15,7 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **KV retention/eviction probe**: use [Experiment 9](#experiment-9-kv-retention-probe).
 - **Cache-control retention**: use [Experiment 10](#experiment-10-cache-pinning-microbenchmark).
 - **Priority scheduling**: use [Experiment 11](#experiment-11-priority-scheduling-probe).
+- **Latency sensitivity**: use [Experiment 13](#experiment-13-latency-sensitivity-probe).
 - **Speculative prefill**: use [Experiment 12](#experiment-12-speculative-prefill-probe).
 - **Run the GH200 trio sequentially**: use [Experiment Suite: Agentic Hint Sweeps](#experiment-suite-agentic-hint-sweeps).
 
@@ -32,7 +33,7 @@ controls in this setup.
 | `osl` | supported | Expected output length. Used for routing/resource estimation. |
 | `expected_output_tokens` | supported alias | Same role as `osl`; Dynamo maps either one into routing. |
 | `speculative_prefill` | supported | Warms likely next-turn KV cache after the current response finishes. |
-| `latency_sensitivity` | deprecated fallback | Older priority-like fallback that feeds routing `priority_jump`. |
+| `latency_sensitivity` | experimental/deprecated fallback | Older priority-like fallback. Use [Experiment 13](#experiment-13-latency-sensitivity-probe) to test whether it is seen and causes visible queue movement. |
 
 Nearby supported control:
 
@@ -1534,8 +1535,8 @@ Across the sweep:
 
 Columns to check first:
 
-- hint proof: `priority_hint_seen`
-- path proof: `priority_path_status`
+- hint proof: `hint_seen`
+- path proof: `hint_path_status`
 - ordering proof: `high_jump_ahead_count`, `high_jump_ahead_rate`
 - summary verdict: `result`
 
@@ -1653,8 +1654,9 @@ Main matrix columns:
 - `max_jump_ahead`: maximum possible high-over-low reorder events
 - `high_jump_ahead_count`: how many times high-priority requests attached before earlier low-priority requests
 - `high_jump_ahead_rate`: `high_jump_ahead_count / max_jump_ahead`
-- `priority_hint_seen`: whether the worker saw the priority hint
-- `priority_path_status`: worker/SGLang priority-path evidence
+- `hint_kind`: which hint field was sent
+- `hint_seen`: whether the worker saw the hint
+- `hint_path_status`: worker/SGLang hint-path evidence
 - `result`: simple verdict, such as `priority_reordered` or `no_visible_reorder`
 
 ### Debug
@@ -1722,7 +1724,8 @@ priority was attached, read, applied, and observed.
 
 Strongest proof in this setup:
 
-- `priority_hint_seen=yes`
+- `hint_kind=priority`
+- `hint_seen=yes`
 - `high_jump_ahead_count > 0`
 - `high_jump_ahead_rate > 0%`
 - `result=priority_reordered`
@@ -1743,8 +1746,9 @@ The public microbenchmark matrix now uses compact fields such as:
 - `high_jump_ahead_count`
 - `high_jump_ahead_rate`
 - `high_completed_ahead_count`
-- `priority_hint_seen`
-- `priority_path_status`
+- `hint_kind`
+- `hint_seen`
+- `hint_path_status`
 - `result`
 
 ### Main Knobs
@@ -1760,6 +1764,145 @@ PRIORITY_SCHEDULING_SWEEP_AXIS
 PRIORITY_SCHEDULING_SWEEP_VALUES
 PRIORITY_TOP_LEVEL_PRIORITY_MODE
 ```
+
+## Experiment 13: Latency Sensitivity Probe
+
+This is the public latency-sensitivity microbenchmark entrypoint.
+
+It reuses the Experiment 11 queue-burst harness, but sends
+`nvext.agent_hints.latency_sensitivity` instead of `nvext.agent_hints.priority`.
+
+Contract files:
+
+- [`contracts/latency_sensitivity_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.sh)
+- [`contracts/latency_sensitivity_microbenchmark.contract.md`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.md)
+
+Public wrapper:
+
+- [`agentbench/run_latency_sensitivity_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_latency_sensitivity_microbenchmark_single_host.sh)
+
+### What This Test Really Does
+
+This experiment sends a mixed burst of low-latency-sensitivity and
+high-latency-sensitivity requests into the same runtime.
+
+The question is:
+
+- does `latency_sensitivity` get received by the worker?
+- do high-sensitivity requests attach ahead of earlier low-sensitivity requests?
+
+### What `sweep` Means Here
+
+One sweep cell means:
+
+- run one mixed burst
+- send low requests with `latency_sensitivity=0.2`
+- send high requests with `latency_sensitivity=1.0`
+- measure whether high-sensitivity requests jump ahead
+
+Across the sweep:
+
+- one scheduling knob changes between runs
+- the default sweep knob is `PRIORITY_ARRIVAL_GAP_MS`
+
+### Run
+
+=== This works on GH200 ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+LATENCY_SENSITIVITY_MODE=all \
+EXPERIMENT_RESET_MODE=flush \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_INPUT_LEN=4000 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+./agentbench/run_latency_sensitivity_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+=== This works on GH200 with real SWE-bench Pro tasks ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+LATENCY_SENSITIVITY_MODE=all \
+PRIORITY_REQUEST_SOURCE=swebench_dataset \
+PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
+PRIORITY_SWEBENCH_SPLIT=test \
+PRIORITY_SWEBENCH_START_INDEX=0 \
+EXPERIMENT_RESET_MODE=restart \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+./agentbench/run_latency_sensitivity_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+### Top-Level Outputs
+
+```bash
+cat experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv
+cat experiments/reports/latest_latency_sensitivity_microbenchmark_summary.md
+cat experiments/reports/latest_latency_sensitivity_microbenchmark_run_contract.json
+
+ls experiments/charts/exp13_latencysens_*
+```
+
+Main outputs:
+
+- `latest_latency_sensitivity_microbenchmark_matrix.csv`: one compact row per sweep point
+- `latest_latency_sensitivity_microbenchmark_summary.md`: readable summary
+- `latest_latency_sensitivity_microbenchmark_run_contract.json`: exact resolved settings
+- `latest_latency_sensitivity_microbenchmark_jump_ahead.svg`: line chart of jump-ahead rate versus arrival gap
+- `experiments/charts/exp13_latencysens_jump_ahead_vs_arrival_gap.svg`: same chart in the shared chart folder
+
+Main matrix columns:
+
+- `hint_kind`: should be `latency_sensitivity`
+- `hint_seen`: whether the worker saw the latency-sensitivity hint
+- `hint_path_status`: worker/SGLang hint-path evidence
+- `high_jump_ahead_count`: how many times high-sensitivity requests attached before earlier low-sensitivity requests
+- `high_jump_ahead_rate`: `high_jump_ahead_count / max_jump_ahead`
+- `result`: simple verdict, such as `latency_sensitivity_reordered` or `no_visible_reorder`
+
+Strongest proof in this setup:
+
+- `hint_kind=latency_sensitivity`
+- `hint_seen=yes`
+- `high_jump_ahead_count > 0`
+- `high_jump_ahead_rate > 0%`
+- `result=latency_sensitivity_reordered`
+
+### Decision Proof
+
+- [`contracts/latency_sensitivity_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.sh)
+  Contract. Sets `PRIORITY_HINT_KIND=latency_sensitivity`, disables top-level
+  priority by default, and redirects outputs to `latest_latency_sensitivity_*`.
+
+- [`agentbench/run_latency_sensitivity_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_latency_sensitivity_microbenchmark_single_host.sh)
+  Public wrapper. Loads the latency-sensitivity contract and delegates to the
+  proven priority-scheduling harness.
+
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py) `build_hint_payload(...)`
+  Script layer. Builds either `agent_hints.priority` or
+  `agent_hints.latency_sensitivity` based on `PRIORITY_HINT_KIND`.
+
+- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py) `runtime_agent_hints(...)`
+  Report layer. Reads worker-side `agent_hints` from runtime JSON logs.
+
+- [`experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py)
+  Report builder. Emits the compact `hint_kind`, `hint_seen`,
+  `hint_path_status`, and jump-ahead columns.
 
 ## Experiment 12: Speculative Prefill Probe
 

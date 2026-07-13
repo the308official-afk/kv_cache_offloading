@@ -13,6 +13,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix-csv", required=True)
     parser.add_argument("--out-dir", required=True)
+    parser.add_argument("--title", default="Priority Scheduling Microbenchmark")
     return parser.parse_args()
 
 
@@ -249,7 +250,7 @@ def build_jump_ahead_chart_svg(
     legend_y = height - 34
     parts.append(f'<line x1="{legend_x}" y1="{legend_y - 3}" x2="{legend_x + 32}" y2="{legend_y - 3}" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>')
     parts.append(f'<circle cx="{legend_x + 16}" cy="{legend_y - 3}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>')
-    parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 2}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High-priority jump-ahead rate</text>')
+    parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 2}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High-urgency jump-ahead rate</text>')
 
     parts.append(f'<text x="28" y="{top + plot_height / 2:.2f}" transform="rotate(-90 28 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Jump-Ahead Rate</text>')
     parts.append(f'<text x="{left + plot_width / 2:.2f}" y="{height - 40}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Arrival Gap (ms)</text>')
@@ -277,8 +278,8 @@ def main() -> None:
         write_svg(
             out_dir / "jump_ahead.svg",
             build_jump_ahead_chart_svg(
-                title="Priority Scheduling: High-Priority Jump-Ahead Rate",
-                subtitle="Higher points mean high-priority requests were attached before more earlier-arriving low-priority requests.",
+                title=f"{args.title}: High-Urgency Jump-Ahead Rate",
+                subtitle="Higher points mean high-urgency requests were attached before more earlier-arriving low-priority requests.",
                 labels=labels,
                 rates=rates,
                 counts=counts,
@@ -295,8 +296,8 @@ def main() -> None:
         write_svg(
             out_dir / "jump_ahead.svg",
             build_line_chart_svg(
-                title="Priority Scheduling: High-Priority Jump-Ahead Events",
-                subtitle="Higher points mean high-priority requests attached before more earlier-arriving low-priority requests.",
+                title=f"{args.title}: High-Urgency Jump-Ahead Events",
+                subtitle="Higher points mean high-urgency requests attached before more earlier-arriving low-priority requests.",
                 labels=labels,
                 series=[("Jump-ahead events", "#2563eb", attach_values)],
                 y_label="Jump-Ahead Events",

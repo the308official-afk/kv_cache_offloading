@@ -63,6 +63,7 @@ REQUEST_COLUMNS = [
     "run_id",
     "request_id",
     "request_role",
+    "hint_kind",
     "priority_class",
     "hint_profile",
     "request_source",
@@ -77,7 +78,9 @@ REQUEST_COLUMNS = [
     "worker_queue_wait_ms",
     "client_latency_ms",
     "agent_hints_priority",
+    "agent_hints_latency_sensitivity",
     "worker_agent_hints_priority",
+    "worker_agent_hints_latency_sensitivity",
     "top_level_priority_sent",
     "worker_top_level_priority",
     "sglang_priority_hint_seen",
@@ -121,7 +124,9 @@ READABLE_REQUEST_COLUMNS = [
     "beat_low_complete",
     "queue_ms",
     "latency_ms",
+    "hint_kind",
     "worker_hint_prio",
+    "worker_latency_sensitivity",
     "sent_top_prio",
     "worker_top_prio",
     "sglang_prio",
@@ -139,7 +144,9 @@ PROOF_REQUEST_COLUMNS = [
     "beat_low_complete",
     "queue_ms",
     "latency_ms",
+    "hint_kind",
     "worker_hint_prio",
+    "worker_latency_sensitivity",
     "sent_top_prio",
     "worker_top_prio",
     "sglang_prio",
@@ -161,6 +168,7 @@ SUMMARY_COLUMNS = [
     "output_tokens",
     "arrival_gap_ms",
     "inter_gap_ms",
+    "hint_kind",
     "top_prio_compat",
     "worker_hint_status",
     "worker_top_prio_status",
@@ -218,6 +226,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--high-priority-count", type=int, default=int(os.environ.get("HIGH_PRIORITY_COUNT", "4")))
     parser.add_argument("--low-priority-value", type=int, default=int(os.environ.get("LOW_PRIORITY_VALUE", "1")))
     parser.add_argument("--high-priority-value", type=int, default=int(os.environ.get("HIGH_PRIORITY_VALUE", "10")))
+    parser.add_argument(
+        "--hint-kind",
+        default=os.environ.get("PRIORITY_HINT_KIND", "priority"),
+        choices=("priority", "latency_sensitivity"),
+        help="Which nvext.agent_hints field marks the high-urgency requests.",
+    )
+    parser.add_argument(
+        "--low-latency-sensitivity-value",
+        type=float,
+        default=float(os.environ.get("LOW_LATENCY_SENSITIVITY_VALUE", "0.2")),
+    )
+    parser.add_argument(
+        "--high-latency-sensitivity-value",
+        type=float,
+        default=float(os.environ.get("HIGH_LATENCY_SENSITIVITY_VALUE", "1.0")),
+    )
     parser.add_argument("--input-len-words", type=int, default=int(os.environ.get("PRIORITY_INPUT_LEN", "4000")))
     parser.add_argument("--output-len-tokens", type=int, default=int(os.environ.get("PRIORITY_OUTPUT_LEN", "128")))
     parser.add_argument("--arrival-gap-ms", type=int, default=int(os.environ.get("PRIORITY_ARRIVAL_GAP_MS", "200")))
@@ -453,6 +477,7 @@ def parse_sglang_event_line(line: str) -> dict[str, Any] | None:
 
 def build_hint_payload(
     *,
+    args: argparse.Namespace,
     run_id: str,
     request_role: str,
     priority_class: str,
@@ -461,7 +486,14 @@ def build_hint_payload(
     output_len_tokens: int,
 ) -> dict[str, Any]:
     payload = dict(DEFAULT_HINTS)
-    payload["priority"] = priority_value
+    if args.hint_kind == "latency_sensitivity":
+        payload["latency_sensitivity"] = (
+            args.high_latency_sensitivity_value
+            if priority_class == "high-priority"
+            else args.low_latency_sensitivity_value
+        )
+    else:
+        payload["priority"] = priority_value
     return payload
 
 
@@ -819,6 +851,7 @@ def send_one_request(
 
     prompt_hash = short_hash(spec.prompt)
     hints = build_hint_payload(
+        args=args,
         run_id=run_id,
         request_role=spec.request_role,
         priority_class=spec.priority_class,
@@ -854,6 +887,7 @@ def send_one_request(
         payload["ignore_eos"] = True
 
     priority = top_level_priority_from_hints(hints)
+    latency_sensitivity = maybe_float(hints.get("latency_sensitivity"))
     should_attempt_top_level_priority = (
         priority is not None and args.top_level_priority_mode != "disable"
     )
@@ -911,6 +945,7 @@ def send_one_request(
         "run_id": run_id,
         "request_id": context["request_id"],
         "request_role": spec.request_role,
+        "hint_kind": args.hint_kind,
         "priority_class": spec.priority_class,
         "hint_profile": spec.hint_profile,
         "request_source": spec.request_source,
@@ -928,6 +963,9 @@ def send_one_request(
         "output_len_tokens": args.output_len_tokens,
         "prompt_hash": prompt_hash,
         "agent_hints_priority": priority if priority is not None else "",
+        "agent_hints_latency_sensitivity": (
+            latency_sensitivity if latency_sensitivity is not None else ""
+        ),
         "top_level_priority_mode": args.top_level_priority_mode,
         "top_level_priority_attempted": should_attempt_top_level_priority,
         "top_level_priority_sent": include_top_level_priority and request_succeeded(status),
@@ -944,6 +982,7 @@ def send_one_request(
         "worker_prompt_tokens": prompt_tokens if prompt_tokens is not None else "",
         "worker_cached_tokens": cached_tokens if cached_tokens is not None else "",
         "worker_agent_hints_priority": "",
+        "worker_agent_hints_latency_sensitivity": "",
         "worker_top_level_priority": "",
         "sglang_priority_events": 0,
         "sglang_priority_hint_seen": False,
@@ -1017,7 +1056,9 @@ def build_readable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             ),
             "queue_ms": safe_int_str(row.get("worker_queue_wait_ms")),
             "latency_ms": safe_int_str(row.get("client_latency_ms")),
+            "hint_kind": row.get("hint_kind", ""),
             "worker_hint_prio": safe_int_str(row.get("worker_agent_hints_priority")),
+            "worker_latency_sensitivity": row.get("worker_agent_hints_latency_sensitivity", ""),
             "sent_top_prio": row.get("top_level_priority_sent", ""),
             "worker_top_prio": safe_int_str(row.get("worker_top_level_priority")),
             "sglang_prio": row.get(
@@ -1209,6 +1250,7 @@ def extract_runtime_records(worker_runtime_log: Path) -> dict[str, dict[str, Any
                 "attached_dt": None,
                 "completed_dt": None,
                 "agent_hints_priority": None,
+                "agent_hints_latency_sensitivity": None,
                 "top_level_priority": None,
                 "prompt_tokens": None,
                 "cached_tokens": None,
@@ -1228,6 +1270,12 @@ def extract_runtime_records(worker_runtime_log: Path) -> dict[str, dict[str, Any
         hint_priority = maybe_int(hints.get("priority"))
         if hint_priority is not None and info["agent_hints_priority"] is None:
             info["agent_hints_priority"] = hint_priority
+        hint_latency_sensitivity = maybe_float(hints.get("latency_sensitivity"))
+        if (
+            hint_latency_sensitivity is not None
+            and info["agent_hints_latency_sensitivity"] is None
+        ):
+            info["agent_hints_latency_sensitivity"] = hint_latency_sensitivity
 
         top_level_priority = maybe_int(record.get("priority"))
         if top_level_priority is not None and info["top_level_priority"] is None:
@@ -1317,6 +1365,14 @@ def attach_sglang_priority_events(
             agent_hints_priority = maybe_int(event.get("worker_agent_hints_priority"))
             if agent_hints_priority is not None and str(row.get("worker_agent_hints_priority", "")) == "":
                 row["worker_agent_hints_priority"] = agent_hints_priority
+            agent_hints_latency_sensitivity = maybe_float(
+                event.get("worker_agent_hints_latency_sensitivity")
+            )
+            if (
+                agent_hints_latency_sensitivity is not None
+                and str(row.get("worker_agent_hints_latency_sensitivity", "")) == ""
+            ):
+                row["worker_agent_hints_latency_sensitivity"] = agent_hints_latency_sensitivity
 
 
 def attach_worker_runtime(rows: list[dict[str, Any]], worker_runtime_log: Path) -> None:
@@ -1343,6 +1399,10 @@ def attach_worker_runtime(rows: list[dict[str, Any]], worker_runtime_log: Path) 
             row["worker_cached_tokens"] = info["cached_tokens"]
         if info.get("agent_hints_priority") is not None:
             row["worker_agent_hints_priority"] = info["agent_hints_priority"]
+        if info.get("agent_hints_latency_sensitivity") is not None:
+            row["worker_agent_hints_latency_sensitivity"] = info[
+                "agent_hints_latency_sensitivity"
+            ]
         if info.get("top_level_priority") is not None:
             row["worker_top_level_priority"] = info["top_level_priority"]
 
@@ -1408,6 +1468,21 @@ def request_priority_status(rows: list[dict[str, Any]], *, field: str, expected:
     return "partial"
 
 
+def request_float_status(rows: list[dict[str, Any]], *, field: str, expected: float) -> str:
+    values = []
+    for row in rows:
+        value = maybe_float(row.get(field))
+        if value is not None:
+            values.append(value)
+    if not rows:
+        return "missing"
+    if not values:
+        return "none"
+    if all(abs(value - expected) < 1e-9 for value in values) and len(values) == len(rows):
+        return "full"
+    return "partial"
+
+
 def frontend_priority_compatibility(rows: list[dict[str, Any]]) -> str:
     if any(truthy(row.get("top_level_priority_unsupported")) for row in rows):
         return "unsupported"
@@ -1424,6 +1499,17 @@ def worker_priority_path_status(high_rows: list[dict[str, Any]]) -> str:
     if any(truthy(row.get("sglang_priority_hint_seen")) for row in high_rows):
         return "seen_not_applied"
     if any(maybe_int(row.get("worker_agent_hints_priority")) is not None for row in high_rows):
+        return "worker_received_hint"
+    return "not_seen"
+
+
+def worker_hint_path_status(high_rows: list[dict[str, Any]], hint_kind: str) -> str:
+    if hint_kind == "priority":
+        return worker_priority_path_status(high_rows)
+    if any(
+        maybe_float(row.get("worker_agent_hints_latency_sensitivity")) is not None
+        for row in high_rows
+    ):
         return "worker_received_hint"
     return "not_seen"
 
@@ -1498,18 +1584,27 @@ def build_summary(
         "output_tokens": args.output_len_tokens,
         "arrival_gap_ms": args.arrival_gap_ms,
         "inter_gap_ms": args.inter_request_gap_ms,
+        "hint_kind": args.hint_kind,
         "top_prio_compat": frontend_priority_compatibility(rows),
-        "worker_hint_status": request_priority_status(
-            high_rows,
-            field="worker_agent_hints_priority",
-            expected=args.high_priority_value,
+        "worker_hint_status": (
+            request_priority_status(
+                high_rows,
+                field="worker_agent_hints_priority",
+                expected=args.high_priority_value,
+            )
+            if args.hint_kind == "priority"
+            else request_float_status(
+                high_rows,
+                field="worker_agent_hints_latency_sensitivity",
+                expected=args.high_latency_sensitivity_value,
+            )
         ),
         "worker_top_prio_status": request_priority_status(
             high_rows,
             field="worker_top_level_priority",
             expected=args.high_priority_value,
         ),
-        "sglang_prio_status": worker_priority_path_status(high_rows),
+        "sglang_prio_status": worker_hint_path_status(high_rows, args.hint_kind),
         "runtime_cov": runtime_coverage,
         "attach_cov": attached_coverage,
         "complete_cov": completed_coverage,
@@ -1543,6 +1638,7 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Output length (tokens): `{summary['output_tokens']}`",
         f"- Arrival gap ms: `{summary['arrival_gap_ms']}`",
         f"- Inter-request gap ms: `{summary['inter_gap_ms']}`",
+        f"- Hint kind: `{summary['hint_kind']}`",
         "",
         "## What happened",
         "",

@@ -28,9 +28,14 @@ PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${PRIORITY_SCHEDULING_SWEEP_SEED_MODE:-per_
 RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
 PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 
-MICROBENCH_LATEST_PREFIX="experiments/reports/latest_priority_scheduling_microbenchmark"
-MICROBENCH_OUT_DIR="experiments/reports/priority_scheduling_microbenchmark/${BASE_ID}"
+MICROBENCH_DISPLAY_NAME="${PRIORITY_SCHEDULING_MICROBENCH_DISPLAY_NAME:-PRIORITY SCHEDULING}"
+MICROBENCH_REPORT_TITLE="${PRIORITY_SCHEDULING_MICROBENCH_REPORT_TITLE:-Priority Scheduling Microbenchmark}"
+MICROBENCH_LATEST_PREFIX="${PRIORITY_SCHEDULING_LATEST_PREFIX_REL:-experiments/reports/latest_priority_scheduling_microbenchmark}"
+MICROBENCH_OUT_ROOT="${PRIORITY_SCHEDULING_OUT_ROOT_REL:-experiments/reports/priority_scheduling_microbenchmark}"
+MICROBENCH_OUT_DIR="${MICROBENCH_OUT_ROOT}/${BASE_ID}"
 SHARED_CHART_DIR="experiments/charts"
+SHARED_CHART_MATRIX_NAME="${PRIORITY_SCHEDULING_SHARED_MATRIX_NAME:-exp11_prioritysched_matrix.csv}"
+SHARED_CHART_JUMP_AHEAD_NAME="${PRIORITY_SCHEDULING_SHARED_JUMP_AHEAD_NAME:-exp11_prioritysched_jump_ahead_vs_arrival_gap.svg}"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -76,17 +81,8 @@ prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
   find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
   rm -f \
-    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_matrix.csv" \
-    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg" \
-    "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_wait_gain_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_latency_vs_arrival_gap.svg" \
-    "${SHARED_CHART_DIR}/exp11_prioritysched_latency_gain_vs_arrival_gap.svg"
+    "${SHARED_CHART_DIR}/${SHARED_CHART_MATRIX_NAME}" \
+    "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}"
 }
 
 usage() {
@@ -190,6 +186,9 @@ Workload defaults:
   high_priority_count=${HIGH_PRIORITY_COUNT}
   low_priority_value=${LOW_PRIORITY_VALUE}
   high_priority_value=${HIGH_PRIORITY_VALUE}
+  hint_kind=${PRIORITY_HINT_KIND}
+  low_latency_sensitivity_value=${LOW_LATENCY_SENSITIVITY_VALUE}
+  high_latency_sensitivity_value=${HIGH_LATENCY_SENSITIVITY_VALUE}
   input_len_words=${PRIORITY_INPUT_LEN}
   output_len_tokens=${PRIORITY_OUTPUT_LEN}
   arrival_gap_ms=${PRIORITY_ARRIVAL_GAP_MS}
@@ -272,6 +271,9 @@ keys = [
     "HIGH_PRIORITY_COUNT",
     "LOW_PRIORITY_VALUE",
     "HIGH_PRIORITY_VALUE",
+    "PRIORITY_HINT_KIND",
+    "LOW_LATENCY_SENSITIVITY_VALUE",
+    "HIGH_LATENCY_SENSITIVITY_VALUE",
     "PRIORITY_INPUT_LEN",
     "PRIORITY_OUTPUT_LEN",
     "PRIORITY_ARRIVAL_GAP_MS",
@@ -342,6 +344,7 @@ build_microbenchmark_report() {
     --out-dir "${MICROBENCH_OUT_DIR}" \
     --contract-sh "${CONTRACT_PATH}" \
     --contract-md "${CONTRACT_DOC_PATH}" \
+    --title "${MICROBENCH_REPORT_TITLE}" \
     --probe-run-id "${LAST_PROBE_RUN_ID}" \
     --sweep-run-ids "${sweep_csv}" \
     --sweep-axis "${PRIORITY_SCHEDULING_SWEEP_AXIS}" \
@@ -356,14 +359,15 @@ build_microbenchmark_charts() {
   local matrix_csv="$1"
   prepare_shared_chart_dir
   if [[ -f "${matrix_csv}" ]]; then
-    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv"
+    cp -f "${matrix_csv}" "${SHARED_CHART_DIR}/${SHARED_CHART_MATRIX_NAME}"
   fi
   "${PYTHON_BIN}" experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
+    --title "${MICROBENCH_REPORT_TITLE}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${MICROBENCH_LATEST_PREFIX}_jump_ahead.svg"
-    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}"
   fi
 }
 
@@ -379,7 +383,7 @@ finalize_runtime_cleanup() {
 
 run_probe_mode() {
   local run_id="${BASE_ID}__probe"
-  banner "PRIORITY SCHEDULING MICROBENCH PROBE"
+  banner "${MICROBENCH_DISPLAY_NAME} MICROBENCH PROBE"
   env \
     DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}" \
     FRONTEND_IMAGE="${PRIORITY_SCHEDULING_FRONTEND_IMAGE}" \
@@ -392,6 +396,9 @@ run_probe_mode() {
     HIGH_PRIORITY_COUNT="${HIGH_PRIORITY_COUNT}" \
     LOW_PRIORITY_VALUE="${LOW_PRIORITY_VALUE}" \
     HIGH_PRIORITY_VALUE="${HIGH_PRIORITY_VALUE}" \
+    PRIORITY_HINT_KIND="${PRIORITY_HINT_KIND}" \
+    LOW_LATENCY_SENSITIVITY_VALUE="${LOW_LATENCY_SENSITIVITY_VALUE}" \
+    HIGH_LATENCY_SENSITIVITY_VALUE="${HIGH_LATENCY_SENSITIVITY_VALUE}" \
     PRIORITY_INPUT_LEN="${PRIORITY_INPUT_LEN}" \
     PRIORITY_OUTPUT_LEN="${PRIORITY_OUTPUT_LEN}" \
     PRIORITY_ARRIVAL_GAP_MS="${PRIORITY_ARRIVAL_GAP_MS}" \
@@ -427,7 +434,7 @@ run_sweep_mode() {
     echo "Sweep mode needs at least one value in PRIORITY_SCHEDULING_SWEEP_VALUES." >&2
     exit 2
   fi
-  banner "PRIORITY SCHEDULING MICROBENCH SWEEP"
+  banner "${MICROBENCH_DISPLAY_NAME} MICROBENCH SWEEP"
   echo "Sweep axis: ${sweep_axis}"
   echo "Sweep values: ${PRIORITY_SCHEDULING_SWEEP_VALUES}"
   LAST_SWEEP_RUN_IDS=()
@@ -450,6 +457,9 @@ run_sweep_mode() {
       HIGH_PRIORITY_COUNT="${HIGH_PRIORITY_COUNT}" \
       LOW_PRIORITY_VALUE="${LOW_PRIORITY_VALUE}" \
       HIGH_PRIORITY_VALUE="${HIGH_PRIORITY_VALUE}" \
+      PRIORITY_HINT_KIND="${PRIORITY_HINT_KIND}" \
+      LOW_LATENCY_SENSITIVITY_VALUE="${LOW_LATENCY_SENSITIVITY_VALUE}" \
+      HIGH_LATENCY_SENSITIVITY_VALUE="${HIGH_LATENCY_SENSITIVITY_VALUE}" \
       PRIORITY_INPUT_LEN="${PRIORITY_INPUT_LEN}" \
       PRIORITY_OUTPUT_LEN="${PRIORITY_OUTPUT_LEN}" \
       PRIORITY_ARRIVAL_GAP_MS="${PRIORITY_ARRIVAL_GAP_MS}" \
@@ -486,20 +496,20 @@ run_plot_mode() {
     echo "Set PRIORITY_SCHEDULING_PLOT_MATRIX_CSV or run probe/all first." >&2
     exit 2
   fi
-  banner "PRIORITY SCHEDULING MICROBENCH PLOT"
+  banner "${MICROBENCH_DISPLAY_NAME} MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
   build_microbenchmark_charts "${matrix_csv}"
 }
 
 print_final_status() {
-  banner "PRIORITY SCHEDULING MICROBENCH READY"
+  banner "${MICROBENCH_DISPLAY_NAME} MICROBENCH READY"
   if [[ "${PRIORITY_SCHEDULING_MODE}" = "plot" ]]; then
     cat <<EOF
 Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${PRIORITY_SCHEDULING_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
-Shared chart: ${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg
+Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
 EOF
     return
   fi
@@ -509,7 +519,7 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
-Shared chart: ${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg
+Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF

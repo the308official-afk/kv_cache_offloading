@@ -7,14 +7,14 @@ Source report:
 ## Success Row
 
 ```csv
-gap_ms,low_requests,high_requests,max_jump_ahead,high_jump_ahead_count,high_jump_ahead_rate,high_completed_ahead_count,priority_hint_seen,priority_path_status,result
-50,8,4,32,18,56.2%,14,yes,worker_received_hint,priority_reordered
+gap_ms,low_requests,high_requests,max_jump_ahead,high_jump_ahead_count,high_jump_ahead_rate,high_completed_ahead_count,hint_kind,hint_seen,hint_path_status,result
+50,8,4,32,18,56.2%,14,priority,yes,worker_received_hint,priority_reordered
 ```
 
 Why this was a success:
 
-- the worker saw the hint: `priority_hint_seen=yes`
-- the priority path was visible: `priority_path_status=worker_received_hint`
+- the worker saw the hint: `hint_seen=yes`
+- the priority path was visible: `hint_path_status=worker_received_hint`
 - high-priority requests attached ahead of earlier low-priority requests:
   - `high_jump_ahead_count=18`
   - `high_jump_ahead_rate=56.2%`
@@ -22,8 +22,8 @@ Why this was a success:
 
 Columns to trust first:
 
-- hint passed and visible: `priority_hint_seen`
-- priority path evidence: `priority_path_status`
+- hint passed and visible: `hint_seen`
+- priority path evidence: `hint_path_status`
 - scheduling effect: `high_jump_ahead_count`, `high_jump_ahead_rate`
 - summary verdict: `result`
 
