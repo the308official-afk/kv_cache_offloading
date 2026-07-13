@@ -832,8 +832,6 @@ PROTECTED_HINT_PROFILES="high-priority" \
 ```
 
 === This works on GH200 with real SWE-bench Pro tasks ===
-This reads the Hugging Face dataset directly. You do not need to run
-Experiment 6 first.
 
 ```bash
 cd ~/kv_cache_offloading
@@ -845,8 +843,8 @@ RETENTION_REQUEST_SOURCE=swebench_dataset \
 RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 RETENTION_SWEBENCH_SPLIT=test \
 RETENTION_SWEBENCH_INDEX=0 \
-KV_RETENTION_RESET_MODE=restart \
-DISTRACTOR_COUNTS="10 20 30" \
+KV_RETENTION_RESET_MODE=flush \
+DISTRACTOR_COUNTS="100 150 200 250 300" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
