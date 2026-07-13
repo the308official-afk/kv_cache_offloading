@@ -11,12 +11,12 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 
 ## Quick Decision Guide
 
-- **SWE-bench prompt / tool / behavior traces**: use Experiment 6.
-- **KV retention/eviction probe**: use Experiment 9.
-- **Cache-control retention**: use Experiment 10.
-- **Priority scheduling**: use Experiment 11.
-- **Speculative prefill**: use Experiment 12.
-- **Run the GH200 trio sequentially**: use `Experiment Suite: Agentic Hint Sweeps`.
+- **SWE-bench prompt / tool / behavior traces**: use [Experiment 6](#experiment-6-prompt-evolution-batch).
+- **KV retention/eviction probe**: use [Experiment 9](#experiment-9-kv-retention-probe).
+- **Cache-control retention**: use [Experiment 10](#experiment-10-cache-pinning-microbenchmark).
+- **Priority scheduling**: use [Experiment 11](#experiment-11-priority-scheduling-probe).
+- **Speculative prefill**: use [Experiment 12](#experiment-12-speculative-prefill-probe).
+- **Run the GH200 trio sequentially**: use [Experiment Suite: Agentic Hint Sweeps](#experiment-suite-agentic-hint-sweeps).
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
