@@ -658,6 +658,22 @@ cat experiments/reports/latest_swebench_real_task_selection.csv
 cat experiments/reports/latest_swebench_real_task_selection.md
 ```
 
+If you want those real-task artifacts as a standalone prep step for
+Experiments 9, 11, and 12, use:
+
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/prepare_swebench_real_request_units.sh
+```
+
+That script refreshes:
+
+- `experiments/reports/latest_swebench_real_request_units.csv`
+- `experiments/reports/latest_swebench_real_request_units_summary.md`
+- `experiments/reports/latest_swebench_real_task_selection.csv`
+- `experiments/reports/latest_swebench_real_task_selection.md`
+
 Batch outputs:
 
 ```text
@@ -847,9 +863,15 @@ PROTECTED_HINT_PROFILES="high-priority" \
 ```
 
 === This works on GH200 with real SWE-bench request units ===
-Use this after Experiment 6 has already produced:
+First prepare the shared real request units:
 
-- `experiments/reports/latest_swebench_real_request_units.csv`
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/prepare_swebench_real_request_units.sh
+```
+
+Then run the retention sweep:
 
 ```bash
 cd ~/kv_cache_offloading

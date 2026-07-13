@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build normalized real-task request units from Experiment 6 SWE-bench runs."""
+"""Build normalized real-task request units from finished SWE-bench runs."""
 
 from __future__ import annotations
 
@@ -283,7 +283,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--trace-index-csv",
         default="experiments/reports/latest_prompt_evolution_trace_index.csv",
-        help="Trace index CSV produced by Experiment 6.",
+        help="Trace index CSV from finished SWE-bench runs.",
     )
     parser.add_argument(
         "--out-dir",

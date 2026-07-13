@@ -5,7 +5,7 @@ This directory defines the shared real-task request layer for SWE-bench Pro.
 The goal is simple:
 
 - keep the existing runtime and experiment wrappers stable
-- postprocess finished Experiment 6 runs
+- postprocess finished SWE-bench runs
 - normalize each real phase request into one reusable request unit
 
 ## Main Output
@@ -20,7 +20,7 @@ Latest top-level copy:
 
 ## One Row Means
 
-One row is one real SWE-bench request phase from one finished Experiment 6 run.
+One row is one real SWE-bench request phase from one finished SWE-bench run.
 
 Examples:
 
@@ -34,9 +34,9 @@ Examples:
 - `request_unit_id`
   - stable row id for downstream reuse
 - `task_index`
-  - batch index used in the Experiment 6 run
+  - batch index used in the originating SWE-bench run
 - `run_id`
-  - Experiment 6 run id
+  - originating SWE-bench run id
 - `repo`
   - SWE-bench repo
 - `instance_id`
