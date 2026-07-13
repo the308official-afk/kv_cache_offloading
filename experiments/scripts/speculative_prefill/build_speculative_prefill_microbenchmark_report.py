@@ -23,6 +23,7 @@ MATRIX_COLUMNS = [
     "spec_prefill",
     "prompt_isolation_mode",
     "request_source",
+    "comparison_mode",
     "turn_a_ms",
     "turn_b_ms",
     "turn_b_gain_ms",
@@ -57,6 +58,7 @@ SUMMARY_COLUMNS = [
     "swebench_turn_a_index",
     "swebench_turn_b_index",
     "swebench_protected_offset",
+    "comparison_mode",
     "probe_run_id",
     "sweep_axis",
     "sweep_values",
@@ -269,6 +271,7 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- swebench_turn_a_index: `{summary['swebench_turn_a_index']}`",
         f"- swebench_turn_b_index: `{summary['swebench_turn_b_index']}`",
         f"- swebench_protected_offset: `{summary['swebench_protected_offset']}`",
+        f"- comparison_mode: `{summary['comparison_mode']}`",
         f"- probe_run_id: `{summary['probe_run_id']}`",
         f"- sweep_axis: `{summary['sweep_axis']}`",
         f"- sweep_values: `{summary['sweep_values']}`",
@@ -295,6 +298,7 @@ def main() -> None:
 
     contract_env = load_contract_env(Path(args.contract_sh))
     run_contract = build_run_contract(args, contract_env)
+    comparison_mode = contract_env.get("SPEC_PREFILL_COMPARISON_MODE", "")
 
     matrix_rows: list[dict[str, Any]] = []
     summary_row = {column: "" for column in SUMMARY_COLUMNS}
@@ -304,6 +308,7 @@ def main() -> None:
     summary_row["probe_run_id"] = args.probe_run_id
     summary_row["sweep_axis"] = args.sweep_axis
     summary_row["sweep_values"] = args.sweep_values
+    summary_row["comparison_mode"] = comparison_mode
 
     sweep_run_ids = [item for item in args.sweep_run_ids.split(",") if item]
     summary_row["sweep_run_count"] = str(len(sweep_run_ids)) if sweep_run_ids else ""
@@ -319,6 +324,7 @@ def main() -> None:
             summary_row["sweep_axis"] = args.sweep_axis
             summary_row["sweep_values"] = args.sweep_values
             summary_row["sweep_run_count"] = str(len(sweep_run_ids)) if sweep_run_ids else ""
+            summary_row["comparison_mode"] = comparison_mode
 
     if sweep_run_ids:
         sweep_values = [item for item in args.sweep_values.split() if item]
@@ -338,6 +344,10 @@ def main() -> None:
                     source_matrix,
                 )
             )
+
+    for row in matrix_rows:
+        row["comparison_mode"] = comparison_mode
+    summary_row["comparison_mode"] = comparison_mode
 
     write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)
     write_csv(out_dir / "microbenchmark_summary.csv", [summary_row], SUMMARY_COLUMNS)

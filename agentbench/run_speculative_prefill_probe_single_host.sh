@@ -26,6 +26,7 @@ SPEC_PREFILL_SWEBENCH_SPLIT="${SPEC_PREFILL_SWEBENCH_SPLIT:-test}"
 SPEC_PREFILL_TURN_A_INDEX="${SPEC_PREFILL_TURN_A_INDEX:-0}"
 SPEC_PREFILL_TURN_B_INDEX="${SPEC_PREFILL_TURN_B_INDEX:-1}"
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET="${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-2}"
+SPEC_PREFILL_COMPARISON_MODE="${SPEC_PREFILL_COMPARISON_MODE:-offset}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
@@ -39,6 +40,11 @@ FRONTEND_IMAGE="${FRONTEND_IMAGE:-local/dynamo-frontend:runtime-json-logs}"
 WORKER_IMAGE="${WORKER_IMAGE:-local/dynamo-sglang:runtime-json-logs}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-restart}"
 EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_state/active_runtime_signature.txt}"
+
+if [[ "${SPEC_PREFILL_COMPARISON_MODE}" = "same_task_isolated" ]]; then
+  SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=0
+  EXPERIMENT_RESET_MODE=restart
+fi
 
 RUN_DIR="experiments/reports/speculative_prefill/${SPEC_PREFILL_ID}"
 DRIVER_LOG="${RUN_DIR}/speculative_prefill_driver.log"
@@ -341,6 +347,59 @@ warn_if_worker_runtime_missing() {
   fi
 }
 
+restart_runtime_for_isolated_arm() {
+  local arm_label="$1"
+  echo "Restarting Dynamo for isolated ${arm_label} arm..." | tee -a "${DRIVER_LOG}"
+  ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
+  runtime_clear_active
+
+  agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
+  echo "Starting Dynamo for ${MODEL} (${arm_label} arm)..." | tee -a "${DRIVER_LOG}"
+  local -a env_cmd=(
+    env
+    -u DYN_RUNTIME_JSON_LOGS
+    -u WORKER_SGLANG_DEV_MODE
+    -u WORKER_SGLANG_SOURCE_ROOT
+    -u SGLANG_TRANSFER_LOG
+    -u SGLANG_TRANSFER_LOG_PROFILE
+  )
+  local -a env_vars=(
+    "DYNAMO_MODEL_PATH=${MODEL}"
+    "DYNAMO_SERVED_MODEL_NAME=${MODEL}"
+    "WORKER_EXTRA_ARGS=${WORKER_BASE_ARGS}"
+    "DYN_TOOL_CALL_PARSER=hermes"
+  )
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+    env_vars+=("DYN_RUNTIME_JSON_LOGS=1")
+    if [[ -n "${SGLANG_ROOT}" && -d "${SGLANG_ROOT}" ]]; then
+      env_vars+=(
+        "WORKER_SGLANG_DEV_MODE=1"
+        "WORKER_SGLANG_SOURCE_ROOT=${SGLANG_ROOT}"
+        "SGLANG_TRANSFER_LOG=1"
+        "SGLANG_TRANSFER_LOG_PROFILE=${SGLANG_TRANSFER_LOG_PROFILE}"
+      )
+    fi
+  fi
+
+  if ! "${env_cmd[@]}" "${env_vars[@]}" ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1; then
+    precise_report_runtime_start_failure "Speculative prefill microbenchmark (${arm_label} arm)" "${DRIVER_LOG}"
+    exit 1
+  fi
+
+  smoke_test_model "${MODEL}" "${SMOKE_LOG}"
+  check_precise_specprefill_runtime_ready
+  agentbench_print_model_readiness_go_banner | tee -a "${DRIVER_LOG}"
+  if [[ "${SPEC_PREFILL_ATTRIBUTION_MODE}" = "precise" ]]; then
+    precise_print_go_summary "specprefill" "${DRIVER_LOG}"
+  fi
+
+  if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
+    echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
+    sleep "${MODEL_COOLDOWN_SECS}"
+  fi
+  runtime_mark_active "${RUNTIME_SIGNATURE}"
+}
+
 ensure_precise_specprefill_dynamo_source
 ensure_precise_specprefill_runtime_images
 prepare_precise_specprefill_sglang
@@ -366,6 +425,7 @@ fi
   echo "SWE-bench turn A index: ${SPEC_PREFILL_TURN_A_INDEX}"
   echo "SWE-bench turn B index: ${SPEC_PREFILL_TURN_B_INDEX}"
   echo "SWE-bench protected offset: ${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET}"
+  echo "Comparison mode: ${SPEC_PREFILL_COMPARISON_MODE}"
   echo "Request-context mode: ${SPEC_PREFILL_REQUEST_CONTEXT_MODE}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
@@ -474,12 +534,46 @@ probe_cmd=(
   --worker-runtime-log "${WORKER_RUNTIME_LOG}"
 )
 
-echo "Running speculative-prefill probe..." | tee -a "${DRIVER_LOG}"
-"${probe_cmd[@]}" 2>&1 | tee -a "${DRIVER_LOG}"
+if [[ "${SPEC_PREFILL_COMPARISON_MODE}" = "same_task_isolated" ]]; then
+  CONTROL_WORKER_RUNTIME_LOG="${RUN_DIR}/speculative_prefill_worker_runtime_control.log"
+  PROTECTED_WORKER_RUNTIME_LOG="${RUN_DIR}/speculative_prefill_worker_runtime_protected.log"
+  rm -f \
+    "${RUN_DIR}/speculative_prefill_requests.csv" \
+    "${RUN_DIR}/speculative_prefill_matrix.csv" \
+    "${RUN_DIR}/speculative_prefill_summary.csv" \
+    "${RUN_DIR}/speculative_prefill_summary.md" \
+    "${WORKER_RUNTIME_LOG}" \
+    "${CONTROL_WORKER_RUNTIME_LOG}" \
+    "${PROTECTED_WORKER_RUNTIME_LOG}"
 
-if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
-  echo "Captured worker runtime log: ${WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+  echo "Running speculative-prefill control arm with isolated runtime..." | tee -a "${DRIVER_LOG}"
+  "${probe_cmd[@]}" --arm-filter control 2>&1 | tee -a "${DRIVER_LOG}"
+  if capture_worker_runtime_log "${CONTROL_WORKER_RUNTIME_LOG}"; then
+    echo "Captured control worker runtime log: ${CONTROL_WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+  fi
+
+  restart_runtime_for_isolated_arm "protected"
+
+  echo "Running speculative-prefill protected arm with isolated runtime..." | tee -a "${DRIVER_LOG}"
+  "${probe_cmd[@]}" --arm-filter protected --append-requests 2>&1 | tee -a "${DRIVER_LOG}"
+  if capture_worker_runtime_log "${PROTECTED_WORKER_RUNTIME_LOG}"; then
+    echo "Captured protected worker runtime log: ${PROTECTED_WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+  fi
+
+  {
+    [[ -f "${CONTROL_WORKER_RUNTIME_LOG}" ]] && cat "${CONTROL_WORKER_RUNTIME_LOG}"
+    [[ -f "${PROTECTED_WORKER_RUNTIME_LOG}" ]] && cat "${PROTECTED_WORKER_RUNTIME_LOG}"
+  } > "${WORKER_RUNTIME_LOG}"
+  echo "Combined isolated worker runtime log: ${WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
   warn_if_worker_runtime_missing "${WORKER_RUNTIME_LOG}"
+else
+  echo "Running speculative-prefill probe..." | tee -a "${DRIVER_LOG}"
+  "${probe_cmd[@]}" 2>&1 | tee -a "${DRIVER_LOG}"
+
+  if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
+    echo "Captured worker runtime log: ${WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+    warn_if_worker_runtime_missing "${WORKER_RUNTIME_LOG}"
+  fi
 fi
 
 echo "Rebuilding report with worker-side evidence..." | tee -a "${DRIVER_LOG}"

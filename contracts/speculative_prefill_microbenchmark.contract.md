@@ -69,6 +69,7 @@ Public control surface
 - `SPEC_PREFILL_TURN_A_INDEX`
 - `SPEC_PREFILL_TURN_B_INDEX`
 - `SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET`
+- `SPEC_PREFILL_COMPARISON_MODE`
 - `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
@@ -90,6 +91,9 @@ Default proof settings
   - `ScaleAI/SWE-bench_Pro`
 - SWE-bench split:
   - `test`
+- comparison mode:
+  - `offset`
+  - use `same_task_isolated` for fair SWE-bench latency comparisons; this forces protected offset to `0` and restarts the runtime between control and protected arms
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 
@@ -120,6 +124,7 @@ Recommended matrix columns
 - `arm`
 - `spec_prefill`
 - `request_source`
+- `comparison_mode`
 - `turn_a_ms`
 - `turn_b_ms`
 - `turn_b_gain_ms`

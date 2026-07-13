@@ -1870,7 +1870,7 @@ SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 SPEC_PREFILL_SWEBENCH_SPLIT=test \
 SPEC_PREFILL_TURN_A_INDEX=0 \
 SPEC_PREFILL_TURN_B_INDEX=1 \
-SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=2 \
+SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
 EXPERIMENT_RESET_MODE=restart \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
@@ -1884,7 +1884,8 @@ In this mode:
 
 - control turn A uses SWE-bench row `SPEC_PREFILL_TURN_A_INDEX`
 - control turn B uses SWE-bench row `SPEC_PREFILL_TURN_B_INDEX`
-- protected turn A/B use those same indexes plus `SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET`
+- with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use those exact same rows
+- the helper restarts Dynamo between the control and protected arms, so the protected arm does not inherit the control arm's cache
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
 
 ```bash
@@ -1922,6 +1923,7 @@ SPEC_PREFILL_SWEBENCH_SPLIT
 SPEC_PREFILL_TURN_A_INDEX
 SPEC_PREFILL_TURN_B_INDEX
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET
+SPEC_PREFILL_COMPARISON_MODE
 RETENTION_PROMPT_ISOLATION_MODE
 SPEC_PREFILL_REQUEST_CONTEXT_MODE
 SGLANG_TRANSFER_LOG_PROFILE

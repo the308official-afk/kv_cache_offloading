@@ -221,6 +221,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--arm-filter",
+        default=os.environ.get("SPEC_PREFILL_ARM_FILTER", "both"),
+        choices=("both", "control", "protected"),
+        help="Run both arms, or only one arm for externally isolated comparisons.",
+    )
+    parser.add_argument(
+        "--append-requests",
+        action="store_true",
+        help="Append newly generated request rows to an existing request CSV before postprocessing.",
+    )
+    parser.add_argument(
         "--prompt-isolation-mode",
         default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
         choices=("standard", "strict", "disjoint"),
@@ -824,6 +835,8 @@ def send_request(
 def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     arms = [ArmSpec("control", False), ArmSpec("protected", True)]
+    if args.arm_filter != "both":
+        arms = [arm for arm in arms if arm.arm == args.arm_filter]
     dataset = load_swebench_dataset_split(args) if args.request_source == "swebench_dataset" else None
     for idx, arm in enumerate(arms):
         if dataset is not None:
@@ -1445,7 +1458,8 @@ def main() -> int:
     if args.postprocess_only:
         request_rows = load_rows_for_postprocess(paths["requests_csv"])
     else:
-        request_rows = run_probe(args, run_id)
+        existing_rows = load_rows_for_postprocess(paths["requests_csv"]) if args.append_requests else []
+        request_rows = existing_rows + run_probe(args, run_id)
         write_csv(paths["requests_csv"], request_rows, REQUEST_COLUMNS)
 
     request_records: dict[str, dict[str, Any]] = {}
