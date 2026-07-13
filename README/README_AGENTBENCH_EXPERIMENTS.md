@@ -1538,7 +1538,7 @@ PRIORITY_INTER_REQUEST_GAP_MS=20 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-=== This works on GH200 with real SWE-bench Pro tasks ===
+=== This works on GH200 with real SWE-bench Pro tasks? ===
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1823,7 +1823,7 @@ SPEC_PREFILL_OUTPUT_TOKENS=128 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-=== This works on GH200 with real SWE-bench Pro tasks ===
+=== This works on GH200 with real SWE-bench Pro tasks? ===
 ```bash
 cd ~/kv_cache_offloading
 
