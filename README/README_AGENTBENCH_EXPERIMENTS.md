@@ -861,10 +861,43 @@ Mental model:
 
 Use this when direct task-level SWE-bench prompts do not create enough cache pressure.
 
+Step 0: capture real SWE-bench phase prompts with Experiment 6.
+
+For a quick smoke test:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
+PROMPT_EVOLUTION_BATCH_END_INDEX=20 \
+PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
+./agentbench/run_prompt_evolution_batch_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+For larger retention sweeps, capture enough tasks first. For example,
+`DISTRACTOR_COUNTS="600"` needs at least 601 captured tasks:
+
+- 1 protected task
+- 600 distractor tasks
+
+Step 1: build the trajectory prompt catalog from the captured Experiment 6
+outputs.
+
 ```bash
 cd ~/kv_cache_offloading
 
 ./agentbench/prepare_swebench_trajectory_prompts.sh
+```
+
+Step 2: run Experiment 9 against the prepared trajectory catalog.
+
+For the quick smoke-test catalog above:
+
+```bash
+cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
@@ -875,10 +908,16 @@ RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0 \
 RETENTION_TRAJECTORY_PROTECTED_STAGE=patch_generation \
 RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review" \
 KV_RETENTION_RESET_MODE=restart \
-DISTRACTOR_COUNTS="100 200 400 600" \
+DISTRACTOR_COUNTS="5 10 15 20" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+For the larger run after capturing enough Experiment 6 tasks, change:
+
+```text
+DISTRACTOR_COUNTS="100 200 400 600"
 ```
 
 Mental model:
