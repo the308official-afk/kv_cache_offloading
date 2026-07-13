@@ -9,6 +9,3 @@ latency_sensitivity_microbenchmark_20260713_203451__sweep_4	Qwen/Qwen3-Coder-30B
 
 
 ```
-
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
