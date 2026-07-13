@@ -143,10 +143,6 @@ require_contract_vars() {
     KV_RETENTION_SWEEP_HELPER
     KV_RETENTION_SUPPORTED_MODES
     RETENTION_REQUEST_SOURCE
-    RETENTION_REAL_REQUEST_UNITS_CSV
-    RETENTION_REAL_PROTECTED_PHASE_GROUPS
-    RETENTION_REAL_DISTRACTOR_PHASE_GROUPS
-    RETENTION_REAL_ALLOW_DISTRACTOR_REUSE
     RETENTION_SWEBENCH_DATASET
     RETENTION_SWEBENCH_SPLIT
     RETENTION_SWEBENCH_INDEX
@@ -242,17 +238,18 @@ Control defaults:
 
 Workload defaults:
   request_source=${RETENTION_REQUEST_SOURCE}
+EOF
+  if [[ "${RETENTION_REQUEST_SOURCE}" = "swebench_dataset" ]]; then
+    cat <<EOF
   swebench_dataset=${RETENTION_SWEBENCH_DATASET}
   swebench_split=${RETENTION_SWEBENCH_SPLIT}
   swebench_index=${RETENTION_SWEBENCH_INDEX}
   swebench_instance_id=${RETENTION_SWEBENCH_INSTANCE_ID}
   swebench_distractor_start_index=${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}
   swebench_allow_distractor_reuse=${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}
-  real_request_units_csv=${RETENTION_REAL_REQUEST_UNITS_CSV}
-  real_protected_request_unit_id=${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}
-  real_protected_phase_groups=${RETENTION_REAL_PROTECTED_PHASE_GROUPS}
-  real_distractor_phase_groups=${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}
-  real_allow_distractor_reuse=${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}
+EOF
+  fi
+  cat <<EOF
   kv_tier_modes=${KV_TIER_MODES}
   distractor_count=${DISTRACTOR_COUNT}
   distractor_counts=${DISTRACTOR_COUNTS}

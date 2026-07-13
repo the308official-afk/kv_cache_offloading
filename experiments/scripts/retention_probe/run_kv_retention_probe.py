@@ -32,9 +32,6 @@ DEFAULT_CACHE_EVENT_LOG = (
     / "sglang_transfer_logs"
     / "latest_sglang_transfer_events.jsonl"
 )
-DEFAULT_REAL_REQUEST_UNITS_CSV = (
-    REPO_ROOT / "experiments" / "reports" / "latest_swebench_real_request_units.csv"
-)
 PROMPT_GENERATOR_VERSION = "cache-word-v4"
 SGLANG_EVENT_PREFIX = "[SGLANG_TRANSFER_JSON] "
 RUNTIME_JSON_PREFIX = "[RUNTIME_JSON]"
@@ -176,7 +173,6 @@ SUMMARY_COLUMNS = [
     "protected_source_instance_id",
     "protected_source_phase",
     "protected_source_phase_group",
-    "real_distractor_pool_size",
     "a_first_status",
     "a_replay_status",
     "a_first_latency_ms",
@@ -302,11 +298,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--request-source",
         default=os.environ.get("RETENTION_REQUEST_SOURCE", "synthetic"),
-        choices=("synthetic", "swebench_dataset", "swebench_real"),
-        help=(
-            "Use the synthetic prompt generator, load SWE-bench rows directly, "
-            "or load prompts from prepared real request units."
-        ),
+        choices=("synthetic", "swebench_dataset"),
+        help="Use the synthetic prompt generator or load SWE-bench rows directly.",
     )
     parser.add_argument(
         "--swebench-dataset",
@@ -344,35 +337,6 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE", "0").strip().lower()
         in {"1", "true", "yes"},
         help="Allow cycling SWE-bench distractor rows if the split is smaller than distractor_count.",
-    )
-    parser.add_argument(
-        "--real-request-units-csv",
-        default=os.environ.get("RETENTION_REAL_REQUEST_UNITS_CSV", str(DEFAULT_REAL_REQUEST_UNITS_CSV)),
-        help=(
-            "Optional CSV of prepared SWE-bench request units for swebench_real mode. "
-            "The simpler swebench_dataset mode reads the dataset directly."
-        ),
-    )
-    parser.add_argument(
-        "--real-protected-request-unit-id",
-        default=os.environ.get("RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID", ""),
-        help="Optional exact request_unit_id to use as protected A in swebench_real mode.",
-    )
-    parser.add_argument(
-        "--real-protected-phase-groups",
-        default=os.environ.get("RETENTION_REAL_PROTECTED_PHASE_GROUPS", "plan act patch review"),
-        help="Allowed phase groups for protected A selection in swebench_real mode.",
-    )
-    parser.add_argument(
-        "--real-distractor-phase-groups",
-        default=os.environ.get("RETENTION_REAL_DISTRACTOR_PHASE_GROUPS", "plan act patch review"),
-        help="Allowed phase groups for distractor selection in swebench_real mode.",
-    )
-    parser.add_argument(
-        "--real-allow-distractor-reuse",
-        action="store_true",
-        default=os.environ.get("RETENTION_REAL_ALLOW_DISTRACTOR_REUSE", "0").strip().lower() in {"1", "true", "yes"},
-        help="Allow cycling real distractor request units if the pool is smaller than distractor_count.",
     )
     parser.add_argument("--postprocess-only", action="store_true")
     parser.add_argument("--protected-input-len", type=int, default=DEFAULT_PROBE_INPUT_LEN)
@@ -477,27 +441,6 @@ def parse_args() -> argparse.Namespace:
 
 def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
-
-
-def resolve_repo_path(raw_path: str) -> Path:
-    path = Path(raw_path).expanduser()
-    if not path.is_absolute():
-        path = REPO_ROOT / path
-    return path
-
-
-def split_labels(raw: str) -> set[str]:
-    labels = [part.strip() for token in raw.split() for part in token.split(",")]
-    return {label for label in labels if label}
-
-
-def real_candidate_sort_key(unit: dict[str, Any]) -> tuple[Any, ...]:
-    return (
-        -(maybe_int(unit.get("prompt_tokens")) or 0),
-        -(maybe_int(unit.get("prompt_chars")) or 0),
-        str(unit.get("phase_group", "")),
-        str(unit.get("request_unit_id", "")),
-    )
 
 
 def format_swebench_dataset_prompt(task: dict[str, Any]) -> str:
@@ -645,159 +588,11 @@ def select_swebench_dataset_workload(
     }
 
 
-def load_real_request_units(args: argparse.Namespace) -> list[dict[str, Any]]:
-    units_csv = resolve_repo_path(args.real_request_units_csv)
-    if not units_csv.exists():
-        raise SystemExit(f"Real request-units CSV not found: {units_csv}")
-
-    rows = read_csv_rows(units_csv)
-    if not rows:
-        raise SystemExit(f"Real request-units CSV is empty: {units_csv}")
-
-    units: list[dict[str, Any]] = []
-    for row in rows:
-        if str(row.get("suitable_for_exp9", "")).strip().lower() != "yes":
-            continue
-        prompt_path_raw = str(row.get("prompt_text_path", "")).strip()
-        if not prompt_path_raw:
-            continue
-        prompt_path = resolve_repo_path(prompt_path_raw)
-        if not prompt_path.exists():
-            continue
-        prompt_text = prompt_path.read_text(encoding="utf-8")
-        if not prompt_text.strip():
-            continue
-        unit = dict(row)
-        unit["prompt_text"] = prompt_text
-        unit["prompt_chars"] = maybe_int(row.get("prompt_chars")) or len(prompt_text)
-        unit["prompt_tokens"] = maybe_int(row.get("prompt_tokens"))
-        units.append(unit)
-
-    if not units:
-        raise SystemExit(
-            f"No usable exp9 real request units were found in: {units_csv}. "
-            "Run Experiment 6 batch export first."
-        )
-    return units
-
-
-def select_real_retention_workload(
-    args: argparse.Namespace,
-) -> tuple[list[tuple[str, str, str, str, dict[str, Any]]], dict[str, Any]]:
-    units = load_real_request_units(args)
-    protected_groups = split_labels(args.real_protected_phase_groups)
-    distractor_groups = split_labels(args.real_distractor_phase_groups)
-
-    protected_candidates = [
-        unit
-        for unit in units
-        if not protected_groups or str(unit.get("phase_group", "")) in protected_groups
-    ]
-    if not protected_candidates:
-        raise SystemExit(
-            "No real protected candidates matched the configured phase-group filter: "
-            f"{args.real_protected_phase_groups!r}"
-        )
-
-    protected: dict[str, Any] | None = None
-    if args.real_protected_request_unit_id:
-        protected = next(
-            (
-                unit
-                for unit in protected_candidates
-                if str(unit.get("request_unit_id", "")) == args.real_protected_request_unit_id
-            ),
-            None,
-        )
-        if protected is None:
-            raise SystemExit(
-                "Requested real protected request_unit_id was not found among exp9-capable units: "
-                f"{args.real_protected_request_unit_id}"
-            )
-    else:
-        protected_candidates = sorted(protected_candidates, key=real_candidate_sort_key)
-        protected = protected_candidates[args.seed % len(protected_candidates)]
-
-    distractor_candidates = [
-        unit
-        for unit in units
-        if str(unit.get("request_unit_id", "")) != str(protected.get("request_unit_id", ""))
-        and str(unit.get("prompt_hash", "")) != str(protected.get("prompt_hash", ""))
-        and (not distractor_groups or str(unit.get("phase_group", "")) in distractor_groups)
-    ]
-    if not distractor_candidates:
-        raise SystemExit(
-            "No real distractor candidates were available after filtering. "
-            "Try a broader RETENTION_REAL_DISTRACTOR_PHASE_GROUPS setting."
-        )
-
-    rng = random.Random(
-        f"retention_real_distractors:{args.seed}:{protected.get('request_unit_id', '')}:{args.distractor_count}"
-    )
-    rng.shuffle(distractor_candidates)
-    distractor_candidates.sort(
-        key=lambda unit: (
-            str(unit.get("instance_id", "")) == str(protected.get("instance_id", "")),
-            str(unit.get("repo", "")) == str(protected.get("repo", "")),
-        )
-    )
-
-    if len(distractor_candidates) < args.distractor_count and not args.real_allow_distractor_reuse:
-        raise SystemExit(
-            "Not enough real distractor candidates for this distractor_count without reuse. "
-            f"need={args.distractor_count} available={len(distractor_candidates)}. "
-            "Either lower DISTRACTOR_COUNT or set RETENTION_REAL_ALLOW_DISTRACTOR_REUSE=1."
-        )
-
-    selected_distractors: list[dict[str, Any]] = []
-    while len(selected_distractors) < args.distractor_count:
-        remaining = args.distractor_count - len(selected_distractors)
-        selected_distractors.extend(distractor_candidates[:remaining])
-
-    sequence: list[tuple[str, str, str, str, dict[str, Any]]] = [
-        (
-            "a_first",
-            str(protected["prompt_text"]),
-            args.protected_hint_profile,
-            args.protected_cache_control_profile,
-            protected,
-        )
-    ]
-    for idx, unit in enumerate(selected_distractors):
-        sequence.append(
-            (
-                f"distractor_{idx:04d}",
-                str(unit["prompt_text"]),
-                args.distractor_hint_profile,
-                args.distractor_cache_control_profile,
-                unit,
-            )
-        )
-    sequence.append(
-        (
-            "a_replay",
-            str(protected["prompt_text"]),
-            args.protected_hint_profile,
-            args.protected_cache_control_profile,
-            protected,
-        )
-    )
-
-    metadata = {
-        "request_source": "swebench_real",
-        "protected": protected,
-        "distractor_pool_size": len(distractor_candidates),
-    }
-    return sequence, metadata
-
-
 def build_probe_sequence(
     args: argparse.Namespace,
 ) -> tuple[list[tuple[str, str, str, str, dict[str, Any] | None]], dict[str, Any]]:
     if args.request_source == "swebench_dataset":
         return select_swebench_dataset_workload(args)
-    if args.request_source == "swebench_real":
-        return select_real_retention_workload(args)
 
     protected_prompt = make_protected_prompt(
         role="protected_A",
@@ -1013,9 +808,6 @@ def request_context(
     if request_source == "swebench_dataset" and source_meta:
         task_instance_id = str(source_meta.get("instance_id") or "swebench_dataset_retention_probe")
         app_variant = "swebench_dataset_retention_probe"
-    elif request_source == "swebench_real" and source_meta:
-        task_instance_id = str(source_meta.get("instance_id") or "swebench_real_retention_probe")
-        app_variant = "swebench_real_retention_probe"
     return {
         "request_id": f"{run_id}::{request_role}::{sequence_index}",
         "parent_run_id": run_id,
@@ -1931,12 +1723,6 @@ def build_summary(
     first = next((row for row in rows if row["request_role"] == "a_first"), {})
     replay = next((row for row in rows if row["request_role"] == "a_replay"), {})
     first_distractor = next((row for row in rows if str(row.get("request_role", "")).startswith("distractor_")), {})
-    distinct_real_distractors = {
-        str(row.get("source_request_unit_id", ""))
-        for row in rows
-        if str(row.get("request_role", "")).startswith("distractor_")
-        and str(row.get("source_request_unit_id", "")).strip()
-    }
     first_ok = request_succeeded(first)
     replay_ok = request_succeeded(replay)
     first_latency = maybe_float(first.get("latency_ms")) if first_ok else None
@@ -2003,7 +1789,6 @@ def build_summary(
         "protected_source_instance_id": first.get("source_instance_id", ""),
         "protected_source_phase": first.get("source_phase", ""),
         "protected_source_phase_group": first.get("source_phase_group", ""),
-        "real_distractor_pool_size": len(distinct_real_distractors) if distinct_real_distractors else "",
         "a_first_status": first.get("status", ""),
         "a_replay_status": replay.get("status", ""),
         "a_first_latency_ms": round_ms(first_latency),
@@ -2088,7 +1873,6 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- protected_source_instance_id: `{summary['protected_source_instance_id']}`",
         f"- protected_source_phase: `{summary['protected_source_phase']}`",
         f"- protected_source_phase_group: `{summary['protected_source_phase_group']}`",
-        f"- real_distractor_pool_size: `{summary['real_distractor_pool_size']}`",
         "",
         "## A Prompt Replay",
         "",
@@ -2180,16 +1964,6 @@ def main() -> int:
                 f"dataset_index={protected.get('dataset_index', '')}"
             )
             print(f"swebench_dataset_distractor_pool_size={workload_meta.get('distractor_pool_size', '')}")
-        elif args.request_source == "swebench_real":
-            protected = workload_meta.get("protected") or {}
-            print(
-                "real_protected_unit="
-                f"{protected.get('request_unit_id', '')} "
-                f"repo={protected.get('repo', '')} "
-                f"instance_id={protected.get('instance_id', '')} "
-                f"phase_group={protected.get('phase_group', '')}"
-            )
-            print(f"real_distractor_pool_size={workload_meta.get('distractor_pool_size', '')}")
         print(
             "requests="
             f"{len(sequence)} protected_hint_profile={args.protected_hint_profile} "

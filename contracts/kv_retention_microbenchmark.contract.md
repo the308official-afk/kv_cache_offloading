@@ -91,11 +91,12 @@ The shell contract currently exposes:
   - `KV_RETENTION_MODE`
 - request source:
   - `RETENTION_REQUEST_SOURCE`
-  - `RETENTION_REAL_REQUEST_UNITS_CSV`
-  - `RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID`
-  - `RETENTION_REAL_PROTECTED_PHASE_GROUPS`
-  - `RETENTION_REAL_DISTRACTOR_PHASE_GROUPS`
-  - `RETENTION_REAL_ALLOW_DISTRACTOR_REUSE`
+  - `RETENTION_SWEBENCH_DATASET`
+  - `RETENTION_SWEBENCH_SPLIT`
+  - `RETENTION_SWEBENCH_INDEX`
+  - `RETENTION_SWEBENCH_INSTANCE_ID`
+  - `RETENTION_SWEBENCH_DISTRACTOR_START_INDEX`
+  - `RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE`
 - attribution path:
   - `RETENTION_ATTRIBUTION_MODE`
   - `RETENTION_REQUEST_CONTEXT_MODE`
@@ -150,7 +151,6 @@ Request-source defaults:
 - `RETENTION_SWEBENCH_INSTANCE_ID=`
 - `RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=-1`
 - `RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=0`
-- `RETENTION_REAL_REQUEST_UNITS_CSV=experiments/reports/latest_swebench_real_request_units.csv`
 
 For direct SWE-bench Pro runs, use:
 
@@ -161,9 +161,6 @@ That path reads the Hugging Face dataset directly and builds:
 - protected A from one SWE-bench task
 - distractors from other SWE-bench tasks
 - protected A replay from the same protected task
-
-The older `RETENTION_REQUEST_SOURCE=swebench_real` path is still available for
-prepared request-unit CSVs.
 
 
 Machine/runtime prerequisites

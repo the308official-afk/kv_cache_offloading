@@ -33,11 +33,6 @@ RETENTION_TOP_LEVEL_PRIORITY_MODE="${RETENTION_TOP_LEVEL_PRIORITY_MODE:-auto}"
 RETENTION_REQUEST_CONTEXT_MODE="${RETENTION_REQUEST_CONTEXT_MODE:-auto}"
 RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
 RETENTION_REQUEST_SOURCE="${RETENTION_REQUEST_SOURCE:-synthetic}"
-RETENTION_REAL_REQUEST_UNITS_CSV="${RETENTION_REAL_REQUEST_UNITS_CSV:-experiments/reports/latest_swebench_real_request_units.csv}"
-RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID="${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID:-}"
-RETENTION_REAL_PROTECTED_PHASE_GROUPS="${RETENTION_REAL_PROTECTED_PHASE_GROUPS:-plan act patch review}"
-RETENTION_REAL_DISTRACTOR_PHASE_GROUPS="${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS:-plan act patch review}"
-RETENTION_REAL_ALLOW_DISTRACTOR_REUSE="${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE:-0}"
 RETENTION_SWEBENCH_DATASET="${RETENTION_SWEBENCH_DATASET:-ScaleAI/SWE-bench_Pro}"
 RETENTION_SWEBENCH_SPLIT="${RETENTION_SWEBENCH_SPLIT:-test}"
 RETENTION_SWEBENCH_INDEX="${RETENTION_SWEBENCH_INDEX:-0}"
@@ -681,10 +676,6 @@ run_probe() {
     --swebench-index "${RETENTION_SWEBENCH_INDEX}"
     --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
     --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
-    --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
-    --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
-    --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
-    --real-distractor-phase-groups "${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -713,9 +704,6 @@ run_probe() {
   )
   if [[ "${IGNORE_EOS}" = "1" ]]; then
     command+=(--ignore-eos)
-  fi
-  if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
-    command+=(--real-allow-distractor-reuse)
   fi
   if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--swebench-allow-distractor-reuse)
@@ -756,10 +744,6 @@ postprocess_probe() {
     --swebench-index "${RETENTION_SWEBENCH_INDEX}"
     --swebench-instance-id "${RETENTION_SWEBENCH_INSTANCE_ID}"
     --swebench-distractor-start-index "${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
-    --real-request-units-csv "${RETENTION_REAL_REQUEST_UNITS_CSV}"
-    --real-protected-request-unit-id "${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID}"
-    --real-protected-phase-groups "${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
-    --real-distractor-phase-groups "${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
     --kv-tier-mode "${kv_tier_mode}"
     --protected-hint-profile "${hint_profile}"
     --distractor-hint-profile none
@@ -789,9 +773,6 @@ postprocess_probe() {
   )
   if [[ "${IGNORE_EOS}" = "1" ]]; then
     command+=(--ignore-eos)
-  fi
-  if [[ "${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
-    command+=(--real-allow-distractor-reuse)
   fi
   if [[ "${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}" = "1" ]]; then
     command+=(--swebench-allow-distractor-reuse)
@@ -1263,17 +1244,14 @@ reset_latest_probe_reports
   echo "Protected cache-control profiles: ${PROTECTED_CACHE_CONTROL_PROFILES}"
   echo "Distractor cache-control profile: ${DISTRACTOR_CACHE_CONTROL_PROFILE}"
   echo "Request source: ${RETENTION_REQUEST_SOURCE}"
-  echo "SWE-bench dataset: ${RETENTION_SWEBENCH_DATASET}"
-  echo "SWE-bench split: ${RETENTION_SWEBENCH_SPLIT}"
-  echo "SWE-bench protected index: ${RETENTION_SWEBENCH_INDEX}"
-  echo "SWE-bench protected instance_id: ${RETENTION_SWEBENCH_INSTANCE_ID:-auto}"
-  echo "SWE-bench distractor start index: ${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
-  echo "SWE-bench distractor reuse allowed: ${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}"
-  echo "Real request units CSV: ${RETENTION_REAL_REQUEST_UNITS_CSV}"
-  echo "Real protected request_unit_id: ${RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID:-auto}"
-  echo "Real protected phase groups: ${RETENTION_REAL_PROTECTED_PHASE_GROUPS}"
-  echo "Real distractor phase groups: ${RETENTION_REAL_DISTRACTOR_PHASE_GROUPS}"
-  echo "Real distractor reuse allowed: ${RETENTION_REAL_ALLOW_DISTRACTOR_REUSE}"
+  if [[ "${RETENTION_REQUEST_SOURCE}" = "swebench_dataset" ]]; then
+    echo "SWE-bench dataset: ${RETENTION_SWEBENCH_DATASET}"
+    echo "SWE-bench split: ${RETENTION_SWEBENCH_SPLIT}"
+    echo "SWE-bench protected index: ${RETENTION_SWEBENCH_INDEX}"
+    echo "SWE-bench protected instance_id: ${RETENTION_SWEBENCH_INSTANCE_ID:-auto}"
+    echo "SWE-bench distractor start index: ${RETENTION_SWEBENCH_DISTRACTOR_START_INDEX}"
+    echo "SWE-bench distractor reuse allowed: ${RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE}"
+  fi
   echo "Distractor count: ${DISTRACTOR_COUNT}"
   echo "Protected input len: ${PROTECTED_INPUT_LEN}"
   echo "Distractor input len: ${DISTRACTOR_INPUT_LEN}"

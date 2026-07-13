@@ -648,32 +648,6 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
-It can also export a shared real-task request layer for advanced downstream
-experiments:
-
-```bash
-cat experiments/reports/latest_swebench_real_request_units.csv
-cat experiments/reports/latest_swebench_real_request_units_summary.md
-cat experiments/reports/latest_swebench_real_task_selection.csv
-cat experiments/reports/latest_swebench_real_task_selection.md
-```
-
-If you want those prepared request-unit artifacts as a standalone advanced prep
-step, use:
-
-```bash
-cd ~/kv_cache_offloading
-
-./agentbench/prepare_swebench_real_request_units.sh
-```
-
-That script refreshes:
-
-- `experiments/reports/latest_swebench_real_request_units.csv`
-- `experiments/reports/latest_swebench_real_request_units_summary.md`
-- `experiments/reports/latest_swebench_real_task_selection.csv`
-- `experiments/reports/latest_swebench_real_task_selection.md`
-
 Batch outputs:
 
 ```text
@@ -682,11 +656,6 @@ experiments/reports/batches/<batch_id>/
   progress_overview.csv
   task_trace_index.md
   task_trace_index.csv
-  swebench_real_request_units/
-    request_units.csv
-    request_units_summary.md
-    task_selection.csv
-    task_selection.md
 ```
 
 Global summaries:
@@ -914,11 +883,6 @@ RETENTION_SWEBENCH_INDEX
 RETENTION_SWEBENCH_INSTANCE_ID
 RETENTION_SWEBENCH_DISTRACTOR_START_INDEX
 RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE
-RETENTION_REAL_REQUEST_UNITS_CSV
-RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID
-RETENTION_REAL_PROTECTED_PHASE_GROUPS
-RETENTION_REAL_DISTRACTOR_PHASE_GROUPS
-RETENTION_REAL_ALLOW_DISTRACTOR_REUSE
 KV_RETENTION_RESET_MODE
 KV_TIER_MODES
 DISTRACTOR_COUNT
