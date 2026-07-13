@@ -9,11 +9,13 @@ This contract defines the public microbenchmark for queue-priority behavior.
 Workload
 --------
 
-Synthetic mixed-priority burst:
+Synthetic or direct SWE-bench task-level mixed-priority burst:
 
 - low-priority requests arrive first
 - high-priority requests arrive slightly later
 - we check whether the later high-priority requests move ahead anyway
+- in `PRIORITY_REQUEST_SOURCE=swebench_dataset`, each request prompt is one
+  SWE-bench Pro task row
 
 Public entrypoint
 -----------------
@@ -65,6 +67,11 @@ Public control surface
 - `PRIORITY_SCHEDULING_SWEEP_AXIS`
 - `PRIORITY_SCHEDULING_SWEEP_VALUES`
 - `PRIORITY_SCHEDULING_SWEEP_SEED_MODE`
+- `PRIORITY_REQUEST_SOURCE`
+- `PRIORITY_SWEBENCH_DATASET`
+- `PRIORITY_SWEBENCH_SPLIT`
+- `PRIORITY_SWEBENCH_START_INDEX`
+- `PRIORITY_SWEBENCH_ALLOW_REUSE`
 - `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
@@ -82,6 +89,12 @@ Default proof settings
   - `per_value`
 - prompt isolation mode:
   - `disjoint`
+- request source:
+  - `synthetic`
+- SWE-bench dataset:
+  - `ScaleAI/SWE-bench_Pro`
+- SWE-bench split:
+  - `test`
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 
@@ -112,6 +125,9 @@ Recommended matrix columns
 - `part`
 - `sweep_axis`
 - `sweep_value`
+- `request_source`
+- `source_instance_id`
+- `source_task_index`
 - `request`
 - `prio_class`
 - `arrival`

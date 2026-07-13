@@ -9,12 +9,14 @@ This contract defines the public speculative-prefill microbenchmark.
 Workload
 --------
 
-Two-turn synthetic flow:
+Two-turn synthetic or direct SWE-bench task-level flow:
 
 - turn A runs first
 - protected arm sends `speculative_prefill=true`
 - Dynamo may warm the likely next turn in the background
 - turn B is compared between control and protected arms
+- in `SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset`, turn A and turn B are
+  formatted from SWE-bench Pro task rows
 
 Public entrypoint
 -----------------
@@ -61,6 +63,12 @@ Public control surface
 - `SPEC_PREFILL_SWEEP_AXIS`
 - `SPEC_PREFILL_SWEEP_VALUES`
 - `SPEC_PREFILL_SWEEP_SEED_MODE`
+- `SPEC_PREFILL_REQUEST_SOURCE`
+- `SPEC_PREFILL_SWEBENCH_DATASET`
+- `SPEC_PREFILL_SWEBENCH_SPLIT`
+- `SPEC_PREFILL_TURN_A_INDEX`
+- `SPEC_PREFILL_TURN_B_INDEX`
+- `SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET`
 - `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
@@ -76,6 +84,12 @@ Default proof settings
   - `per_value`
 - prompt isolation mode:
   - `disjoint`
+- request source:
+  - `synthetic`
+- SWE-bench dataset:
+  - `ScaleAI/SWE-bench_Pro`
+- SWE-bench split:
+  - `test`
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 
@@ -108,6 +122,7 @@ Recommended matrix columns
 - `sweep_value`
 - `arm`
 - `spec_prefill`
+- `request_source`
 - `turn_a_ms`
 - `turn_b_ms`
 - `turn_b_gain_ms`
@@ -118,6 +133,10 @@ Recommended matrix columns
 - `turn_b_prompt_family`
 - `turn_a_prompt_hash`
 - `turn_b_prompt_hash`
+- `turn_a_source_instance_id`
+- `turn_a_source_task_index`
+- `turn_b_source_instance_id`
+- `turn_b_source_task_index`
 - `hint_status`
 - `prefill_wrap`
 - `prefill_spawned`

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib
 import json
 import os
 import random
@@ -31,6 +32,10 @@ REQUEST_COLUMNS = [
     "request",
     "spec_prefill",
     "prompt_isolation_mode",
+    "request_source",
+    "source_repo",
+    "source_instance_id",
+    "source_task_index",
     "prompt_family",
     "prompt_hash",
     "request_id",
@@ -56,6 +61,7 @@ MATRIX_COLUMNS = [
     "arm",
     "spec_prefill",
     "prompt_isolation_mode",
+    "request_source",
     "turn_a_ms",
     "turn_b_ms",
     "turn_b_latency_gain_ms",
@@ -65,6 +71,12 @@ MATRIX_COLUMNS = [
     "turn_b_prompt_family",
     "turn_a_prompt_hash",
     "turn_b_prompt_hash",
+    "turn_a_source_repo",
+    "turn_a_source_instance_id",
+    "turn_a_source_task_index",
+    "turn_b_source_repo",
+    "turn_b_source_instance_id",
+    "turn_b_source_task_index",
     "hint_status",
     "prefill_evidence_status",
     "prefill_wrap",
@@ -82,6 +94,12 @@ SUMMARY_COLUMNS = [
     "run_id",
     "model",
     "mode",
+    "request_source",
+    "swebench_dataset",
+    "swebench_split",
+    "swebench_turn_a_index",
+    "swebench_turn_b_index",
+    "swebench_protected_offset",
     "prompt_isolation_mode",
     "turn_a_words",
     "turn_b_words",
@@ -111,6 +129,10 @@ class ArmSpec:
 class PromptSpec:
     text: str
     family: str
+    request_source: str = "synthetic"
+    source_repo: str = ""
+    source_instance_id: str = ""
+    source_task_index: str = ""
 
 
 def now_run_id() -> str:
@@ -160,6 +182,43 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--seed", type=int, default=int(os.environ.get("SPEC_PREFILL_SEED", "42")))
     parser.add_argument(
+        "--request-source",
+        default=os.environ.get("SPEC_PREFILL_REQUEST_SOURCE", "synthetic"),
+        choices=("synthetic", "swebench_dataset"),
+        help="Prompt source for speculative-prefill turn prompts.",
+    )
+    parser.add_argument(
+        "--swebench-dataset",
+        default=os.environ.get("SPEC_PREFILL_SWEBENCH_DATASET", "ScaleAI/SWE-bench_Pro"),
+        help="Hugging Face dataset name for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-split",
+        default=os.environ.get("SPEC_PREFILL_SWEBENCH_SPLIT", "test"),
+        help="Dataset split for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-turn-a-index",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_TURN_A_INDEX", "0")),
+        help="Dataset index used for control turn A in swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-turn-b-index",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_TURN_B_INDEX", "1")),
+        help="Dataset index used for control turn B in swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-protected-offset",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET", "2")),
+        help=(
+            "Offset added to turn A/B indices for the protected arm so it does not "
+            "reuse the control arm's exact SWE-bench prompts."
+        ),
+    )
+    parser.add_argument(
         "--prompt-isolation-mode",
         default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
         choices=("standard", "strict", "disjoint"),
@@ -188,6 +247,53 @@ def parse_args() -> argparse.Namespace:
 
 def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def format_swebench_dataset_prompt(task: dict[str, Any]) -> str:
+    try:
+        prompts_module = importlib.import_module("agentbench.deepagents_app.src.prompts")
+    except Exception as exc:  # noqa: BLE001 - keep the missing dependency message actionable.
+        raise SystemExit(f"Could not import SWE-bench prompt formatter: {exc}") from exc
+    return str(prompts_module.format_swebench_task_prompt(task))
+
+
+def load_swebench_dataset_split(args: argparse.Namespace) -> Any:
+    try:
+        datasets_module = importlib.import_module("datasets")
+    except Exception as exc:  # noqa: BLE001 - show the exact install fix.
+        raise SystemExit(
+            "SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset requires the datasets package. "
+            "Install it with: python3 -m pip install -r agentbench/requirements.txt"
+        ) from exc
+    return datasets_module.load_dataset(args.swebench_dataset, split=args.swebench_split)
+
+
+def dataset_row_to_task(row: Any) -> dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    try:
+        return dict(row)
+    except Exception as exc:  # noqa: BLE001 - report malformed dataset rows clearly.
+        raise SystemExit(f"Could not convert SWE-bench dataset row to dict: {exc}") from exc
+
+
+def swebench_prompt_spec(dataset: Any, *, dataset_index: int) -> PromptSpec:
+    if len(dataset) == 0:
+        raise SystemExit("SWE-bench dataset split is empty.")
+    normalized_index = dataset_index % len(dataset)
+    task = dataset_row_to_task(dataset[normalized_index])
+    prompt = format_swebench_dataset_prompt(task)
+    instance_id = str(task.get("instance_id", f"swebench_index_{normalized_index}"))
+    repo = str(task.get("repo", ""))
+    family = f"swebench_dataset:{normalized_index}:{short_hash(instance_id or prompt)}"
+    return PromptSpec(
+        text=prompt,
+        family=family,
+        request_source="swebench_dataset",
+        source_repo=repo,
+        source_instance_id=instance_id,
+        source_task_index=str(normalized_index),
+    )
 
 
 def round_ms(value: float | None) -> int | str:
@@ -521,19 +627,33 @@ def request_context(
     prompt_hash: str,
     prompt_family: str,
     prompt_isolation_mode: str,
+    request_source: str,
+    source_repo: str,
+    source_instance_id: str,
+    source_task_index: str,
 ) -> dict[str, Any]:
+    if request_source == "swebench_dataset":
+        task_instance_id = source_instance_id or "swebench_dataset_speculative_prefill_probe"
+        app_variant = "swebench_dataset_speculative_prefill_probe"
+    else:
+        task_instance_id = "synthetic_speculative_prefill_probe"
+        app_variant = "synthetic_speculative_prefill_probe"
     return {
         "request_id": f"{run_id}::{arm}::{request_role}",
         "parent_run_id": run_id,
-        "task_instance_id": "synthetic_speculative_prefill_probe",
+        "task_instance_id": task_instance_id,
         "phase": "speculative_prefill_probe",
         "step_index": step_index,
         "step_title": request_role,
-        "app_variant": "synthetic_speculative_prefill_probe",
+        "app_variant": app_variant,
         "arm": arm,
         "prompt_hash": prompt_hash,
         "prompt_family": prompt_family,
         "prompt_isolation_mode": prompt_isolation_mode,
+        "request_source": request_source,
+        "source_repo": source_repo,
+        "source_instance_id": source_instance_id,
+        "source_task_index": source_task_index,
     }
 
 
@@ -551,6 +671,10 @@ def build_annotations(context: dict[str, Any]) -> list[str]:
         "prompt_hash",
         "prompt_family",
         "prompt_isolation_mode",
+        "request_source",
+        "source_repo",
+        "source_instance_id",
+        "source_task_index",
     ):
         value = context.get(key)
         if value in (None, ""):
@@ -589,7 +713,7 @@ def send_request(
     run_id: str,
     arm: str,
     request_name: str,
-    prompt_family: str,
+    prompt_spec: PromptSpec,
     messages: list[dict[str, str]],
     step_index: int,
     spec_prefill: bool,
@@ -603,8 +727,12 @@ def send_request(
         request_role=request_name,
         step_index=step_index,
         prompt_hash=prompt_hash,
-        prompt_family=prompt_family,
+        prompt_family=prompt_spec.family,
         prompt_isolation_mode=args.prompt_isolation_mode,
+        request_source=prompt_spec.request_source,
+        source_repo=prompt_spec.source_repo,
+        source_instance_id=prompt_spec.source_instance_id,
+        source_task_index=prompt_spec.source_task_index,
     )
     hint_probe_id = f"{run_id}::{arm}::{request_name}"
     hints = build_agent_hints(
@@ -661,7 +789,11 @@ def send_request(
         "request": request_name,
         "spec_prefill": spec_prefill,
         "prompt_isolation_mode": args.prompt_isolation_mode,
-        "prompt_family": prompt_family,
+        "request_source": prompt_spec.request_source,
+        "source_repo": prompt_spec.source_repo,
+        "source_instance_id": prompt_spec.source_instance_id,
+        "source_task_index": prompt_spec.source_task_index,
+        "prompt_family": prompt_spec.family,
         "prompt_hash": prompt_hash,
         "request_id": context["request_id"],
         "hint_probe_id": hint_probe_id,
@@ -690,23 +822,35 @@ def send_request(
 def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     arms = [ArmSpec("control", False), ArmSpec("protected", True)]
+    dataset = load_swebench_dataset_split(args) if args.request_source == "swebench_dataset" else None
     for idx, arm in enumerate(arms):
-        turn_a_prompt = make_turn_a_prompt(
-            arm=arm.arm,
-            target_len=args.turn_a_words,
-            seed=args.seed + idx,
-            isolation_mode=args.prompt_isolation_mode,
-            sweep_axis=args.sweep_axis_context,
-            sweep_value=args.sweep_value_context,
-        )
-        turn_b_user_prompt = make_turn_b_user_prompt(
-            arm=arm.arm,
-            target_len=args.turn_b_words,
-            seed=args.seed + 100 + idx,
-            isolation_mode=args.prompt_isolation_mode,
-            sweep_axis=args.sweep_axis_context,
-            sweep_value=args.sweep_value_context,
-        )
+        if dataset is not None:
+            arm_offset = 0 if arm.arm == "control" else args.swebench_protected_offset
+            turn_a_prompt = swebench_prompt_spec(
+                dataset,
+                dataset_index=args.swebench_turn_a_index + arm_offset,
+            )
+            turn_b_user_prompt = swebench_prompt_spec(
+                dataset,
+                dataset_index=args.swebench_turn_b_index + arm_offset,
+            )
+        else:
+            turn_a_prompt = make_turn_a_prompt(
+                arm=arm.arm,
+                target_len=args.turn_a_words,
+                seed=args.seed + idx,
+                isolation_mode=args.prompt_isolation_mode,
+                sweep_axis=args.sweep_axis_context,
+                sweep_value=args.sweep_value_context,
+            )
+            turn_b_user_prompt = make_turn_b_user_prompt(
+                arm=arm.arm,
+                target_len=args.turn_b_words,
+                seed=args.seed + 100 + idx,
+                isolation_mode=args.prompt_isolation_mode,
+                sweep_axis=args.sweep_axis_context,
+                sweep_value=args.sweep_value_context,
+            )
         target_request_id = f"{run_id}::{arm.arm}::turn_b"
         target_hint_probe_id = f"{run_id}::{arm.arm}::turn_b"
         turn_a = send_request(
@@ -714,7 +858,7 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             run_id=run_id,
             arm=arm.arm,
             request_name="turn_a",
-            prompt_family=turn_a_prompt.family,
+            prompt_spec=turn_a_prompt,
             messages=[{"role": "user", "content": turn_a_prompt.text}],
             step_index=0,
             spec_prefill=arm.spec_prefill,
@@ -730,6 +874,10 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                     "request": "turn_b",
                     "spec_prefill": arm.spec_prefill,
                     "prompt_isolation_mode": args.prompt_isolation_mode,
+                    "request_source": turn_b_user_prompt.request_source,
+                    "source_repo": turn_b_user_prompt.source_repo,
+                    "source_instance_id": turn_b_user_prompt.source_instance_id,
+                    "source_task_index": turn_b_user_prompt.source_task_index,
                     "prompt_family": turn_b_user_prompt.family,
                     "prompt_hash": "",
                     "request_id": target_request_id,
@@ -765,7 +913,7 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             run_id=run_id,
             arm=arm.arm,
             request_name="turn_b",
-            prompt_family=turn_b_user_prompt.family,
+            prompt_spec=turn_b_user_prompt,
             messages=[
                 {"role": "user", "content": turn_a_prompt.text},
                 {"role": "assistant", "content": turn_a.get("response_text") or ""},
@@ -1086,6 +1234,7 @@ def build_matrix_rows(
                     "prompt_isolation_mode",
                     turn_b.get("prompt_isolation_mode", ""),
                 ),
+                "request_source": turn_a.get("request_source", turn_b.get("request_source", "")),
                 "turn_a_ms": turn_a.get("latency_ms", ""),
                 "turn_b_ms": turn_b.get("latency_ms", ""),
                 "turn_b_latency_gain_ms": latency_gain_ms if latency_gain_ms is not None else "",
@@ -1095,6 +1244,12 @@ def build_matrix_rows(
                 "turn_b_prompt_family": turn_b.get("prompt_family", ""),
                 "turn_a_prompt_hash": turn_a.get("prompt_hash", ""),
                 "turn_b_prompt_hash": turn_b.get("prompt_hash", ""),
+                "turn_a_source_repo": turn_a.get("source_repo", ""),
+                "turn_a_source_instance_id": turn_a.get("source_instance_id", ""),
+                "turn_a_source_task_index": turn_a.get("source_task_index", ""),
+                "turn_b_source_repo": turn_b.get("source_repo", ""),
+                "turn_b_source_instance_id": turn_b.get("source_instance_id", ""),
+                "turn_b_source_task_index": turn_b.get("source_task_index", ""),
                 "hint_status": hint_status,
                 "prefill_evidence_status": prefill_evidence_status,
                 "prefill_wrap": prefill["prefill_wrap"],
@@ -1134,9 +1289,21 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "run_id": run_id,
         "model": args.model,
         "mode": args.attribution_mode,
+        "request_source": args.request_source,
+        "swebench_dataset": args.swebench_dataset if args.request_source == "swebench_dataset" else "",
+        "swebench_split": args.swebench_split if args.request_source == "swebench_dataset" else "",
+        "swebench_turn_a_index": (
+            args.swebench_turn_a_index if args.request_source == "swebench_dataset" else ""
+        ),
+        "swebench_turn_b_index": (
+            args.swebench_turn_b_index if args.request_source == "swebench_dataset" else ""
+        ),
+        "swebench_protected_offset": (
+            args.swebench_protected_offset if args.request_source == "swebench_dataset" else ""
+        ),
         "prompt_isolation_mode": args.prompt_isolation_mode,
-        "turn_a_words": args.turn_a_words,
-        "turn_b_words": args.turn_b_words,
+        "turn_a_words": args.turn_a_words if args.request_source == "synthetic" else "dataset",
+        "turn_b_words": args.turn_b_words if args.request_source == "synthetic" else "dataset",
         "output_tokens": args.output_len_tokens,
         "warmup_wait_ms": args.warmup_wait_ms,
         "control_turn_b_ms": control.get("turn_b_ms", ""),
@@ -1159,6 +1326,12 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         "",
         f"- Model: `{summary['model']}`",
         f"- Attribution mode: `{summary['mode']}`",
+        f"- Request source: `{summary['request_source']}`",
+        f"- SWE-bench dataset: `{summary['swebench_dataset']}`",
+        f"- SWE-bench split: `{summary['swebench_split']}`",
+        f"- SWE-bench turn A index: `{summary['swebench_turn_a_index']}`",
+        f"- SWE-bench turn B index: `{summary['swebench_turn_b_index']}`",
+        f"- SWE-bench protected offset: `{summary['swebench_protected_offset']}`",
         f"- Prompt isolation mode: `{summary['prompt_isolation_mode']}`",
         f"- Turn A words: `{summary['turn_a_words']}`",
         f"- Turn B words: `{summary['turn_b_words']}`",

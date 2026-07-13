@@ -25,6 +25,11 @@ PRIORITY_ARRIVAL_GAP_MS="${PRIORITY_ARRIVAL_GAP_MS:-200}"
 PRIORITY_INTER_REQUEST_GAP_MS="${PRIORITY_INTER_REQUEST_GAP_MS:-20}"
 PRIORITY_TOP_LEVEL_PRIORITY_MODE="${PRIORITY_TOP_LEVEL_PRIORITY_MODE:-auto}"
 PRIORITY_REQUEST_CONTEXT_MODE="${PRIORITY_REQUEST_CONTEXT_MODE:-auto}"
+PRIORITY_REQUEST_SOURCE="${PRIORITY_REQUEST_SOURCE:-synthetic}"
+PRIORITY_SWEBENCH_DATASET="${PRIORITY_SWEBENCH_DATASET:-ScaleAI/SWE-bench_Pro}"
+PRIORITY_SWEBENCH_SPLIT="${PRIORITY_SWEBENCH_SPLIT:-test}"
+PRIORITY_SWEBENCH_START_INDEX="${PRIORITY_SWEBENCH_START_INDEX:-0}"
+PRIORITY_SWEBENCH_ALLOW_REUSE="${PRIORITY_SWEBENCH_ALLOW_REUSE:-0}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
@@ -378,6 +383,11 @@ warn_if_worker_runtime_missing() {
   echo "Output length tokens: ${PRIORITY_OUTPUT_LEN}"
   echo "Arrival gap ms: ${PRIORITY_ARRIVAL_GAP_MS}"
   echo "Inter-request gap ms: ${PRIORITY_INTER_REQUEST_GAP_MS}"
+  echo "Request source: ${PRIORITY_REQUEST_SOURCE}"
+  echo "SWE-bench dataset: ${PRIORITY_SWEBENCH_DATASET}"
+  echo "SWE-bench split: ${PRIORITY_SWEBENCH_SPLIT}"
+  echo "SWE-bench start index: ${PRIORITY_SWEBENCH_START_INDEX}"
+  echo "SWE-bench allow reuse: ${PRIORITY_SWEBENCH_ALLOW_REUSE}"
   echo "Top-level priority mode: ${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
   echo "Request-context mode: ${PRIORITY_REQUEST_CONTEXT_MODE}"
   echo "Driver log: ${DRIVER_LOG}"
@@ -484,12 +494,19 @@ probe_cmd=(
   --output-len-tokens "${PRIORITY_OUTPUT_LEN}"
   --arrival-gap-ms "${PRIORITY_ARRIVAL_GAP_MS}"
   --inter-request-gap-ms "${PRIORITY_INTER_REQUEST_GAP_MS}"
+  --request-source "${PRIORITY_REQUEST_SOURCE}"
+  --swebench-dataset "${PRIORITY_SWEBENCH_DATASET}"
+  --swebench-split "${PRIORITY_SWEBENCH_SPLIT}"
+  --swebench-start-index "${PRIORITY_SWEBENCH_START_INDEX}"
   --request-timeout "${REQUEST_TIMEOUT}"
   --top-level-priority-mode "${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
   --request-context-mode "${PRIORITY_REQUEST_CONTEXT_MODE}"
   --cache-event-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl
   --worker-runtime-log "${WORKER_RUNTIME_LOG}"
 )
+if [[ "${PRIORITY_SWEBENCH_ALLOW_REUSE}" = "1" ]]; then
+  probe_cmd+=(--swebench-allow-reuse)
+fi
 if [[ "${IGNORE_EOS}" = "1" ]]; then
   probe_cmd+=(--ignore-eos)
 fi

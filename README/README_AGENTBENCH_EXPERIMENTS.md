@@ -1469,7 +1469,9 @@ Supported modes:
 - `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
-This is a synthetic scheduling experiment. It does **not** use SWE-bench.
+This can use either synthetic prompts or direct SWE-bench Pro task prompts.
+The direct SWE-bench mode is task-level only; it does not execute full
+multi-step agents.
 
 ### What This Test Really Does
 
@@ -1536,6 +1538,35 @@ PRIORITY_INTER_REQUEST_GAP_MS=20 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+=== This works on GH200 with real SWE-bench Pro tasks ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+PRIORITY_SCHEDULING_MODE=all \
+PRIORITY_REQUEST_SOURCE=swebench_dataset \
+PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
+PRIORITY_SWEBENCH_SPLIT=test \
+PRIORITY_SWEBENCH_START_INDEX=0 \
+EXPERIMENT_RESET_MODE=flush \
+PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
+PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
+LOW_PRIORITY_COUNT=8 \
+HIGH_PRIORITY_COUNT=4 \
+PRIORITY_OUTPUT_LEN=128 \
+PRIORITY_INTER_REQUEST_GAP_MS=20 \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+In this mode:
+
+- each low/high request is one SWE-bench Pro task prompt
+- `PRIORITY_SWEBENCH_START_INDEX=0` starts the burst at dataset row 0
+- `LOW_PRIORITY_COUNT + HIGH_PRIORITY_COUNT` controls how many task prompts are used
+- `PRIORITY_INPUT_LEN` is ignored because real task prompts come from the dataset
+
 ### Core Contract Knobs
 
 ```text
@@ -1549,6 +1580,11 @@ PRIORITY_ARRIVAL_GAP_MS
 PRIORITY_INTER_REQUEST_GAP_MS
 PRIORITY_SCHEDULING_SWEEP_AXIS
 PRIORITY_SCHEDULING_SWEEP_VALUES
+PRIORITY_REQUEST_SOURCE
+PRIORITY_SWEBENCH_DATASET
+PRIORITY_SWEBENCH_SPLIT
+PRIORITY_SWEBENCH_START_INDEX
+PRIORITY_SWEBENCH_ALLOW_REUSE
 PRIORITY_TOP_LEVEL_PRIORITY_MODE
 PRIORITY_REQUEST_CONTEXT_MODE
 SGLANG_TRANSFER_LOG_PROFILE
@@ -1710,7 +1746,9 @@ Supported modes:
 - `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
-This is a synthetic two-turn experiment. It does **not** use SWE-bench.
+This can use either synthetic two-turn prompts or direct SWE-bench Pro task
+prompts. The direct SWE-bench mode is task-level only; it does not execute full
+multi-step agents.
 
 ### What This Test Really Does
 
@@ -1785,6 +1823,35 @@ SPEC_PREFILL_OUTPUT_TOKENS=128 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+=== This works on GH200 with real SWE-bench Pro tasks ===
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRECISE_START_MODE=clean \
+SPEC_PREFILL_MODE=all \
+SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset \
+SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
+SPEC_PREFILL_SWEBENCH_SPLIT=test \
+SPEC_PREFILL_TURN_A_INDEX=0 \
+SPEC_PREFILL_TURN_B_INDEX=1 \
+SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=2 \
+EXPERIMENT_RESET_MODE=flush \
+SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
+SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_OUTPUT_TOKENS=128 \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+In this mode:
+
+- control turn A uses SWE-bench row `SPEC_PREFILL_TURN_A_INDEX`
+- control turn B uses SWE-bench row `SPEC_PREFILL_TURN_B_INDEX`
+- protected turn A/B use those same indexes plus `SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET`
+- `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1814,6 +1881,12 @@ SPEC_PREFILL_WARMUP_WAIT_MS
 SPEC_PREFILL_SWEEP_AXIS
 SPEC_PREFILL_SWEEP_VALUES
 SPEC_PREFILL_SWEEP_SEED_MODE
+SPEC_PREFILL_REQUEST_SOURCE
+SPEC_PREFILL_SWEBENCH_DATASET
+SPEC_PREFILL_SWEBENCH_SPLIT
+SPEC_PREFILL_TURN_A_INDEX
+SPEC_PREFILL_TURN_B_INDEX
+SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET
 RETENTION_PROMPT_ISOLATION_MODE
 SPEC_PREFILL_REQUEST_CONTEXT_MODE
 SGLANG_TRANSFER_LOG_PROFILE
@@ -2039,6 +2112,41 @@ Then change:
 
 ```text
 EXP9_RETENTION_REQUEST_SOURCE=swebench_trajectory
+```
+
+Experiment 11 can use synthetic prompts or direct SWE-bench Pro tasks.
+Set these in the Experiment 11 block:
+
+```text
+EXP11_PRIORITY_REQUEST_SOURCE=synthetic
+EXP11_PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
+EXP11_PRIORITY_SWEBENCH_SPLIT=test
+EXP11_PRIORITY_SWEBENCH_START_INDEX=0
+EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=0
+```
+
+To run Experiment 11 directly from SWE-bench Pro, change:
+
+```text
+EXP11_PRIORITY_REQUEST_SOURCE=swebench_dataset
+```
+
+Experiment 12 can use synthetic prompts or direct SWE-bench Pro tasks.
+Set these in the Experiment 12 block:
+
+```text
+EXP12_SPEC_PREFILL_REQUEST_SOURCE=synthetic
+EXP12_SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
+EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=test
+EXP12_SPEC_PREFILL_TURN_A_INDEX=0
+EXP12_SPEC_PREFILL_TURN_B_INDEX=1
+EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=2
+```
+
+To run Experiment 12 directly from SWE-bench Pro, change:
+
+```text
+EXP12_SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset
 ```
 
 The default selection is:

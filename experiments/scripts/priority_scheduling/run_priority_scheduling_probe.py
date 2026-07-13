@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import importlib
 import json
 import os
 import random
@@ -62,6 +63,10 @@ REQUEST_COLUMNS = [
     "request_role",
     "priority_class",
     "hint_profile",
+    "request_source",
+    "source_repo",
+    "source_instance_id",
+    "source_task_index",
     "arrival_index",
     "attached_rank",
     "completed_rank",
@@ -102,6 +107,9 @@ REQUEST_COLUMNS = [
 READABLE_REQUEST_COLUMNS = [
     "request",
     "prio_class",
+    "request_source",
+    "source_instance_id",
+    "source_task_index",
     "arrival",
     "attach",
     "complete",
@@ -141,6 +149,10 @@ SUMMARY_COLUMNS = [
     "run_id",
     "model",
     "mode",
+    "request_source",
+    "swebench_dataset",
+    "swebench_split",
+    "swebench_start_index",
     "low_n",
     "high_n",
     "input_words",
@@ -173,6 +185,10 @@ class RequestSpec:
     arrival_index: int
     planned_offset_ms: int
     prompt: str
+    request_source: str = "synthetic"
+    source_repo: str = ""
+    source_instance_id: str = ""
+    source_task_index: str = ""
 
 
 def now_run_id() -> str:
@@ -209,6 +225,35 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("PRIORITY_INTER_REQUEST_GAP_MS", "20")),
     )
     parser.add_argument("--seed", type=int, default=int(os.environ.get("PRIORITY_PROBE_SEED", "42")))
+    parser.add_argument(
+        "--request-source",
+        default=os.environ.get("PRIORITY_REQUEST_SOURCE", "synthetic"),
+        choices=("synthetic", "swebench_dataset"),
+        help="Prompt source for priority requests.",
+    )
+    parser.add_argument(
+        "--swebench-dataset",
+        default=os.environ.get("PRIORITY_SWEBENCH_DATASET", "ScaleAI/SWE-bench_Pro"),
+        help="Hugging Face dataset name for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-split",
+        default=os.environ.get("PRIORITY_SWEBENCH_SPLIT", "test"),
+        help="Dataset split for swebench_dataset mode.",
+    )
+    parser.add_argument(
+        "--swebench-start-index",
+        type=int,
+        default=int(os.environ.get("PRIORITY_SWEBENCH_START_INDEX", "0")),
+        help="First dataset row used for the mixed-priority burst.",
+    )
+    parser.add_argument(
+        "--swebench-allow-reuse",
+        action="store_true",
+        default=os.environ.get("PRIORITY_SWEBENCH_ALLOW_REUSE", "0").strip().lower()
+        in {"1", "true", "yes"},
+        help="Allow cycling SWE-bench rows if the split is smaller than the burst.",
+    )
     parser.add_argument(
         "--prompt-isolation-mode",
         default=os.environ.get("RETENTION_PROMPT_ISOLATION_MODE", "disjoint"),
@@ -259,6 +304,43 @@ def parse_args() -> argparse.Namespace:
 
 def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def format_swebench_dataset_prompt(task: dict[str, Any]) -> str:
+    try:
+        prompts_module = importlib.import_module("agentbench.deepagents_app.src.prompts")
+    except Exception as exc:  # noqa: BLE001 - keep the missing dependency message actionable.
+        raise SystemExit(f"Could not import SWE-bench prompt formatter: {exc}") from exc
+    return str(prompts_module.format_swebench_task_prompt(task))
+
+
+def load_swebench_dataset_split(args: argparse.Namespace) -> Any:
+    try:
+        datasets_module = importlib.import_module("datasets")
+    except Exception as exc:  # noqa: BLE001 - show the exact install fix.
+        raise SystemExit(
+            "PRIORITY_REQUEST_SOURCE=swebench_dataset requires the datasets package. "
+            "Install it with: python3 -m pip install -r agentbench/requirements.txt"
+        ) from exc
+    return datasets_module.load_dataset(args.swebench_dataset, split=args.swebench_split)
+
+
+def dataset_row_to_task(row: Any) -> dict[str, Any]:
+    if isinstance(row, dict):
+        return dict(row)
+    try:
+        return dict(row)
+    except Exception as exc:  # noqa: BLE001 - report malformed dataset rows clearly.
+        raise SystemExit(f"Could not convert SWE-bench dataset row to dict: {exc}") from exc
+
+
+def swebench_task_source_meta(task: dict[str, Any], *, dataset_index: int) -> dict[str, str]:
+    return {
+        "request_source": "swebench_dataset",
+        "source_repo": str(task.get("repo", "")),
+        "source_instance_id": str(task.get("instance_id", f"swebench_index_{dataset_index}")),
+        "source_task_index": str(dataset_index),
+    }
 
 
 def utc_now() -> datetime:
@@ -388,17 +470,31 @@ def request_context(
     arrival_index: int,
     priority_class: str,
     prompt_hash: str,
+    request_source: str,
+    source_repo: str,
+    source_instance_id: str,
+    source_task_index: str,
 ) -> dict[str, Any]:
+    if request_source == "swebench_dataset":
+        task_instance_id = source_instance_id or "swebench_dataset_priority_scheduling_probe"
+        app_variant = "swebench_dataset_priority_scheduling_probe"
+    else:
+        task_instance_id = "synthetic_priority_scheduling_probe"
+        app_variant = "synthetic_priority_scheduling_probe"
     return {
         "request_id": f"{run_id}::{request_role}",
         "parent_run_id": run_id,
-        "task_instance_id": "synthetic_priority_scheduling_probe",
+        "task_instance_id": task_instance_id,
         "phase": "priority_scheduling_probe",
         "step_index": arrival_index,
         "step_title": request_role,
-        "app_variant": "synthetic_priority_scheduling_probe",
+        "app_variant": app_variant,
         "priority_class": priority_class,
         "prompt_hash": prompt_hash,
+        "request_source": request_source,
+        "source_repo": source_repo,
+        "source_instance_id": source_instance_id,
+        "source_task_index": source_task_index,
     }
 
 
@@ -423,6 +519,10 @@ def build_annotations(context: dict[str, Any]) -> list[str]:
         "app_variant",
         "priority_class",
         "prompt_hash",
+        "request_source",
+        "source_repo",
+        "source_instance_id",
+        "source_task_index",
     ):
         value = context.get(key)
         if value in (None, ""):
@@ -587,7 +687,75 @@ def make_prompt(*, request_role: str, target_len: int, seed: int, isolation_mode
     return header + " ".join(words)
 
 
+def build_swebench_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
+    dataset = load_swebench_dataset_split(args)
+    total_requests = args.low_priority_count + args.high_priority_count
+    if len(dataset) == 0:
+        raise SystemExit("SWE-bench dataset split is empty.")
+    if total_requests > len(dataset) and not args.swebench_allow_reuse:
+        raise SystemExit(
+            "Not enough SWE-bench rows for this priority burst without reuse. "
+            f"need={total_requests} available={len(dataset)}. "
+            "Use smaller LOW_PRIORITY_COUNT/HIGH_PRIORITY_COUNT or set PRIORITY_SWEBENCH_ALLOW_REUSE=1."
+        )
+
+    start_index = args.swebench_start_index % len(dataset)
+
+    def row_for(offset: int) -> tuple[int, dict[str, Any], str, dict[str, str]]:
+        if not args.swebench_allow_reuse and offset >= len(dataset):
+            raise SystemExit("Internal SWE-bench row selection overflow without reuse.")
+        dataset_index = (start_index + offset) % len(dataset)
+        task = dataset_row_to_task(dataset[dataset_index])
+        prompt = format_swebench_dataset_prompt(task)
+        meta = swebench_task_source_meta(task, dataset_index=dataset_index)
+        return dataset_index, task, prompt, meta
+
+    specs: list[RequestSpec] = []
+    arrival_index = 0
+    row_offset = 0
+    for idx in range(args.low_priority_count):
+        request_role = f"low_{idx:04d}"
+        _dataset_index, _task, prompt, meta = row_for(row_offset)
+        row_offset += 1
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="low-priority",
+                priority_value=args.low_priority_value,
+                hint_profile="low-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=idx * args.inter_request_gap_ms,
+                prompt=prompt,
+                **meta,
+            )
+        )
+        arrival_index += 1
+
+    high_start_ms = args.arrival_gap_ms
+    for idx in range(args.high_priority_count):
+        request_role = f"high_{idx:04d}"
+        _dataset_index, _task, prompt, meta = row_for(row_offset)
+        row_offset += 1
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="high-priority",
+                priority_value=args.high_priority_value,
+                hint_profile="high-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=high_start_ms + idx * args.inter_request_gap_ms,
+                prompt=prompt,
+                **meta,
+            )
+        )
+        arrival_index += 1
+    return specs
+
+
 def build_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
+    if args.request_source == "swebench_dataset":
+        return build_swebench_request_specs(args)
+
     specs: list[RequestSpec] = []
     arrival_index = 0
     for idx in range(args.low_priority_count):
@@ -662,6 +830,10 @@ def send_one_request(
         arrival_index=spec.arrival_index,
         priority_class=spec.priority_class,
         prompt_hash=prompt_hash,
+        request_source=spec.request_source,
+        source_repo=spec.source_repo,
+        source_instance_id=spec.source_instance_id,
+        source_task_index=spec.source_task_index,
     )
     base_nvext: dict[str, Any] = {
         "agent_context": build_agent_context(context),
@@ -739,6 +911,10 @@ def send_one_request(
         "request_role": spec.request_role,
         "priority_class": spec.priority_class,
         "hint_profile": spec.hint_profile,
+        "request_source": spec.request_source,
+        "source_repo": spec.source_repo,
+        "source_instance_id": spec.source_instance_id,
+        "source_task_index": spec.source_task_index,
         "arrival_index": spec.arrival_index,
         "planned_offset_ms": spec.planned_offset_ms,
         "client_send_timestamp_utc": send_started.isoformat(),
@@ -746,7 +922,7 @@ def send_one_request(
         "client_latency_ms": round_ms(latency_ms),
         "status": status,
         "error": error,
-        "input_len_words": args.input_len_words,
+        "input_len_words": len(spec.prompt.split()),
         "output_len_tokens": args.output_len_tokens,
         "prompt_hash": prompt_hash,
         "agent_hints_priority": priority if priority is not None else "",
@@ -821,6 +997,9 @@ def build_readable_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         readable = {
             "request": row.get("request_role", ""),
             "prio_class": row.get("priority_class", ""),
+            "request_source": row.get("request_source", ""),
+            "source_instance_id": row.get("source_instance_id", ""),
+            "source_task_index": row.get("source_task_index", ""),
             "arrival": safe_int_str(row.get("arrival_index")),
             "attach": safe_int_str(row.get("attached_rank")),
             "complete": safe_int_str(row.get("completed_rank")),
@@ -1305,9 +1484,15 @@ def build_summary(
         "run_id": run_id,
         "model": args.model,
         "mode": args.attribution_mode,
+        "request_source": args.request_source,
+        "swebench_dataset": args.swebench_dataset if args.request_source == "swebench_dataset" else "",
+        "swebench_split": args.swebench_split if args.request_source == "swebench_dataset" else "",
+        "swebench_start_index": (
+            args.swebench_start_index if args.request_source == "swebench_dataset" else ""
+        ),
         "low_n": args.low_priority_count,
         "high_n": args.high_priority_count,
-        "input_words": args.input_len_words,
+        "input_words": args.input_len_words if args.request_source == "synthetic" else "dataset",
         "output_tokens": args.output_len_tokens,
         "arrival_gap_ms": args.arrival_gap_ms,
         "inter_gap_ms": args.inter_request_gap_ms,
@@ -1346,6 +1531,10 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         "",
         f"- Model: `{summary['model']}`",
         f"- Attribution mode: `{summary['mode']}`",
+        f"- Request source: `{summary['request_source']}`",
+        f"- SWE-bench dataset: `{summary['swebench_dataset']}`",
+        f"- SWE-bench split: `{summary['swebench_split']}`",
+        f"- SWE-bench start index: `{summary['swebench_start_index']}`",
         f"- Low-priority requests: `{summary['low_n']}`",
         f"- High-priority requests: `{summary['high_n']}`",
         f"- Input length (words): `{summary['input_words']}`",

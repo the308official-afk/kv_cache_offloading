@@ -209,6 +209,11 @@ HIGH_PRIORITY_COUNT='${HIGH_PRIORITY_COUNT:-}'
 PRIORITY_INPUT_LEN='${PRIORITY_INPUT_LEN:-}'
 PRIORITY_OUTPUT_LEN='${PRIORITY_OUTPUT_LEN:-}'
 PRIORITY_INTER_REQUEST_GAP_MS='${PRIORITY_INTER_REQUEST_GAP_MS:-}'
+PRIORITY_REQUEST_SOURCE='${PRIORITY_REQUEST_SOURCE:-}'
+PRIORITY_SWEBENCH_DATASET='${PRIORITY_SWEBENCH_DATASET:-}'
+PRIORITY_SWEBENCH_SPLIT='${PRIORITY_SWEBENCH_SPLIT:-}'
+PRIORITY_SWEBENCH_START_INDEX='${PRIORITY_SWEBENCH_START_INDEX:-}'
+PRIORITY_SWEBENCH_ALLOW_REUSE='${PRIORITY_SWEBENCH_ALLOW_REUSE:-}'
 SPEC_PREFILL_MODE='${SPEC_PREFILL_MODE:-}'
 SPEC_PREFILL_PROMPT_ISOLATION_MODE='${SPEC_PREFILL_PROMPT_ISOLATION_MODE}'
 SPEC_PREFILL_SWEEP_SEED_MODE='${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}'
@@ -217,6 +222,12 @@ SPEC_PREFILL_SWEEP_VALUES='${SPEC_PREFILL_SWEEP_VALUES:-}'
 SPEC_PREFILL_TURN_A_WORDS='${SPEC_PREFILL_TURN_A_WORDS:-}'
 SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
 SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
+SPEC_PREFILL_REQUEST_SOURCE='${SPEC_PREFILL_REQUEST_SOURCE:-}'
+SPEC_PREFILL_SWEBENCH_DATASET='${SPEC_PREFILL_SWEBENCH_DATASET:-}'
+SPEC_PREFILL_SWEBENCH_SPLIT='${SPEC_PREFILL_SWEBENCH_SPLIT:-}'
+SPEC_PREFILL_TURN_A_INDEX='${SPEC_PREFILL_TURN_A_INDEX:-}'
+SPEC_PREFILL_TURN_B_INDEX='${SPEC_PREFILL_TURN_B_INDEX:-}'
+SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
 EXP9_MODE='${EXP9_MODE:-}'
 EXP9_RETENTION_REQUEST_SOURCE='${EXP9_RETENTION_REQUEST_SOURCE:-}'
 EXP9_RETENTION_SWEBENCH_DATASET='${EXP9_RETENTION_SWEBENCH_DATASET:-}'
@@ -248,6 +259,11 @@ EXP10_CACHE_PINNING_TTL='${EXP10_CACHE_PINNING_TTL:-}'
 EXP10_CACHE_PINNING_PINNED_RATIO='${EXP10_CACHE_PINNING_PINNED_RATIO:-}'
 EXP10_CACHE_PINNING_HICACHE_RATIO='${EXP10_CACHE_PINNING_HICACHE_RATIO:-}'
 EXP11_MODE='${EXP11_MODE:-}'
+EXP11_PRIORITY_REQUEST_SOURCE='${EXP11_PRIORITY_REQUEST_SOURCE:-}'
+EXP11_PRIORITY_SWEBENCH_DATASET='${EXP11_PRIORITY_SWEBENCH_DATASET:-}'
+EXP11_PRIORITY_SWEBENCH_SPLIT='${EXP11_PRIORITY_SWEBENCH_SPLIT:-}'
+EXP11_PRIORITY_SWEBENCH_START_INDEX='${EXP11_PRIORITY_SWEBENCH_START_INDEX:-}'
+EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE='${EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE:-}'
 EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS='${EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
 EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES='${EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
 EXP11_LOW_PRIORITY_COUNT='${EXP11_LOW_PRIORITY_COUNT:-}'
@@ -256,6 +272,12 @@ EXP11_PRIORITY_INPUT_LEN='${EXP11_PRIORITY_INPUT_LEN:-}'
 EXP11_PRIORITY_OUTPUT_LEN='${EXP11_PRIORITY_OUTPUT_LEN:-}'
 EXP11_PRIORITY_INTER_REQUEST_GAP_MS='${EXP11_PRIORITY_INTER_REQUEST_GAP_MS:-}'
 EXP12_MODE='${EXP12_MODE:-}'
+EXP12_SPEC_PREFILL_REQUEST_SOURCE='${EXP12_SPEC_PREFILL_REQUEST_SOURCE:-}'
+EXP12_SPEC_PREFILL_SWEBENCH_DATASET='${EXP12_SPEC_PREFILL_SWEBENCH_DATASET:-}'
+EXP12_SPEC_PREFILL_SWEBENCH_SPLIT='${EXP12_SPEC_PREFILL_SWEBENCH_SPLIT:-}'
+EXP12_SPEC_PREFILL_TURN_A_INDEX='${EXP12_SPEC_PREFILL_TURN_A_INDEX:-}'
+EXP12_SPEC_PREFILL_TURN_B_INDEX='${EXP12_SPEC_PREFILL_TURN_B_INDEX:-}'
+EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
 EXP12_SPEC_PREFILL_ATTRIBUTION_MODE='${EXP12_SPEC_PREFILL_ATTRIBUTION_MODE:-}'
 EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE='${EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE:-}'
 EXP12_SPEC_PREFILL_SWEEP_AXIS='${EXP12_SPEC_PREFILL_SWEEP_AXIS:-}'
@@ -862,6 +884,11 @@ run_experiment_11() {
   local exp11_priority_input_len
   local exp11_priority_output_len
   local exp11_priority_inter_request_gap_ms
+  local exp11_request_source
+  local exp11_swebench_dataset
+  local exp11_swebench_split
+  local exp11_swebench_start_index
+  local exp11_swebench_allow_reuse
   exp11_sweep_axis="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
   exp11_sweep_values="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
   exp11_low_priority_count="$(resolve_value EXP11_LOW_PRIORITY_COUNT LOW_PRIORITY_COUNT)"
@@ -869,6 +896,11 @@ run_experiment_11() {
   exp11_priority_input_len="$(resolve_value EXP11_PRIORITY_INPUT_LEN PRIORITY_INPUT_LEN)"
   exp11_priority_output_len="$(resolve_value EXP11_PRIORITY_OUTPUT_LEN PRIORITY_OUTPUT_LEN)"
   exp11_priority_inter_request_gap_ms="$(resolve_value EXP11_PRIORITY_INTER_REQUEST_GAP_MS PRIORITY_INTER_REQUEST_GAP_MS)"
+  exp11_request_source="$(resolve_value EXP11_PRIORITY_REQUEST_SOURCE PRIORITY_REQUEST_SOURCE)"
+  exp11_swebench_dataset="$(resolve_value EXP11_PRIORITY_SWEBENCH_DATASET PRIORITY_SWEBENCH_DATASET)"
+  exp11_swebench_split="$(resolve_value EXP11_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
+  exp11_swebench_start_index="$(resolve_value EXP11_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
+  exp11_swebench_allow_reuse="$(resolve_value EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
@@ -889,6 +921,11 @@ high_priority_count=${exp11_high_priority_count}
 priority_input_len=${exp11_priority_input_len}
 priority_output_len=${exp11_priority_output_len}
 priority_inter_request_gap_ms=${exp11_priority_inter_request_gap_ms}
+priority_request_source=${exp11_request_source}
+priority_swebench_dataset=${exp11_swebench_dataset}
+priority_swebench_split=${exp11_swebench_split}
+priority_swebench_start_index=${exp11_swebench_start_index}
+priority_swebench_allow_reuse=${exp11_swebench_allow_reuse}
 EOF
   local -a env_args=(
     env
@@ -911,6 +948,11 @@ EOF
   [[ -n "${exp11_priority_input_len}" ]] && env_args+=(PRIORITY_INPUT_LEN="${exp11_priority_input_len}")
   [[ -n "${exp11_priority_output_len}" ]] && env_args+=(PRIORITY_OUTPUT_LEN="${exp11_priority_output_len}")
   [[ -n "${exp11_priority_inter_request_gap_ms}" ]] && env_args+=(PRIORITY_INTER_REQUEST_GAP_MS="${exp11_priority_inter_request_gap_ms}")
+  [[ -n "${exp11_request_source}" ]] && env_args+=(PRIORITY_REQUEST_SOURCE="${exp11_request_source}")
+  [[ -n "${exp11_swebench_dataset}" ]] && env_args+=(PRIORITY_SWEBENCH_DATASET="${exp11_swebench_dataset}")
+  [[ -n "${exp11_swebench_split}" ]] && env_args+=(PRIORITY_SWEBENCH_SPLIT="${exp11_swebench_split}")
+  [[ -n "${exp11_swebench_start_index}" ]] && env_args+=(PRIORITY_SWEBENCH_START_INDEX="${exp11_swebench_start_index}")
+  [[ -n "${exp11_swebench_allow_reuse}" ]] && env_args+=(PRIORITY_SWEBENCH_ALLOW_REUSE="${exp11_swebench_allow_reuse}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
@@ -950,6 +992,12 @@ run_experiment_12() {
   local exp12_output_tokens
   local exp12_attribution_mode
   local exp12_request_context_mode
+  local exp12_request_source
+  local exp12_swebench_dataset
+  local exp12_swebench_split
+  local exp12_turn_a_index
+  local exp12_turn_b_index
+  local exp12_swebench_protected_offset
   exp12_sweep_axis="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_AXIS SPEC_PREFILL_SWEEP_AXIS)"
   exp12_sweep_values="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_VALUES SPEC_PREFILL_SWEEP_VALUES)"
   exp12_turn_a_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_WORDS SPEC_PREFILL_TURN_A_WORDS)"
@@ -957,6 +1005,12 @@ run_experiment_12() {
   exp12_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_OUTPUT_TOKENS SPEC_PREFILL_OUTPUT_TOKENS)"
   exp12_attribution_mode="$(resolve_value EXP12_SPEC_PREFILL_ATTRIBUTION_MODE SPEC_PREFILL_ATTRIBUTION_MODE)"
   exp12_request_context_mode="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE SPEC_PREFILL_REQUEST_CONTEXT_MODE)"
+  exp12_request_source="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_SOURCE SPEC_PREFILL_REQUEST_SOURCE)"
+  exp12_swebench_dataset="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_DATASET SPEC_PREFILL_SWEBENCH_DATASET)"
+  exp12_swebench_split="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_SPLIT SPEC_PREFILL_SWEBENCH_SPLIT)"
+  exp12_turn_a_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_INDEX SPEC_PREFILL_TURN_A_INDEX)"
+  exp12_turn_b_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_INDEX SPEC_PREFILL_TURN_B_INDEX)"
+  exp12_swebench_protected_offset="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
@@ -977,6 +1031,12 @@ spec_prefill_sweep_values=${exp12_sweep_values}
 spec_prefill_turn_a_words=${exp12_turn_a_words}
 spec_prefill_turn_b_words=${exp12_turn_b_words}
 spec_prefill_output_tokens=${exp12_output_tokens}
+spec_prefill_request_source=${exp12_request_source}
+spec_prefill_swebench_dataset=${exp12_swebench_dataset}
+spec_prefill_swebench_split=${exp12_swebench_split}
+spec_prefill_turn_a_index=${exp12_turn_a_index}
+spec_prefill_turn_b_index=${exp12_turn_b_index}
+spec_prefill_swebench_protected_offset=${exp12_swebench_protected_offset}
 EOF
   local -a env_args=(
     env
@@ -999,6 +1059,12 @@ EOF
   [[ -n "${exp12_turn_a_words}" ]] && env_args+=(SPEC_PREFILL_TURN_A_WORDS="${exp12_turn_a_words}")
   [[ -n "${exp12_turn_b_words}" ]] && env_args+=(SPEC_PREFILL_TURN_B_WORDS="${exp12_turn_b_words}")
   [[ -n "${exp12_output_tokens}" ]] && env_args+=(SPEC_PREFILL_OUTPUT_TOKENS="${exp12_output_tokens}")
+  [[ -n "${exp12_request_source}" ]] && env_args+=(SPEC_PREFILL_REQUEST_SOURCE="${exp12_request_source}")
+  [[ -n "${exp12_swebench_dataset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_DATASET="${exp12_swebench_dataset}")
+  [[ -n "${exp12_swebench_split}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_SPLIT="${exp12_swebench_split}")
+  [[ -n "${exp12_turn_a_index}" ]] && env_args+=(SPEC_PREFILL_TURN_A_INDEX="${exp12_turn_a_index}")
+  [[ -n "${exp12_turn_b_index}" ]] && env_args+=(SPEC_PREFILL_TURN_B_INDEX="${exp12_turn_b_index}")
+  [[ -n "${exp12_swebench_protected_offset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET="${exp12_swebench_protected_offset}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
