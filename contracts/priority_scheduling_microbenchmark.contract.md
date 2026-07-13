@@ -115,7 +115,9 @@ Consolidated public outputs
 - `experiments/reports/latest_priority_scheduling_microbenchmark_summary.md`
 - `experiments/reports/latest_priority_scheduling_microbenchmark_run_contract.json`
 - `experiments/reports/latest_priority_scheduling_microbenchmark_jump_ahead.svg`
+  - line chart of jump-ahead rate versus arrival gap
 - `experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg`
+  - same chart copied into the shared chart folder
 
 Recommended matrix columns
 --------------------------

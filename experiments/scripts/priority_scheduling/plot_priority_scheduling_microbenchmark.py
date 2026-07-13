@@ -212,8 +212,8 @@ def build_jump_ahead_chart_svg(
     max_y = max([100.0] + rates)
     grid_lines = 5
     y_ticks = [max_y * step / grid_lines for step in range(grid_lines + 1)]
-    gap = plot_width / max(len(labels), 1)
-    bar_width = min(86, int(gap * 0.58))
+    count = max(len(labels), 1)
+    x_step = plot_width / max(count - 1, 1)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -228,16 +228,28 @@ def build_jump_ahead_chart_svg(
         parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{left + plot_width}" y2="{y:.2f}" stroke="#e2e8f0" stroke-width="1"/>')
         parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{tick:.0f}%</text>')
 
-    for idx, (label, rate, count, max_count) in enumerate(zip(labels, rates, counts, max_counts)):
-        center_x = left + gap * idx + gap / 2
-        x0 = center_x - bar_width / 2
-        bar_height = (rate / max_y) * plot_height if max_y else 0
-        y0 = top + plot_height - bar_height
-        color = "#2563eb" if count > 0 else "#cbd5e1"
-        parts.append(f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{bar_width}" height="{bar_height:.2f}" rx="10" fill="{color}" opacity="0.94"/>')
-        parts.append(f'<text x="{center_x:.2f}" y="{y0 - 26:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#334155">{rate:.1f}%</text>')
-        parts.append(f'<text x="{center_x:.2f}" y="{y0 - 8:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">{count}/{max_count}</text>')
-        parts.append(f'<text x="{center_x:.2f}" y="{top + plot_height + 24}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
+    points = []
+    for idx, (label, rate) in enumerate(zip(labels, rates)):
+        x = left + (idx * x_step if count > 1 else plot_width / 2)
+        y = top + plot_height - (rate / max_y) * plot_height if max_y else top + plot_height
+        points.append((x, y))
+        parts.append(f'<text x="{x:.2f}" y="{top + plot_height + 24}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
+
+    if points:
+        path_points = " ".join(f"{x:.2f},{y:.2f}" for x, y in points)
+        parts.append(f'<polyline fill="none" stroke="#2563eb" stroke-width="4" stroke-linejoin="round" stroke-linecap="round" points="{path_points}"/>')
+
+    for (x, y), rate, jump_count, max_count in zip(points, rates, counts, max_counts):
+        color = "#2563eb" if jump_count > 0 else "#94a3b8"
+        parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="6" fill="{color}" stroke="#ffffff" stroke-width="2"/>')
+        parts.append(f'<text x="{x:.2f}" y="{y - 14:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#334155">{rate:.1f}%</text>')
+        parts.append(f'<text x="{x:.2f}" y="{y + 24:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">{jump_count}/{max_count}</text>')
+
+    legend_x = left
+    legend_y = height - 34
+    parts.append(f'<line x1="{legend_x}" y1="{legend_y - 3}" x2="{legend_x + 32}" y2="{legend_y - 3}" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>')
+    parts.append(f'<circle cx="{legend_x + 16}" cy="{legend_y - 3}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>')
+    parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 2}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High-priority jump-ahead rate</text>')
 
     parts.append(f'<text x="28" y="{top + plot_height / 2:.2f}" transform="rotate(-90 28 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Jump-Ahead Rate</text>')
     parts.append(f'<text x="{left + plot_width / 2:.2f}" y="{height - 40}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Arrival Gap (ms)</text>')
@@ -266,7 +278,7 @@ def main() -> None:
             out_dir / "jump_ahead.svg",
             build_jump_ahead_chart_svg(
                 title="Priority Scheduling: High-Priority Jump-Ahead Rate",
-                subtitle="Higher bars mean high-priority requests were attached before more earlier-arriving low-priority requests.",
+                subtitle="Higher points mean high-priority requests were attached before more earlier-arriving low-priority requests.",
                 labels=labels,
                 rates=rates,
                 counts=counts,
@@ -279,69 +291,15 @@ def main() -> None:
     if sweep_rows:
         labels = [row.get("sweep_value", "") for row in sweep_rows]
         attach_values = [max(0, parse_int(row.get("high_attach_leapfrogs")) or 0) for row in sweep_rows]
-        low_wait_values = [parse_int(row.get("low_wait_ms")) or 0 for row in sweep_rows]
-        high_wait_values = [parse_int(row.get("high_wait_ms")) or 0 for row in sweep_rows]
-        low_latency_values = [parse_int(row.get("low_latency_ms")) or 0 for row in sweep_rows]
-        high_latency_values = [parse_int(row.get("high_latency_ms")) or 0 for row in sweep_rows]
-        wait_gain_values = [max(0, low - high) for low, high in zip(low_wait_values, high_wait_values)]
-        latency_gain_values = [max(0, low - high) for low, high in zip(low_latency_values, high_latency_values)]
 
         write_svg(
-            out_dir / "priority_wins.svg",
-            build_bar_chart_svg(
-                title="Priority Scheduling Sweep: Priority Wins",
-                subtitle="More attached leapfrogs means late high-priority requests moved ahead more often.",
-                labels=labels,
-                values=attach_values,
-                colors=["#2563eb"] * len(labels),
-                y_label="High-Priority Wins",
-            ),
-        )
-
-        write_svg(
-            out_dir / "queue_wait.svg",
+            out_dir / "jump_ahead.svg",
             build_line_chart_svg(
-                title="Priority Scheduling Sweep: Queue Wait",
-                subtitle="Lower high-priority wait than low-priority wait supports scheduling separation.",
+                title="Priority Scheduling: High-Priority Jump-Ahead Events",
+                subtitle="Higher points mean high-priority requests attached before more earlier-arriving low-priority requests.",
                 labels=labels,
-                series=[
-                    ("Low-priority wait", "#94a3b8", low_wait_values),
-                    ("High-priority wait", "#2563eb", high_wait_values),
-                ],
-                y_label="Queue Wait (ms)",
-            ),
-        )
-        write_svg(
-            out_dir / "wait_gain.svg",
-            build_line_chart_svg(
-                title="Priority Scheduling Sweep: Wait Gain",
-                subtitle="Positive values mean high-priority requests waited less than low-priority requests.",
-                labels=labels,
-                series=[("Wait gain", "#16a34a", wait_gain_values)],
-                y_label="Wait Gain (ms)",
-            ),
-        )
-        write_svg(
-            out_dir / "latency_vs_arrival_gap.svg",
-            build_line_chart_svg(
-                title="Priority Scheduling Sweep: Request Latency",
-                subtitle="Lower high-priority latency than low-priority latency supports scheduling separation.",
-                labels=labels,
-                series=[
-                    ("Low-priority latency", "#94a3b8", low_latency_values),
-                    ("High-priority latency", "#2563eb", high_latency_values),
-                ],
-                y_label="Latency (ms)",
-            ),
-        )
-        write_svg(
-            out_dir / "latency_gain.svg",
-            build_line_chart_svg(
-                title="Priority Scheduling Sweep: Latency Gain",
-                subtitle="Positive values mean high-priority requests finished faster than low-priority requests.",
-                labels=labels,
-                series=[("Latency gain", "#16a34a", latency_gain_values)],
-                y_label="Latency Gain (ms)",
+                series=[("Jump-ahead events", "#2563eb", attach_values)],
+                y_label="Jump-Ahead Events",
             ),
         )
 

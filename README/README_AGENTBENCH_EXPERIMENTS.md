@@ -1642,8 +1642,8 @@ Main outputs:
 - `latest_priority_scheduling_microbenchmark_matrix.csv`: one compact row per sweep point
 - `latest_priority_scheduling_microbenchmark_summary.md`: readable summary
 - `latest_priority_scheduling_microbenchmark_run_contract.json`: exact resolved settings
-- `latest_priority_scheduling_microbenchmark_jump_ahead.svg`
-- `experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg`
+- `latest_priority_scheduling_microbenchmark_jump_ahead.svg`: line chart of jump-ahead rate versus arrival gap
+- `experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg`: same chart in the shared chart folder
 
 Main matrix columns:
 
