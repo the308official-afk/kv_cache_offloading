@@ -95,6 +95,37 @@ echo "Worker image: $WORKER_IMAGE"
 echo "Pinned SGLang source image: $SGLANG_SOURCE_IMAGE"
 ```
 
+### Clear Generated Reports And Charts
+
+Use this when you want to remove old generated outputs and start fresh:
+
+```bash
+cd ~/kv_cache_offloading
+
+./clear_reports.sh
+```
+
+For non-interactive cleanup:
+
+```bash
+cd ~/kv_cache_offloading
+
+./clear_reports.sh --yes
+```
+
+What it clears:
+
+- `experiments/reports/*`
+- `experiments/charts/*`
+
+What it keeps:
+
+- `experiments/raw`
+- `experiments/runtime_state`
+- upstream Dynamo/SGLang sources
+- Docker images
+- model caches
+
 Shared default readiness timing is now automatic for all experiment wrappers
 and `run_dynamo_single_host.sh`:
 
