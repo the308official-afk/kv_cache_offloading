@@ -1,31 +1,19 @@
 
 
 ```bash
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-KV_RETENTION_MODE=sweep \
-RETENTION_REQUEST_SOURCE=swebench_dataset \
-RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
-RETENTION_SWEBENCH_SPLIT=test \
-RETENTION_SWEBENCH_INDEX=0 \
-KV_RETENTION_RESET_MODE=restart \
-DISTRACTOR_COUNTS="10 20 30" \
-PROTECTED_HINT_PROFILES="high-priority" \
-./agentbench/run_kv_retention_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-========================================
-EXPERIMENT DIRS READY (raw/report/chart/runtime directories exist and are writable)
-========================================
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/sglang_transfer_logs
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/lpx_decode_split/profiles
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/agentbench/results
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/raw/agentbench/diagnostics
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/reports
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/charts
-  /home/central/ojaiyeob/kv_cache_offloading/experiments/runtime_state
-Missing required contract variable: RETENTION_REAL_PROTECTED_REQUEST_UNIT_ID
-Missing required contract variable: RETENTION_SWEBENCH_INSTANCE_ID
-ojaiyeob@gracehopper:~/kv_cache_offloading$
+Request source: swebench_dataset
+SWE-bench dataset: ScaleAI/SWE-bench_Pro
+SWE-bench split: test
+SWE-bench protected index: 0
+SWE-bench protected instance_id: auto
+SWE-bench distractor start index: -1
+SWE-bench distractor reuse allowed: 0
+Real request units CSV: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/latest_swebench_real_request_units.csv
+Real protected request_unit_id: auto
+Real protected phase groups: plan act patch review
+Real distractor phase groups: plan act patch review
+Real distractor reuse allowed: 0
+Distractor count: 10
 
 ```
 
