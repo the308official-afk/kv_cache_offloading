@@ -23,6 +23,8 @@ from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 DEFAULT_OUT_ROOT = REPO_ROOT / "experiments" / "reports" / "priority_scheduling"
 DEFAULT_CACHE_EVENT_LOG = (
     REPO_ROOT
