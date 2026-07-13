@@ -112,39 +112,27 @@ Consolidated public outputs
 ---------------------------
 
 - `experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv`
-- `experiments/reports/latest_priority_scheduling_microbenchmark_summary.csv`
 - `experiments/reports/latest_priority_scheduling_microbenchmark_summary.md`
 - `experiments/reports/latest_priority_scheduling_microbenchmark_run_contract.json`
-- `experiments/reports/latest_priority_scheduling_microbenchmark_attach_gain.svg`
-- `experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg`
-- `experiments/reports/latest_priority_scheduling_microbenchmark_chart_manifest.json`
+- `experiments/reports/latest_priority_scheduling_microbenchmark_jump_ahead.svg`
+- `experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg`
 
 Recommended matrix columns
 --------------------------
 
-- `part`
-- `sweep_axis`
-- `sweep_value`
+- `run_id`
+- `model`
 - `request_source`
-- `source_instance_id`
-- `source_task_index`
-- `request`
-- `prio_class`
-- `arrival`
-- `attach`
-- `complete`
-- `attach_gain`
-- `complete_gain`
-- `beat_low_attach`
-- `beat_low_complete`
-- `queue_ms`
-- `latency_ms`
-- `worker_hint_prio`
-- `sent_top_prio`
-- `worker_top_prio`
-- `sglang_prio`
-- `runtime_match`
-- `effect`
+- `gap_ms`
+- `low_requests`
+- `high_requests`
+- `max_jump_ahead`
+- `high_jump_ahead_count`
+- `high_jump_ahead_rate`
+- `high_completed_ahead_count`
+- `priority_hint_seen`
+- `priority_path_status`
+- `result`
 
 Decision-proof code paths
 -------------------------
@@ -163,10 +151,10 @@ Success criteria
 
 Strong scheduling evidence means:
 
-- `attach_gain > 0` for some high-priority requests
-- `beat_low_attach > 0` for some high-priority requests
-- lower mean `queue_ms` for high-priority requests
-- worker-side hint proof is present
+- `priority_hint_seen=yes`
+- `high_jump_ahead_count > 0`
+- `high_jump_ahead_rate > 0%`
+- `result=priority_reordered`
 
 Known failure signatures
 ------------------------
@@ -174,4 +162,5 @@ Known failure signatures
 - no worker attach/completed events:
   - runtime image is missing full precise instrumentation
 - all high-priority requests behave like low-priority requests:
-  - scheduling effect not observed in this run
+  - `high_jump_ahead_count=0`
+  - `result=no_visible_reorder`

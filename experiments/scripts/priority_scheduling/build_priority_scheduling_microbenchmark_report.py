@@ -13,42 +13,19 @@ from typing import Any
 
 
 MATRIX_COLUMNS = [
-    "benchmark_id",
-    "part",
-    "sweep_axis",
-    "sweep_value",
     "run_id",
     "model",
     "request_source",
-    "source_instance_id",
-    "source_task_index",
-    "request",
-    "prio_class",
-    "arrival",
-    "attach",
-    "complete",
-    "attach_gain",
-    "complete_gain",
-    "beat_low_attach",
-    "beat_low_complete",
-    "queue_ms",
-    "latency_ms",
-    "low_wait_ms",
-    "high_wait_ms",
-    "low_latency_ms",
-    "high_latency_ms",
-    "high_attach_leapfrogs",
-    "high_complete_leapfrogs",
-    "top_prio_compat",
-    "worker_hint_status",
-    "worker_top_prio_status",
-    "sglang_prio_status",
-    "worker_hint_prio",
-    "sent_top_prio",
-    "worker_top_prio",
-    "sglang_prio",
-    "runtime_match",
-    "effect",
+    "gap_ms",
+    "low_requests",
+    "high_requests",
+    "max_jump_ahead",
+    "high_jump_ahead_count",
+    "high_jump_ahead_rate",
+    "high_completed_ahead_count",
+    "priority_hint_seen",
+    "priority_path_status",
+    "result",
 ]
 
 SUMMARY_COLUMNS = [
@@ -124,6 +101,29 @@ def pick(row: dict[str, str], *keys: str) -> str:
     return ""
 
 
+def to_int(value: Any) -> int:
+    if value in (None, ""):
+        return 0
+    try:
+        return int(float(str(value)))
+    except (TypeError, ValueError):
+        return 0
+
+
+def percent_text(numerator: int, denominator: int) -> str:
+    if denominator <= 0:
+        return ""
+    return f"{(numerator / denominator) * 100:.1f}%"
+
+
+def priority_hint_seen_status(value: str) -> str:
+    if value == "full":
+        return "yes"
+    if value in ("", "none", "missing"):
+        return "no"
+    return value
+
+
 def load_contract_env(contract_path: Path) -> dict[str, str]:
     shell = f"""
 set -a
@@ -139,6 +139,8 @@ env
     env_map: dict[str, str] = {}
     prefixes = (
         "PRIORITY_SCHEDULING_",
+        "PRIORITY_REQUEST_",
+        "PRIORITY_SWEBENCH_",
         "PRIORITY_REQUEST_CONTEXT_MODE",
         "PRIORITY_TOP_LEVEL_PRIORITY_MODE",
         "LOW_PRIORITY_",
@@ -183,52 +185,6 @@ def probe_paths(run_id: str) -> dict[str, Path]:
     }
 
 
-def normalize_matrix_rows(benchmark_id: str, probe_run_id: str, model: str, rows: list[dict[str, str]]) -> list[dict[str, Any]]:
-    normalized: list[dict[str, Any]] = []
-    for row in rows:
-        normalized.append(
-            {
-                "benchmark_id": benchmark_id,
-                "part": "probe",
-                "sweep_axis": "",
-                "sweep_value": "",
-                "run_id": probe_run_id,
-                "model": model,
-                "request_source": pick(row, "request_source"),
-                "source_instance_id": pick(row, "source_instance_id"),
-                "source_task_index": pick(row, "source_task_index"),
-                "request": pick(row, "request", "request_role"),
-                "prio_class": pick(row, "prio_class", "priority_class"),
-                "arrival": pick(row, "arrival", "arrival_index"),
-                "attach": pick(row, "attach", "attached_rank"),
-                "complete": pick(row, "complete", "completed_rank"),
-                "attach_gain": pick(row, "attach_priority_gain"),
-                "complete_gain": pick(row, "completion_priority_gain"),
-                "beat_low_attach": pick(row, "beat_low_attach", "overtook_earlier_low_attached_count"),
-                "beat_low_complete": pick(row, "beat_low_complete", "overtook_earlier_low_completed_count"),
-                "queue_ms": pick(row, "queue_ms", "worker_queue_wait_ms"),
-                "latency_ms": pick(row, "latency_ms", "client_latency_ms"),
-                "low_wait_ms": "",
-                "high_wait_ms": "",
-                "low_latency_ms": "",
-                "high_latency_ms": "",
-                "high_attach_leapfrogs": "",
-                "high_complete_leapfrogs": "",
-                "top_prio_compat": "",
-                "worker_hint_status": "",
-                "worker_top_prio_status": "",
-                "sglang_prio_status": "",
-                "worker_hint_prio": pick(row, "worker_hint_prio", "worker_agent_hints_priority"),
-                "sent_top_prio": pick(row, "sent_top_prio", "top_level_priority_sent"),
-                "worker_top_prio": pick(row, "worker_top_prio", "worker_top_level_priority"),
-                "sglang_prio": pick(row, "sglang_prio", "sglang_scheduler_priority_applied"),
-                "runtime_match": pick(row, "runtime_match", "worker_runtime_matched"),
-                "effect": pick(row, "effect", "scheduling_success_signal"),
-            }
-        )
-    return normalized
-
-
 def normalize_summary(benchmark_id: str, summary_row: dict[str, str]) -> dict[str, Any]:
     return {
         "benchmark_id": benchmark_id,
@@ -263,51 +219,34 @@ def normalize_summary(benchmark_id: str, summary_row: dict[str, str]) -> dict[st
 
 
 def normalize_sweep_row(
-    benchmark_id: str,
     run_id: str,
     model: str,
-    sweep_axis: str,
     sweep_value: str,
     summary_row: dict[str, str],
 ) -> dict[str, Any]:
-    summary = normalize_summary(benchmark_id, summary_row)
+    summary = normalize_summary("", summary_row)
+    low_requests = to_int(summary["low_n"])
+    high_requests = to_int(summary["high_n"])
+    max_jump_ahead = low_requests * high_requests
+    jump_count = to_int(summary["high_attach_leapfrogs"])
+    completed_count = to_int(summary["high_complete_leapfrogs"])
+    result = "priority_reordered" if jump_count > 0 else "no_visible_reorder"
+    if priority_hint_seen_status(str(summary["worker_hint_status"])) == "no":
+        result = "priority_hint_not_seen"
     return {
-        "benchmark_id": benchmark_id,
-        "part": "sweep",
-        "sweep_axis": sweep_axis,
-        "sweep_value": sweep_value,
         "run_id": run_id,
         "model": model,
-        "request_source": summary["request_source"],
-        "source_instance_id": "",
-        "source_task_index": "",
-        "request": "",
-        "prio_class": "",
-        "arrival": "",
-        "attach": "",
-        "complete": "",
-        "attach_gain": "",
-        "complete_gain": "",
-        "beat_low_attach": "",
-        "beat_low_complete": "",
-        "queue_ms": "",
-        "latency_ms": "",
-        "low_wait_ms": summary["low_wait_ms"],
-        "high_wait_ms": summary["high_wait_ms"],
-        "low_latency_ms": summary["low_latency_ms"],
-        "high_latency_ms": summary["high_latency_ms"],
-        "high_attach_leapfrogs": summary["high_attach_leapfrogs"],
-        "high_complete_leapfrogs": summary["high_complete_leapfrogs"],
-        "top_prio_compat": summary["top_prio_compat"],
-        "worker_hint_status": summary["worker_hint_status"],
-        "worker_top_prio_status": summary["worker_top_prio_status"],
-        "sglang_prio_status": summary["sglang_prio_status"],
-        "worker_hint_prio": "",
-        "sent_top_prio": "",
-        "worker_top_prio": "",
-        "sglang_prio": "",
-        "runtime_match": "",
-        "effect": summary["effect"],
+        "request_source": summary["request_source"] or "synthetic",
+        "gap_ms": sweep_value or summary["arrival_gap_ms"],
+        "low_requests": low_requests,
+        "high_requests": high_requests,
+        "max_jump_ahead": max_jump_ahead,
+        "high_jump_ahead_count": jump_count,
+        "high_jump_ahead_rate": percent_text(jump_count, max_jump_ahead),
+        "high_completed_ahead_count": completed_count,
+        "priority_hint_seen": priority_hint_seen_status(str(summary["worker_hint_status"])),
+        "priority_path_status": summary["sglang_prio_status"],
+        "result": result,
     }
 
 
@@ -331,10 +270,8 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- worker_hint_status: `{summary['worker_hint_status']}`",
         f"- worker_top_prio_status: `{summary['worker_top_prio_status']}`",
         f"- sglang_prio_status: `{summary['sglang_prio_status']}`",
-        f"- low_wait_ms: `{summary['low_wait_ms']}`",
-        f"- high_wait_ms: `{summary['high_wait_ms']}`",
-        f"- high_attach_leapfrogs: `{summary['high_attach_leapfrogs']}`",
-        f"- high_complete_leapfrogs: `{summary['high_complete_leapfrogs']}`",
+        f"- high_jump_ahead_count: `{summary['high_attach_leapfrogs']}`",
+        f"- high_completed_ahead_count: `{summary['high_complete_leapfrogs']}`",
         f"- effect: `{summary['effect']}`",
         "",
     ]
@@ -363,15 +300,22 @@ def main() -> None:
 
     if args.probe_run_id:
         paths = probe_paths(args.probe_run_id)
-        readable_rows = read_csv(paths["matrix"])
         summary_rows = read_csv(paths["summary"])
-        matrix_rows.extend(normalize_matrix_rows(args.run_id, args.probe_run_id, args.model, readable_rows))
         if summary_rows:
             summary_row = normalize_summary(args.run_id, summary_rows[0])
             summary_row["probe_run_id"] = args.probe_run_id
             summary_row["sweep_axis"] = args.sweep_axis
             summary_row["sweep_values"] = args.sweep_values
             summary_row["sweep_run_count"] = str(len(sweep_run_ids)) if sweep_run_ids else ""
+            if not sweep_run_ids:
+                matrix_rows.append(
+                    normalize_sweep_row(
+                        args.probe_run_id,
+                        args.model,
+                        summary_row["arrival_gap_ms"],
+                        summary_rows[0],
+                    )
+                )
 
     if sweep_run_ids:
         sweep_values = [item for item in args.sweep_values.split() if item]
@@ -383,10 +327,8 @@ def main() -> None:
             sweep_value = sweep_values[idx] if idx < len(sweep_values) else str(idx + 1)
             matrix_rows.append(
                 normalize_sweep_row(
-                    args.run_id,
                     run_id,
                     args.model,
-                    args.sweep_axis,
                     sweep_value,
                     summary_rows[0],
                 )

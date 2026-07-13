@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from html import escape
 from pathlib import Path
 
@@ -27,6 +26,19 @@ def parse_int(value: str | None) -> int | None:
         return None
     try:
         return int(float(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_percent(value: str | None) -> float | None:
+    if value in (None, "", "null"):
+        return None
+    text = str(value).strip()
+    try:
+        if text.endswith("%"):
+            return float(text[:-1])
+        raw = float(text)
+        return raw * 100 if 0 <= raw <= 1 else raw
     except (TypeError, ValueError):
         return None
 
@@ -180,11 +192,88 @@ def build_line_chart_svg(
     return "\n".join(parts)
 
 
+def build_jump_ahead_chart_svg(
+    *,
+    title: str,
+    subtitle: str,
+    labels: list[str],
+    rates: list[float],
+    counts: list[int],
+    max_counts: list[int],
+) -> str:
+    width = 1260
+    height = 560
+    left = 92
+    right = 60
+    top = 96
+    bottom = 118
+    plot_width = width - left - right
+    plot_height = height - top - bottom
+    max_y = max([100.0] + rates)
+    grid_lines = 5
+    y_ticks = [max_y * step / grid_lines for step in range(grid_lines + 1)]
+    gap = plot_width / max(len(labels), 1)
+    bar_width = min(86, int(gap * 0.58))
+
+    parts = [
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
+        '<rect width="100%" height="100%" fill="#ffffff"/>',
+        f'<text x="{left}" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">{escape(title)}</text>',
+        f'<text x="{left}" y="70" font-family="Inter, Arial, sans-serif" font-size="14" fill="#64748b">{escape(subtitle)}</text>',
+        f'<rect x="{left}" y="{top}" width="{plot_width}" height="{plot_height}" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>',
+    ]
+
+    for tick in y_ticks:
+        y = top + plot_height - (tick / max_y) * plot_height
+        parts.append(f'<line x1="{left}" y1="{y:.2f}" x2="{left + plot_width}" y2="{y:.2f}" stroke="#e2e8f0" stroke-width="1"/>')
+        parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{tick:.0f}%</text>')
+
+    for idx, (label, rate, count, max_count) in enumerate(zip(labels, rates, counts, max_counts)):
+        center_x = left + gap * idx + gap / 2
+        x0 = center_x - bar_width / 2
+        bar_height = (rate / max_y) * plot_height if max_y else 0
+        y0 = top + plot_height - bar_height
+        color = "#2563eb" if count > 0 else "#cbd5e1"
+        parts.append(f'<rect x="{x0:.2f}" y="{y0:.2f}" width="{bar_width}" height="{bar_height:.2f}" rx="10" fill="{color}" opacity="0.94"/>')
+        parts.append(f'<text x="{center_x:.2f}" y="{y0 - 26:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#334155">{rate:.1f}%</text>')
+        parts.append(f'<text x="{center_x:.2f}" y="{y0 - 8:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#64748b">{count}/{max_count}</text>')
+        parts.append(f'<text x="{center_x:.2f}" y="{top + plot_height + 24}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
+
+    parts.append(f'<text x="28" y="{top + plot_height / 2:.2f}" transform="rotate(-90 28 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Jump-Ahead Rate</text>')
+    parts.append(f'<text x="{left + plot_width / 2:.2f}" y="{height - 40}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Arrival Gap (ms)</text>')
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
 def main() -> None:
     args = parse_args()
     rows = read_csv(Path(args.matrix_csv))
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    compact_rows = [row for row in rows if row.get("high_jump_ahead_count", "") != ""]
+    if compact_rows:
+        labels = [row.get("gap_ms", "") for row in compact_rows]
+        counts = [parse_int(row.get("high_jump_ahead_count")) or 0 for row in compact_rows]
+        max_counts = [parse_int(row.get("max_jump_ahead")) or 0 for row in compact_rows]
+        rates = [
+            parse_percent(row.get("high_jump_ahead_rate"))
+            if parse_percent(row.get("high_jump_ahead_rate")) is not None
+            else ((count / max_count) * 100 if max_count else 0)
+            for row, count, max_count in zip(compact_rows, counts, max_counts)
+        ]
+        write_svg(
+            out_dir / "jump_ahead.svg",
+            build_jump_ahead_chart_svg(
+                title="Priority Scheduling: High-Priority Jump-Ahead Rate",
+                subtitle="Higher bars mean high-priority requests were attached before more earlier-arriving low-priority requests.",
+                labels=labels,
+                rates=rates,
+                counts=counts,
+                max_counts=max_counts,
+            ),
+        )
+        return
 
     sweep_rows = [row for row in rows if row.get("part") == "sweep"]
     if sweep_rows:
@@ -256,18 +345,6 @@ def main() -> None:
             ),
         )
 
-        manifest = {
-            "matrix_csv": str(Path(args.matrix_csv).resolve()),
-            "chart_mode": "sweep",
-            "charts": {
-                "priority_wins": str((out_dir / "priority_wins.svg").resolve()),
-                "queue_wait": str((out_dir / "queue_wait.svg").resolve()),
-                "wait_gain": str((out_dir / "wait_gain.svg").resolve()),
-                "latency_vs_arrival_gap": str((out_dir / "latency_vs_arrival_gap.svg").resolve()),
-                "latency_gain": str((out_dir / "latency_gain.svg").resolve()),
-            },
-        }
-        (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return
 
     labels = [row.get("request", "") for row in rows]
@@ -299,16 +376,6 @@ def main() -> None:
             y_label="Queue Wait (ms)",
         ),
     )
-
-    manifest = {
-        "matrix_csv": str(Path(args.matrix_csv).resolve()),
-        "chart_mode": "probe",
-        "charts": {
-            "attach_gain": str((out_dir / "attach_gain.svg").resolve()),
-            "queue_wait": str((out_dir / "queue_wait.svg").resolve()),
-        },
-    }
-    (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

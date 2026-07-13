@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import json
 from html import escape
 from pathlib import Path
 
@@ -199,10 +198,6 @@ def main() -> None:
         labels = [row.get("sweep_value", "") for row in by_arm["control"] or by_arm["protected"]]
         control_latency = [parse_int(row.get("turn_b_ms")) or 0 for row in by_arm["control"]]
         protected_latency = [parse_int(row.get("turn_b_ms")) or 0 for row in by_arm["protected"]]
-        control_cached = [parse_int(row.get("turn_b_cached")) or 0 for row in by_arm["control"]]
-        protected_cached = [parse_int(row.get("turn_b_cached")) or 0 for row in by_arm["protected"]]
-        latency_gain = [max(0, control - protected) for control, protected in zip(control_latency, protected_latency)]
-        cache_gain = [max(0, protected - control) for control, protected in zip(control_cached, protected_cached)]
 
         write_svg(
             out_dir / "turnb_latency.svg",
@@ -218,57 +213,11 @@ def main() -> None:
             ),
         )
 
-        write_svg(
-            out_dir / "turnb_cached.svg",
-            build_line_chart_svg(
-                title="Speculative Prefill Sweep: Turn B Cached Tokens",
-                subtitle="If speculative prefill helps, the protected curve should stay above control.",
-                labels=labels,
-                series=[
-                    ("Control", "#94a3b8", control_cached),
-                    ("Protected", "#16a34a", protected_cached),
-                ],
-                y_label="Turn B Cached Tokens",
-            ),
-        )
-        write_svg(
-            out_dir / "latency_gain.svg",
-            build_line_chart_svg(
-                title="Speculative Prefill Sweep: Latency Gain",
-                subtitle="Positive values mean the protected arm replayed turn B faster than control.",
-                labels=labels,
-                series=[("Latency gain", "#16a34a", latency_gain)],
-                y_label="Latency Gain (ms)",
-            ),
-        )
-        write_svg(
-            out_dir / "cache_gain.svg",
-            build_line_chart_svg(
-                title="Speculative Prefill Sweep: Cache Gain",
-                subtitle="Positive values mean the protected arm replayed turn B with more cached tokens than control.",
-                labels=labels,
-                series=[("Cache gain", "#16a34a", cache_gain)],
-                y_label="Cached-Token Gain",
-            ),
-        )
-
-        manifest = {
-            "matrix_csv": str(Path(args.matrix_csv).resolve()),
-            "chart_mode": "sweep",
-            "charts": {
-                "turnb_latency": str((out_dir / "turnb_latency.svg").resolve()),
-                "turnb_cached": str((out_dir / "turnb_cached.svg").resolve()),
-                "latency_gain": str((out_dir / "latency_gain.svg").resolve()),
-                "cache_gain": str((out_dir / "cache_gain.svg").resolve()),
-            },
-        }
-        (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
         return
 
     labels = [row.get("arm", "") for row in rows]
     colors = [color_for_arm(row.get("arm", "")) for row in rows]
     latency_values = [parse_int(row.get("turn_b_ms")) or 0 for row in rows]
-    cached_values = [parse_int(row.get("turn_b_cached")) or 0 for row in rows]
 
     write_svg(
         out_dir / "turnb_latency.svg",
@@ -281,28 +230,6 @@ def main() -> None:
             y_label="Turn B Latency (ms)",
         ),
     )
-
-    write_svg(
-        out_dir / "turnb_cached.svg",
-        build_bar_chart_svg(
-            title="Speculative Prefill: Turn B Cached Tokens",
-            subtitle="Protected turn B should arrive warmer if the background prefill succeeded.",
-            labels=labels,
-            values=cached_values,
-            colors=colors,
-            y_label="Turn B Cached Tokens",
-        ),
-    )
-
-    manifest = {
-        "matrix_csv": str(Path(args.matrix_csv).resolve()),
-        "chart_mode": "probe",
-        "charts": {
-            "turnb_latency": str((out_dir / "turnb_latency.svg").resolve()),
-            "turnb_cached": str((out_dir / "turnb_cached.svg").resolve()),
-        },
-    }
-    (out_dir / "chart_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

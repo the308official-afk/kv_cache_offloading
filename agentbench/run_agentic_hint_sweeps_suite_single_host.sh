@@ -394,6 +394,7 @@ prune_shared_chart_dir_for_suite_selection() {
 
   prune_one_experiment 11 \
     "${charts_dir}/exp11_prioritysched_matrix.csv" \
+    "${charts_dir}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg" \
     "${charts_dir}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg" \
     "${charts_dir}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
     "${charts_dir}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
@@ -444,7 +445,7 @@ sync_shared_assets_for_experiment() {
       ;;
     11)
       sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
-      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg" "${charts_dir}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg"
+      sync_one "experiments/reports/latest_priority_scheduling_microbenchmark_jump_ahead.svg" "${charts_dir}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg"
       ;;
     12)
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
@@ -773,11 +774,11 @@ EOF
   append_result_json \
     "9" "kv_retention" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_kv_retention_microbenchmark_matrix.csv" \
-    "experiments/reports/latest_kv_retention_microbenchmark_summary.csv" \
+    "" \
     "experiments/reports/latest_kv_retention_microbenchmark_summary.md" \
     "experiments/reports/latest_kv_retention_microbenchmark_run_contract.json" \
-    "experiments/reports/latest_kv_retention_microbenchmark_chart_manifest.json" \
-    "experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg|experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg|experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg" \
+    "" \
+    "experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg|experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg" \
     "${error_message}" "${started_at}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   [[ "${status}" = "passed" || "${SUITE_CONTINUE_ON_ERROR}" = "1" ]]
 }
@@ -965,11 +966,11 @@ EOF
   append_result_json \
     "11" "priority_scheduling" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" \
-    "experiments/reports/latest_priority_scheduling_microbenchmark_summary.csv" \
+    "" \
     "experiments/reports/latest_priority_scheduling_microbenchmark_summary.md" \
     "experiments/reports/latest_priority_scheduling_microbenchmark_run_contract.json" \
-    "experiments/reports/latest_priority_scheduling_microbenchmark_chart_manifest.json" \
-    "experiments/reports/latest_priority_scheduling_microbenchmark_attach_gain.svg|experiments/reports/latest_priority_scheduling_microbenchmark_queue_wait.svg" \
+    "" \
+    "experiments/reports/latest_priority_scheduling_microbenchmark_jump_ahead.svg" \
     "${error_message}" "${started_at}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   [[ "${status}" = "passed" || "${SUITE_CONTINUE_ON_ERROR}" = "1" ]]
 }
@@ -1077,11 +1078,11 @@ EOF
   append_result_json \
     "12" "speculative_prefill" "${status}" "${mode}" "${wrapper}" \
     "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" \
-    "experiments/reports/latest_speculative_prefill_microbenchmark_summary.csv" \
+    "" \
     "experiments/reports/latest_speculative_prefill_microbenchmark_summary.md" \
     "experiments/reports/latest_speculative_prefill_microbenchmark_run_contract.json" \
-    "experiments/reports/latest_speculative_prefill_microbenchmark_chart_manifest.json" \
-    "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg|experiments/reports/latest_speculative_prefill_microbenchmark_turnb_cached.svg" \
+    "" \
+    "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" \
     "${error_message}" "${started_at}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   [[ "${status}" = "passed" || "${SUITE_CONTINUE_ON_ERROR}" = "1" ]]
 }

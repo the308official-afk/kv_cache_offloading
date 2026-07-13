@@ -120,13 +120,10 @@ MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-default}"
 # Planned consolidated microbenchmark outputs
 : "${KV_RETENTION_REPORT_DIR:=${ROOT_DIR}/experiments/reports/kv_retention_microbenchmark}"
 : "${KV_RETENTION_LATEST_MATRIX:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_matrix.csv}"
-: "${KV_RETENTION_LATEST_SUMMARY_CSV:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_summary.csv}"
 : "${KV_RETENTION_LATEST_SUMMARY_MD:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_summary.md}"
 : "${KV_RETENTION_LATEST_RUN_CONTRACT:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_run_contract.json}"
 : "${KV_RETENTION_LATEST_REPLAY_LATENCY_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg}"
 : "${KV_RETENTION_LATEST_REPLAY_CACHED_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg}"
-: "${KV_RETENTION_LATEST_SURVIVAL_CHART:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg}"
-: "${KV_RETENTION_LATEST_CHART_MANIFEST:=${ROOT_DIR}/experiments/reports/latest_kv_retention_microbenchmark_chart_manifest.json}"
 
 export ROOT_DIR
 export MACHINE_PROFILE
@@ -223,10 +220,7 @@ export MODEL_SMOKE_DELAY_SECS
 export MODEL_COOLDOWN_SECS
 export KV_RETENTION_REPORT_DIR
 export KV_RETENTION_LATEST_MATRIX
-export KV_RETENTION_LATEST_SUMMARY_CSV
 export KV_RETENTION_LATEST_SUMMARY_MD
 export KV_RETENTION_LATEST_RUN_CONTRACT
 export KV_RETENTION_LATEST_REPLAY_LATENCY_CHART
 export KV_RETENTION_LATEST_REPLAY_CACHED_CHART
-export KV_RETENTION_LATEST_SURVIVAL_CHART
-export KV_RETENTION_LATEST_CHART_MANIFEST

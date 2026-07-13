@@ -37,12 +37,10 @@ Current lower-level helpers:
 Planned primary outputs:
 
 - `experiments/reports/latest_kv_retention_microbenchmark_matrix.csv`
-- `experiments/reports/latest_kv_retention_microbenchmark_summary.csv`
 - `experiments/reports/latest_kv_retention_microbenchmark_summary.md`
 - `experiments/reports/latest_kv_retention_microbenchmark_run_contract.json`
 - `experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg`
 - `experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg`
-- `experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg`
 
 
 Supported modes
@@ -346,15 +344,13 @@ Per-run:
 Top-level latest:
 
 - `experiments/reports/latest_kv_retention_microbenchmark_matrix.csv`
-- `experiments/reports/latest_kv_retention_microbenchmark_summary.csv`
 - `experiments/reports/latest_kv_retention_microbenchmark_summary.md`
 - `experiments/reports/latest_kv_retention_microbenchmark_run_contract.json`
 
-Planned charts:
+Public charts:
 
 - `experiments/reports/latest_kv_retention_microbenchmark_replay_latency.svg`
 - `experiments/reports/latest_kv_retention_microbenchmark_replay_cached_tokens.svg`
-- `experiments/reports/latest_kv_retention_microbenchmark_survival_curve.svg`
 
 
 Recommended public matrix schema

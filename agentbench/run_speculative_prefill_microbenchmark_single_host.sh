@@ -46,6 +46,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
   "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
   "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
+  "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
+  "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
 )
 
@@ -202,9 +204,6 @@ Runtime defaults:
   sweep_seed_mode=${SPEC_PREFILL_SWEEP_SEED_MODE}
   retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 EOF
-  printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
-  printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
-  printf '%s\n' "${SPEC_PREFILL_MODE}" > "${MICROBENCH_LATEST_PREFIX}_last_mode.txt"
 }
 
 clear_microbenchmark_latest_pointers() {
@@ -221,6 +220,8 @@ reset_microbenchmark_plot_outputs() {
   rm -f \
     "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg" \
     "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
@@ -330,7 +331,6 @@ build_microbenchmark_report() {
     --sweep-axis "${SPEC_PREFILL_SWEEP_AXIS}" \
     --sweep-values "${SPEC_PREFILL_SWEEP_VALUES}"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv" "${MICROBENCH_LATEST_PREFIX}_matrix.csv"
-  cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv" "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.md" "${MICROBENCH_LATEST_PREFIX}_summary.md"
   cp -f "${MICROBENCH_OUT_DIR}/run_contract.json" "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
 }
@@ -347,15 +347,7 @@ build_microbenchmark_charts() {
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
   fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
-  fi
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
-  fi
 }
 
 finalize_runtime_cleanup() {
@@ -401,7 +393,6 @@ run_probe_mode() {
     SPEC_PREFILL_SEED="${SPEC_PREFILL_SEED}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
-  printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
   LAST_PROBE_RUN_ID="${run_id}"
 }
 
@@ -459,9 +450,6 @@ run_sweep_mode() {
       "${SPEC_PREFILL_PROBE_HELPER}" "${MODEL}"
     LAST_SWEEP_RUN_IDS+=("${run_id}")
   done
-  if [[ "${#LAST_SWEEP_RUN_IDS[@]}" -gt 0 ]]; then
-    printf '%s\n' "${LAST_SWEEP_RUN_IDS[*]}" > "${MICROBENCH_LATEST_PREFIX}_last_sweep_run_ids.txt"
-  fi
 }
 
 run_plot_mode() {
@@ -473,7 +461,6 @@ run_plot_mode() {
   fi
   banner "SPECULATIVE PREFILL MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
-  printf '%s\n' "${matrix_csv}" > "${MICROBENCH_LATEST_PREFIX}_plot_matrix_path.txt"
   build_microbenchmark_charts "${matrix_csv}"
 }
 
@@ -485,7 +472,7 @@ Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${SPEC_PREFILL_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
-Turn B cached chart: ${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg
+Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
 EOF
     return
   fi
@@ -493,10 +480,9 @@ EOF
 Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
-Microbenchmark summary: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
-Turn B cached chart: ${MICROBENCH_OUT_DIR}/charts/turnb_cached.svg
+Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF

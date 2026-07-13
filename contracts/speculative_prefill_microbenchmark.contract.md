@@ -107,12 +107,9 @@ Consolidated public outputs
 ---------------------------
 
 - `experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv`
-- `experiments/reports/latest_speculative_prefill_microbenchmark_summary.csv`
 - `experiments/reports/latest_speculative_prefill_microbenchmark_summary.md`
 - `experiments/reports/latest_speculative_prefill_microbenchmark_run_contract.json`
 - `experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg`
-- `experiments/reports/latest_speculative_prefill_microbenchmark_turnb_cached.svg`
-- `experiments/reports/latest_speculative_prefill_microbenchmark_chart_manifest.json`
 
 Recommended matrix columns
 --------------------------

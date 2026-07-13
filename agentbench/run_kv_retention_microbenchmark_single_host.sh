@@ -44,6 +44,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_replay_latency.svg"
   "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.svg"
   "${MICROBENCH_LATEST_PREFIX}_survival_curve.svg"
+  "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
+  "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
 )
 
@@ -291,9 +293,6 @@ Readiness defaults:
   MODEL_SMOKE_DELAY_SECS=${MODEL_SMOKE_DELAY_SECS}
   MODEL_COOLDOWN_SECS=${MODEL_COOLDOWN_SECS}
 EOF
-  printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
-  printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
-  printf '%s\n' "${KV_RETENTION_MODE}" > "${MICROBENCH_LATEST_PREFIX}_last_mode.txt"
 }
 
 clear_microbenchmark_latest_pointers() {
@@ -443,7 +442,6 @@ build_microbenchmark_report() {
     --sweep-run-id "${LAST_SWEEP_RUN_ID}"
 
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv" "${MICROBENCH_LATEST_PREFIX}_matrix.csv"
-  cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv" "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.md" "${MICROBENCH_LATEST_PREFIX}_summary.md"
   cp -f "${MICROBENCH_OUT_DIR}/run_contract.json" "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
 }
@@ -466,18 +464,6 @@ build_microbenchmark_charts() {
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.svg"
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg"
   fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
-  fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
-  fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/survival_curve.svg" "${MICROBENCH_LATEST_PREFIX}_survival_curve.svg"
-  fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
-  fi
 }
 
 finalize_runtime_cleanup() {
@@ -499,7 +485,8 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${KV_RETENTION_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Replay latency chart: ${MICROBENCH_OUT_DIR}/charts/replay_latency.svg
 Replay cached chart: ${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg
-Survival chart: ${MICROBENCH_OUT_DIR}/charts/survival_curve.svg
+Shared charts: ${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg
+               ${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg
 
 Current status:
   - public wrapper: ready
@@ -515,11 +502,11 @@ EOF
 Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
-Microbenchmark summary: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Replay latency chart: ${MICROBENCH_OUT_DIR}/charts/replay_latency.svg
 Replay cached chart: ${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg
-Survival chart: ${MICROBENCH_OUT_DIR}/charts/survival_curve.svg
+Shared charts: ${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg
+               ${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Last sweep run id: ${LAST_SWEEP_RUN_ID:-<none>}
 
@@ -594,7 +581,6 @@ run_probe_mode() {
     REQUIRE_PRECISE_KV="${REQUIRE_PRECISE_KV}" \
     STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE}" \
     "${KV_RETENTION_PROBE_HELPER}" "${MODEL}"
-  printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
   LAST_PROBE_RUN_ID="${run_id}"
 }
 
@@ -644,7 +630,6 @@ run_sweep_mode() {
     STOP_DYNAMO_WHEN_DONE="0" \
     EXPERIMENT_RESET_MODE="${KV_RETENTION_RESET_MODE}" \
     "${KV_RETENTION_SWEEP_HELPER}" "${MODEL}"
-  printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_sweep_run_id.txt"
   LAST_SWEEP_RUN_ID="${run_id}"
 }
 
@@ -657,7 +642,6 @@ run_plot_mode() {
   fi
   banner "KV RETENTION MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
-  printf '%s\n' "${matrix_csv}" > "${MICROBENCH_LATEST_PREFIX}_plot_matrix_path.txt"
   build_microbenchmark_charts "${matrix_csv}"
 }
 

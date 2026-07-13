@@ -1037,22 +1037,19 @@ through a sweep.
 
 ```bash
 cat experiments/reports/latest_kv_retention_microbenchmark_matrix.csv
-cat experiments/reports/latest_kv_retention_microbenchmark_summary.csv
 cat experiments/reports/latest_kv_retention_microbenchmark_summary.md
 cat experiments/reports/latest_kv_retention_microbenchmark_run_contract.json
 
-ls experiments/reports/latest_kv_retention_microbenchmark_*.svg
-cat experiments/reports/latest_kv_retention_microbenchmark_chart_manifest.json
+ls experiments/charts/exp9_kvretention_*
 ```
 
 Main outputs:
 
 - `latest_kv_retention_microbenchmark_matrix.csv`: normalized probe + sweep table
-- `latest_kv_retention_microbenchmark_summary.csv`: one-row summary
+- `latest_kv_retention_microbenchmark_summary.md`: readable summary
 - `latest_kv_retention_microbenchmark_run_contract.json`: exact resolved settings
-- `replay_latency.svg`
-- `replay_cached_tokens.svg`
-- `survival_curve.svg`
+- `experiments/charts/exp9_kvretention_latency_vs_distractors.svg`
+- `experiments/charts/exp9_kvretention_cache_vs_distractors.svg`
 
 ### Decision Proof
 
@@ -1495,21 +1492,21 @@ Across the sweep:
 
 - one public scheduling knob changes between runs
 - most commonly that knob is `PRIORITY_ARRIVAL_GAP_MS`
-- the important question is whether the high-priority class keeps getting lower
-  wait time and more leapfrogs as you move across sweep values
+- the important question is whether later high-priority requests attach ahead
+  of earlier low-priority requests
 
 ### What Counts As Success
 
 - the worker really saw the priority hint
-- high-priority requests wait less than low-priority requests
-- high-priority requests leapfrog low-priority requests in the queue
+- high-priority requests attach ahead of earlier low-priority requests
+- the jump-ahead rate is above zero for at least one sweep point
 
 Columns to check first:
 
-- hint proof: `worker_hint_status`, `sglang_prio_status`
-- queue benefit: `low_wait_ms`, `high_wait_ms`
-- ordering proof: `high_attach_leapfrogs`, `high_complete_leapfrogs`
-- summary verdict: `effect`
+- hint proof: `priority_hint_seen`
+- path proof: `priority_path_status`
+- ordering proof: `high_jump_ahead_count`, `high_jump_ahead_rate`
+- summary verdict: `result`
 
 ### Worked Success Example
 
@@ -1603,21 +1600,31 @@ The contract is the source of truth for:
 
 ```bash
 cat experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv
-cat experiments/reports/latest_priority_scheduling_microbenchmark_summary.csv
 cat experiments/reports/latest_priority_scheduling_microbenchmark_summary.md
 cat experiments/reports/latest_priority_scheduling_microbenchmark_run_contract.json
 
-ls experiments/reports/latest_priority_scheduling_microbenchmark_*.svg
-cat experiments/reports/latest_priority_scheduling_microbenchmark_chart_manifest.json
+ls experiments/charts/exp11_prioritysched_*
 ```
 
 Main outputs:
 
-- `latest_priority_scheduling_microbenchmark_matrix.csv`: one row per request or per sweep point
-- `latest_priority_scheduling_microbenchmark_summary.csv`: one-row summary
+- `latest_priority_scheduling_microbenchmark_matrix.csv`: one compact row per sweep point
+- `latest_priority_scheduling_microbenchmark_summary.md`: readable summary
 - `latest_priority_scheduling_microbenchmark_run_contract.json`: exact resolved settings
-- `attach_gain.svg`
-- `queue_wait.svg`
+- `latest_priority_scheduling_microbenchmark_jump_ahead.svg`
+- `experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg`
+
+Main matrix columns:
+
+- `gap_ms`: how late the high-priority burst arrived after the low-priority burst
+- `low_requests`: number of low-priority requests in the burst
+- `high_requests`: number of high-priority requests in the burst
+- `max_jump_ahead`: maximum possible high-over-low reorder events
+- `high_jump_ahead_count`: how many times high-priority requests attached before earlier low-priority requests
+- `high_jump_ahead_rate`: `high_jump_ahead_count / max_jump_ahead`
+- `priority_hint_seen`: whether the worker saw the priority hint
+- `priority_path_status`: worker/SGLang priority-path evidence
+- `result`: simple verdict, such as `priority_reordered` or `no_visible_reorder`
 
 ### Debug
 
@@ -1682,8 +1689,12 @@ priority was attached, read, applied, and observed.
   Report builder. Converts raw timing/order into the user-facing scheduling
   proof columns.
 
-Strongest proof in this setup: `sglang_scheduler_priority_applied=true` plus a
-positive `attach_gain` / `beat_low_attach`.
+Strongest proof in this setup:
+
+- `priority_hint_seen=yes`
+- `high_jump_ahead_count > 0`
+- `high_jump_ahead_rate > 0%`
+- `result=priority_reordered`
 
 ### Lower-Level Wrapper
 
@@ -1692,25 +1703,18 @@ Normally use the single public wrapper above.
 - [`agentbench/run_priority_scheduling_probe_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_priority_scheduling_probe_single_host.sh)
   - probe component
 
-Component report names now use compact fields such as:
+The public microbenchmark matrix now uses compact fields such as:
 
-- `request`
-- `prio_class`
-- `arrival`
-- `attach`
-- `complete`
-- `attach_gain`
-- `complete_gain`
-- `beat_low_attach`
-- `beat_low_complete`
-- `queue_ms`
-- `latency_ms`
-- `worker_hint_prio`
-- `sent_top_prio`
-- `worker_top_prio`
-- `sglang_prio`
-- `runtime_match`
-- `effect`
+- `gap_ms`
+- `low_requests`
+- `high_requests`
+- `max_jump_ahead`
+- `high_jump_ahead_count`
+- `high_jump_ahead_rate`
+- `high_completed_ahead_count`
+- `priority_hint_seen`
+- `priority_path_status`
+- `result`
 
 ### Main Knobs
 
@@ -1905,21 +1909,18 @@ The contract is the source of truth for:
 
 ```bash
 cat experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv
-cat experiments/reports/latest_speculative_prefill_microbenchmark_summary.csv
 cat experiments/reports/latest_speculative_prefill_microbenchmark_summary.md
 cat experiments/reports/latest_speculative_prefill_microbenchmark_run_contract.json
 
-ls experiments/reports/latest_speculative_prefill_microbenchmark_*.svg
-cat experiments/reports/latest_speculative_prefill_microbenchmark_chart_manifest.json
+ls experiments/charts/exp12_specprefill_*
 ```
 
 Main outputs:
 
 - `latest_speculative_prefill_microbenchmark_matrix.csv`: one row per arm or per sweep-arm point
-- `latest_speculative_prefill_microbenchmark_summary.csv`: one-row summary
+- `latest_speculative_prefill_microbenchmark_summary.md`: readable summary
 - `latest_speculative_prefill_microbenchmark_run_contract.json`: exact resolved settings
-- `turnb_latency.svg`
-- `turnb_cached.svg`
+- `experiments/charts/exp12_specprefill_latency_vs_warmup_wait.svg`
 
 ### Debug
 

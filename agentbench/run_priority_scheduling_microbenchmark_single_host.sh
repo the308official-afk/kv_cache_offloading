@@ -44,8 +44,13 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   "${MICROBENCH_LATEST_PREFIX}_summary.md"
   "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
+  "${MICROBENCH_LATEST_PREFIX}_jump_ahead.svg"
   "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_queue_wait.svg"
+  "${MICROBENCH_LATEST_PREFIX}_priority_wins.svg"
+  "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg"
+  "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
+  "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
 )
 
@@ -75,6 +80,7 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_attach_gain.svg" \
     "${SHARED_CHART_DIR}/latest_priority_scheduling_microbenchmark_queue_wait.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_matrix.csv" \
+    "${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_priority_wins_vs_arrival_gap.svg" \
     "${SHARED_CHART_DIR}/exp11_prioritysched_wait_vs_arrival_gap.svg" \
@@ -207,9 +213,6 @@ Runtime defaults:
   sweep_seed_mode=${PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
   retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 EOF
-  printf '%s\n' "${CONTRACT_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
-  printf '%s\n' "${CONTRACT_DOC_PATH}" > "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
-  printf '%s\n' "${PRIORITY_SCHEDULING_MODE}" > "${MICROBENCH_LATEST_PREFIX}_last_mode.txt"
 }
 
 clear_microbenchmark_latest_pointers() {
@@ -224,8 +227,13 @@ reset_microbenchmark_outputs() {
 
 reset_microbenchmark_plot_outputs() {
   rm -f \
+    "${MICROBENCH_LATEST_PREFIX}_jump_ahead.svg" \
     "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_queue_wait.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_priority_wins.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg" \
+    "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
@@ -340,7 +348,6 @@ build_microbenchmark_report() {
     --sweep-values "${PRIORITY_SCHEDULING_SWEEP_VALUES}"
 
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv" "${MICROBENCH_LATEST_PREFIX}_matrix.csv"
-  cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv" "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.md" "${MICROBENCH_LATEST_PREFIX}_summary.md"
   cp -f "${MICROBENCH_OUT_DIR}/run_contract.json" "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
 }
@@ -354,22 +361,9 @@ build_microbenchmark_charts() {
   "${PYTHON_BIN}" experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py \
     --matrix-csv "${matrix_csv}" \
     --out-dir "${MICROBENCH_OUT_DIR}/charts"
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/attach_gain.svg" "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
-  fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${MICROBENCH_LATEST_PREFIX}_attach_gain.svg"
-  fi
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${MICROBENCH_LATEST_PREFIX}_queue_wait.svg"
-  fi
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/priority_wins.svg" "${MICROBENCH_LATEST_PREFIX}_priority_wins.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/wait_gain.svg" "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_vs_arrival_gap.svg" "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/latency_gain.svg" "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
-  [[ -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/queue_wait.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_queue_wait_vs_arrival_gap.svg"
-  if [[ -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" ]]; then
-    cp -f "${MICROBENCH_OUT_DIR}/charts/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${MICROBENCH_LATEST_PREFIX}_jump_ahead.svg"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg"
   fi
 }
 
@@ -422,7 +416,6 @@ run_probe_mode() {
     PRIORITY_PROBE_SEED="${PRIORITY_PROBE_SEED}" \
     AUTO_BUILD_PRECISE_IMAGES="${AUTO_BUILD_PRECISE_IMAGES}" \
     "${PRIORITY_SCHEDULING_PROBE_HELPER}" "${MODEL}"
-  printf '%s\n' "${run_id}" > "${MICROBENCH_LATEST_PREFIX}_last_probe_run_id.txt"
   LAST_PROBE_RUN_ID="${run_id}"
 }
 
@@ -484,9 +477,6 @@ run_sweep_mode() {
       "${PRIORITY_SCHEDULING_PROBE_HELPER}" "${MODEL}"
     LAST_SWEEP_RUN_IDS+=("${run_id}")
   done
-  if [[ "${#LAST_SWEEP_RUN_IDS[@]}" -gt 0 ]]; then
-    printf '%s\n' "${LAST_SWEEP_RUN_IDS[*]}" > "${MICROBENCH_LATEST_PREFIX}_last_sweep_run_ids.txt"
-  fi
 }
 
 run_plot_mode() {
@@ -498,7 +488,6 @@ run_plot_mode() {
   fi
   banner "PRIORITY SCHEDULING MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
-  printf '%s\n' "${matrix_csv}" > "${MICROBENCH_LATEST_PREFIX}_plot_matrix_path.txt"
   build_microbenchmark_charts "${matrix_csv}"
 }
 
@@ -509,8 +498,8 @@ print_final_status() {
 Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${PRIORITY_SCHEDULING_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
-Attach gain chart: ${MICROBENCH_OUT_DIR}/charts/attach_gain.svg
-Queue wait chart: ${MICROBENCH_OUT_DIR}/charts/queue_wait.svg
+Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
+Shared chart: ${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg
 EOF
     return
   fi
@@ -518,10 +507,9 @@ EOF
 Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
-Microbenchmark summary: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
-Attach gain chart: ${MICROBENCH_OUT_DIR}/charts/attach_gain.svg
-Queue wait chart: ${MICROBENCH_OUT_DIR}/charts/queue_wait.svg
+Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
+Shared chart: ${SHARED_CHART_DIR}/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF
