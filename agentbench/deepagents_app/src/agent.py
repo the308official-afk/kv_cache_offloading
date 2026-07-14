@@ -112,7 +112,7 @@ def env_int(name: str, *, default: int) -> int:
 
 def agent_invoke_config() -> dict[str, Any]:
     return {
-        "recursion_limit": env_int("AGENTBENCH_AGENT_RECURSION_LIMIT", default=30),
+        "recursion_limit": env_int("AGENTBENCH_AGENT_RECURSION_LIMIT", default=80),
     }
 
 

@@ -197,14 +197,19 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
   || status=$?
 
   AFTER_RESULT="$(latest_result_dir)"
-  if [[ -n "${AFTER_RESULT}" ]]; then
+  NEW_RESULT_DIR=""
+  if [[ -n "${AFTER_RESULT}" && "${AFTER_RESULT}" != "${BEFORE_RESULT}" ]]; then
+    NEW_RESULT_DIR="${AFTER_RESULT}"
+  fi
+
+  if [[ -n "${NEW_RESULT_DIR}" ]]; then
     "${PYTHON_BIN}" experiments/scripts/agentbench_report/build_run_report.py \
-      --agentbench-result-dir "${AFTER_RESULT}" \
+      --agentbench-result-dir "${NEW_RESULT_DIR}" \
       --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl >/dev/null 2>&1 || true
   fi
 
-  if [[ -n "${AFTER_RESULT}" && "${AFTER_RESULT}" != "${BEFORE_RESULT}" ]]; then
-    RUN_ID="$(basename "${AFTER_RESULT}")"
+  if [[ -n "${NEW_RESULT_DIR}" && "${status}" -eq 0 ]]; then
+    RUN_ID="$(basename "${NEW_RESULT_DIR}")"
     append_progress_row "${RUN_ID}"
     append_trace_index_row "${RUN_ID}" "${INDEX}"
     {
@@ -215,6 +220,15 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       echo "All runs overview: experiments/reports/all_runs_overview.csv"
       echo "Latest execution prompts: experiments/reports/latest_runs_execution_prompts.md"
       echo "All execution prompts: experiments/reports/all_runs_execution_prompts.csv"
+      echo "Exit status: ${status}"
+      echo
+    } | tee -a "${PROGRESS_LOG}"
+  elif [[ -n "${NEW_RESULT_DIR}" ]]; then
+    RUN_ID="$(basename "${NEW_RESULT_DIR}")"
+    {
+      echo "Run failed: ${RUN_ID}"
+      echo "Partial result dir: ${NEW_RESULT_DIR}"
+      echo "Partial report dir: experiments/reports/runs/${RUN_ID}"
       echo "Exit status: ${status}"
       echo
     } | tee -a "${PROGRESS_LOG}"
@@ -234,7 +248,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       echo "Index ${INDEX} failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0" | tee -a "${PROGRESS_LOG}" >&2
       exit "${status}"
     fi
-  elif [[ -z "${AFTER_RESULT}" || "${AFTER_RESULT}" = "${BEFORE_RESULT}" ]]; then
+  elif [[ -z "${NEW_RESULT_DIR}" ]]; then
     if [[ "${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" = "1" ]]; then
       echo "Index ${INDEX} produced no new result; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
