@@ -1,0 +1,36 @@
+Run,Repo,Model,Steps,Planning,Execution,Exec Size Δ,Patch Gen,Review,Other,Total,Patch
+155045,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+140100,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+145347,unknown,,0,0 - none,0 - none,,0 - none,0 - none,0 - none,0,0 B
+152937,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+153328,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+153719,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+154111,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11773,1 - execute,"2 - execute, read_file",0 - none,3,0 B
+133507,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,0,0 - none,0 - none,-7863,0 - none,0 - none,0 - none,0,0 B
+134122,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-11496,"2 - execute, read_file","2 - execute, read_file",0 - none,4,0 B
+134209,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-7491,1 - read_file,2 - read_file,0 - none,3,0 B
+134254,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,2,0 - none,"8 - edit_file, execute, read_file, write_file",-70,1 - write_todos,1 - write_todos,0 - none,10,1.6 KB
+134657,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,8470,0 - none,0 - none,0 - none,0,0 B
+134943,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,"3 - ls, write_todos",3 - glob,-8696,"2 - glob, write_todos","2 - glob, write_todos",0 - none,10,183 B
+135125,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-9054,1 - read_file,3 - read_file,0 - none,4,183 B
+140928,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,6 - read_file,-8126,1 - read_file,2 - read_file,0 - none,9,0 B
+141144,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-9217,1 - read_file,2 - read_file,0 - none,3,0 B
+141220,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,2,0 - none,"9 - edit_file, execute, read_file, write_file",-11619,1 - execute,1 - execute,0 - none,11,1.9 KB
+141350,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,12197,1 - read_file,1 - ls,0 - none,2,0 B
+141717,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,2 - write_todos,0 - none,-9335,1 - read_file,1 - read_file,0 - none,4,183 B
+141753,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,"10 - ls, read_file",-9132,3 - ls,1 - ls,0 - none,14,183 B
+141858,unknown,,0,0 - none,0 - none,,0 - none,0 - none,0 - none,0,0 B
+141902,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,14041,0 - none,1 - execute,0 - none,1,0 B
+142228,teleport,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-12393,1 - execute,1 - execute,0 - none,2,0 B
+145726,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,2,0 - none,"5 - edit_file, execute, read_file",-12438,2 - write_file,1 - read_file,0 - none,8,412 B
+145823,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,-9217,1 - read_file,2 - read_file,0 - none,3,0 B
+145859,NodeBB,Qwen/Qwen2.5-Coder-7B-Instruct,2,0 - none,"9 - edit_file, execute, read_file, write_file",-11619,1 - execute,1 - execute,0 - none,11,1.9 KB
+150029,qutebrowser,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,0 - none,18615,1 - write_todos,1 - execute,0 - none,2,0 B
+150501,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,2 - write_todos,0 - none,-9335,1 - read_file,1 - read_file,0 - none,4,183 B
+150537,ansible,Qwen/Qwen2.5-Coder-7B-Instruct,3,0 - none,"10 - ls, read_file",-9079,2 - ls,2 - ls,0 - none,14,183 B
+151005,NodeBB,Qwen/Qwen2.5-7B-Instruct,2,0 - none,"56 - edit_file, execute, grep, ls, read_file",990,0 - none,0 - none,0 - none,56,0 B
+151456,qutebrowser,Qwen/Qwen2.5-7B-Instruct,1,0 - none,"12 - edit_file, execute, grep, ls, read_file",-9844,7 - execute,0 - none,0 - none,19,0 B
+151626,NodeBB,Qwen/Qwen2.5-7B-Instruct,3,0 - none,"170 - grep, ls, read_file",4574,"4 - edit_file, execute",4 - execute,0 - none,178,0 B
+152607,qutebrowser,Qwen/Qwen2.5-7B-Instruct,1,0 - none,"9 - edit_file, execute, grep, ls, read_file, write_todos",398,"3 - edit_file, execute","3 - edit_file, execute",0 - none,15,0 B
+152853,unknown,,0,0 - none,0 - none,,0 - none,0 - none,0 - none,0,0 B
+152927,unknown,,0,0 - none,0 - none,,0 - none,0 - none,0 - none,0,0 B

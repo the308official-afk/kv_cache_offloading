@@ -694,15 +694,10 @@ cat experiments/charts/exp6_runs_execution_prompts.md
 The same important tables are also copied with simpler names:
 
 ```bash
+cat experiments/charts/prompt_evolution_run_overview.csv
 cat experiments/charts/exp6_task_summary_table.csv
 cat experiments/charts/exp6_run_overview_table.csv
 cat experiments/charts/exp6_trace_index_table.csv
-```
-
-It also creates a slide-friendly chart from the run overview table:
-
-```bash
-experiments/charts/exp6_prompt_evolution_run_overview.svg
 ```
 
 Batch outputs:

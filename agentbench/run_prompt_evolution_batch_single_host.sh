@@ -33,6 +33,7 @@ publish_prompt_evolution_reports() {
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_task_summary_table.csv" \
+    "experiments/reports/prompt_evolution_run_overview.csv:prompt_evolution_run_overview.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_run_overview_table.csv" \
     "experiments/reports/latest_prompt_evolution_trace_index.csv:exp6_prompt_evolution_trace_index.csv" \
@@ -45,13 +46,6 @@ publish_prompt_evolution_reports() {
       cp -f "${source_path}" "${SHARED_CHART_DIR}/${target_name}"
     fi
   done
-
-  if [[ -f experiments/reports/prompt_evolution_run_overview.csv ]]; then
-    "${PYTHON_BIN}" experiments/scripts/prompt_evolution/plot_prompt_evolution_overview.py \
-      --overview-csv experiments/reports/prompt_evolution_run_overview.csv \
-      --out-svg "${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.svg" \
-      | tee -a "${DRIVER_LOG}"
-  fi
 }
 
 usage() {
@@ -192,5 +186,5 @@ fi
   echo "Latest trace index CSV: experiments/reports/latest_prompt_evolution_trace_index.csv"
   echo "Latest trace index MD: experiments/reports/latest_prompt_evolution_trace_index.md"
   echo "Published readable Exp 6 reports to: ${SHARED_CHART_DIR}/exp6_*"
-  echo "Run-overview chart: ${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.svg"
+  echo "Run-overview table copy: ${SHARED_CHART_DIR}/prompt_evolution_run_overview.csv"
 } | tee -a "${DRIVER_LOG}"
