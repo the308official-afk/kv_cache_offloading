@@ -755,6 +755,7 @@ still up:
 ```bash
 cd ~/kv_cache_offloading
 
+AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
 ./agentbench/debug_prompt_evolution_tool_calls.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
@@ -765,6 +766,10 @@ The debug wrapper checks:
 - whether recent `all_runs_execution_prompts.csv` rows still show zero tools
 - whether raw Dynamo can return OpenAI-style `tool_calls`
 - whether Deep Agents can execute a multi-tool loop
+
+This wrapper exits nonzero on any critical failure. In particular, it stops if
+raw Dynamo cannot produce structured tool calls, or if Deep Agents cannot
+complete the multi-tool loop.
 
 Output is stored under:
 

@@ -5,11 +5,19 @@ cd "$(dirname "$0")/.."
 
 MODEL_NAME="${1:-${TOOL_DEBUG_MODEL:-${MODEL_NAME:-Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8}}}"
 FRONTEND_URL="${TOOL_DEBUG_FRONTEND_URL:-http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions}"
-PYTHON_BIN="${PYTHON_BIN:-python3}"
+if [[ -z "${PYTHON_BIN:-}" ]]; then
+  if command -v python3.11 >/dev/null 2>&1; then
+    PYTHON_BIN="python3.11"
+  else
+    PYTHON_BIN="python3"
+  fi
+fi
 RUN_ID="${TOOL_DEBUG_RUN_ID:-tool_call_debug_$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="experiments/reports/tool_call_debug/${RUN_ID}"
 RECENT_ROWS="${TOOL_DEBUG_RECENT_ROWS:-20}"
 DEEPAGENTS_CASE="${TOOL_DEBUG_DEEPAGENTS_CASE:-ls-read-execute}"
+AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
+export AGENTBENCH_DEEPAGENTS_SOURCE
 
 mkdir -p "${OUT_DIR}"
 
@@ -23,17 +31,15 @@ section() {
 run_with_log() {
   local log_file="$1"
   shift
-  set +e
   "$@" 2>&1 | tee "${log_file}"
-  local status="${PIPESTATUS[0]}"
-  set -e
-  return "${status}"
+  return "${PIPESTATUS[0]}"
 }
 
 section "PROMPT EVOLUTION TOOL-CALL DEBUG"
 echo "Model: ${MODEL_NAME}"
 echo "Frontend URL: ${FRONTEND_URL}"
 echo "Python: ${PYTHON_BIN}"
+echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
 echo "Output dir: ${OUT_DIR}"
 echo
 echo "This script does not start Dynamo."
@@ -43,7 +49,8 @@ section "STEP 0: LOCAL FILE CHECK"
 missing=0
 for path in \
   "agentbench/diagnose_dynamo_tool_calls.py" \
-  "agentbench/diagnose_deepagents_tool_loop.py"
+  "agentbench/diagnose_deepagents_tool_loop.py" \
+  "upstream/deepagents/libs/deepagents/pyproject.toml"
 do
   if [[ -f "${path}" ]]; then
     echo "ok: ${path}"
@@ -146,29 +153,74 @@ PY
 
 section "STEP 3: DIRECT DYNAMO TOOL-CALL TEST"
 echo "Goal: any case should show tool_calls=1."
-dynamo_status=0
 run_with_log "${OUT_DIR}/dynamo_tool_calls.log" \
   "${PYTHON_BIN}" agentbench/diagnose_dynamo_tool_calls.py \
     --frontend-url "${FRONTEND_URL}" \
     --model "${MODEL_NAME}" \
     --cases auto,required,named \
     --max-tokens 256 \
-    --output-dir "${OUT_DIR}/dynamo_tool_calls" || dynamo_status="$?"
-echo "Direct Dynamo diagnostic exit status: ${dynamo_status}"
+    --output-dir "${OUT_DIR}/dynamo_tool_calls"
+echo "Direct Dynamo diagnostic exit status: 0"
+
+"${PYTHON_BIN}" - <<'PY' "${OUT_DIR}"
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+out_dir = Path(sys.argv[1])
+summary_path = out_dir / "dynamo_tool_calls" / "summary.json"
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+cases = summary.get("cases") if isinstance(summary.get("cases"), list) else []
+counts = [
+    int(case.get("tool_call_count") or 0)
+    for case in cases
+    if isinstance(case, dict)
+]
+print(f"Direct Dynamo tool-call counts: {counts}")
+if not any(count > 0 for count in counts):
+    raise SystemExit(
+        "CRITICAL FAIL: direct Dynamo produced zero structured tool calls in every case."
+    )
+PY
 
 section "STEP 4: DEEP AGENTS TOOL LOOP TEST"
 echo "Goal: tool_calls > 0, multi_tool_loop_observed=True, case_success=True."
-deepagents_status=0
 run_with_log "${OUT_DIR}/deepagents_tool_loop.log" \
   "${PYTHON_BIN}" agentbench/diagnose_deepagents_tool_loop.py \
     --frontend-url "${FRONTEND_URL}" \
     --model "${MODEL_NAME}" \
     --case "${DEEPAGENTS_CASE}" \
-    --output-dir "${OUT_DIR}/deepagents_tool_loop" || deepagents_status="$?"
-echo "Deep Agents diagnostic exit status: ${deepagents_status}"
+    --output-dir "${OUT_DIR}/deepagents_tool_loop"
+echo "Deep Agents diagnostic exit status: 0"
+
+"${PYTHON_BIN}" - <<'PY' "${OUT_DIR}"
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+out_dir = Path(sys.argv[1])
+summary_path = out_dir / "deepagents_tool_loop" / "summary.json"
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+tool_calls = int(summary.get("ai_tool_call_count") or 0)
+tool_messages = int(summary.get("tool_message_count") or 0)
+multi_tool_loop = bool(summary.get("multi_tool_loop_observed"))
+case_success = bool(summary.get("case_success"))
+print(f"Deep Agents tool calls: {tool_calls}")
+print(f"Deep Agents tool messages: {tool_messages}")
+print(f"Deep Agents multi-tool loop observed: {multi_tool_loop}")
+print(f"Deep Agents case success: {case_success}")
+if not case_success:
+    raise SystemExit(
+        "CRITICAL FAIL: Deep Agents did not complete the required multi-tool loop."
+    )
+PY
 
 section "STEP 5: SIMPLE INTERPRETATION"
-"${PYTHON_BIN}" - <<'PY' "${OUT_DIR}" "${dynamo_status}" "${deepagents_status}"
+"${PYTHON_BIN}" - <<'PY' "${OUT_DIR}" "0" "0"
 from __future__ import annotations
 
 import json
