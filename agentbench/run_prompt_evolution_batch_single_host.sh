@@ -24,6 +24,7 @@ MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY
 MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
 SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
+DEEPAGENTS_READY_HELPER="${DEEPAGENTS_READY_HELPER:-./agentbench/ensure_deepagents_ready.sh}"
 
 BATCH_DIR="experiments/reports/batches/${PROMPT_EVOLUTION_BATCH_ID}"
 DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
@@ -235,6 +236,7 @@ PY
   echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
   echo "Require tool loop: ${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}"
   echo "Tool-loop preflight case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
+  echo "Deep Agents ready helper: ${DEEPAGENTS_READY_HELPER}"
   echo "Frontend URL: ${FRONTEND_URL}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
@@ -258,6 +260,9 @@ if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
   echo "Cooldown: ${MODEL_COOLDOWN_SECS}s" | tee -a "${DRIVER_LOG}"
   sleep "${MODEL_COOLDOWN_SECS}"
 fi
+
+echo "Ensuring Deep Agents dependency is ready..." | tee -a "${DRIVER_LOG}"
+"${DEEPAGENTS_READY_HELPER}" 2>&1 | tee -a "${DRIVER_LOG}"
 
 check_deepagents_tool_loop "${MODEL}" "${FRONTEND_URL}"
 

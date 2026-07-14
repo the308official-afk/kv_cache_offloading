@@ -671,8 +671,12 @@ Note:
 - for larger models, set both groups
 - before launching the batch, the wrapper now verifies that Deep Agents can
   execute a real tool loop
+- if `upstream/deepagents` is missing, the wrapper downloads the pinned
+  Deep Agents checkout and installs it automatically
 - this preflight is required by default through
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
+- dependency auto-install is enabled by default through
+  `AGENTBENCH_DEEPAGENTS_AUTO_INSTALL=1`
 - only set `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=0` when you intentionally want
   prompt-only reports and are willing to see `tool_call_count=0`
 

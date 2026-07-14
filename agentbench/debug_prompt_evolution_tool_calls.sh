@@ -17,6 +17,7 @@ OUT_DIR="experiments/reports/tool_call_debug/${RUN_ID}"
 RECENT_ROWS="${TOOL_DEBUG_RECENT_ROWS:-20}"
 DEEPAGENTS_CASE="${TOOL_DEBUG_DEEPAGENTS_CASE:-ls-read-execute}"
 AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
+DEEPAGENTS_READY_HELPER="${DEEPAGENTS_READY_HELPER:-./agentbench/ensure_deepagents_ready.sh}"
 export AGENTBENCH_DEEPAGENTS_SOURCE
 
 mkdir -p "${OUT_DIR}"
@@ -44,6 +45,9 @@ echo "Output dir: ${OUT_DIR}"
 echo
 echo "This script does not start Dynamo."
 echo "Run it while the same Dynamo runtime from Experiment 6 is still up."
+
+section "STEP -1: ENSURE DEEP AGENTS IS READY"
+"${DEEPAGENTS_READY_HELPER}"
 
 section "STEP 0: LOCAL FILE CHECK"
 missing=0
