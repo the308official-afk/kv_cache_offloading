@@ -1609,7 +1609,7 @@ PRIORITY_REQUEST_SOURCE=swebench_dataset \
 PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 PRIORITY_SWEBENCH_SPLIT=test \
 PRIORITY_SWEBENCH_START_INDEX=0 \
-EXPERIMENT_RESET_MODE=restart \
+EXPERIMENT_RESET_MODE=flush \
 PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
 PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
 LOW_PRIORITY_COUNT=8 \
@@ -1868,7 +1868,7 @@ PRIORITY_REQUEST_SOURCE=swebench_dataset \
 PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 PRIORITY_SWEBENCH_SPLIT=test \
 PRIORITY_SWEBENCH_START_INDEX=0 \
-EXPERIMENT_RESET_MODE=restart \
+EXPERIMENT_RESET_MODE=flush \
 PRIORITY_SCHEDULING_SWEEP_AXIS=PRIORITY_ARRIVAL_GAP_MS \
 PRIORITY_SCHEDULING_SWEEP_VALUES="50 100 200 400" \
 LOW_PRIORITY_COUNT=8 \
@@ -2309,31 +2309,12 @@ Default prompt-isolation policy:
 
 ### Run
 
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
 To run only the SWE-bench cases:
 
 ```bash
 cd ~/kv_cache_offloading
 
 SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
-To run only one case:
-
-```bash
-cd ~/kv_cache_offloading
-
-SUITE_RUNS="exp11_swebench" \
 DYNAMO_MACHINE_PROFILE=gh200 \
 ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
