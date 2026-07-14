@@ -1,49 +1,90 @@
 
 ```bash
-Building wheels for collected packages: deepagents
-  Building wheel for deepagents (pyproject.toml): started
-  Building wheel for deepagents (pyproject.toml): finished with status 'done'
-  Created wheel for deepagents: filename=deepagents-0.5.7-py3-none-any.whl size=187644 sha256=c30fa0d121f4e9dacd81df424c357d8ce458f988129435672cba5ce67cc4b248
-  Stored in directory: /tmp/pip-ephem-wheel-cache-56qr6z6f/wheels/67/d1/66/6c1b78f1a5c339c94a4a36f1d66cce2b6276edc45e6382ef80
-Successfully built deepagents
-Installing collected packages: deepagents
-  Attempting uninstall: deepagents
-    Found existing installation: deepagents 0.5.7
-    Uninstalling deepagents-0.5.7:
-      Successfully uninstalled deepagents-0.5.7
-Successfully installed deepagents-0.5.7
-Verifying Deep Agents import...
-deepagents: /home/central/ojaiyeob/.local/lib/python3.11/site-packages/deepagents/__init__.py
-Deep Agents ready.
+========================================
+(5/6) MODEL READINESS GO (model registration and smoke test both passed)
+========================================
+Cooldown: 60s
+Ensuring Deep Agents dependency is ready...
+Checking Deep Agents dependency...
+Deep Agents dir: upstream/deepagents
+Deep Agents ref: 2cf7e25dbb40e783d9d4d545c29e595800bf314f
+Auto install: 1
+Force refresh: 0
+Force reinstall: 0
+Deep Agents git checkout exists.
+Deep Agents checkout already at pinned ref.
+Deep Agents import ok: /home/central/ojaiyeob/.local/lib/python3.11/site-packages/deepagents/__init__.py
+Deep Agents marker ok: experiments/runtime_state/deepagents_ready.marker
+Deep Agents already ready; skipping install.
 
 Checking Deep Agents tool loop before Experiment 6 batch...
 Case: edit-validate
 Deep Agents source: upstream
 Forced tool choice: auto
-Diagnostic recursion limit: 12
+Diagnostic recursion limit: 30
 Diagnostic timeout seconds: 180
-Preflight log: experiments/reports/batches/prompt_evolution_batch_20260714_204841/prompt_evolution_tool_loop_preflight.log
-Preflight output dir: experiments/reports/batches/prompt_evolution_batch_20260714_204841/tool_loop_preflight
-/usr/lib/python3.11/dataclasses.py:1492: LangChainDeprecationWarning: `files_update` was deprecated in deepagents 0.5.0 and will be removed in deepagents==0.7.0. State updates are now handled internally by the backend.
+Preflight log: experiments/reports/batches/prompt_evolution_batch_20260714_210507/prompt_evolution_tool_loop_preflight.log
+Preflight output dir: experiments/reports/batches/prompt_evolution_batch_20260714_210507/tool_loop_preflight
+/usr/lib/python3.11/dataclasses.py:1492: LangChainDeprecationWarning: `files_update` was deprecated in deepagents 0.5.0 and will be removed in deepagents==0.7.0. State updates are now ha   ndled internally by the backend.
   return obj.__class__(**changes)
+Diagnostic output: experiments/reports/batches/prompt_evolution_batch_20260714_210507/tool_loop_preflight
+tool_calls=2
+tool_messages=2
+invalid_tool_calls=0
+unique_tools=execute,write_file
+required_tools_observed=True
+multi_tool_loop_observed=True
+result_file_exists=True
+edit_validation_observed=True
+case_success=True
+
+Deep Agents tool-loop preflight result:
+  tool_calls=2
+  tool_messages=2
+  multi_tool_loop_observed=True
+  case_success=True
+Deep Agents tool-loop preflight passed.
+Running prompt evolution batch for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8...
+Batch ID: prompt_evolution_batch_20260714_210507
+Model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+Frontend URL: http://127.0.0.1:8000/v1/chat/completions
+Hint profile: high-reuse
+Hint provider: agentbench
+Continue on task error: 0
+Progress log: experiments/reports/batches/prompt_evolution_batch_20260714_210507/progress.log
+Progress CSV: experiments/reports/batches/prompt_evolution_batch_20260714_210507/progress_overview.csv
+Trace index CSV: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.csv
+Trace index MD: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.md
+
+===== Running SWE-bench index 0 =====
 Traceback (most recent call last):
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/diagnose_deepagents_tool_loop.py", line 374, in <module>
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 5011, in <module>
     main()
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/diagnose_deepagents_tool_loop.py", line 318, in main
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4495, in main
+    workflow = run_task_workflow(
+               ^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_app/src/agent.py", line 1728, in run_task_workflow
+    planning_result = execute_phase_agent(
+                      ^^^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_app/src/agent.py", line 1560, in execute_phase_agent
     response = agent.invoke(
                ^^^^^^^^^^^^^
   File "/home/central/ojaiyeob/.local/lib/python3.11/site-packages/langgraph/pregel/main.py", line 3880, in invoke
     for chunk in self.stream(
   File "/home/central/ojaiyeob/.local/lib/python3.11/site-packages/langgraph/pregel/main.py", line 2980, in stream
     raise GraphRecursionError(msg)
-langgraph.errors.GraphRecursionError: Recursion limit of 12 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.
+langgraph.errors.GraphRecursionError: Recursion limit of 30 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.
 For troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT
+Run complete: agentbench-20260714_161122
+Run report: experiments/reports/runs/agentbench-20260714_161122
+Prompt evolution trace index: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.md
+Latest overview: experiments/reports/latest_runs_overview.md
+All runs overview: experiments/reports/all_runs_overview.csv
+Latest execution prompts: experiments/reports/latest_runs_execution_prompts.md
+All execution prompts: experiments/reports/all_runs_execution_prompts.csv
+Exit status: 1
 
-CRITICAL FAIL: Deep Agents tool-loop preflight command failed.
-Experiment 6 would likely produce tool_call_count=0, so the batch is stopped.
-See: experiments/reports/batches/prompt_evolution_batch_20260714_204841/prompt_evolution_tool_loop_preflight.log
-For deeper diagnosis, run:
-  AGENTBENCH_DEEPAGENTS_SOURCE=upstream ./agentbench/debug_prompt_evolution_tool_calls.sh Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+Index 0 failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 ojaiyeob@gracehopper:~/kv_cache_offloading$
 
 ```
