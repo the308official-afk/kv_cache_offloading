@@ -116,6 +116,19 @@ def agent_invoke_config() -> dict[str, Any]:
     }
 
 
+def model_only_phases() -> set[str]:
+    value = os.environ.get("AGENTBENCH_MODEL_ONLY_PHASES", "planning")
+    return {
+        item.strip().lower().replace("-", "_")
+        for item in value.split(",")
+        if item.strip()
+    }
+
+
+def phase_uses_model_only(phase: str) -> bool:
+    return phase.strip().lower().replace("-", "_") in model_only_phases()
+
+
 def limit_text(text: str, limit: int = 3000) -> str:
     if len(text) <= limit:
         return text
@@ -1462,6 +1475,156 @@ def build_phase_prompt(
     raise ValueError(f"Unsupported phase: {phase}")
 
 
+def execute_model_only_phase(
+    *,
+    phase: str,
+    sequence_index: int,
+    frontend_url: str,
+    model: str,
+    base_hints: dict[str, Any],
+    prompt: str,
+    workspace_dir: Path | None,
+    app_variant: str = "local",
+    task_index: int | None = None,
+    task_source: str | None = None,
+    task_metadata: dict[str, Any] | None = None,
+    parent_run_id: str | None = None,
+    step_title: str | None = None,
+    expected_output_tokens: int = 1024,
+    hint_provider: str = HINT_PROVIDER_AGENTBENCH,
+) -> dict:
+    request_context = build_request_context(
+        parent_run_id=parent_run_id,
+        task_instance_id=(task_metadata or {}).get("instance_id"),
+        phase=phase,
+        app_variant=app_variant,
+        step_index=sequence_index,
+        step_title=step_title or phase.replace("_", " ").title(),
+    )
+    phase_hints = build_phase_hints(
+        base_hints,
+        phase=phase,
+        hint_provider=hint_provider,
+        request_context=request_context,
+        expected_output_tokens=expected_output_tokens,
+        sequence_index=sequence_index,
+    )
+    if phase_hints:
+        phase_hints["hint_probe_id"] = build_phase_probe_id(
+            parent_run_id=parent_run_id,
+            phase=phase,
+            sequence_index=sequence_index,
+        )
+    log_lifecycle_event(
+        stage=f"{phase}_model_only_request_prepared",
+        payload={
+            "event_kind": "request_context",
+            "phase": phase,
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": phase_hints,
+            "request_context": request_context,
+            "workspace_dir": str(workspace_dir) if workspace_dir is not None else None,
+            "model_only_phases": sorted(model_only_phases()),
+        },
+    )
+    system_prompt = (
+        "You are a concise software engineering planner. "
+        "Return the requested answer directly. Do not call tools."
+    )
+    llm = build_dynamo_chat_model(
+        frontend_url=frontend_url,
+        model=model,
+        hint_payload=phase_hints,
+        request_context=request_context,
+        max_tokens=expected_output_tokens,
+    )
+    log_outbound_harness_request(
+        check_point=f"2. Model-only {phase} request leaving harness",
+        task_index=task_index,
+        payload={
+            "task_source": task_source,
+            "task_metadata": task_metadata or {},
+            "phase": phase,
+            "prompt_preview": _prompt_preview(prompt),
+            "prompt": prompt,
+            "hints": phase_hints,
+            "request_context": request_context,
+            "deepagents_runtime_source": DEEPAGENTS_RUNTIME_SOURCE,
+            "model_only": True,
+        },
+    )
+    log_lifecycle_event(
+        stage=f"{phase}_model_only_request_dispatched",
+        payload={
+            "event_kind": "request_dispatch",
+            "phase": phase,
+            "frontend_url": frontend_url,
+            "model": model,
+            "hints": phase_hints,
+            "request_context": request_context,
+            "system_prompt": system_prompt,
+            **build_prompt_snapshot(prompt),
+        },
+    )
+    original_cwd = Path.cwd()
+    try:
+        if workspace_dir is not None:
+            os.chdir(workspace_dir)
+        started_at_perf = time.perf_counter()
+        response = llm.invoke(
+            [
+                ("system", system_prompt),
+                ("user", prompt),
+            ]
+        )
+        finished_at_perf = time.perf_counter()
+    finally:
+        os.chdir(original_cwd)
+    measurement = build_measurement_record(
+        phase=phase,
+        model=model,
+        frontend_url=frontend_url,
+        prompt=prompt,
+        hints=phase_hints,
+        response=response,
+        started_at_perf=started_at_perf,
+        finished_at_perf=finished_at_perf,
+        task_index=task_index,
+        task_source=task_source,
+        task_metadata=task_metadata,
+        request_context=request_context,
+        step_index=sequence_index,
+        step_title=step_title,
+        app_variant=app_variant,
+    )
+    log_lifecycle_event(
+        stage=f"{phase}_model_only_response_received",
+        payload={
+            "event_kind": "response",
+            "phase": phase,
+            "request_context": request_context,
+            "measurement": measurement,
+            **build_response_snapshot(response),
+        },
+    )
+    return {
+        "phase": phase,
+        "sequence_index": sequence_index,
+        "hints": phase_hints,
+        "request_context": request_context,
+        "prompt": prompt,
+        "response": response,
+        "response_text": response_text(response),
+        "measurement": measurement,
+        "tool_progress": summarize_tool_progress(response),
+        "tool_call_details": extract_tool_call_details(response),
+        "model_only": True,
+    }
+
+
 def execute_phase_agent(
     *,
     phase: str,
@@ -1480,6 +1643,25 @@ def execute_phase_agent(
     expected_output_tokens: int = 1024,
     hint_provider: str = HINT_PROVIDER_AGENTBENCH,
 ) -> dict:
+    if phase_uses_model_only(phase):
+        return execute_model_only_phase(
+            phase=phase,
+            sequence_index=sequence_index,
+            frontend_url=frontend_url,
+            model=model,
+            base_hints=base_hints,
+            prompt=prompt,
+            workspace_dir=workspace_dir,
+            app_variant=app_variant,
+            task_index=task_index,
+            task_source=task_source,
+            task_metadata=task_metadata,
+            parent_run_id=parent_run_id,
+            step_title=step_title,
+            expected_output_tokens=expected_output_tokens,
+            hint_provider=hint_provider,
+        )
+
     request_context = build_request_context(
         parent_run_id=parent_run_id,
         task_instance_id=(task_metadata or {}).get("instance_id"),

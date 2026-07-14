@@ -609,6 +609,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export AGENTBENCH_AGENT_RECURSION_LIMIT=80
+export AGENTBENCH_MODEL_ONLY_PHASES=planning
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -652,6 +653,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export AGENTBENCH_AGENT_RECURSION_LIMIT=80
+export AGENTBENCH_MODEL_ONLY_PHASES=planning
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -714,6 +716,9 @@ Note:
   of running indefinitely
 - Experiment 6 full SWE-bench agent phases are capped by default with
   `AGENTBENCH_AGENT_RECURSION_LIMIT=80`
+- Experiment 6 defaults to `AGENTBENCH_MODEL_ONLY_PHASES=planning`, so the
+  planning phase returns a bounded plan without entering the Deep Agents tool
+  graph; execution still uses tools
 - this preflight is required by default through
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
 - dependency auto-install is enabled by default through
@@ -1030,6 +1035,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export AGENTBENCH_AGENT_RECURSION_LIMIT=80
+export AGENTBENCH_MODEL_ONLY_PHASES=planning
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
