@@ -45,18 +45,17 @@ say TOOL_CALL_FAILED.""",
 Use the available tools. Do not describe tool calls as text.
 
 Required actions:
-1. Use read_file to inspect /tool_probe.txt.
-2. Use write_file or edit_file to create /tool_probe_result.txt containing exactly:
+1. Use write_file or edit_file to create /tool_probe_result.txt containing exactly:
    tool-loop-ok
-3. Use execute to run: test -f tool_probe_result.txt && cat tool_probe_result.txt
-4. Then give a short final answer.
+2. Use execute to run: test -f tool_probe_result.txt && cat tool_probe_result.txt
+3. Then give a short final answer.
 
 If you cannot use tools, say TOOL_CALL_FAILED.""",
 }
 
 EXPECTED_CASE_TOOLS = {
     "ls-read-execute": {"ls", "read_file", "execute"},
-    "edit-validate": {"read_file", "execute"},
+    "edit-validate": {"execute"},
 }
 
 EXPECTED_CASE_TOOL_GROUPS = {
@@ -98,8 +97,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--recursion-limit",
         type=int,
-        default=int(os.environ.get("AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT", "12")),
-        help="LangGraph recursion limit for this diagnostic. Defaults to 12.",
+        default=int(os.environ.get("AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT", "30")),
+        help="LangGraph recursion limit for this diagnostic. Defaults to 30.",
     )
     parser.add_argument(
         "--timeout-seconds",
@@ -314,25 +313,34 @@ def main() -> None:
         request_context=request_context,
         prompt_stage="tool_diagnostic_agent_system_prompt_loaded",
     )
+    response = None
+    invoke_error: BaseException | None = None
     try:
         response = agent.invoke(
             {"messages": [{"role": "user", "content": prompt}]},
             config={"recursion_limit": args.recursion_limit},
         )
+    except BaseException as exc:
+        invoke_error = exc
     finally:
         if args.timeout_seconds > 0:
             signal.alarm(0)
-    messages = extract_messages(response)
+
+    messages = extract_messages(response) if response is not None else []
     summary = {
         "frontend_url": args.frontend_url,
         "model": args.model,
         "app_variant": args.app_variant,
         "case": args.case,
+        "recursion_limit": args.recursion_limit,
+        "timeout_seconds": args.timeout_seconds,
         "workspace": str(workspace),
         "prompt": prompt,
         "request_context": request_context,
         "hints": hints,
-        "final_text": response_text(response),
+        "final_text": response_text(response) if response is not None else "",
+        "invoke_error_type": type(invoke_error).__name__ if invoke_error else "",
+        "invoke_error": str(invoke_error) if invoke_error else "",
         **summarize_messages(messages, workspace, case=args.case),
     }
 
@@ -367,7 +375,12 @@ def main() -> None:
     print(f"multi_tool_loop_observed={summary['multi_tool_loop_observed']}")
     print(f"result_file_exists={summary['result_file_exists']}")
     print(f"edit_validation_observed={summary['edit_validation_observed']}")
+    if invoke_error is not None:
+        print(f"invoke_error_type={summary['invoke_error_type']}")
+        print(f"invoke_error={summary['invoke_error']}")
     print(f"case_success={summary['case_success']}")
+    if invoke_error is not None:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

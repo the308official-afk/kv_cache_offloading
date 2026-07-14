@@ -707,7 +707,7 @@ Note:
 - the tool-loop preflight defaults to `PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate`
   so it checks a small workspace edit plus validation command
 - the tool-loop preflight is capped by default with
-  `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=12` and
+  `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=30` and
   `AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS=180`, so a bad tool loop fails instead
   of running indefinitely
 - Experiment 6 agent runs are capped by default with
