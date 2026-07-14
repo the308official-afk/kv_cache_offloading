@@ -23,5 +23,6 @@ grep -n "Tool-call parser" "$BATCH_DIR/prompt_evolution_batch_driver.log"
 
 
 ```bash
-
+cat experiments/reports/all_runs_execution_prompts.csv
+cat experiments/reports/all_runs_overview.csv
 ```
