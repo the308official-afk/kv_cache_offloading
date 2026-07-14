@@ -608,8 +608,8 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export AGENTBENCH_AGENT_RECURSION_LIMIT=80
-export AGENTBENCH_MODEL_ONLY_PHASES=planning
+export AGENTBENCH_AGENT_RECURSION_LIMIT=300
+export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -652,8 +652,8 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export AGENTBENCH_AGENT_RECURSION_LIMIT=80
-export AGENTBENCH_MODEL_ONLY_PHASES=planning
+export AGENTBENCH_AGENT_RECURSION_LIMIT=300
+export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -714,11 +714,12 @@ Note:
   `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=30` and
   `AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS=180`, so a bad tool loop fails instead
   of running indefinitely
-- Experiment 6 full SWE-bench agent phases are capped by default with
-  `AGENTBENCH_AGENT_RECURSION_LIMIT=80`
-- Experiment 6 defaults to `AGENTBENCH_MODEL_ONLY_PHASES=planning`, so the
-  planning phase returns a bounded plan without entering the Deep Agents tool
-  graph; execution still uses tools
+- for full SWE-bench Pro task solving, use a larger Deep Agents graph budget:
+  `AGENTBENCH_AGENT_RECURSION_LIMIT=300`
+- use `AGENTBENCH_MODEL_ONLY_PHASES=""` when you want to preserve the normal
+  Deep Agents planning and execution graph instead of bypassing planning
+- only use `AGENTBENCH_MODEL_ONLY_PHASES=planning` as a diagnostic escape hatch
+  when you specifically want to skip the planning graph and test execution only
 - this preflight is required by default through
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
 - dependency auto-install is enabled by default through
@@ -1034,8 +1035,8 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export AGENTBENCH_AGENT_RECURSION_LIMIT=80
-export AGENTBENCH_MODEL_ONLY_PHASES=planning
+export AGENTBENCH_AGENT_RECURSION_LIMIT=300
+export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
