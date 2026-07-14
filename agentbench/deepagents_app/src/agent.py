@@ -1086,10 +1086,9 @@ def normalize_forced_tool_choice(value: str | None) -> str | None:
 def apply_tool_choice_override(llm: ChatOpenAI) -> ChatOpenAI:
     """Force LangChain-bound tools to use a specific OpenAI tool_choice.
 
-    Dynamo/SGLang can parse tool calls when tool_choice is `required`, while
-    some local models only emit text-like tool tags in auto mode. This wrapper
-    keeps the normal Deep Agents flow, but changes the bound model request from
-    auto to the configured tool_choice when tools are present.
+    This is mainly a diagnostic escape hatch. The normal Experiment 6 path keeps
+    `tool_choice=auto`; setting AGENTBENCH_FORCE_TOOL_CHOICE=required can help
+    isolate whether a model/runtime can emit structured tool calls at all.
     """
     forced_choice = normalize_forced_tool_choice(os.environ.get("AGENTBENCH_FORCE_TOOL_CHOICE"))
     if forced_choice is None:
@@ -1115,22 +1114,91 @@ def apply_tool_choice_override(llm: ChatOpenAI) -> ChatOpenAI:
     return llm
 
 
+_HARNESS_PROFILE_CONFIGURED = False
+
+
+def configure_deepagents_harness_profile() -> None:
+    """Keep the Exp 6 harness focused on direct file/shell tools.
+
+    Deep Agents auto-adds a general-purpose subagent by default. That exposes a
+    broad `task` tool, which is useful for open-ended agents but noisy for this
+    microbenchmark because we want visible, direct tool calls against the
+    SWE-bench workspace.
+    """
+    global _HARNESS_PROFILE_CONFIGURED
+    if _HARNESS_PROFILE_CONFIGURED:
+        return
+
+    if not env_flag("AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT", default=True):
+        log_lifecycle_event(
+            stage="deepagents_harness_profile",
+            payload={
+                "event_kind": "harness_profile",
+                "general_purpose_subagent": "enabled_by_env",
+            },
+        )
+        _HARNESS_PROFILE_CONFIGURED = True
+        return
+
+    try:
+        from deepagents.profiles import (
+            GeneralPurposeSubagentProfile,
+            HarnessProfile,
+            register_harness_profile,
+        )
+
+        register_harness_profile(
+            "openai",
+            HarnessProfile(
+                general_purpose_subagent=GeneralPurposeSubagentProfile(enabled=False),
+            ),
+        )
+    except Exception as exc:
+        log_lifecycle_event(
+            stage="deepagents_harness_profile_error",
+            payload={
+                "event_kind": "harness_profile_error",
+                "general_purpose_subagent": "disable_failed",
+                "error": repr(exc),
+            },
+        )
+        if env_flag("AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE", default=True):
+            raise RuntimeError(
+                "Failed to disable Deep Agents general-purpose subagent. "
+                "Set AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE=0 "
+                "to continue anyway."
+            ) from exc
+        return
+
+    log_lifecycle_event(
+        stage="deepagents_harness_profile",
+        payload={
+            "event_kind": "harness_profile",
+            "general_purpose_subagent": "disabled",
+        },
+    )
+    _HARNESS_PROFILE_CONFIGURED = True
+
+
 # Builds the Deep Agents filesystem/shell backend rooted at the task workspace.
 def build_agent_backend(workspace_dir: Path | None):
     root_dir = str(workspace_dir or Path.cwd())
     ephemeral_backend = StateBackend()
+    artifacts_backend = StateBackend()
     shell_backend = LocalShellBackend(
         root_dir=root_dir,
         inherit_env=True,
         env=os.environ.copy(),
-        virtual_mode=False,
+        virtual_mode=True,
     )
     return CompositeBackend(
         default=shell_backend,
         routes={
             "/memories/": ephemeral_backend,
             "/conversation_history/": ephemeral_backend,
+            "/artifacts/": artifacts_backend,
         },
+        artifacts_root="/artifacts",
     )
 
 
@@ -1151,6 +1219,7 @@ def build_coding_agent(
     # Debugging note: this is the Deep Agents harness construction point.
     # The returned agent is powered by create_deep_agent(...) but wired to local Dynamo.
 
+    configure_deepagents_harness_profile()
     system_prompt = load_agent_instructions(app_variant)
     log_lifecycle_event(
         stage=prompt_stage,

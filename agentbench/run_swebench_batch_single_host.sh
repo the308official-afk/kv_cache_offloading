@@ -18,6 +18,7 @@ END_INDEX="${END_INDEX:-4}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
 BATCH_ID="${BATCH_ID:-agentbench_batch_$(date +%Y%m%d_%H%M%S)}"
+AGENTBENCH_BATCH_CONTINUE_ON_ERROR="${AGENTBENCH_BATCH_CONTINUE_ON_ERROR:-0}"
 
 BATCH_DIR="experiments/reports/batches/${BATCH_ID}"
 PROGRESS_CSV="${BATCH_DIR}/progress_overview.csv"
@@ -169,6 +170,7 @@ echo "Model: ${MODEL}" | tee -a "${PROGRESS_LOG}"
 echo "Frontend URL: ${FRONTEND_URL}" | tee -a "${PROGRESS_LOG}"
 echo "Hint profile: ${HINT_PROFILE}" | tee -a "${PROGRESS_LOG}"
 echo "Hint provider: ${HINT_PROVIDER}" | tee -a "${PROGRESS_LOG}"
+echo "Continue on task error: ${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Trace index CSV: ${TRACE_INDEX_CSV}" | tee -a "${PROGRESS_LOG}"
@@ -225,8 +227,21 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
   fi
 
   if [[ "${status}" -ne 0 ]]; then
-    echo "Index ${INDEX} failed; continuing" | tee -a "${PROGRESS_LOG}"
-    echo | tee -a "${PROGRESS_LOG}"
+    if [[ "${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" = "1" ]]; then
+      echo "Index ${INDEX} failed; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
+      echo | tee -a "${PROGRESS_LOG}"
+    else
+      echo "Index ${INDEX} failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0" | tee -a "${PROGRESS_LOG}" >&2
+      exit "${status}"
+    fi
+  elif [[ -z "${AFTER_RESULT}" || "${AFTER_RESULT}" = "${BEFORE_RESULT}" ]]; then
+    if [[ "${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" = "1" ]]; then
+      echo "Index ${INDEX} produced no new result; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
+      echo | tee -a "${PROGRESS_LOG}"
+    else
+      echo "Index ${INDEX} produced no new result; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0" | tee -a "${PROGRESS_LOG}" >&2
+      exit 1
+    fi
   fi
 done
 

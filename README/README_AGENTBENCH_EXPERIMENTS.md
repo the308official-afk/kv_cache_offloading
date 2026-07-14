@@ -596,16 +596,20 @@ Manual version:
 ```bash
 cd ~/kv_cache_offloading
 
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8'
 export AGENTBENCH_EXECUTION_LOOP=1
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=hermes
+export DYN_TOOL_CALL_PARSER=qwen3_coder
+export DYN_REASONING_PARSER=qwen3
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_FORCE_TOOL_CHOICE=required
+export AGENTBENCH_FORCE_TOOL_CHOICE=auto
+export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
+export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
+export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
 START_INDEX=0 \
 END_INDEX=5 \
@@ -634,16 +638,20 @@ export MODEL_COOLDOWN_SECS=60
 ```bash
 cd ~/kv_cache_offloading
 
-export MODEL_NAME='Qwen/Qwen2.5-Coder-7B-Instruct'
+export MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8'
 export AGENTBENCH_EXECUTION_LOOP=1
 export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=hermes
+export DYN_TOOL_CALL_PARSER=qwen3_coder
+export DYN_REASONING_PARSER=qwen3
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_FORCE_TOOL_CHOICE=required
+export AGENTBENCH_FORCE_TOOL_CHOICE=auto
+export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
+export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
+export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
 START_INDEX=0 \
 END_INDEX=5 \
@@ -653,6 +661,17 @@ FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions
 ./agentbench/run_prompt_evolution_batch_single_host.sh \
   "$MODEL_NAME"
 ```
+
+For `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8`, use:
+
+```bash
+export DYN_TOOL_CALL_PARSER=qwen3_coder
+export DYN_REASONING_PARSER=qwen3
+```
+
+Do not use `DYN_TOOL_CALL_PARSER=hermes` for this Qwen3-Coder path. The
+wrapper auto-detects `qwen3_coder` and `qwen3` when these variables are not set,
+but exporting them explicitly makes the GH200 run easier to debug.
 
 To watch the worker after the restart:
 
@@ -675,9 +694,18 @@ Note:
   execute a real tool loop
 - if `upstream/deepagents` is missing, the wrapper downloads the pinned
   Deep Agents checkout and installs it automatically
-- the wrapper defaults to `AGENTBENCH_FORCE_TOOL_CHOICE=required` because this
-  GH200 model/runtime path produced structured tool calls when tool use was
-  required, but not in auto mode
+- for Qwen3-Coder models, the wrapper now defaults to
+  `DYN_TOOL_CALL_PARSER=qwen3_coder` and `DYN_REASONING_PARSER=qwen3`
+- the wrapper defaults to `AGENTBENCH_FORCE_TOOL_CHOICE=auto`; only set
+  `AGENTBENCH_FORCE_TOOL_CHOICE=required` as a diagnostic override
+- the wrapper disables the broad Deep Agents general-purpose subagent by
+  default so Experiment 6 sees direct file/shell tool calls instead of routing
+  through the `task` tool
+- the inner batch defaults to `AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0`, so one
+  failed SWE-bench task stops the batch instead of producing misleading zero
+  summaries
+- the tool-loop preflight defaults to `PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate`
+  so it checks a small workspace edit plus validation command
 - the tool-loop preflight is capped by default with
   `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=12` and
   `AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS=180`, so a bad tool loop fails instead
@@ -778,8 +806,8 @@ What each file means:
 - `tool_call_details.md`: the exact tools called, with arguments when available
 - `phase_summary.md`: the per-phase behavior summary across planning/execution/review
 
-If Experiment 6 still shows `tool_call_count=0` after starting Dynamo with
-`DYN_TOOL_CALL_PARSER=hermes`, run the tool-call debug wrapper while Dynamo is
+If Experiment 6 still shows `tool_call_count=0` after starting Dynamo with the
+Qwen3-Coder parser settings, run the tool-call debug wrapper while Dynamo is
 still up:
 
 ```bash
@@ -792,7 +820,8 @@ AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
 
 The debug wrapper checks:
 
-- whether the latest Experiment 6 driver log says `Tool-call parser: hermes`
+- whether the latest Experiment 6 driver log says `Tool-call parser: qwen3_coder`
+- whether the latest Experiment 6 driver log says `Reasoning parser: qwen3`
 - whether recent `all_runs_execution_prompts.csv` rows still show zero tools
 - whether raw Dynamo can return OpenAI-style `tool_calls`
 - whether Deep Agents can execute a multi-tool loop
@@ -992,7 +1021,14 @@ export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
 export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=hermes
+export DYN_TOOL_CALL_PARSER=qwen3_coder
+export DYN_REASONING_PARSER=qwen3
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_FORCE_TOOL_CHOICE=auto
+export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
+export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
+export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
+export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \

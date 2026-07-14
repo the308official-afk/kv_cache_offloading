@@ -15,14 +15,19 @@ fi
 RUN_ID="${TOOL_DEBUG_RUN_ID:-tool_call_debug_$(date +%Y%m%d_%H%M%S)}"
 OUT_DIR="experiments/reports/tool_call_debug/${RUN_ID}"
 RECENT_ROWS="${TOOL_DEBUG_RECENT_ROWS:-20}"
-DEEPAGENTS_CASE="${TOOL_DEBUG_DEEPAGENTS_CASE:-ls-read-execute}"
+DEEPAGENTS_CASE="${TOOL_DEBUG_DEEPAGENTS_CASE:-edit-validate}"
 AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT="${AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT:-12}"
 AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS="${AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS:-180}"
+AGENTBENCH_DIAGNOSTIC_SHELL_TIMEOUT_SECONDS="${AGENTBENCH_DIAGNOSTIC_SHELL_TIMEOUT_SECONDS:-$((AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS + 60))}"
 AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
-AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE:-required}"
+AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE:-auto}"
+AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT="${AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT:-1}"
+AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE="${AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE:-1}"
 DEEPAGENTS_READY_HELPER="${DEEPAGENTS_READY_HELPER:-./agentbench/ensure_deepagents_ready.sh}"
 export AGENTBENCH_DEEPAGENTS_SOURCE
 export AGENTBENCH_FORCE_TOOL_CHOICE
+export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT
+export AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE
 export AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT
 export AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS
 
@@ -38,7 +43,11 @@ section() {
 run_with_log() {
   local log_file="$1"
   shift
-  "$@" 2>&1 | tee "${log_file}"
+  if [[ "${AGENTBENCH_DIAGNOSTIC_SHELL_TIMEOUT_SECONDS}" != "0" ]] && command -v timeout >/dev/null 2>&1; then
+    timeout "${AGENTBENCH_DIAGNOSTIC_SHELL_TIMEOUT_SECONDS}s" "$@" 2>&1 | tee "${log_file}"
+  else
+    "$@" 2>&1 | tee "${log_file}"
+  fi
   return "${PIPESTATUS[0]}"
 }
 
@@ -48,8 +57,10 @@ echo "Frontend URL: ${FRONTEND_URL}"
 echo "Python: ${PYTHON_BIN}"
 echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
 echo "Deep Agents forced tool choice: ${AGENTBENCH_FORCE_TOOL_CHOICE}"
+echo "Disable Deep Agents general-purpose subagent: ${AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT}"
 echo "Deep Agents diagnostic recursion limit: ${AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT}"
 echo "Deep Agents diagnostic timeout seconds: ${AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS}"
+echo "Outer shell timeout seconds: ${AGENTBENCH_DIAGNOSTIC_SHELL_TIMEOUT_SECONDS}"
 echo "Output dir: ${OUT_DIR}"
 echo
 echo "This script does not start Dynamo."
@@ -83,6 +94,8 @@ if [[ -n "${latest_batch_dir}" && -f "${latest_batch_dir}/prompt_evolution_batch
   echo "Latest batch dir: ${latest_batch_dir}"
   grep -n "Tool-call parser" "${latest_batch_dir}/prompt_evolution_batch_driver.log" \
     | tee "${OUT_DIR}/latest_batch_tool_parser.txt" || true
+  grep -n "Reasoning parser" "${latest_batch_dir}/prompt_evolution_batch_driver.log" \
+    | tee "${OUT_DIR}/latest_batch_reasoning_parser.txt" || true
 else
   echo "No prompt evolution batch driver log found yet."
 fi
