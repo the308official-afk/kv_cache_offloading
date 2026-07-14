@@ -1,18 +1,11 @@
 
 
 ```bash
-[727/732] distractor_0725 hint_profile=none cache_control_profile=off
-  status=200 latency_ms=43 cached= reuse=
-[728/732] distractor_0726 hint_profile=none cache_control_profile=off
-  status=200 latency_ms=44 cached= reuse=
-[729/732] distractor_0727 hint_profile=none cache_control_profile=off
-  status=200 latency_ms=149 cached= reuse=
-[730/732] distractor_0728 hint_profile=none cache_control_profile=off
-  status=200 latency_ms=44 cached= reuse=
-[731/732] distractor_0729 hint_profile=none cache_control_profile=off
-  status=200 latency_ms=133 cached= reuse=
-[732/732] a_replay hint_profile=high-priority cache_control_profile=off
-  status=200 latency_ms=32 cached=1600 reuse=0.978
-Request rows: /home/central/ojaiyeob/kv_cac
+run_id	model	request_source	hint_kind	gap_ms	low_requests	high_requests	max_jump_ahead	high_jump_ahead_count	high_jump_ahead_rate	high_completed_ahead_count	hint_seen	hint_path_status	result
+priority_scheduling_microbenchmark_20260714_154506__sweep_1	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	swebench_dataset	priority	50	8	4	32	21	65.60%	17	yes	worker_received_hint	priority_reordered
+priority_scheduling_microbenchmark_20260714_154506__sweep_2	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	swebench_dataset	priority	100	8	4	32	8	25.00%	8	yes	worker_received_hint	priority_reordered
+priority_scheduling_microbenchmark_20260714_154506__sweep_3	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	swebench_dataset	priority	200	8	4	32	4	12.50%	4	yes	worker_received_hint	priority_reordered
+priority_scheduling_microbenchmark_20260714_154506__sweep_4	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	swebench_dataset	priority	400	8	4	32	0	0.00%	0	yes	worker_received_hint	no_visible_reorder
+
 
 ```
