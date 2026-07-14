@@ -14,6 +14,7 @@ HINT_PROFILE="${HINT_PROFILE:-high-reuse}"
 HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
+DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-hermes}"
 PROMPT_EVOLUTION_BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID:-prompt_evolution_batch_$(date +%Y%m%d_%H%M%S)}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY_SECS}}"
@@ -130,6 +131,7 @@ smoke_test_model() {
   echo "Task range: ${START_INDEX}-${END_INDEX}"
   echo "Hint profile: ${HINT_PROFILE}"
   echo "Hint provider: ${HINT_PROVIDER}"
+  echo "Tool-call parser: ${DYN_TOOL_CALL_PARSER}"
   echo "Frontend URL: ${FRONTEND_URL}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
@@ -143,6 +145,7 @@ agentbench_print_model_readiness_active_banner | tee -a "${DRIVER_LOG}"
 echo "Starting Dynamo for ${MODEL}..." | tee -a "${DRIVER_LOG}"
 DYNAMO_MODEL_PATH="${MODEL}" \
 DYNAMO_SERVED_MODEL_NAME="${MODEL}" \
+DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER}" \
 ./run_dynamo_single_host.sh start >> "${DRIVER_LOG}" 2>&1
 
 smoke_test_model "${MODEL}" "${SMOKE_LOG}"
