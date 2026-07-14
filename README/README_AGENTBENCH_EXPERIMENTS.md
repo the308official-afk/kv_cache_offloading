@@ -680,6 +680,31 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
+The wrapper also copies the latest readable Experiment 6 outputs into the
+shared chart folder:
+
+```bash
+ls experiments/charts/exp6_*
+cat experiments/charts/exp6_prompt_evolution_run_overview.csv
+cat experiments/charts/exp6_prompt_evolution_task_summary.csv
+cat experiments/charts/exp6_prompt_evolution_trace_index.csv
+cat experiments/charts/exp6_runs_execution_prompts.md
+```
+
+The same important tables are also copied with simpler names:
+
+```bash
+cat experiments/charts/exp6_task_summary_table.csv
+cat experiments/charts/exp6_run_overview_table.csv
+cat experiments/charts/exp6_trace_index_table.csv
+```
+
+It also creates a slide-friendly chart from the run overview table:
+
+```bash
+experiments/charts/exp6_prompt_evolution_run_overview.svg
+```
+
 Batch outputs:
 
 ```text
@@ -922,6 +947,12 @@ outputs.
 cd ~/kv_cache_offloading
 
 ./agentbench/prepare_swebench_trajectory_prompts.sh
+```
+
+This also copies the catalog CSV used by Experiment 9 into:
+
+```bash
+experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 ```
 
 Step 2: run Experiment 9 against the prepared trajectory catalog.
@@ -2338,6 +2369,12 @@ SPEC_PREFILL_PROMPT_ISOLATION_MODE
 
 `SUITE_ISOLATION_MODE` is still the main runtime policy setting:
 
+- `per_case`
+  - restart between experiments
+  - use each selected case's known-good reset mode
+  - current defaults:
+    - synthetic cases: `flush`
+    - SWE-bench Pro cases: `restart`
 - `clean`
   - restart between experiments
   - restart between sweep values
@@ -2351,9 +2388,14 @@ SPEC_PREFILL_PROMPT_ISOLATION_MODE
 
 Recommended:
 
+- `per_case`: safest default for the mixed synthetic + SWE-bench suite
 - `clean`: slowest, most conservative
-- `flush`: best default balance when flush works
+- `flush`: useful when you intentionally want every selected case to use flush
 - `fast`: quickest for iteration
+
+For the default mixed suite, do not force `SUITE_ISOLATION_MODE=flush` unless
+you intentionally want the SWE-bench cases to use flush too. The known-good
+SWE-bench cases currently use `restart`.
 
 ### Outputs
 

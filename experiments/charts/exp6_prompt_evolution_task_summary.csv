@@ -1,0 +1,36 @@
+Run,Repo,Task Summary,Expected Action,Patch,Base Commit
+155045,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+140100,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+145347,unknown,,edit repo code,No,
+152937,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+153328,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+153719,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+154111,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+133507,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+134122,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+134209,qutebrowser,The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.,refactor code organization,No,ebfe9b7a
+134254,NodeBB,"Move .well-known assets to separate router file, add a basic webfinger implementation",modify routing/controller logic,Yes,da2441b9
+134657,qutebrowser,Host blocking does not apply to subdomains when only the parent domain is listed,fix host-matching logic,No,0b8cc812
+134943,ansible,Collection Name Validation Accepts Python Keywords,fix validation logic,Yes,f533d465
+135125,ansible,uri module uses .netrc to overwrite Authorization header even if specified,modify routing/controller logic,Yes,79f67ed5
+140928,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+141144,qutebrowser,The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.,refactor code organization,No,ebfe9b7a
+141220,NodeBB,"Move .well-known assets to separate router file, add a basic webfinger implementation",modify routing/controller logic,Yes,da2441b9
+141350,qutebrowser,Host blocking does not apply to subdomains when only the parent domain is listed,fix host-matching logic,No,0b8cc812
+141717,ansible,Collection Name Validation Accepts Python Keywords,fix validation logic,Yes,f533d465
+141753,ansible,uri module uses .netrc to overwrite Authorization header even if specified,modify routing/controller logic,Yes,79f67ed5
+141858,unknown,,edit repo code,No,
+141902,qutebrowser,"The application is currently configured to display the changelog after any upgrade, including patch and minor updates.",edit repo code,No,5ee28105
+142228,teleport,kubectl exec interactive sessions fail due to missing session uploader initialization in Kubernetes service,modify routing/controller logic,No,481158d6
+145726,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,Yes,1e137b07
+145823,qutebrowser,The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.,refactor code organization,No,ebfe9b7a
+145859,NodeBB,"Move .well-known assets to separate router file, add a basic webfinger implementation",modify routing/controller logic,Yes,da2441b9
+150029,qutebrowser,Host blocking does not apply to subdomains when only the parent domain is listed,fix host-matching logic,No,0b8cc812
+150501,ansible,Collection Name Validation Accepts Python Keywords,fix validation logic,Yes,f533d465
+150537,ansible,uri module uses .netrc to overwrite Authorization header even if specified,modify routing/controller logic,Yes,79f67ed5
+151005,NodeBB,Email Validation Status Not Handled Correctly in ACP and Confirmation Logic,fix validation logic,No,1e137b07
+151456,qutebrowser,The `hide_qt_warning` function and its associated tests have been moved from `log.py` to `qtlog.py` to better organize Qt-specific logging functionality.,refactor code organization,No,ebfe9b7a
+151626,NodeBB,"Move .well-known assets to separate router file, add a basic webfinger implementation",modify routing/controller logic,No,da2441b9
+152607,qutebrowser,Host blocking does not apply to subdomains when only the parent domain is listed,fix host-matching logic,No,0b8cc812
+152853,unknown,,edit repo code,No,
+152927,unknown,,edit repo code,No,

@@ -25,7 +25,7 @@ SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-sweep}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
 SUITE_ENSURE_PRECISE_RUNTIME="${SUITE_ENSURE_PRECISE_RUNTIME:-auto}"
-SUITE_ISOLATION_MODE="${SUITE_ISOLATION_MODE:-clean}"
+SUITE_ISOLATION_MODE="${SUITE_ISOLATION_MODE:-per_case}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
 RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
 SPEC_PREFILL_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE:-disjoint}"
@@ -37,6 +37,8 @@ EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
 EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
 EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
 EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
+CASE_EXPERIMENT_RESET_MODE=""
+CASE_KV_RETENTION_RESET_MODE=""
 WRAPPER_STOP_DYNAMO_WHEN_DONE="1"
 
 SUITE_ROOT_DIR="experiments/reports/agentic_hint_sweeps_suite/${SUITE_ID}"
@@ -109,7 +111,7 @@ Main knobs:
   DYNAMO_MACHINE_PROFILE=ec2|gh200
   SUITE_RUNS="exp9_synthetic exp11_swebench"
   SUITE_EXPERIMENTS="9 11 12"           # legacy fallback when SUITE_RUNS is unset
-  SUITE_ISOLATION_MODE=clean|flush|fast # clean=restarts sweep values, flush=flushes sweep values, fast=reuses runtime within experiments without flush
+  SUITE_ISOLATION_MODE=per_case|clean|flush|fast # per_case uses the known-good reset mode for each selected case
   SUITE_CONTINUE_ON_ERROR=0|1
   SUITE_INTERACTIVE_BUILD_PROGRESS=1
   SUITE_ENSURE_PRECISE_RUNTIME=auto|0|1
@@ -127,6 +129,15 @@ if [[ -z "${MODEL}" ]]; then
 fi
 
 case "${SUITE_ISOLATION_MODE}" in
+  per_case)
+    EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
+    EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
+    EFFECTIVE_KV_RETENTION_RESET_MODE="restart"
+    EFFECTIVE_RETENTION_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_CACHE_PINNING_SWEEP_SEED_MODE="per_cell"
+    EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE="per_value"
+    EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE="per_value"
+    ;;
   clean)
     EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="1"
     EFFECTIVE_EXPERIMENT_RESET_MODE="restart"
@@ -156,7 +167,7 @@ case "${SUITE_ISOLATION_MODE}" in
     ;;
   *)
     echo "Unknown SUITE_ISOLATION_MODE: ${SUITE_ISOLATION_MODE}" >&2
-    echo "Valid values: clean flush fast" >&2
+    echo "Valid values: per_case clean flush fast" >&2
     exit 2
     ;;
 esac
@@ -235,6 +246,8 @@ SPEC_PREFILL_TURN_B_INDEX='${SPEC_PREFILL_TURN_B_INDEX:-}'
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
 SPEC_PREFILL_COMPARISON_MODE='${SPEC_PREFILL_COMPARISON_MODE:-}'
 EXP9_MODE='${EXP9_MODE:-}'
+EXP9_SYNTHETIC_RESET_MODE='${EXP9_SYNTHETIC_RESET_MODE:-}'
+EXP9_SWEBENCH_RESET_MODE='${EXP9_SWEBENCH_RESET_MODE:-}'
 EXP9_RETENTION_REQUEST_SOURCE='${EXP9_RETENTION_REQUEST_SOURCE:-}'
 EXP9_RETENTION_SWEBENCH_DATASET='${EXP9_RETENTION_SWEBENCH_DATASET:-}'
 EXP9_RETENTION_SWEBENCH_SPLIT='${EXP9_RETENTION_SWEBENCH_SPLIT:-}'
@@ -265,6 +278,8 @@ EXP10_CACHE_PINNING_TTL='${EXP10_CACHE_PINNING_TTL:-}'
 EXP10_CACHE_PINNING_PINNED_RATIO='${EXP10_CACHE_PINNING_PINNED_RATIO:-}'
 EXP10_CACHE_PINNING_HICACHE_RATIO='${EXP10_CACHE_PINNING_HICACHE_RATIO:-}'
 EXP11_MODE='${EXP11_MODE:-}'
+EXP11_SYNTHETIC_RESET_MODE='${EXP11_SYNTHETIC_RESET_MODE:-}'
+EXP11_SWEBENCH_RESET_MODE='${EXP11_SWEBENCH_RESET_MODE:-}'
 EXP11_PRIORITY_REQUEST_SOURCE='${EXP11_PRIORITY_REQUEST_SOURCE:-}'
 EXP11_PRIORITY_SWEBENCH_DATASET='${EXP11_PRIORITY_SWEBENCH_DATASET:-}'
 EXP11_PRIORITY_SWEBENCH_SPLIT='${EXP11_PRIORITY_SWEBENCH_SPLIT:-}'
@@ -278,6 +293,8 @@ EXP11_PRIORITY_INPUT_LEN='${EXP11_PRIORITY_INPUT_LEN:-}'
 EXP11_PRIORITY_OUTPUT_LEN='${EXP11_PRIORITY_OUTPUT_LEN:-}'
 EXP11_PRIORITY_INTER_REQUEST_GAP_MS='${EXP11_PRIORITY_INTER_REQUEST_GAP_MS:-}'
 EXP12_MODE='${EXP12_MODE:-}'
+EXP12_SYNTHETIC_RESET_MODE='${EXP12_SYNTHETIC_RESET_MODE:-}'
+EXP12_SWEBENCH_RESET_MODE='${EXP12_SWEBENCH_RESET_MODE:-}'
 EXP12_SPEC_PREFILL_REQUEST_SOURCE='${EXP12_SPEC_PREFILL_REQUEST_SOURCE:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_DATASET='${EXP12_SPEC_PREFILL_SWEBENCH_DATASET:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_SPLIT='${EXP12_SPEC_PREFILL_SWEBENCH_SPLIT:-}'
@@ -293,6 +310,8 @@ EXP12_SPEC_PREFILL_TURN_A_WORDS='${EXP12_SPEC_PREFILL_TURN_A_WORDS:-}'
 EXP12_SPEC_PREFILL_TURN_B_WORDS='${EXP12_SPEC_PREFILL_TURN_B_WORDS:-}'
 EXP12_SPEC_PREFILL_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_OUTPUT_TOKENS:-}'
 EXP13_MODE='${EXP13_MODE:-}'
+EXP13_SYNTHETIC_RESET_MODE='${EXP13_SYNTHETIC_RESET_MODE:-}'
+EXP13_SWEBENCH_RESET_MODE='${EXP13_SWEBENCH_RESET_MODE:-}'
 EXP13_PRIORITY_REQUEST_SOURCE='${EXP13_PRIORITY_REQUEST_SOURCE:-}'
 EXP13_PRIORITY_SWEBENCH_DATASET='${EXP13_PRIORITY_SWEBENCH_DATASET:-}'
 EXP13_PRIORITY_SWEBENCH_SPLIT='${EXP13_PRIORITY_SWEBENCH_SPLIT:-}'
@@ -739,6 +758,24 @@ prepare_fresh_runtime_for_experiment() {
     ./runtime_instrumentation/reset_experiment_state.sh clear-active >> "${SUITE_DRIVER_LOG}" 2>&1 || true
 }
 
+set_case_reset_modes() {
+  if [[ "${SUITE_ISOLATION_MODE}" != "per_case" ]]; then
+    CASE_EXPERIMENT_RESET_MODE=""
+    CASE_KV_RETENTION_RESET_MODE=""
+    return 0
+  fi
+  CASE_EXPERIMENT_RESET_MODE="$1"
+  CASE_KV_RETENTION_RESET_MODE="${2:-$1}"
+}
+
+case_experiment_reset_mode() {
+  printf '%s' "${CASE_EXPERIMENT_RESET_MODE:-${EFFECTIVE_EXPERIMENT_RESET_MODE}}"
+}
+
+case_kv_retention_reset_mode() {
+  printf '%s' "${CASE_KV_RETENTION_RESET_MODE:-${CASE_EXPERIMENT_RESET_MODE:-${EFFECTIVE_KV_RETENTION_RESET_MODE}}}"
+}
+
 run_experiment_9() {
   local index="$1"
   local total="$2"
@@ -772,6 +809,8 @@ run_experiment_9() {
   local exp9_distractor_input_len
   local exp9_protected_hint_profiles
   local exp9_stop_on_probe_failure
+  local exp9_experiment_reset_mode
+  local exp9_kv_retention_reset_mode
   exp9_retention_request_source="$(resolve_value EXP9_RETENTION_REQUEST_SOURCE RETENTION_REQUEST_SOURCE)"
   exp9_retention_swebench_dataset="$(resolve_value EXP9_RETENTION_SWEBENCH_DATASET RETENTION_SWEBENCH_DATASET)"
   exp9_retention_swebench_split="$(resolve_value EXP9_RETENTION_SWEBENCH_SPLIT RETENTION_SWEBENCH_SPLIT)"
@@ -794,6 +833,8 @@ run_experiment_9() {
   exp9_protected_input_len="$(resolve_value EXP9_PROTECTED_INPUT_LEN PROTECTED_INPUT_LEN)"
   exp9_distractor_input_len="$(resolve_value EXP9_DISTRACTOR_INPUT_LEN DISTRACTOR_INPUT_LEN)"
   exp9_protected_hint_profiles="$(resolve_value EXP9_PROTECTED_HINT_PROFILES PROTECTED_HINT_PROFILES)"
+  exp9_experiment_reset_mode="$(case_experiment_reset_mode)"
+  exp9_kv_retention_reset_mode="$(case_kv_retention_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "9" "kv_retention" "${display_mode}"
@@ -818,7 +859,7 @@ trajectory_allow_distractor_reuse=${exp9_retention_trajectory_allow_distractor_r
 retention_attribution_mode=${exp9_retention_attribution_mode}
 retention_request_context_mode=${exp9_retention_request_context_mode}
 retention_top_level_priority_mode=${exp9_retention_top_level_priority_mode}
-retention_reset_mode=${EFFECTIVE_KV_RETENTION_RESET_MODE}
+retention_reset_mode=${exp9_kv_retention_reset_mode}
 retention_sweep_seed_mode=${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 precise_start_mode=${PRECISE_START_MODE:-clean}
@@ -838,8 +879,8 @@ EOF
     PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
     SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
     SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
-    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
-    KV_RETENTION_RESET_MODE="${EFFECTIVE_KV_RETENTION_RESET_MODE}"
+    EXPERIMENT_RESET_MODE="${exp9_experiment_reset_mode}"
+    KV_RETENTION_RESET_MODE="${exp9_kv_retention_reset_mode}"
     RETENTION_SWEEP_SEED_MODE="${EFFECTIVE_RETENTION_SWEEP_SEED_MODE}"
     RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
     STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
@@ -995,6 +1036,7 @@ run_experiment_11() {
   local exp11_swebench_split
   local exp11_swebench_start_index
   local exp11_swebench_allow_reuse
+  local exp11_experiment_reset_mode
   exp11_sweep_axis="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
   exp11_sweep_values="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
   exp11_low_priority_count="$(resolve_value EXP11_LOW_PRIORITY_COUNT LOW_PRIORITY_COUNT)"
@@ -1007,6 +1049,7 @@ run_experiment_11() {
   exp11_swebench_split="$(resolve_value EXP11_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
   exp11_swebench_start_index="$(resolve_value EXP11_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
   exp11_swebench_allow_reuse="$(resolve_value EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
+  exp11_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "11" "priority_scheduling" "${display_mode}"
@@ -1014,7 +1057,7 @@ run_experiment_11() {
 --- Experiment 11 parameters ---
 wrapper=${wrapper}
 mode=${display_mode}
-experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+experiment_reset_mode=${exp11_experiment_reset_mode}
 priority_scheduling_sweep_seed_mode=${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 precise_start_mode=${PRECISE_START_MODE:-clean}
@@ -1041,7 +1084,7 @@ EOF
     PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
     SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
     SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
-    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    EXPERIMENT_RESET_MODE="${exp11_experiment_reset_mode}"
     RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
     PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}"
     STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
@@ -1105,6 +1148,7 @@ run_experiment_12() {
   local exp12_turn_b_index
   local exp12_swebench_protected_offset
   local exp12_comparison_mode
+  local exp12_experiment_reset_mode
   exp12_sweep_axis="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_AXIS SPEC_PREFILL_SWEEP_AXIS)"
   exp12_sweep_values="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_VALUES SPEC_PREFILL_SWEEP_VALUES)"
   exp12_turn_a_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_WORDS SPEC_PREFILL_TURN_A_WORDS)"
@@ -1119,6 +1163,7 @@ run_experiment_12() {
   exp12_turn_b_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_INDEX SPEC_PREFILL_TURN_B_INDEX)"
   exp12_swebench_protected_offset="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET)"
   exp12_comparison_mode="$(resolve_value EXP12_SPEC_PREFILL_COMPARISON_MODE SPEC_PREFILL_COMPARISON_MODE)"
+  exp12_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
@@ -1128,7 +1173,7 @@ wrapper=${wrapper}
 mode=${display_mode}
 spec_prefill_attribution_mode=${exp12_attribution_mode}
 spec_prefill_request_context_mode=${exp12_request_context_mode}
-experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+experiment_reset_mode=${exp12_experiment_reset_mode}
 spec_prefill_prompt_isolation_mode=${SPEC_PREFILL_PROMPT_ISOLATION_MODE}
 spec_prefill_sweep_seed_mode=${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}
 precise_start_mode=${PRECISE_START_MODE:-clean}
@@ -1155,7 +1200,7 @@ EOF
     PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
     SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
     SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
-    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    EXPERIMENT_RESET_MODE="${exp12_experiment_reset_mode}"
     RETENTION_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE}"
     SPEC_PREFILL_SWEEP_SEED_MODE="${EFFECTIVE_SPEC_PREFILL_SWEEP_SEED_MODE}"
     STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
@@ -1219,6 +1264,7 @@ run_experiment_13() {
   local exp13_swebench_split
   local exp13_swebench_start_index
   local exp13_swebench_allow_reuse
+  local exp13_experiment_reset_mode
   exp13_sweep_axis="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
   exp13_sweep_values="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
   exp13_low_priority_count="$(resolve_value EXP13_LOW_PRIORITY_COUNT LOW_PRIORITY_COUNT)"
@@ -1231,6 +1277,7 @@ run_experiment_13() {
   exp13_swebench_split="$(resolve_value EXP13_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
   exp13_swebench_start_index="$(resolve_value EXP13_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
   exp13_swebench_allow_reuse="$(resolve_value EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
+  exp13_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "13" "latency_sensitivity" "${display_mode}"
@@ -1238,7 +1285,7 @@ run_experiment_13() {
 --- Experiment 13 parameters ---
 wrapper=${wrapper}
 mode=${display_mode}
-experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+experiment_reset_mode=${exp13_experiment_reset_mode}
 latency_sensitivity_sweep_seed_mode=${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
 retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
 precise_start_mode=${PRECISE_START_MODE:-clean}
@@ -1265,7 +1312,7 @@ EOF
     PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
     SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
     SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
-    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    EXPERIMENT_RESET_MODE="${exp13_experiment_reset_mode}"
     RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
     PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}"
     STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
@@ -1319,8 +1366,11 @@ EOF
 
 configure_suite_case() {
   local run_case="$1"
+  CASE_EXPERIMENT_RESET_MODE=""
+  CASE_KV_RETENTION_RESET_MODE=""
   case "${run_case}" in
     exp9_synthetic)
+      set_case_reset_modes "${EXP9_SYNTHETIC_RESET_MODE}" "${EXP9_SYNTHETIC_RESET_MODE}"
       EXP9_MODE="${EXP9_SYNTHETIC_MODE}"
       EXP9_RETENTION_REQUEST_SOURCE="${EXP9_SYNTHETIC_RETENTION_REQUEST_SOURCE}"
       EXP9_RETENTION_ATTRIBUTION_MODE="${EXP9_SYNTHETIC_RETENTION_ATTRIBUTION_MODE}"
@@ -1336,6 +1386,7 @@ configure_suite_case() {
       EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
       ;;
     exp9_swebench)
+      set_case_reset_modes "${EXP9_SWEBENCH_RESET_MODE}" "${EXP9_SWEBENCH_RESET_MODE}"
       EXP9_MODE="${EXP9_SWEBENCH_MODE}"
       EXP9_RETENTION_REQUEST_SOURCE="${EXP9_SWEBENCH_RETENTION_REQUEST_SOURCE}"
       EXP9_RETENTION_SWEBENCH_DATASET="${EXP9_SWEBENCH_RETENTION_SWEBENCH_DATASET}"
@@ -1354,6 +1405,7 @@ configure_suite_case() {
       EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
       ;;
     exp11_synthetic)
+      set_case_reset_modes "${EXP11_SYNTHETIC_RESET_MODE}"
       EXP11_MODE="${EXP11_SYNTHETIC_MODE}"
       EXP11_PRIORITY_REQUEST_SOURCE="${EXP11_SYNTHETIC_PRIORITY_REQUEST_SOURCE}"
       EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP11_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS}"
@@ -1369,6 +1421,7 @@ configure_suite_case() {
       EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
       ;;
     exp11_swebench)
+      set_case_reset_modes "${EXP11_SWEBENCH_RESET_MODE}"
       EXP11_MODE="${EXP11_SWEBENCH_MODE}"
       EXP11_PRIORITY_REQUEST_SOURCE="${EXP11_SWEBENCH_PRIORITY_REQUEST_SOURCE}"
       EXP11_PRIORITY_SWEBENCH_DATASET="${EXP11_SWEBENCH_PRIORITY_SWEBENCH_DATASET}"
@@ -1384,6 +1437,7 @@ configure_suite_case() {
       EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
       ;;
     exp12_synthetic)
+      set_case_reset_modes "${EXP12_SYNTHETIC_RESET_MODE}"
       EXP12_MODE="${EXP12_SYNTHETIC_MODE}"
       EXP12_SPEC_PREFILL_REQUEST_SOURCE="${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_SOURCE}"
       EXP12_SPEC_PREFILL_ATTRIBUTION_MODE="${EXP12_SYNTHETIC_SPEC_PREFILL_ATTRIBUTION_MODE}"
@@ -1401,6 +1455,7 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_COMPARISON_MODE=""
       ;;
     exp12_swebench)
+      set_case_reset_modes "${EXP12_SWEBENCH_RESET_MODE}"
       EXP12_MODE="${EXP12_SWEBENCH_MODE}"
       EXP12_SPEC_PREFILL_REQUEST_SOURCE="${EXP12_SWEBENCH_SPEC_PREFILL_REQUEST_SOURCE}"
       EXP12_SPEC_PREFILL_SWEBENCH_DATASET="${EXP12_SWEBENCH_SPEC_PREFILL_SWEBENCH_DATASET}"
@@ -1418,6 +1473,7 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
       ;;
     exp13_synthetic)
+      set_case_reset_modes "${EXP13_SYNTHETIC_RESET_MODE}"
       EXP13_MODE="${EXP13_SYNTHETIC_MODE}"
       EXP13_PRIORITY_REQUEST_SOURCE="${EXP13_SYNTHETIC_PRIORITY_REQUEST_SOURCE}"
       EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP13_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS}"
@@ -1433,6 +1489,7 @@ configure_suite_case() {
       EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
       ;;
     exp13_swebench)
+      set_case_reset_modes "${EXP13_SWEBENCH_RESET_MODE}"
       EXP13_MODE="${EXP13_SWEBENCH_MODE}"
       EXP13_PRIORITY_REQUEST_SOURCE="${EXP13_SWEBENCH_PRIORITY_REQUEST_SOURCE}"
       EXP13_PRIORITY_SWEBENCH_DATASET="${EXP13_SWEBENCH_PRIORITY_SWEBENCH_DATASET}"
@@ -1463,6 +1520,7 @@ run_suite_case() {
   exp="$(suite_run_experiment_id "${run_case}")" || return 1
   suite_case_banner "${index}" "${total}" "${run_case}"
   configure_suite_case "${run_case}" || return 1
+  log "Resolved case reset mode: experiment_reset_mode=$(case_experiment_reset_mode) kv_retention_reset_mode=$(case_kv_retention_reset_mode)"
   case "${exp}" in
     9) run_experiment_9 "${index}" "${total}" ;;
     10) run_experiment_10 "${index}" "${total}" ;;
@@ -1491,9 +1549,14 @@ log "Interactive build progress: ${SUITE_INTERACTIVE_BUILD_PROGRESS}"
 log "Suite ensure precise runtime: ${SUITE_ENSURE_PRECISE_RUNTIME}"
 log "Retention prompt isolation mode: ${RETENTION_PROMPT_ISOLATION_MODE}"
 log "Speculative-prefill prompt isolation mode: ${SPEC_PREFILL_PROMPT_ISOLATION_MODE}"
-log "Experiment reset mode: ${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+log "Default experiment reset mode: ${EFFECTIVE_EXPERIMENT_RESET_MODE}"
 log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
 case "${SUITE_ISOLATION_MODE}" in
+  per_case)
+    log "Suite runtime policy: restart between experiments, use each selected case's known-good reset mode"
+    log "Case reset policy: synthetic cases use flush; SWE-bench cases use restart"
+    log "Sweep prompt policy: different prompts across sweep values where supported"
+    ;;
   clean)
     log "Suite runtime policy: restart between experiments, restart between sweep values"
     log "Sweep prompt policy: fixed prompts across sweep values"

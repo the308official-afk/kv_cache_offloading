@@ -20,7 +20,7 @@
 : "${SUITE_DEFAULT_RUNS:=exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_swebench exp13_synthetic exp13_swebench}"
 : "${SUITE_RUNS:=}"
 : "${SUITE_EXPERIMENTS:=}"
-: "${SUITE_ISOLATION_MODE:=flush}"
+: "${SUITE_ISOLATION_MODE:=per_case}"
 : "${SUITE_DEFAULT_MODE:=sweep}"
 : "${SUITE_CONTINUE_ON_ERROR:=0}"
 : "${SUITE_INTERACTIVE_BUILD_PROGRESS:=1}"
@@ -41,6 +41,7 @@
 ###############################################################################
 
 : "${EXP9_SYNTHETIC_MODE:=sweep}"
+: "${EXP9_SYNTHETIC_RESET_MODE:=flush}"
 : "${EXP9_SYNTHETIC_RETENTION_REQUEST_SOURCE:=synthetic}"
 : "${EXP9_SYNTHETIC_RETENTION_ATTRIBUTION_MODE:=precise}"
 : "${EXP9_SYNTHETIC_RETENTION_REQUEST_CONTEXT_MODE:=auto}"
@@ -56,6 +57,7 @@
 ###############################################################################
 
 : "${EXP9_SWEBENCH_MODE:=sweep}"
+: "${EXP9_SWEBENCH_RESET_MODE:=flush}"
 : "${EXP9_SWEBENCH_RETENTION_REQUEST_SOURCE:=swebench_dataset}"
 : "${EXP9_RETENTION_SWEBENCH_DATASET:=ScaleAI/SWE-bench_Pro}"
 : "${EXP9_RETENTION_SWEBENCH_SPLIT:=test}"
@@ -82,6 +84,7 @@
 ###############################################################################
 
 : "${EXP11_SYNTHETIC_MODE:=all}"
+: "${EXP11_SYNTHETIC_RESET_MODE:=flush}"
 : "${EXP11_SYNTHETIC_PRIORITY_REQUEST_SOURCE:=synthetic}"
 : "${EXP11_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS:=PRIORITY_ARRIVAL_GAP_MS}"
 : "${EXP11_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_VALUES:=50 100 200 400}"
@@ -96,6 +99,7 @@
 ###############################################################################
 
 : "${EXP11_SWEBENCH_MODE:=all}"
+: "${EXP11_SWEBENCH_RESET_MODE:=flush}"
 : "${EXP11_SWEBENCH_PRIORITY_REQUEST_SOURCE:=swebench_dataset}"
 : "${EXP11_PRIORITY_SWEBENCH_DATASET:=ScaleAI/SWE-bench_Pro}"
 : "${EXP11_PRIORITY_SWEBENCH_SPLIT:=test}"
@@ -115,6 +119,7 @@
 ###############################################################################
 
 : "${EXP12_SYNTHETIC_MODE:=all}"
+: "${EXP12_SYNTHETIC_RESET_MODE:=flush}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_SOURCE:=synthetic}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_ATTRIBUTION_MODE:=precise}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_CONTEXT_MODE:=auto}"
@@ -129,6 +134,7 @@
 ###############################################################################
 
 : "${EXP12_SWEBENCH_MODE:=all}"
+: "${EXP12_SWEBENCH_RESET_MODE:=restart}"
 : "${EXP12_SWEBENCH_SPEC_PREFILL_REQUEST_SOURCE:=swebench_dataset}"
 : "${EXP12_SPEC_PREFILL_SWEBENCH_DATASET:=ScaleAI/SWE-bench_Pro}"
 : "${EXP12_SPEC_PREFILL_SWEBENCH_SPLIT:=test}"
@@ -148,6 +154,7 @@
 ###############################################################################
 
 : "${EXP13_SYNTHETIC_MODE:=all}"
+: "${EXP13_SYNTHETIC_RESET_MODE:=flush}"
 : "${EXP13_SYNTHETIC_PRIORITY_REQUEST_SOURCE:=synthetic}"
 : "${EXP13_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS:=PRIORITY_ARRIVAL_GAP_MS}"
 : "${EXP13_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_VALUES:=50 100 200 400}"
@@ -162,6 +169,7 @@
 ###############################################################################
 
 : "${EXP13_SWEBENCH_MODE:=all}"
+: "${EXP13_SWEBENCH_RESET_MODE:=flush}"
 : "${EXP13_SWEBENCH_PRIORITY_REQUEST_SOURCE:=swebench_dataset}"
 : "${EXP13_SWEBENCH_PRIORITY_SWEBENCH_DATASET:=ScaleAI/SWE-bench_Pro}"
 : "${EXP13_SWEBENCH_PRIORITY_SWEBENCH_SPLIT:=test}"

@@ -8,8 +8,8 @@ source agentbench/model_config.sh
 PYTHON_BIN="${PYTHON_BIN:-python3.11}"
 MODEL="${1:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}"
 FRONTEND_URL="${FRONTEND_URL:-${AGENTBENCH_FRONTEND_URL}}"
-START_INDEX="${START_INDEX:-0}"
-END_INDEX="${END_INDEX:-5}"
+START_INDEX="${START_INDEX:-${PROMPT_EVOLUTION_BATCH_START_INDEX:-0}}"
+END_INDEX="${END_INDEX:-${PROMPT_EVOLUTION_BATCH_END_INDEX:-5}}"
 HINT_PROFILE="${HINT_PROFILE:-high-reuse}"
 HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
@@ -19,11 +19,40 @@ MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY_SECS}}"
 MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
+SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
 
 BATCH_DIR="experiments/reports/batches/${PROMPT_EVOLUTION_BATCH_ID}"
 DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
 SMOKE_LOG="${BATCH_DIR}/prompt_evolution_batch_smoke_test.log"
 mkdir -p "${BATCH_DIR}"
+
+publish_prompt_evolution_reports() {
+  mkdir -p "${SHARED_CHART_DIR}"
+
+  local src
+  for src in \
+    "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
+    "experiments/reports/prompt_evolution_task_summary.csv:exp6_task_summary_table.csv" \
+    "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
+    "experiments/reports/prompt_evolution_run_overview.csv:exp6_run_overview_table.csv" \
+    "experiments/reports/latest_prompt_evolution_trace_index.csv:exp6_prompt_evolution_trace_index.csv" \
+    "experiments/reports/latest_prompt_evolution_trace_index.csv:exp6_trace_index_table.csv" \
+    "experiments/reports/latest_prompt_evolution_trace_index.md:exp6_prompt_evolution_trace_index.md" \
+    "experiments/reports/latest_runs_execution_prompts.md:exp6_runs_execution_prompts.md"; do
+    local source_path="${src%%:*}"
+    local target_name="${src##*:}"
+    if [[ -f "${source_path}" ]]; then
+      cp -f "${source_path}" "${SHARED_CHART_DIR}/${target_name}"
+    fi
+  done
+
+  if [[ -f experiments/reports/prompt_evolution_run_overview.csv ]]; then
+    "${PYTHON_BIN}" experiments/scripts/prompt_evolution/plot_prompt_evolution_overview.py \
+      --overview-csv experiments/reports/prompt_evolution_run_overview.csv \
+      --out-svg "${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.svg" \
+      | tee -a "${DRIVER_LOG}"
+  fi
+}
 
 usage() {
   cat <<EOF
@@ -143,6 +172,8 @@ PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}" \
 BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID}" \
 ./agentbench/run_swebench_batch_single_host.sh 2>&1 | tee -a "${DRIVER_LOG}"
 
+publish_prompt_evolution_reports
+
 if [[ "${STOP_DYNAMO_WHEN_DONE}" = "1" ]]; then
   echo "Stopping Dynamo after prompt evolution batch..." | tee -a "${DRIVER_LOG}"
   ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
@@ -160,4 +191,6 @@ fi
   echo "Prompt evolution summary: experiments/reports/prompt_evolution_run_overview.csv"
   echo "Latest trace index CSV: experiments/reports/latest_prompt_evolution_trace_index.csv"
   echo "Latest trace index MD: experiments/reports/latest_prompt_evolution_trace_index.md"
+  echo "Published readable Exp 6 reports to: ${SHARED_CHART_DIR}/exp6_*"
+  echo "Run-overview chart: ${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.svg"
 } | tee -a "${DRIVER_LOG}"
