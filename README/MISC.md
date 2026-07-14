@@ -1,5 +1,37 @@
 
 ```bash
+ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
+
+./agentbench/debug_prompt_evolution_tool_calls.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+
+========================================
+PROMPT EVOLUTION TOOL-CALL DEBUG
+========================================
+Model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+Frontend URL: http://127.0.0.1:8000/v1/chat/completions
+Python: python3.11
+Deep Agents source: upstream
+Output dir: experiments/reports/tool_call_debug/tool_call_debug_20260714_193110
+
+This script does not start Dynamo.
+Run it while the same Dynamo runtime from Experiment 6 is still up.
+
+========================================
+STEP 0: LOCAL FILE CHECK
+========================================
+ok: agentbench/diagnose_dynamo_tool_calls.py
+ok: agentbench/diagnose_deepagents_tool_loop.py
+missing: upstream/deepagents/libs/deepagents/pyproject.toml
+Required diagnostic script is missing; stopping.
+ojaiyeob@gracehopper:~/kv_cache_offloading$
+
+```
+
+
+
+
+```bash
 cd ~/kv_cache_offloading
 
 AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
