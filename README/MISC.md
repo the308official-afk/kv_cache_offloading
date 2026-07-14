@@ -16,7 +16,9 @@ ojaiyeob@gracehopper:~/kv_cache_offloading$
 
 
 ```bash
+BATCH_DIR="$(ls -td experiments/reports/batches/prompt_evolution_batch_* | head -1)"
 
+grep -n "Tool-call parser" "$BATCH_DIR/prompt_evolution_batch_driver.log"
 ```
 
 
