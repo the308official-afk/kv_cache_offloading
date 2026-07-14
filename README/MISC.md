@@ -1,92 +1,11 @@
 
 ```bash
-========================================
-(5/6) MODEL READINESS GO (model registration and smoke test both passed)
-========================================
-Cooldown: 60s
-Ensuring Deep Agents dependency is ready...
-Checking Deep Agents dependency...
-Deep Agents dir: upstream/deepagents
-Deep Agents ref: 2cf7e25dbb40e783d9d4d545c29e595800bf314f
-Auto install: 1
-Force refresh: 0
-Force reinstall: 0
-Deep Agents git checkout exists.
-Deep Agents checkout already at pinned ref.
-Deep Agents import ok: /home/central/ojaiyeob/.local/lib/python3.11/site-packages/deepagents/__init__.py
-Deep Agents marker ok: experiments/runtime_state/deepagents_ready.marker
-Deep Agents already ready; skipping install.
+cd ~/kv_cache_offloading
 
-Checking Deep Agents tool loop before Experiment 6 batch...
-Case: edit-validate
-Deep Agents source: upstream
-Forced tool choice: auto
-Diagnostic recursion limit: 30
-Diagnostic timeout seconds: 180
-Preflight log: experiments/reports/batches/prompt_evolution_batch_20260714_210507/prompt_evolution_tool_loop_preflight.log
-Preflight output dir: experiments/reports/batches/prompt_evolution_batch_20260714_210507/tool_loop_preflight
-/usr/lib/python3.11/dataclasses.py:1492: LangChainDeprecationWarning: `files_update` was deprecated in deepagents 0.5.0 and will be removed in deepagents==0.7.0. State updates are now ha   ndled internally by the backend.
-  return obj.__class__(**changes)
-Diagnostic output: experiments/reports/batches/prompt_evolution_batch_20260714_210507/tool_loop_preflight
-tool_calls=2
-tool_messages=2
-invalid_tool_calls=0
-unique_tools=execute,write_file
-required_tools_observed=True
-multi_tool_loop_observed=True
-result_file_exists=True
-edit_validation_observed=True
-case_success=True
+RUN_DIR="$(ls -td experiments/raw/agentbench/results/agentbench-* | head -1)"
 
-Deep Agents tool-loop preflight result:
-  tool_calls=2
-  tool_messages=2
-  multi_tool_loop_observed=True
-  case_success=True
-Deep Agents tool-loop preflight passed.
-Running prompt evolution batch for Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8...
-Batch ID: prompt_evolution_batch_20260714_210507
-Model: Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-Frontend URL: http://127.0.0.1:8000/v1/chat/completions
-Hint profile: high-reuse
-Hint provider: agentbench
-Continue on task error: 0
-Progress log: experiments/reports/batches/prompt_evolution_batch_20260714_210507/progress.log
-Progress CSV: experiments/reports/batches/prompt_evolution_batch_20260714_210507/progress_overview.csv
-Trace index CSV: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.csv
-Trace index MD: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.md
-
-===== Running SWE-bench index 0 =====
-Traceback (most recent call last):
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 5011, in <module>
-    main()
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4495, in main
-    workflow = run_task_workflow(
-               ^^^^^^^^^^^^^^^^^^
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_app/src/agent.py", line 1728, in run_task_workflow
-    planning_result = execute_phase_agent(
-                      ^^^^^^^^^^^^^^^^^^^^
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_app/src/agent.py", line 1560, in execute_phase_agent
-    response = agent.invoke(
-               ^^^^^^^^^^^^^
-  File "/home/central/ojaiyeob/.local/lib/python3.11/site-packages/langgraph/pregel/main.py", line 3880, in invoke
-    for chunk in self.stream(
-  File "/home/central/ojaiyeob/.local/lib/python3.11/site-packages/langgraph/pregel/main.py", line 2980, in stream
-    raise GraphRecursionError(msg)
-langgraph.errors.GraphRecursionError: Recursion limit of 30 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.
-For troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT
-Run complete: agentbench-20260714_161122
-Run report: experiments/reports/runs/agentbench-20260714_161122
-Prompt evolution trace index: experiments/reports/batches/prompt_evolution_batch_20260714_210507/task_trace_index.md
-Latest overview: experiments/reports/latest_runs_overview.md
-All runs overview: experiments/reports/all_runs_overview.csv
-Latest execution prompts: experiments/reports/latest_runs_execution_prompts.md
-All execution prompts: experiments/reports/all_runs_execution_prompts.csv
-Exit status: 1
-
-Index 0 failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-ojaiyeob@gracehopper:~/kv_cache_offloading$
-
+grep -RniE "tool_calls|tool_call|execute|read_file|write_file|edit_file|GraphRecursion|recursion" \
+  "$RUN_DIR" | tail -100
 ```
 
 
