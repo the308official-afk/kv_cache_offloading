@@ -1,4 +1,19 @@
 
+```bash
+cd ~/kv_cache_offloading
+
+AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
+./agentbench/debug_prompt_evolution_tool_calls.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+```bash
+cd ~/kv_cache_offloading
+
+python3.11 -m pip install ./upstream/deepagents/libs/deepagents
+python3.11 -m pip install -r agentbench/requirements.txt
+```
+
 
 ```bash
 ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
