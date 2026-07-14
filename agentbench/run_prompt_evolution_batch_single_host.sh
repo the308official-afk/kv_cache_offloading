@@ -63,7 +63,6 @@ DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
 SMOKE_LOG="${BATCH_DIR}/prompt_evolution_batch_smoke_test.log"
 TOOL_LOOP_PREFLIGHT_LOG="${BATCH_DIR}/prompt_evolution_tool_loop_preflight.log"
 TOOL_LOOP_PREFLIGHT_DIR="${BATCH_DIR}/tool_loop_preflight"
-mkdir -p "${BATCH_DIR}"
 
 clear_prompt_evolution_public_reports() {
   mkdir -p "${SHARED_CHART_DIR}"
@@ -77,6 +76,25 @@ clear_prompt_evolution_public_reports() {
     "${SHARED_CHART_DIR}/exp6_prompt_evolution_trace_index.csv" \
     "${SHARED_CHART_DIR}/exp6_trace_index_table.csv" \
     "${SHARED_CHART_DIR}/exp6_prompt_evolution_trace_index.md"
+}
+
+clear_prompt_evolution_report_state() {
+  mkdir -p experiments/reports/batches
+  rm -f \
+    experiments/reports/prompt_evolution_run_overview.csv \
+    experiments/reports/prompt_evolution_task_summary.csv \
+    experiments/reports/latest_prompt_evolution_trace_index.csv \
+    experiments/reports/latest_prompt_evolution_trace_index.md \
+    experiments/reports/all_runs_* \
+    experiments/reports/latest_runs_* \
+    experiments/reports/latest_run_*
+  rm -rf experiments/reports/runs
+  find experiments/reports/batches \
+    -mindepth 1 \
+    -maxdepth 1 \
+    -type d \
+    -name 'prompt_evolution_batch_*' \
+    -exec rm -rf -- {} +
 }
 
 publish_prompt_evolution_reports() {
@@ -95,7 +113,9 @@ publish_prompt_evolution_reports() {
   done
 }
 
+clear_prompt_evolution_report_state
 clear_prompt_evolution_public_reports
+mkdir -p "${BATCH_DIR}"
 
 usage() {
   cat <<EOF

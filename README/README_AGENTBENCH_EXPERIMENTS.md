@@ -748,9 +748,12 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
-The wrapper clears old Experiment 6 public files at the beginning of each run,
-then copies only the latest readable Experiment 6 outputs into the shared chart
-folder:
+The wrapper clears old Experiment 6 report state at the beginning of each run,
+including cumulative `all_runs_*`, `latest_runs_*`, `latest_run_*`,
+`prompt_evolution_*`, prior `runs/`, prior `prompt_evolution_batch_*`
+directories, and old Experiment 6 public files in `experiments/charts`.
+Then it copies only the latest readable Experiment 6 outputs into the shared
+chart folder:
 
 ```bash
 ls experiments/charts/exp6_*
