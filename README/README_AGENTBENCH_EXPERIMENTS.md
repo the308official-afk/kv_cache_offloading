@@ -748,6 +748,36 @@ What each file means:
 - `tool_call_details.md`: the exact tools called, with arguments when available
 - `phase_summary.md`: the per-phase behavior summary across planning/execution/review
 
+If Experiment 6 still shows `tool_call_count=0` after starting Dynamo with
+`DYN_TOOL_CALL_PARSER=hermes`, run the tool-call debug wrapper while Dynamo is
+still up:
+
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/debug_prompt_evolution_tool_calls.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+The debug wrapper checks:
+
+- whether the latest Experiment 6 driver log says `Tool-call parser: hermes`
+- whether recent `all_runs_execution_prompts.csv` rows still show zero tools
+- whether raw Dynamo can return OpenAI-style `tool_calls`
+- whether Deep Agents can execute a multi-tool loop
+
+Output is stored under:
+
+```text
+experiments/reports/tool_call_debug/<run_id>/
+```
+
+Interpretation:
+
+- direct Dynamo fails: Dynamo/SGLang/model is not returning structured tool calls
+- direct Dynamo passes but Deep Agents fails: Deep Agents/LangChain tool binding is the issue
+- both pass: the SWE-bench prompt-evolution loop needs debugging
+
 ## Experiment 9: KV Retention Probe
 
 This is the public KV-retention microbenchmark entrypoint.
