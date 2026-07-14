@@ -682,6 +682,11 @@ Note:
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
 - dependency auto-install is enabled by default through
   `AGENTBENCH_DEEPAGENTS_AUTO_INSTALL=1`
+- the helper skips reinstalling Deep Agents when the pinned checkout, Python
+  import, and runtime marker are already valid
+- force a refresh only when needed with
+  `AGENTBENCH_DEEPAGENTS_FORCE_REFRESH=1` or
+  `AGENTBENCH_DEEPAGENTS_FORCE_REINSTALL=1`
 - only set `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=0` when you intentionally want
   prompt-only reports and are willing to see `tool_call_count=0`
 
