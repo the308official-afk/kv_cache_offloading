@@ -2278,31 +2278,12 @@ Default prompt-isolation policy:
 
 ### Run
 
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
 To run only the SWE-bench cases:
 
 ```bash
 cd ~/kv_cache_offloading
 
 SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
-To run only one case:
-
-```bash
-cd ~/kv_cache_offloading
-
-SUITE_RUNS="exp11_swebench" \
 DYNAMO_MACHINE_PROFILE=gh200 \
 ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
