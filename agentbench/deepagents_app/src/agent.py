@@ -116,6 +116,14 @@ def agent_invoke_config() -> dict[str, Any]:
     }
 
 
+def agent_stream_trace_enabled() -> bool:
+    return env_flag("AGENTBENCH_TRACE_AGENT_STREAM", default=False)
+
+
+def agent_stream_trace_mode() -> str:
+    return os.environ.get("AGENTBENCH_TRACE_AGENT_STREAM_MODE", "values").strip() or "values"
+
+
 def model_only_phases() -> set[str]:
     value = os.environ.get("AGENTBENCH_MODEL_ONLY_PHASES", "planning")
     return {
@@ -405,6 +413,140 @@ def _message_text(message: Any) -> str:
             return response_text(text)
         content = getattr(message, "content", None)
     return response_text(content if content is not None else message)
+
+
+def _message_summary(message: Any) -> dict[str, Any]:
+    tool_calls = None
+    if isinstance(message, Mapping):
+        tool_calls = message.get("tool_calls")
+    if tool_calls is None:
+        tool_calls = getattr(message, "tool_calls", None)
+    tool_call_names = []
+    if isinstance(tool_calls, list):
+        tool_call_names = [
+            name
+            for tool_call in tool_calls
+            if (name := _tool_call_name(tool_call))
+        ]
+    if isinstance(message, Mapping):
+        name = message.get("name")
+        tool_call_id = message.get("tool_call_id")
+    else:
+        name = getattr(message, "name", None)
+        tool_call_id = getattr(message, "tool_call_id", None)
+    return {
+        "type": _message_type(message),
+        "name": str(name) if name else None,
+        "tool_call_id": str(tool_call_id) if tool_call_id else None,
+        "tool_call_count": len(tool_call_names),
+        "tool_call_names": tool_call_names,
+        "content_preview": _message_text(message)[:1000],
+    }
+
+
+def summarize_agent_stream_chunk(chunk: Any) -> dict[str, Any]:
+    if isinstance(chunk, Mapping):
+        keys = sorted(str(key) for key in chunk.keys())
+        messages = chunk.get("messages")
+        if isinstance(messages, list):
+            return {
+                "kind": "state",
+                "keys": keys,
+                "message_count": len(messages),
+                "last_messages": [
+                    _message_summary(message)
+                    for message in messages[-3:]
+                ],
+            }
+        return {
+            "kind": "mapping",
+            "keys": keys,
+            "preview": response_text(chunk)[:1000],
+        }
+    return {
+        "kind": type(chunk).__name__,
+        "preview": response_text(chunk)[:1000],
+    }
+
+
+def run_agent_with_optional_stream_trace(
+    agent: Any,
+    input_payload: dict[str, Any],
+    *,
+    phase: str,
+    request_context: dict[str, Any],
+) -> Any:
+    config = agent_invoke_config()
+    if not agent_stream_trace_enabled():
+        return agent.invoke(input_payload, config=config)
+
+    stream_mode = agent_stream_trace_mode()
+    chunk_count = 0
+    last_chunk = None
+    log_lifecycle_event(
+        stage=f"{phase}_agent_stream_trace_started",
+        payload={
+            "event_kind": "agent_stream_trace",
+            "phase": phase,
+            "request_context": request_context,
+            "stream_mode": stream_mode,
+            "config": config,
+        },
+    )
+    try:
+        for chunk in agent.stream(
+            input_payload,
+            config=config,
+            stream_mode=stream_mode,
+        ):
+            chunk_count += 1
+            last_chunk = chunk
+            log_lifecycle_event(
+                stage=f"{phase}_agent_stream_step",
+                payload={
+                    "event_kind": "agent_stream_step",
+                    "phase": phase,
+                    "request_context": request_context,
+                    "chunk_index": chunk_count,
+                    "stream_mode": stream_mode,
+                    "chunk_summary": summarize_agent_stream_chunk(chunk),
+                },
+            )
+    except Exception as exc:
+        log_lifecycle_event(
+            stage=f"{phase}_agent_stream_error",
+            payload={
+                "event_kind": "agent_stream_error",
+                "phase": phase,
+                "request_context": request_context,
+                "chunk_count": chunk_count,
+                "stream_mode": stream_mode,
+                "error_type": type(exc).__name__,
+                "error": repr(exc),
+                "last_chunk_summary": (
+                    summarize_agent_stream_chunk(last_chunk)
+                    if last_chunk is not None
+                    else None
+                ),
+            },
+        )
+        raise
+    log_lifecycle_event(
+        stage=f"{phase}_agent_stream_trace_completed",
+        payload={
+            "event_kind": "agent_stream_trace_completed",
+            "phase": phase,
+            "request_context": request_context,
+            "chunk_count": chunk_count,
+            "stream_mode": stream_mode,
+            "last_chunk_summary": (
+                summarize_agent_stream_chunk(last_chunk)
+                if last_chunk is not None
+                else None
+            ),
+        },
+    )
+    return last_chunk if last_chunk is not None else {}
 
 
 def _tool_call_id(tool_call: Any) -> str | None:
@@ -1369,9 +1511,11 @@ def execute_baseline_agent(
         if workspace_dir is not None:
             os.chdir(workspace_dir)
         started_at_perf = time.perf_counter()
-        response = agent.invoke(
+        response = run_agent_with_optional_stream_trace(
+            agent,
             {"messages": [{"role": "user", "content": task_prompt}]},
-            config=agent_invoke_config(),
+            phase="baseline_execution",
+            request_context=request_context,
         )
         finished_at_perf = time.perf_counter()
     finally:
@@ -1739,9 +1883,11 @@ def execute_phase_agent(
         if workspace_dir is not None:
             os.chdir(workspace_dir)
         started_at_perf = time.perf_counter()
-        response = agent.invoke(
+        response = run_agent_with_optional_stream_trace(
+            agent,
             {"messages": [{"role": "user", "content": prompt}]},
-            config=agent_invoke_config(),
+            phase=phase,
+            request_context=request_context,
         )
         finished_at_perf = time.perf_counter()
     finally:
