@@ -603,6 +603,8 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
 export DYN_TOOL_CALL_PARSER=hermes
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 
 START_INDEX=0 \
 END_INDEX=5 \
@@ -638,6 +640,8 @@ export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
 export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
 export DYN_TOOL_CALL_PARSER=hermes
+export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 
 START_INDEX=0 \
 END_INDEX=5 \
@@ -665,6 +669,12 @@ Note:
   - `MODEL_SMOKE_DELAY_SECS`
   - `MODEL_COOLDOWN_SECS`
 - for larger models, set both groups
+- before launching the batch, the wrapper now verifies that Deep Agents can
+  execute a real tool loop
+- this preflight is required by default through
+  `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
+- only set `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=0` when you intentionally want
+  prompt-only reports and are willing to see `tool_call_count=0`
 
 This produces prompt-evolution summaries such as:
 

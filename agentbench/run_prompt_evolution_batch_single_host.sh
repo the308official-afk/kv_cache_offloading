@@ -15,6 +15,9 @@ HINT_PROVIDER="${HINT_PROVIDER:-agentbench}"
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
 DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-hermes}"
+AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
+PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP="${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP:-1}"
+PROMPT_EVOLUTION_TOOL_LOOP_CASE="${PROMPT_EVOLUTION_TOOL_LOOP_CASE:-ls-read-execute}"
 PROMPT_EVOLUTION_BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID:-prompt_evolution_batch_$(date +%Y%m%d_%H%M%S)}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY_SECS}}"
@@ -25,6 +28,8 @@ SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
 BATCH_DIR="experiments/reports/batches/${PROMPT_EVOLUTION_BATCH_ID}"
 DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
 SMOKE_LOG="${BATCH_DIR}/prompt_evolution_batch_smoke_test.log"
+TOOL_LOOP_PREFLIGHT_LOG="${BATCH_DIR}/prompt_evolution_tool_loop_preflight.log"
+TOOL_LOOP_PREFLIGHT_DIR="${BATCH_DIR}/tool_loop_preflight"
 mkdir -p "${BATCH_DIR}"
 
 publish_prompt_evolution_reports() {
@@ -63,7 +68,8 @@ This wrapper:
   2. starts Dynamo with the selected model
   3. waits for /v1/models registration
   4. runs a smoke-test request
-  5. launches the SWE-bench prompt-evolution batch
+  5. verifies Deep Agents can execute a real tool loop
+  6. launches the SWE-bench prompt-evolution batch
 EOF
 }
 
@@ -125,6 +131,100 @@ smoke_test_model() {
   return 1
 }
 
+check_deepagents_tool_loop() {
+  local model="$1"
+  local frontend_url="$2"
+
+  if [[ "${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}" != "1" ]]; then
+    {
+      echo "Skipping Deep Agents tool-loop preflight because PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}."
+      echo "Warning: Experiment 6 may produce tool_call_count=0 if the tool loop is broken."
+    } | tee -a "${DRIVER_LOG}"
+    return 0
+  fi
+
+  {
+    echo
+    echo "Checking Deep Agents tool loop before Experiment 6 batch..."
+    echo "Case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
+    echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
+    echo "Preflight log: ${TOOL_LOOP_PREFLIGHT_LOG}"
+    echo "Preflight output dir: ${TOOL_LOOP_PREFLIGHT_DIR}"
+  } | tee -a "${DRIVER_LOG}"
+
+  rm -rf "${TOOL_LOOP_PREFLIGHT_DIR}"
+  mkdir -p "${TOOL_LOOP_PREFLIGHT_DIR}"
+
+  if ! AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE}" \
+    "${PYTHON_BIN}" agentbench/diagnose_deepagents_tool_loop.py \
+      --frontend-url "${frontend_url}" \
+      --model "${model}" \
+      --case "${PROMPT_EVOLUTION_TOOL_LOOP_CASE}" \
+      --output-dir "${TOOL_LOOP_PREFLIGHT_DIR}" \
+      2>&1 | tee "${TOOL_LOOP_PREFLIGHT_LOG}"; then
+    {
+      echo
+      echo "CRITICAL FAIL: Deep Agents tool-loop preflight command failed."
+      echo "Experiment 6 would likely produce tool_call_count=0, so the batch is stopped."
+      echo "See: ${TOOL_LOOP_PREFLIGHT_LOG}"
+      echo "For deeper diagnosis, run:"
+      echo "  AGENTBENCH_DEEPAGENTS_SOURCE=upstream ./agentbench/debug_prompt_evolution_tool_calls.sh ${model}"
+    } | tee -a "${DRIVER_LOG}" >&2
+    return 1
+  fi
+
+  "${PYTHON_BIN}" - <<'PY' "${TOOL_LOOP_PREFLIGHT_DIR}/summary.json" "${DRIVER_LOG}" "${TOOL_LOOP_PREFLIGHT_LOG}"
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+summary_path = Path(sys.argv[1])
+driver_log = Path(sys.argv[2])
+preflight_log = Path(sys.argv[3])
+
+if not summary_path.exists():
+    message = (
+        "CRITICAL FAIL: Deep Agents tool-loop preflight did not write summary.json.\n"
+        f"See: {preflight_log}\n"
+    )
+    with driver_log.open("a", encoding="utf-8") as f:
+        f.write("\n" + message)
+    raise SystemExit(message)
+
+summary = json.loads(summary_path.read_text(encoding="utf-8"))
+tool_calls = int(summary.get("ai_tool_call_count") or 0)
+tool_messages = int(summary.get("tool_message_count") or 0)
+multi_tool_loop = bool(summary.get("multi_tool_loop_observed"))
+case_success = bool(summary.get("case_success"))
+
+lines = [
+    "",
+    "Deep Agents tool-loop preflight result:",
+    f"  tool_calls={tool_calls}",
+    f"  tool_messages={tool_messages}",
+    f"  multi_tool_loop_observed={multi_tool_loop}",
+    f"  case_success={case_success}",
+]
+print("\n".join(lines))
+with driver_log.open("a", encoding="utf-8") as f:
+    f.write("\n".join(lines) + "\n")
+
+if not case_success:
+    message = (
+        "CRITICAL FAIL: Deep Agents did not complete the required multi-tool loop.\n"
+        "Experiment 6 would likely produce tool_call_count=0, so the batch is stopped.\n"
+        f"See: {preflight_log}\n"
+    )
+    with driver_log.open("a", encoding="utf-8") as f:
+        f.write("\n" + message)
+    raise SystemExit(message)
+PY
+
+  echo "Deep Agents tool-loop preflight passed." | tee -a "${DRIVER_LOG}"
+}
+
 {
   echo "Prompt evolution batch ID: ${PROMPT_EVOLUTION_BATCH_ID}"
   echo "Model: ${MODEL}"
@@ -132,6 +232,9 @@ smoke_test_model() {
   echo "Hint profile: ${HINT_PROFILE}"
   echo "Hint provider: ${HINT_PROVIDER}"
   echo "Tool-call parser: ${DYN_TOOL_CALL_PARSER}"
+  echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
+  echo "Require tool loop: ${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}"
+  echo "Tool-loop preflight case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
   echo "Frontend URL: ${FRONTEND_URL}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
@@ -156,7 +259,10 @@ if [[ "${MODEL_COOLDOWN_SECS}" -gt 0 ]]; then
   sleep "${MODEL_COOLDOWN_SECS}"
 fi
 
+check_deepagents_tool_loop "${MODEL}" "${FRONTEND_URL}"
+
 echo "Running prompt evolution batch for ${MODEL}..." | tee -a "${DRIVER_LOG}"
+AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE}" \
 AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE}" \
 MODEL="${MODEL}" \
 MODEL_NAME="${MODEL}" \
