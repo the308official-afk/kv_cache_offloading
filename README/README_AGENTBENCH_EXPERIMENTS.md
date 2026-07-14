@@ -678,6 +678,12 @@ Note:
 - the wrapper defaults to `AGENTBENCH_FORCE_TOOL_CHOICE=required` because this
   GH200 model/runtime path produced structured tool calls when tool use was
   required, but not in auto mode
+- the tool-loop preflight is capped by default with
+  `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=12` and
+  `AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS=180`, so a bad tool loop fails instead
+  of running indefinitely
+- Experiment 6 agent runs are capped by default with
+  `AGENTBENCH_AGENT_RECURSION_LIMIT=30`
 - this preflight is required by default through
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
 - dependency auto-install is enabled by default through

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import signal
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -92,6 +94,18 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=None,
         help="Directory for diagnostic artifacts.",
+    )
+    parser.add_argument(
+        "--recursion-limit",
+        type=int,
+        default=int(os.environ.get("AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT", "12")),
+        help="LangGraph recursion limit for this diagnostic. Defaults to 12.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=int(os.environ.get("AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS", "180")),
+        help="Hard timeout for this diagnostic. Defaults to 180 seconds.",
     )
     return parser.parse_args()
 
@@ -245,6 +259,15 @@ def summarize_messages(
 
 def main() -> None:
     args = parse_args()
+    if args.timeout_seconds > 0:
+        def _timeout_handler(signum, frame):  # noqa: ARG001
+            raise TimeoutError(
+                f"Deep Agents tool-loop diagnostic timed out after {args.timeout_seconds}s"
+            )
+
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.alarm(args.timeout_seconds)
+
     try:
         from agentbench.deepagents_app.src.agent import (  # noqa: PLC0415
             build_coding_agent,
@@ -291,7 +314,14 @@ def main() -> None:
         request_context=request_context,
         prompt_stage="tool_diagnostic_agent_system_prompt_loaded",
     )
-    response = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+    try:
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": prompt}]},
+            config={"recursion_limit": args.recursion_limit},
+        )
+    finally:
+        if args.timeout_seconds > 0:
+            signal.alarm(0)
     messages = extract_messages(response)
     summary = {
         "frontend_url": args.frontend_url,

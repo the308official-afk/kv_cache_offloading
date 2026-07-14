@@ -110,6 +110,12 @@ def env_int(name: str, *, default: int) -> int:
         raise SystemExit(f"{name} must be an integer, got {value!r}") from exc
 
 
+def agent_invoke_config() -> dict[str, Any]:
+    return {
+        "recursion_limit": env_int("AGENTBENCH_AGENT_RECURSION_LIMIT", default=30),
+    }
+
+
 def limit_text(text: str, limit: int = 3000) -> str:
     if len(text) <= limit:
         return text
@@ -1281,7 +1287,10 @@ def execute_baseline_agent(
         if workspace_dir is not None:
             os.chdir(workspace_dir)
         started_at_perf = time.perf_counter()
-        response = agent.invoke({"messages": [{"role": "user", "content": task_prompt}]})
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": task_prompt}]},
+            config=agent_invoke_config(),
+        )
         finished_at_perf = time.perf_counter()
     finally:
         os.chdir(original_cwd)
@@ -1479,7 +1488,10 @@ def execute_phase_agent(
         if workspace_dir is not None:
             os.chdir(workspace_dir)
         started_at_perf = time.perf_counter()
-        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]})
+        response = agent.invoke(
+            {"messages": [{"role": "user", "content": prompt}]},
+            config=agent_invoke_config(),
+        )
         finished_at_perf = time.perf_counter()
     finally:
         os.chdir(original_cwd)
