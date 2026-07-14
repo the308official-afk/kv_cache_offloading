@@ -17,7 +17,9 @@ EXPERIMENT_DIRS_HELPER="${EXPERIMENT_DIRS_HELPER:-./runtime_instrumentation/ensu
 
 MODEL="${1:-${SUITE_MODEL:-${MODEL:-${MODEL_NAME:-${AGENTBENCH_MODEL}}}}}"
 SUITE_ID="${AGENTIC_HINT_SUITE_ID:-agentic_hint_sweeps_suite_$(date +%Y%m%d_%H%M%S)}"
-SUITE_EXPERIMENTS="${SUITE_EXPERIMENTS:-9 11 12}"
+SUITE_EXPERIMENTS="${SUITE_EXPERIMENTS:-}"
+SUITE_RUNS="${SUITE_RUNS:-}"
+SUITE_DEFAULT_RUNS="${SUITE_DEFAULT_RUNS:-}"
 SUITE_CONTINUE_ON_ERROR="${SUITE_CONTINUE_ON_ERROR:-0}"
 SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS="${SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS:-1}"
 SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-sweep}"
@@ -105,7 +107,8 @@ Recommended flow:
 Main knobs:
   SUITE_CONFIG_PATH=path/to/alternate_suite.conf.sh
   DYNAMO_MACHINE_PROFILE=ec2|gh200
-  SUITE_EXPERIMENTS="9 11 12"           # add 10 when needed
+  SUITE_RUNS="exp9_synthetic exp11_swebench"
+  SUITE_EXPERIMENTS="9 11 12"           # legacy fallback when SUITE_RUNS is unset
   SUITE_ISOLATION_MODE=clean|flush|fast # clean=restarts sweep values, flush=flushes sweep values, fast=reuses runtime within experiments without flush
   SUITE_CONTINUE_ON_ERROR=0|1
   SUITE_INTERACTIVE_BUILD_PROGRESS=1
@@ -168,6 +171,8 @@ AGENTIC_HINT_SUITE_ID='${SUITE_ID}'
 SUITE_CONFIG_PATH='${SUITE_CONFIG_PATH}'
 DYNAMO_MACHINE_PROFILE='${DYNAMO_MACHINE_PROFILE:-}'
 SUITE_MODEL='${MODEL}'
+SUITE_DEFAULT_RUNS='${SUITE_DEFAULT_RUNS}'
+SUITE_RUNS='${SUITE_RUNS}'
 SUITE_EXPERIMENTS='${SUITE_EXPERIMENTS}'
 SUITE_ISOLATION_MODE='${SUITE_ISOLATION_MODE}'
 SUITE_CONTINUE_ON_ERROR='${SUITE_CONTINUE_ON_ERROR}'
@@ -228,6 +233,7 @@ SPEC_PREFILL_SWEBENCH_SPLIT='${SPEC_PREFILL_SWEBENCH_SPLIT:-}'
 SPEC_PREFILL_TURN_A_INDEX='${SPEC_PREFILL_TURN_A_INDEX:-}'
 SPEC_PREFILL_TURN_B_INDEX='${SPEC_PREFILL_TURN_B_INDEX:-}'
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
+SPEC_PREFILL_COMPARISON_MODE='${SPEC_PREFILL_COMPARISON_MODE:-}'
 EXP9_MODE='${EXP9_MODE:-}'
 EXP9_RETENTION_REQUEST_SOURCE='${EXP9_RETENTION_REQUEST_SOURCE:-}'
 EXP9_RETENTION_SWEBENCH_DATASET='${EXP9_RETENTION_SWEBENCH_DATASET:-}'
@@ -278,6 +284,7 @@ EXP12_SPEC_PREFILL_SWEBENCH_SPLIT='${EXP12_SPEC_PREFILL_SWEBENCH_SPLIT:-}'
 EXP12_SPEC_PREFILL_TURN_A_INDEX='${EXP12_SPEC_PREFILL_TURN_A_INDEX:-}'
 EXP12_SPEC_PREFILL_TURN_B_INDEX='${EXP12_SPEC_PREFILL_TURN_B_INDEX:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
+EXP12_SPEC_PREFILL_COMPARISON_MODE='${EXP12_SPEC_PREFILL_COMPARISON_MODE:-}'
 EXP12_SPEC_PREFILL_ATTRIBUTION_MODE='${EXP12_SPEC_PREFILL_ATTRIBUTION_MODE:-}'
 EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE='${EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE:-}'
 EXP12_SPEC_PREFILL_SWEEP_AXIS='${EXP12_SPEC_PREFILL_SWEEP_AXIS:-}'
@@ -285,6 +292,19 @@ EXP12_SPEC_PREFILL_SWEEP_VALUES='${EXP12_SPEC_PREFILL_SWEEP_VALUES:-}'
 EXP12_SPEC_PREFILL_TURN_A_WORDS='${EXP12_SPEC_PREFILL_TURN_A_WORDS:-}'
 EXP12_SPEC_PREFILL_TURN_B_WORDS='${EXP12_SPEC_PREFILL_TURN_B_WORDS:-}'
 EXP12_SPEC_PREFILL_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_OUTPUT_TOKENS:-}'
+EXP13_MODE='${EXP13_MODE:-}'
+EXP13_PRIORITY_REQUEST_SOURCE='${EXP13_PRIORITY_REQUEST_SOURCE:-}'
+EXP13_PRIORITY_SWEBENCH_DATASET='${EXP13_PRIORITY_SWEBENCH_DATASET:-}'
+EXP13_PRIORITY_SWEBENCH_SPLIT='${EXP13_PRIORITY_SWEBENCH_SPLIT:-}'
+EXP13_PRIORITY_SWEBENCH_START_INDEX='${EXP13_PRIORITY_SWEBENCH_START_INDEX:-}'
+EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE='${EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE:-}'
+EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS='${EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
+EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES='${EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
+EXP13_LOW_PRIORITY_COUNT='${EXP13_LOW_PRIORITY_COUNT:-}'
+EXP13_HIGH_PRIORITY_COUNT='${EXP13_HIGH_PRIORITY_COUNT:-}'
+EXP13_PRIORITY_INPUT_LEN='${EXP13_PRIORITY_INPUT_LEN:-}'
+EXP13_PRIORITY_OUTPUT_LEN='${EXP13_PRIORITY_OUTPUT_LEN:-}'
+EXP13_PRIORITY_INTER_REQUEST_GAP_MS='${EXP13_PRIORITY_INTER_REQUEST_GAP_MS:-}'
 EOF
 
 log() {
@@ -354,6 +374,7 @@ sync_latest_matrices_to_shared_charts() {
   has_selected_experiment 10 && [[ -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv" "${charts_dir}/exp10_cachepinning_matrix.csv"
   has_selected_experiment 11 && [[ -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv" "${charts_dir}/exp11_prioritysched_matrix.csv"
   has_selected_experiment 12 && [[ -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
+  has_selected_experiment 13 && [[ -f "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" "${charts_dir}/exp13_latencysens_matrix.csv"
 }
 
 prune_shared_chart_dir_for_suite_selection() {
@@ -411,6 +432,11 @@ prune_shared_chart_dir_for_suite_selection() {
     "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_turna_latency_vs_warmup_wait.svg" \
     "${charts_dir}/latest_speculative_prefill_microbenchmark_matrix.csv"
+
+  prune_one_experiment 13 \
+    "${charts_dir}/exp13_latencysens_matrix.csv" \
+    "${charts_dir}/exp13_latencysens_jump_ahead_vs_arrival_gap.svg" \
+    "${charts_dir}/latest_latency_sensitivity_microbenchmark_matrix.csv"
 }
 
 sync_shared_assets_for_experiment() {
@@ -451,6 +477,10 @@ sync_shared_assets_for_experiment() {
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg"
       ;;
+    13)
+      sync_one "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" "${charts_dir}/exp13_latencysens_matrix.csv"
+      sync_one "experiments/reports/latest_latency_sensitivity_microbenchmark_jump_ahead.svg" "${charts_dir}/exp13_latencysens_jump_ahead_vs_arrival_gap.svg"
+      ;;
   esac
 
   if [[ "${published_any}" = "1" ]]; then
@@ -464,7 +494,7 @@ resolved_mode_display() {
   local experiment_id="$1"
   local mode="$2"
   case "${experiment_id}:${mode}" in
-    9:all|11:all|12:all)
+    9:all|11:all|12:all|13:all)
       echo "all (resolved to sweep + plot)"
       ;;
     10:all)
@@ -482,17 +512,84 @@ canonical_experiment() {
     10|cache_pinning|pinning) echo "10" ;;
     11|priority|priority_scheduling) echo "11" ;;
     12|spec_prefill|speculative_prefill) echo "12" ;;
+    13|latency_sensitivity|latency) echo "13" ;;
     *) return 1 ;;
   esac
+}
+
+canonical_suite_run() {
+  case "$1" in
+    exp9_synthetic|9_synthetic|kv_retention_synthetic) echo "exp9_synthetic" ;;
+    exp9_swebench|9_swebench|kv_retention_swebench) echo "exp9_swebench" ;;
+    exp10|exp10_cache_pinning|cache_pinning) echo "exp10" ;;
+    exp11_synthetic|11_synthetic|priority_synthetic|priority_scheduling_synthetic) echo "exp11_synthetic" ;;
+    exp11_swebench|11_swebench|priority_swebench|priority_scheduling_swebench) echo "exp11_swebench" ;;
+    exp12_synthetic|12_synthetic|spec_prefill_synthetic|speculative_prefill_synthetic) echo "exp12_synthetic" ;;
+    exp12_swebench|12_swebench|spec_prefill_swebench|speculative_prefill_swebench) echo "exp12_swebench" ;;
+    exp13_synthetic|13_synthetic|latency_sensitivity_synthetic) echo "exp13_synthetic" ;;
+    exp13_swebench|13_swebench|latency_sensitivity_swebench) echo "exp13_swebench" ;;
+    *) return 1 ;;
+  esac
+}
+
+suite_run_experiment_id() {
+  case "$1" in
+    exp9_*) echo "9" ;;
+    exp10*) echo "10" ;;
+    exp11_*) echo "11" ;;
+    exp12_*) echo "12" ;;
+    exp13_*) echo "13" ;;
+    *) return 1 ;;
+  esac
+}
+
+build_suite_run_selection() {
+  SUITE_RUN_SELECTION=()
+  local token=""
+  local exp=""
+  if [[ -n "${SUITE_RUNS:-}" ]]; then
+    for token in ${SUITE_RUNS}; do
+      if exp="$(canonical_suite_run "${token}")"; then
+        SUITE_RUN_SELECTION+=("${exp}")
+      else
+        SUITE_RUN_SELECTION+=("UNKNOWN:${token}")
+      fi
+    done
+    return
+  fi
+
+  if [[ -z "${SUITE_EXPERIMENTS:-}" && -n "${SUITE_DEFAULT_RUNS:-}" ]]; then
+    for token in ${SUITE_DEFAULT_RUNS}; do
+      if exp="$(canonical_suite_run "${token}")"; then
+        SUITE_RUN_SELECTION+=("${exp}")
+      else
+        SUITE_RUN_SELECTION+=("UNKNOWN:${token}")
+      fi
+    done
+    return
+  fi
+
+  for token in ${SUITE_EXPERIMENTS}; do
+    if ! exp="$(canonical_experiment "${token}")"; then
+      SUITE_RUN_SELECTION+=("UNKNOWN:${token}")
+      continue
+    fi
+    case "${exp}" in
+      9) SUITE_RUN_SELECTION+=("exp9_synthetic") ;;
+      10) SUITE_RUN_SELECTION+=("exp10") ;;
+      11) SUITE_RUN_SELECTION+=("exp11_synthetic") ;;
+      12) SUITE_RUN_SELECTION+=("exp12_synthetic") ;;
+    esac
+  done
 }
 
 has_selected_experiment() {
   local target
   target="$(canonical_experiment "$1")" || return 1
-  local token=""
   local exp=""
-  for token in ${SUITE_EXPERIMENTS}; do
-    exp="$(canonical_experiment "${token}")" || continue
+  local run_case=""
+  for run_case in "${SUITE_RUN_SELECTION[@]:-}"; do
+    exp="$(suite_run_experiment_id "${run_case}")" || continue
     if [[ "${exp}" = "${target}" ]]; then
       return 0
     fi
@@ -537,6 +634,8 @@ build_suite_outputs() {
     "${SUITE_ID}" \
     "${MODEL}" \
     "${DYNAMO_MACHINE_PROFILE:-}" \
+    "${SUITE_RUNS}" \
+    "${SUITE_RUN_SELECTION[*]}" \
     "${SUITE_EXPERIMENTS}" \
     "${SUITE_CONTINUE_ON_ERROR}" \
     "${SUITE_ENV_SNAPSHOT}" \
@@ -555,12 +654,14 @@ summary_path = Path(sys.argv[3])
 suite_id = sys.argv[4]
 model = sys.argv[5]
 machine_profile = sys.argv[6]
-suite_experiments = sys.argv[7]
-continue_on_error = sys.argv[8]
-env_snapshot = sys.argv[9]
-driver_log = sys.argv[10]
-suite_started_at = sys.argv[11]
-suite_finished_at = sys.argv[12]
+suite_runs = sys.argv[7]
+resolved_suite_runs = sys.argv[8]
+suite_experiments = sys.argv[9]
+continue_on_error = sys.argv[10]
+env_snapshot = sys.argv[11]
+driver_log = sys.argv[12]
+suite_started_at = sys.argv[13]
+suite_finished_at = sys.argv[14]
 
 results = []
 if jsonl_path.exists():
@@ -572,6 +673,8 @@ manifest = {
     "suite_id": suite_id,
     "model": model,
     "machine_profile": machine_profile,
+    "suite_runs": suite_runs,
+    "resolved_suite_runs": resolved_suite_runs,
     "suite_experiments": suite_experiments,
     "continue_on_error": continue_on_error,
     "generated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -589,7 +692,9 @@ lines = [
     f"- suite_id: `{suite_id}`",
     f"- model: `{model}`",
     f"- machine_profile: `{machine_profile}`",
-    f"- experiments: `{suite_experiments}`",
+    f"- suite_runs: `{suite_runs}`",
+    f"- resolved_suite_runs: `{resolved_suite_runs}`",
+    f"- legacy_experiments: `{suite_experiments}`",
     f"- continue_on_error: `{continue_on_error}`",
     f"- started_at_utc: `{suite_started_at}`",
     f"- finished_at_utc: `{suite_finished_at}`",
@@ -999,6 +1104,7 @@ run_experiment_12() {
   local exp12_turn_a_index
   local exp12_turn_b_index
   local exp12_swebench_protected_offset
+  local exp12_comparison_mode
   exp12_sweep_axis="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_AXIS SPEC_PREFILL_SWEEP_AXIS)"
   exp12_sweep_values="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_VALUES SPEC_PREFILL_SWEEP_VALUES)"
   exp12_turn_a_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_WORDS SPEC_PREFILL_TURN_A_WORDS)"
@@ -1012,6 +1118,7 @@ run_experiment_12() {
   exp12_turn_a_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_INDEX SPEC_PREFILL_TURN_A_INDEX)"
   exp12_turn_b_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_INDEX SPEC_PREFILL_TURN_B_INDEX)"
   exp12_swebench_protected_offset="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET)"
+  exp12_comparison_mode="$(resolve_value EXP12_SPEC_PREFILL_COMPARISON_MODE SPEC_PREFILL_COMPARISON_MODE)"
   log
   prepare_fresh_runtime_for_experiment
   suite_run_start_banner "${index}" "${total}" "12" "speculative_prefill" "${display_mode}"
@@ -1038,6 +1145,7 @@ spec_prefill_swebench_split=${exp12_swebench_split}
 spec_prefill_turn_a_index=${exp12_turn_a_index}
 spec_prefill_turn_b_index=${exp12_turn_b_index}
 spec_prefill_swebench_protected_offset=${exp12_swebench_protected_offset}
+spec_prefill_comparison_mode=${exp12_comparison_mode}
 EOF
   local -a env_args=(
     env
@@ -1066,6 +1174,7 @@ EOF
   [[ -n "${exp12_turn_a_index}" ]] && env_args+=(SPEC_PREFILL_TURN_A_INDEX="${exp12_turn_a_index}")
   [[ -n "${exp12_turn_b_index}" ]] && env_args+=(SPEC_PREFILL_TURN_B_INDEX="${exp12_turn_b_index}")
   [[ -n "${exp12_swebench_protected_offset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET="${exp12_swebench_protected_offset}")
+  [[ -n "${exp12_comparison_mode}" ]] && env_args+=(SPEC_PREFILL_COMPARISON_MODE="${exp12_comparison_mode}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
@@ -1087,12 +1196,293 @@ EOF
   [[ "${status}" = "passed" || "${SUITE_CONTINUE_ON_ERROR}" = "1" ]]
 }
 
+run_experiment_13() {
+  local index="$1"
+  local total="$2"
+  local mode="${EXP13_MODE:-${LATENCY_SENSITIVITY_MODE:-${SUITE_DEFAULT_MODE}}}"
+  local display_mode
+  display_mode="$(resolved_mode_display "13" "${mode}")"
+  local wrapper="./agentbench/run_latency_sensitivity_microbenchmark_single_host.sh"
+  local started_at
+  started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  local status="passed"
+  local error_message=""
+  local exp13_sweep_axis
+  local exp13_sweep_values
+  local exp13_low_priority_count
+  local exp13_high_priority_count
+  local exp13_priority_input_len
+  local exp13_priority_output_len
+  local exp13_priority_inter_request_gap_ms
+  local exp13_request_source
+  local exp13_swebench_dataset
+  local exp13_swebench_split
+  local exp13_swebench_start_index
+  local exp13_swebench_allow_reuse
+  exp13_sweep_axis="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
+  exp13_sweep_values="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
+  exp13_low_priority_count="$(resolve_value EXP13_LOW_PRIORITY_COUNT LOW_PRIORITY_COUNT)"
+  exp13_high_priority_count="$(resolve_value EXP13_HIGH_PRIORITY_COUNT HIGH_PRIORITY_COUNT)"
+  exp13_priority_input_len="$(resolve_value EXP13_PRIORITY_INPUT_LEN PRIORITY_INPUT_LEN)"
+  exp13_priority_output_len="$(resolve_value EXP13_PRIORITY_OUTPUT_LEN PRIORITY_OUTPUT_LEN)"
+  exp13_priority_inter_request_gap_ms="$(resolve_value EXP13_PRIORITY_INTER_REQUEST_GAP_MS PRIORITY_INTER_REQUEST_GAP_MS)"
+  exp13_request_source="$(resolve_value EXP13_PRIORITY_REQUEST_SOURCE PRIORITY_REQUEST_SOURCE)"
+  exp13_swebench_dataset="$(resolve_value EXP13_PRIORITY_SWEBENCH_DATASET PRIORITY_SWEBENCH_DATASET)"
+  exp13_swebench_split="$(resolve_value EXP13_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
+  exp13_swebench_start_index="$(resolve_value EXP13_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
+  exp13_swebench_allow_reuse="$(resolve_value EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
+  log
+  prepare_fresh_runtime_for_experiment
+  suite_run_start_banner "${index}" "${total}" "13" "latency_sensitivity" "${display_mode}"
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+--- Experiment 13 parameters ---
+wrapper=${wrapper}
+mode=${display_mode}
+experiment_reset_mode=${EFFECTIVE_EXPERIMENT_RESET_MODE}
+latency_sensitivity_sweep_seed_mode=${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}
+retention_prompt_isolation_mode=${RETENTION_PROMPT_ISOLATION_MODE}
+precise_start_mode=${PRECISE_START_MODE:-clean}
+sglang_transfer_log=${SGLANG_TRANSFER_LOG}
+sglang_transfer_log_profile=${SGLANG_TRANSFER_LOG_PROFILE}
+latency_sensitivity_sweep_axis=${exp13_sweep_axis}
+latency_sensitivity_sweep_values=${exp13_sweep_values}
+low_priority_count=${exp13_low_priority_count}
+high_priority_count=${exp13_high_priority_count}
+priority_input_len=${exp13_priority_input_len}
+priority_output_len=${exp13_priority_output_len}
+priority_inter_request_gap_ms=${exp13_priority_inter_request_gap_ms}
+priority_request_source=${exp13_request_source}
+priority_swebench_dataset=${exp13_swebench_dataset}
+priority_swebench_split=${exp13_swebench_split}
+priority_swebench_start_index=${exp13_swebench_start_index}
+priority_swebench_allow_reuse=${exp13_swebench_allow_reuse}
+EOF
+  local -a env_args=(
+    env
+    DYNAMO_MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-}"
+    EXPERIMENT_DIRS_READY_ALREADY="${EXPERIMENT_DIRS_READY_ALREADY:-0}"
+    INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS}"
+    PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
+    SGLANG_TRANSFER_LOG="${SGLANG_TRANSFER_LOG:-1}"
+    SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
+    EXPERIMENT_RESET_MODE="${EFFECTIVE_EXPERIMENT_RESET_MODE}"
+    RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE}"
+    PRIORITY_SCHEDULING_SWEEP_SEED_MODE="${EFFECTIVE_PRIORITY_SCHEDULING_SWEEP_SEED_MODE}"
+    STOP_DYNAMO_WHEN_DONE="${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
+    LATENCY_SENSITIVITY_MODE="${mode}"
+  )
+  [[ -n "${exp13_sweep_axis}" ]] && env_args+=(PRIORITY_SCHEDULING_SWEEP_AXIS="${exp13_sweep_axis}")
+  [[ -n "${exp13_sweep_values}" ]] && env_args+=(PRIORITY_SCHEDULING_SWEEP_VALUES="${exp13_sweep_values}")
+  [[ -n "${exp13_low_priority_count}" ]] && env_args+=(LOW_PRIORITY_COUNT="${exp13_low_priority_count}")
+  [[ -n "${exp13_high_priority_count}" ]] && env_args+=(HIGH_PRIORITY_COUNT="${exp13_high_priority_count}")
+  [[ -n "${exp13_priority_input_len}" ]] && env_args+=(PRIORITY_INPUT_LEN="${exp13_priority_input_len}")
+  [[ -n "${exp13_priority_output_len}" ]] && env_args+=(PRIORITY_OUTPUT_LEN="${exp13_priority_output_len}")
+  [[ -n "${exp13_priority_inter_request_gap_ms}" ]] && env_args+=(PRIORITY_INTER_REQUEST_GAP_MS="${exp13_priority_inter_request_gap_ms}")
+  [[ -n "${exp13_request_source}" ]] && env_args+=(PRIORITY_REQUEST_SOURCE="${exp13_request_source}")
+  [[ -n "${exp13_swebench_dataset}" ]] && env_args+=(PRIORITY_SWEBENCH_DATASET="${exp13_swebench_dataset}")
+  [[ -n "${exp13_swebench_split}" ]] && env_args+=(PRIORITY_SWEBENCH_SPLIT="${exp13_swebench_split}")
+  [[ -n "${exp13_swebench_start_index}" ]] && env_args+=(PRIORITY_SWEBENCH_START_INDEX="${exp13_swebench_start_index}")
+  [[ -n "${exp13_swebench_allow_reuse}" ]] && env_args+=(PRIORITY_SWEBENCH_ALLOW_REUSE="${exp13_swebench_allow_reuse}")
+  if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
+    status="failed"
+    error_message="Experiment 13 wrapper failed"
+  fi
+  if [[ "${status}" = "passed" ]]; then
+    sync_shared_assets_for_experiment "13"
+  fi
+  stop_dynamo_if_requested
+  suite_run_end_banner "${index}" "${total}" "13" "latency_sensitivity" "${status}"
+  append_result_json \
+    "13" "latency_sensitivity" "${status}" "${mode}" "${wrapper}" \
+    "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" \
+    "" \
+    "experiments/reports/latest_latency_sensitivity_microbenchmark_summary.md" \
+    "experiments/reports/latest_latency_sensitivity_microbenchmark_run_contract.json" \
+    "" \
+    "experiments/reports/latest_latency_sensitivity_microbenchmark_jump_ahead.svg" \
+    "${error_message}" "${started_at}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  [[ "${status}" = "passed" || "${SUITE_CONTINUE_ON_ERROR}" = "1" ]]
+}
+
+suite_case_banner() {
+  local index="$1"
+  local total="$2"
+  local run_case="$3"
+  cat <<EOF | tee -a "${SUITE_DRIVER_LOG}"
+
+################################################################################
+### SUITE RUN CASE ${index}/${total}: ${run_case}
+################################################################################
+
+EOF
+}
+
+configure_suite_case() {
+  local run_case="$1"
+  case "${run_case}" in
+    exp9_synthetic)
+      EXP9_MODE="${EXP9_SYNTHETIC_MODE}"
+      EXP9_RETENTION_REQUEST_SOURCE="${EXP9_SYNTHETIC_RETENTION_REQUEST_SOURCE}"
+      EXP9_RETENTION_ATTRIBUTION_MODE="${EXP9_SYNTHETIC_RETENTION_ATTRIBUTION_MODE}"
+      EXP9_RETENTION_REQUEST_CONTEXT_MODE="${EXP9_SYNTHETIC_RETENTION_REQUEST_CONTEXT_MODE}"
+      EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE="${EXP9_SYNTHETIC_RETENTION_TOP_LEVEL_PRIORITY_MODE}"
+      EXP9_STOP_ON_PROBE_FAILURE="${EXP9_SYNTHETIC_STOP_ON_PROBE_FAILURE}"
+      EXP9_DISTRACTOR_COUNTS="${EXP9_SYNTHETIC_DISTRACTOR_COUNTS}"
+      EXP9_PROTECTED_INPUT_LEN="${EXP9_SYNTHETIC_PROTECTED_INPUT_LEN}"
+      EXP9_DISTRACTOR_INPUT_LEN="${EXP9_SYNTHETIC_DISTRACTOR_INPUT_LEN}"
+      EXP9_PROTECTED_HINT_PROFILES="${EXP9_SYNTHETIC_PROTECTED_HINT_PROFILES}"
+      EXP9_RETENTION_SWEBENCH_INSTANCE_ID=""
+      EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=""
+      EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
+      ;;
+    exp9_swebench)
+      EXP9_MODE="${EXP9_SWEBENCH_MODE}"
+      EXP9_RETENTION_REQUEST_SOURCE="${EXP9_SWEBENCH_RETENTION_REQUEST_SOURCE}"
+      EXP9_RETENTION_SWEBENCH_DATASET="${EXP9_SWEBENCH_RETENTION_SWEBENCH_DATASET}"
+      EXP9_RETENTION_SWEBENCH_SPLIT="${EXP9_SWEBENCH_RETENTION_SWEBENCH_SPLIT}"
+      EXP9_RETENTION_SWEBENCH_INDEX="${EXP9_SWEBENCH_RETENTION_SWEBENCH_INDEX}"
+      EXP9_RETENTION_ATTRIBUTION_MODE=""
+      EXP9_RETENTION_REQUEST_CONTEXT_MODE=""
+      EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE=""
+      EXP9_STOP_ON_PROBE_FAILURE=""
+      EXP9_DISTRACTOR_COUNTS="${EXP9_SWEBENCH_DISTRACTOR_COUNTS}"
+      EXP9_PROTECTED_INPUT_LEN=""
+      EXP9_DISTRACTOR_INPUT_LEN=""
+      EXP9_PROTECTED_HINT_PROFILES="${EXP9_SWEBENCH_PROTECTED_HINT_PROFILES}"
+      EXP9_RETENTION_SWEBENCH_INSTANCE_ID=""
+      EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=""
+      EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
+      ;;
+    exp11_synthetic)
+      EXP11_MODE="${EXP11_SYNTHETIC_MODE}"
+      EXP11_PRIORITY_REQUEST_SOURCE="${EXP11_SYNTHETIC_PRIORITY_REQUEST_SOURCE}"
+      EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP11_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP11_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP11_LOW_PRIORITY_COUNT="${EXP11_SYNTHETIC_LOW_PRIORITY_COUNT}"
+      EXP11_HIGH_PRIORITY_COUNT="${EXP11_SYNTHETIC_HIGH_PRIORITY_COUNT}"
+      EXP11_PRIORITY_INPUT_LEN="${EXP11_SYNTHETIC_PRIORITY_INPUT_LEN}"
+      EXP11_PRIORITY_OUTPUT_LEN="${EXP11_SYNTHETIC_PRIORITY_OUTPUT_LEN}"
+      EXP11_PRIORITY_INTER_REQUEST_GAP_MS="${EXP11_SYNTHETIC_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP11_PRIORITY_SWEBENCH_DATASET=""
+      EXP11_PRIORITY_SWEBENCH_SPLIT=""
+      EXP11_PRIORITY_SWEBENCH_START_INDEX=""
+      EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      ;;
+    exp11_swebench)
+      EXP11_MODE="${EXP11_SWEBENCH_MODE}"
+      EXP11_PRIORITY_REQUEST_SOURCE="${EXP11_SWEBENCH_PRIORITY_REQUEST_SOURCE}"
+      EXP11_PRIORITY_SWEBENCH_DATASET="${EXP11_SWEBENCH_PRIORITY_SWEBENCH_DATASET}"
+      EXP11_PRIORITY_SWEBENCH_SPLIT="${EXP11_SWEBENCH_PRIORITY_SWEBENCH_SPLIT}"
+      EXP11_PRIORITY_SWEBENCH_START_INDEX="${EXP11_SWEBENCH_PRIORITY_SWEBENCH_START_INDEX}"
+      EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP11_SWEBENCH_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP11_SWEBENCH_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP11_LOW_PRIORITY_COUNT="${EXP11_SWEBENCH_LOW_PRIORITY_COUNT}"
+      EXP11_HIGH_PRIORITY_COUNT="${EXP11_SWEBENCH_HIGH_PRIORITY_COUNT}"
+      EXP11_PRIORITY_INPUT_LEN=""
+      EXP11_PRIORITY_OUTPUT_LEN="${EXP11_SWEBENCH_PRIORITY_OUTPUT_LEN}"
+      EXP11_PRIORITY_INTER_REQUEST_GAP_MS="${EXP11_SWEBENCH_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      ;;
+    exp12_synthetic)
+      EXP12_MODE="${EXP12_SYNTHETIC_MODE}"
+      EXP12_SPEC_PREFILL_REQUEST_SOURCE="${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_SOURCE}"
+      EXP12_SPEC_PREFILL_ATTRIBUTION_MODE="${EXP12_SYNTHETIC_SPEC_PREFILL_ATTRIBUTION_MODE}"
+      EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE="${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_CONTEXT_MODE}"
+      EXP12_SPEC_PREFILL_SWEEP_AXIS="${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_AXIS}"
+      EXP12_SPEC_PREFILL_SWEEP_VALUES="${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_VALUES}"
+      EXP12_SPEC_PREFILL_TURN_A_WORDS="${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_A_WORDS}"
+      EXP12_SPEC_PREFILL_TURN_B_WORDS="${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_B_WORDS}"
+      EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
+      EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
+      EXP12_SPEC_PREFILL_TURN_A_INDEX=""
+      EXP12_SPEC_PREFILL_TURN_B_INDEX=""
+      EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
+      EXP12_SPEC_PREFILL_COMPARISON_MODE=""
+      ;;
+    exp12_swebench)
+      EXP12_MODE="${EXP12_SWEBENCH_MODE}"
+      EXP12_SPEC_PREFILL_REQUEST_SOURCE="${EXP12_SWEBENCH_SPEC_PREFILL_REQUEST_SOURCE}"
+      EXP12_SPEC_PREFILL_SWEBENCH_DATASET="${EXP12_SWEBENCH_SPEC_PREFILL_SWEBENCH_DATASET}"
+      EXP12_SPEC_PREFILL_SWEBENCH_SPLIT="${EXP12_SWEBENCH_SPEC_PREFILL_SWEBENCH_SPLIT}"
+      EXP12_SPEC_PREFILL_TURN_A_INDEX="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_A_INDEX}"
+      EXP12_SPEC_PREFILL_TURN_B_INDEX="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_B_INDEX}"
+      EXP12_SPEC_PREFILL_COMPARISON_MODE="${EXP12_SWEBENCH_SPEC_PREFILL_COMPARISON_MODE}"
+      EXP12_SPEC_PREFILL_ATTRIBUTION_MODE=""
+      EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE=""
+      EXP12_SPEC_PREFILL_SWEEP_AXIS="${EXP12_SWEBENCH_SPEC_PREFILL_SWEEP_AXIS}"
+      EXP12_SPEC_PREFILL_SWEEP_VALUES="${EXP12_SWEBENCH_SPEC_PREFILL_SWEEP_VALUES}"
+      EXP12_SPEC_PREFILL_TURN_A_WORDS=""
+      EXP12_SPEC_PREFILL_TURN_B_WORDS=""
+      EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
+      ;;
+    exp13_synthetic)
+      EXP13_MODE="${EXP13_SYNTHETIC_MODE}"
+      EXP13_PRIORITY_REQUEST_SOURCE="${EXP13_SYNTHETIC_PRIORITY_REQUEST_SOURCE}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP13_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP13_SYNTHETIC_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP13_LOW_PRIORITY_COUNT="${EXP13_SYNTHETIC_LOW_PRIORITY_COUNT}"
+      EXP13_HIGH_PRIORITY_COUNT="${EXP13_SYNTHETIC_HIGH_PRIORITY_COUNT}"
+      EXP13_PRIORITY_INPUT_LEN="${EXP13_SYNTHETIC_PRIORITY_INPUT_LEN}"
+      EXP13_PRIORITY_OUTPUT_LEN="${EXP13_SYNTHETIC_PRIORITY_OUTPUT_LEN}"
+      EXP13_PRIORITY_INTER_REQUEST_GAP_MS="${EXP13_SYNTHETIC_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP13_PRIORITY_SWEBENCH_DATASET=""
+      EXP13_PRIORITY_SWEBENCH_SPLIT=""
+      EXP13_PRIORITY_SWEBENCH_START_INDEX=""
+      EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      ;;
+    exp13_swebench)
+      EXP13_MODE="${EXP13_SWEBENCH_MODE}"
+      EXP13_PRIORITY_REQUEST_SOURCE="${EXP13_SWEBENCH_PRIORITY_REQUEST_SOURCE}"
+      EXP13_PRIORITY_SWEBENCH_DATASET="${EXP13_SWEBENCH_PRIORITY_SWEBENCH_DATASET}"
+      EXP13_PRIORITY_SWEBENCH_SPLIT="${EXP13_SWEBENCH_PRIORITY_SWEBENCH_SPLIT}"
+      EXP13_PRIORITY_SWEBENCH_START_INDEX="${EXP13_SWEBENCH_PRIORITY_SWEBENCH_START_INDEX}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP13_SWEBENCH_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP13_SWEBENCH_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP13_LOW_PRIORITY_COUNT="${EXP13_SWEBENCH_LOW_PRIORITY_COUNT}"
+      EXP13_HIGH_PRIORITY_COUNT="${EXP13_SWEBENCH_HIGH_PRIORITY_COUNT}"
+      EXP13_PRIORITY_INPUT_LEN=""
+      EXP13_PRIORITY_OUTPUT_LEN="${EXP13_SWEBENCH_PRIORITY_OUTPUT_LEN}"
+      EXP13_PRIORITY_INTER_REQUEST_GAP_MS="${EXP13_SWEBENCH_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      ;;
+    exp10)
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+run_suite_case() {
+  local run_case="$1"
+  local index="$2"
+  local total="$3"
+  local exp
+  exp="$(suite_run_experiment_id "${run_case}")" || return 1
+  suite_case_banner "${index}" "${total}" "${run_case}"
+  configure_suite_case "${run_case}" || return 1
+  case "${exp}" in
+    9) run_experiment_9 "${index}" "${total}" ;;
+    10) run_experiment_10 "${index}" "${total}" ;;
+    11) run_experiment_11 "${index}" "${total}" ;;
+    12) run_experiment_12 "${index}" "${total}" ;;
+    13) run_experiment_13 "${index}" "${total}" ;;
+    *) return 1 ;;
+  esac
+}
+
+declare -a SUITE_RUN_SELECTION=()
+build_suite_run_selection
+
 banner "AGENTIC HINT SWEEPS SUITE" | tee -a "${SUITE_DRIVER_LOG}"
 log "Suite id: ${SUITE_ID}"
 log "Suite config path: ${SUITE_CONFIG_PATH}"
 log "Model: ${MODEL}"
 log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}"
-log "Experiments: ${SUITE_EXPERIMENTS}"
+log "Suite runs: ${SUITE_RUN_SELECTION[*]}"
+log "Legacy experiments: ${SUITE_EXPERIMENTS:-<unset>}"
 log "Suite isolation mode: ${SUITE_ISOLATION_MODE}"
 log "Continue on error: ${SUITE_CONTINUE_ON_ERROR}"
 log "Stop Dynamo between experiments: ${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
@@ -1126,17 +1516,17 @@ ensure_suite_precise_runtime_if_needed
 
 suite_ok=1
 selected_experiment_total=0
-for token in ${SUITE_EXPERIMENTS}; do
-  if exp="$(canonical_experiment "${token}")"; then
+for run_case in "${SUITE_RUN_SELECTION[@]}"; do
+  if [[ "${run_case}" != UNKNOWN:* ]]; then
     selected_experiment_total=$((selected_experiment_total + 1))
   fi
 done
-log "Resolved selected experiment count: ${selected_experiment_total}"
+log "Resolved selected run count: ${selected_experiment_total}"
 
 selected_experiment_index=0
-for token in ${SUITE_EXPERIMENTS}; do
-  if ! exp="$(canonical_experiment "${token}")"; then
-    log "Unknown suite experiment token: ${token}"
+for run_case in "${SUITE_RUN_SELECTION[@]}"; do
+  if [[ "${run_case}" = UNKNOWN:* ]]; then
+    log "Unknown suite run token: ${run_case#UNKNOWN:}"
     suite_ok=0
     if [[ "${SUITE_CONTINUE_ON_ERROR}" != "1" ]]; then
       break
@@ -1145,12 +1535,7 @@ for token in ${SUITE_EXPERIMENTS}; do
   fi
 
   selected_experiment_index=$((selected_experiment_index + 1))
-  case "${exp}" in
-    9) run_experiment_9 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
-    10) run_experiment_10 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
-    11) run_experiment_11 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
-    12) run_experiment_12 "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0 ;;
-  esac
+  run_suite_case "${run_case}" "${selected_experiment_index}" "${selected_experiment_total}" || suite_ok=0
 
   if [[ "${suite_ok}" != "1" && "${SUITE_CONTINUE_ON_ERROR}" != "1" ]]; then
     break

@@ -17,7 +17,7 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **Priority scheduling**: use [Experiment 11](#experiment-11-priority-scheduling-probe).
 - **Latency sensitivity**: use [Experiment 13](#experiment-13-latency-sensitivity-probe).
 - **Speculative prefill**: use [Experiment 12](#experiment-12-speculative-prefill-probe).
-- **Run the GH200 trio sequentially**: use [Experiment Suite: Agentic Hint Sweeps](#experiment-suite-agentic-hint-sweeps).
+- **Run the GH200 suite sequentially**: use [Experiment Suite: Agentic Hint Sweeps](#experiment-suite-agentic-hint-sweeps).
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -2206,14 +2206,12 @@ SPEC_PREFILL_REQUEST_CONTEXT_MODE
 
 ## Experiment Suite: Agentic Hint Sweeps
 
-Use this when you want one readable script that runs the experiment wrappers one
-after another.
+Use this when you want one readable script that runs the known-good experiment
+wrappers one after another.
 
-This suite now works from a config file with clearly separated blocks for each
-experiment instead of one huge mixed environment command.
-
-The default values in that config are now tuned to match the current GH200 trio
-for Experiments 9, 11, and 12.
+The suite is config-driven. The config contains separate, clearly named blocks
+for the synthetic and SWE-bench Pro versions of Experiments 9, 11, 12, and 13.
+Select the exact blocks you want with `SUITE_RUNS`.
 
 Public files:
 
@@ -2226,113 +2224,56 @@ Public files:
 
 ### What This Really Does
 
-The suite does not try to merge all experiments into one runtime command.
+The suite does not merge all experiments into one runtime command. It runs the
+same public wrappers you already use directly, waits for each wrapper to finish,
+then starts the next selected case.
 
-Instead, it:
+Available `SUITE_RUNS` cases:
 
-- reads the shared suite settings
-- reads the Experiment 9 block
-- runs the Experiment 9 wrapper and waits for it to finish
-- reads the Experiment 11 block
-- reads the Experiment 12 block
+```text
+exp9_synthetic
+exp9_swebench
+exp11_synthetic
+exp11_swebench
+exp12_synthetic
+exp12_swebench
+exp13_synthetic
+exp13_swebench
+```
 
-So adding another experiment later is simple:
+Default selection in the config:
 
-- add a new section to the config
-- add its experiment id to `SUITE_EXPERIMENTS`
-- wire one more wrapper call into the suite script
+```text
+SUITE_DEFAULT_RUNS="exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_swebench exp13_synthetic exp13_swebench"
+```
+
+Use `SUITE_RUNS` only when you want to override that default. Legacy
+`SUITE_EXPERIMENTS="9 11 12"` still works when `SUITE_RUNS` is unset, but it
+maps to the synthetic cases only. Prefer `SUITE_RUNS` for new runs.
 
 ### Config Layout
 
 Edit the suite config file directly. It is already split into sections:
 
 - shared suite settings
-- Experiment 9: KV retention
-- Experiment 11: priority scheduling
-- Experiment 12: speculative prefill
+- Experiment 9 synthetic: KV retention
+- Experiment 9 SWE-bench: KV retention over real SWE-bench Pro task prompts
+- Experiment 11 synthetic: priority scheduling
+- Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
+- Experiment 12 synthetic: speculative prefill
+- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts
+- Experiment 13 synthetic: latency sensitivity
+- Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
 
-Experiment 9 can use synthetic prompts, direct SWE-bench Pro tasks, or
-captured SWE-bench trajectory prompts.
-Set these in the Experiment 9 block:
-
-```text
-EXP9_RETENTION_REQUEST_SOURCE=synthetic
-EXP9_RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
-EXP9_RETENTION_SWEBENCH_SPLIT=test
-EXP9_RETENTION_SWEBENCH_INDEX=0
-EXP9_RETENTION_SWEBENCH_INSTANCE_ID=
-EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=-1
-EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=0
-EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
-EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0
-EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID=
-EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE=patch_generation
-EXP9_RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review"
-EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX=-1
-EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE=0
-```
-
-To run Experiment 9 directly from SWE-bench Pro, change:
-
-```text
-EXP9_RETENTION_REQUEST_SOURCE=swebench_dataset
-```
-
-To run Experiment 9 from captured trajectory prompts, first prepare the catalog:
+The config file is:
 
 ```bash
-cd ~/kv_cache_offloading
-./agentbench/prepare_swebench_trajectory_prompts.sh
+agentbench/agentic_hint_sweeps_suite.conf.sh
 ```
-
-Then change:
-
-```text
-EXP9_RETENTION_REQUEST_SOURCE=swebench_trajectory
-```
-
-Experiment 11 can use synthetic prompts or direct SWE-bench Pro tasks.
-Set these in the Experiment 11 block:
-
-```text
-EXP11_PRIORITY_REQUEST_SOURCE=synthetic
-EXP11_PRIORITY_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
-EXP11_PRIORITY_SWEBENCH_SPLIT=test
-EXP11_PRIORITY_SWEBENCH_START_INDEX=0
-EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=0
-```
-
-To run Experiment 11 directly from SWE-bench Pro, change:
-
-```text
-EXP11_PRIORITY_REQUEST_SOURCE=swebench_dataset
-```
-
-Experiment 12 can use synthetic prompts or direct SWE-bench Pro tasks.
-Set these in the Experiment 12 block:
-
-```text
-EXP12_SPEC_PREFILL_REQUEST_SOURCE=synthetic
-EXP12_SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro
-EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=test
-EXP12_SPEC_PREFILL_TURN_A_INDEX=0
-EXP12_SPEC_PREFILL_TURN_B_INDEX=1
-EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=2
-```
-
-To run Experiment 12 directly from SWE-bench Pro, change:
-
-```text
-EXP12_SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset
-```
-
-The default selection is:
-
-- `SUITE_EXPERIMENTS="9 11 12"`
 
 Default prompt-isolation policy:
 
-- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for Experiments 9 and 11
+- `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for retention-style prompts
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
 
 ### Run
@@ -2345,12 +2286,23 @@ DYNAMO_MACHINE_PROFILE=gh200 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-If you want a separate config file:
+To run only the SWE-bench cases:
 
 ```bash
 cd ~/kv_cache_offloading
 
-SUITE_CONFIG_PATH=agentbench/agentic_hint_sweeps_suite.conf.sh \
+SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
+DYNAMO_MACHINE_PROFILE=gh200 \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+To run only one case:
+
+```bash
+cd ~/kv_cache_offloading
+
+SUITE_RUNS="exp11_swebench" \
 DYNAMO_MACHINE_PROFILE=gh200 \
 ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
@@ -2371,6 +2323,8 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 ```text
 SUITE_CONFIG_PATH
 DYNAMO_MACHINE_PROFILE
+SUITE_DEFAULT_RUNS
+SUITE_RUNS
 SUITE_EXPERIMENTS
 SUITE_ISOLATION_MODE
 SUITE_CONTINUE_ON_ERROR
@@ -2406,8 +2360,7 @@ Recommended:
 Charts are copied into [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts) as soon as each experiment finishes, so you can inspect them before the full suite completes.
 
 The suite also removes chart files for experiments that are not in the current
-`SUITE_EXPERIMENTS` selection, so stale `exp10_*` files do not linger when you
-run only `9 11 12`.
+`SUITE_RUNS` selection, so stale chart files do not linger when you run a subset.
 
 Top-level suite outputs:
 
@@ -2431,16 +2384,18 @@ Main outputs:
 - `latest_agentic_hint_sweeps_suite_driver.log`: suite-level launch log
 - `experiments/charts/`: shared folder containing only the latest chart SVGs and the matrix CSVs they were generated from
 
-The suite banners now show the actual selected count, for example `1/3`, `2/3`, `3/3`.
+The suite banners show the actual selected case count, for example `1/8`,
+`2/8`, and so on.
 When a wrapper uses `MODE=all`, the banner also shows the resolved behavior, for example:
 
 - Experiment 9: `all (resolved to sweep + plot)`
 - Experiment 11: `all (resolved to sweep + plot)`
 - Experiment 12: `all (resolved to sweep + plot)`
+- Experiment 13: `all (resolved to sweep + plot)`
 
 The suite terminal output and nohup log now print very clear start/end banners
-for each experiment block, so you can easily see when 9, 11, or 12 begins
-and ends.
+for each selected case, so you can easily see when each synthetic or SWE-bench
+run begins and ends.
 
 If a precise image rebuild happens, you will also now see
 clear build banners such as:
