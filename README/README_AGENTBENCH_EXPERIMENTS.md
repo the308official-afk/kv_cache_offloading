@@ -604,6 +604,7 @@ export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
 export DYN_TOOL_CALL_PARSER=hermes
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_FORCE_TOOL_CHOICE=required
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 
 START_INDEX=0 \
@@ -641,6 +642,7 @@ export AGENTBENCH_EXECUTION_GUARD=1
 export AGENTBENCH_PRINT_CHECKPOINTS=1
 export DYN_TOOL_CALL_PARSER=hermes
 export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
+export AGENTBENCH_FORCE_TOOL_CHOICE=required
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 
 START_INDEX=0 \
@@ -673,6 +675,9 @@ Note:
   execute a real tool loop
 - if `upstream/deepagents` is missing, the wrapper downloads the pinned
   Deep Agents checkout and installs it automatically
+- the wrapper defaults to `AGENTBENCH_FORCE_TOOL_CHOICE=required` because this
+  GH200 model/runtime path produced structured tool calls when tool use was
+  required, but not in auto mode
 - this preflight is required by default through
   `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
 - dependency auto-install is enabled by default through

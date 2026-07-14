@@ -17,8 +17,10 @@ OUT_DIR="experiments/reports/tool_call_debug/${RUN_ID}"
 RECENT_ROWS="${TOOL_DEBUG_RECENT_ROWS:-20}"
 DEEPAGENTS_CASE="${TOOL_DEBUG_DEEPAGENTS_CASE:-ls-read-execute}"
 AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
+AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE:-required}"
 DEEPAGENTS_READY_HELPER="${DEEPAGENTS_READY_HELPER:-./agentbench/ensure_deepagents_ready.sh}"
 export AGENTBENCH_DEEPAGENTS_SOURCE
+export AGENTBENCH_FORCE_TOOL_CHOICE
 
 mkdir -p "${OUT_DIR}"
 
@@ -41,6 +43,7 @@ echo "Model: ${MODEL_NAME}"
 echo "Frontend URL: ${FRONTEND_URL}"
 echo "Python: ${PYTHON_BIN}"
 echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
+echo "Deep Agents forced tool choice: ${AGENTBENCH_FORCE_TOOL_CHOICE}"
 echo "Output dir: ${OUT_DIR}"
 echo
 echo "This script does not start Dynamo."

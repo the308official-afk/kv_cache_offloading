@@ -11,6 +11,7 @@ import json
 import subprocess
 import sys
 import time
+from functools import wraps
 from pathlib import Path
 from typing import Any
 from collections.abc import Mapping
@@ -1057,7 +1058,7 @@ def build_dynamo_chat_model(
         extra_body["extra_args"] = {
             "runtime_observability": runtime_observability,
         }
-    return ChatOpenAI(
+    llm = ChatOpenAI(
         model=model,
         base_url=frontend_base_url(frontend_url),
         api_key="dummy",
@@ -1066,6 +1067,46 @@ def build_dynamo_chat_model(
         timeout=300,
         extra_body=extra_body,
     )
+    return apply_tool_choice_override(llm)
+
+
+def normalize_forced_tool_choice(value: str | None) -> str | None:
+    choice = (value or "").strip()
+    if not choice or choice.lower() in {"0", "false", "none", "off", "auto"}:
+        return None
+    return choice
+
+
+def apply_tool_choice_override(llm: ChatOpenAI) -> ChatOpenAI:
+    """Force LangChain-bound tools to use a specific OpenAI tool_choice.
+
+    Dynamo/SGLang can parse tool calls when tool_choice is `required`, while
+    some local models only emit text-like tool tags in auto mode. This wrapper
+    keeps the normal Deep Agents flow, but changes the bound model request from
+    auto to the configured tool_choice when tools are present.
+    """
+    forced_choice = normalize_forced_tool_choice(os.environ.get("AGENTBENCH_FORCE_TOOL_CHOICE"))
+    if forced_choice is None:
+        return llm
+
+    original_bind_tools = llm.bind_tools
+
+    @wraps(original_bind_tools)
+    def bind_tools_with_forced_choice(tools, *args, **kwargs):
+        existing_choice = kwargs.get("tool_choice")
+        if existing_choice is None or str(existing_choice).strip().lower() == "auto":
+            kwargs["tool_choice"] = forced_choice
+        return original_bind_tools(tools, *args, **kwargs)
+
+    object.__setattr__(llm, "bind_tools", bind_tools_with_forced_choice)
+    log_lifecycle_event(
+        stage="dynamo_chat_model_tool_choice_override",
+        payload={
+            "event_kind": "tool_choice_override",
+            "forced_tool_choice": forced_choice,
+        },
+    )
+    return llm
 
 
 # Builds the Deep Agents filesystem/shell backend rooted at the task workspace.

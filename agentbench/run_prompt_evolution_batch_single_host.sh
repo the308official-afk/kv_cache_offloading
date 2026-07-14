@@ -16,6 +16,7 @@ PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
 DYN_TOOL_CALL_PARSER="${DYN_TOOL_CALL_PARSER:-hermes}"
 AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
+AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE:-required}"
 PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP="${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP:-1}"
 PROMPT_EVOLUTION_TOOL_LOOP_CASE="${PROMPT_EVOLUTION_TOOL_LOOP_CASE:-ls-read-execute}"
 PROMPT_EVOLUTION_BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID:-prompt_evolution_batch_$(date +%Y%m%d_%H%M%S)}"
@@ -149,6 +150,7 @@ check_deepagents_tool_loop() {
     echo "Checking Deep Agents tool loop before Experiment 6 batch..."
     echo "Case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
     echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
+    echo "Forced tool choice: ${AGENTBENCH_FORCE_TOOL_CHOICE}"
     echo "Preflight log: ${TOOL_LOOP_PREFLIGHT_LOG}"
     echo "Preflight output dir: ${TOOL_LOOP_PREFLIGHT_DIR}"
   } | tee -a "${DRIVER_LOG}"
@@ -157,6 +159,7 @@ check_deepagents_tool_loop() {
   mkdir -p "${TOOL_LOOP_PREFLIGHT_DIR}"
 
   if ! AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE}" \
+    AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE}" \
     "${PYTHON_BIN}" agentbench/diagnose_deepagents_tool_loop.py \
       --frontend-url "${frontend_url}" \
       --model "${model}" \
@@ -234,6 +237,7 @@ PY
   echo "Hint provider: ${HINT_PROVIDER}"
   echo "Tool-call parser: ${DYN_TOOL_CALL_PARSER}"
   echo "Deep Agents source: ${AGENTBENCH_DEEPAGENTS_SOURCE}"
+  echo "Deep Agents forced tool choice: ${AGENTBENCH_FORCE_TOOL_CHOICE}"
   echo "Require tool loop: ${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}"
   echo "Tool-loop preflight case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
   echo "Deep Agents ready helper: ${DEEPAGENTS_READY_HELPER}"
@@ -268,6 +272,7 @@ check_deepagents_tool_loop "${MODEL}" "${FRONTEND_URL}"
 
 echo "Running prompt evolution batch for ${MODEL}..." | tee -a "${DRIVER_LOG}"
 AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE}" \
+AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE}" \
 AGENTBENCH_WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE}" \
 MODEL="${MODEL}" \
 MODEL_NAME="${MODEL}" \
