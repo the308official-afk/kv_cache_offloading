@@ -748,25 +748,19 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
-The wrapper also copies the latest readable Experiment 6 outputs into the
-shared chart folder:
+The wrapper clears old Experiment 6 public files at the beginning of each run,
+then copies only the latest readable Experiment 6 outputs into the shared chart
+folder:
 
 ```bash
 ls experiments/charts/exp6_*
 cat experiments/charts/exp6_prompt_evolution_run_overview.csv
 cat experiments/charts/exp6_prompt_evolution_task_summary.csv
-cat experiments/charts/exp6_prompt_evolution_trace_index.csv
 cat experiments/charts/exp6_runs_execution_prompts.md
 ```
 
-The same important tables are also copied with simpler names:
-
-```bash
-cat experiments/charts/prompt_evolution_run_overview.csv
-cat experiments/charts/exp6_task_summary_table.csv
-cat experiments/charts/exp6_run_overview_table.csv
-cat experiments/charts/exp6_trace_index_table.csv
-```
+`exp6_prompt_evolution_run_overview.csv` is the manager-facing table used for
+the run-overview slides. It is the first report to inspect after Experiment 6.
 
 Batch outputs:
 

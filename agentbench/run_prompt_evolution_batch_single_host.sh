@@ -42,8 +42,8 @@ AGENTBENCH_DEEPAGENTS_SOURCE="${AGENTBENCH_DEEPAGENTS_SOURCE:-upstream}"
 AGENTBENCH_FORCE_TOOL_CHOICE="${AGENTBENCH_FORCE_TOOL_CHOICE:-auto}"
 AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT="${AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT:-1}"
 AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE="${AGENTBENCH_REQUIRE_GENERAL_PURPOSE_SUBAGENT_DISABLE:-1}"
-AGENTBENCH_AGENT_RECURSION_LIMIT="${AGENTBENCH_AGENT_RECURSION_LIMIT:-80}"
-AGENTBENCH_MODEL_ONLY_PHASES="${AGENTBENCH_MODEL_ONLY_PHASES:-planning}"
+AGENTBENCH_AGENT_RECURSION_LIMIT="${AGENTBENCH_AGENT_RECURSION_LIMIT:-300}"
+AGENTBENCH_MODEL_ONLY_PHASES="${AGENTBENCH_MODEL_ONLY_PHASES:-}"
 AGENTBENCH_TRACE_AGENT_STREAM="${AGENTBENCH_TRACE_AGENT_STREAM:-0}"
 AGENTBENCH_TRACE_AGENT_STREAM_MODE="${AGENTBENCH_TRACE_AGENT_STREAM_MODE:-values}"
 AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT="${AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT:-30}"
@@ -65,19 +65,27 @@ TOOL_LOOP_PREFLIGHT_LOG="${BATCH_DIR}/prompt_evolution_tool_loop_preflight.log"
 TOOL_LOOP_PREFLIGHT_DIR="${BATCH_DIR}/tool_loop_preflight"
 mkdir -p "${BATCH_DIR}"
 
+clear_prompt_evolution_public_reports() {
+  mkdir -p "${SHARED_CHART_DIR}"
+  rm -f \
+    "${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.csv" \
+    "${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv" \
+    "${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md" \
+    "${SHARED_CHART_DIR}/prompt_evolution_run_overview.csv" \
+    "${SHARED_CHART_DIR}/exp6_task_summary_table.csv" \
+    "${SHARED_CHART_DIR}/exp6_run_overview_table.csv" \
+    "${SHARED_CHART_DIR}/exp6_prompt_evolution_trace_index.csv" \
+    "${SHARED_CHART_DIR}/exp6_trace_index_table.csv" \
+    "${SHARED_CHART_DIR}/exp6_prompt_evolution_trace_index.md"
+}
+
 publish_prompt_evolution_reports() {
   mkdir -p "${SHARED_CHART_DIR}"
 
   local src
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
-    "experiments/reports/prompt_evolution_task_summary.csv:exp6_task_summary_table.csv" \
-    "experiments/reports/prompt_evolution_run_overview.csv:prompt_evolution_run_overview.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
-    "experiments/reports/prompt_evolution_run_overview.csv:exp6_run_overview_table.csv" \
-    "experiments/reports/latest_prompt_evolution_trace_index.csv:exp6_prompt_evolution_trace_index.csv" \
-    "experiments/reports/latest_prompt_evolution_trace_index.csv:exp6_trace_index_table.csv" \
-    "experiments/reports/latest_prompt_evolution_trace_index.md:exp6_prompt_evolution_trace_index.md" \
     "experiments/reports/latest_runs_execution_prompts.md:exp6_runs_execution_prompts.md"; do
     local source_path="${src%%:*}"
     local target_name="${src##*:}"
@@ -86,6 +94,8 @@ publish_prompt_evolution_reports() {
     fi
   done
 }
+
+clear_prompt_evolution_public_reports
 
 usage() {
   cat <<EOF
@@ -335,7 +345,10 @@ HINT_PROFILE="${HINT_PROFILE}" \
 HINT_PROVIDER="${HINT_PROVIDER}" \
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}" \
 BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID}" \
+set +e
 ./agentbench/run_swebench_batch_single_host.sh 2>&1 | tee -a "${DRIVER_LOG}"
+BATCH_STATUS="${PIPESTATUS[0]}"
+set -e
 
 publish_prompt_evolution_reports
 
@@ -356,9 +369,13 @@ fi
   echo "Prompt evolution summary: experiments/reports/prompt_evolution_run_overview.csv"
   echo "Latest trace index CSV: experiments/reports/latest_prompt_evolution_trace_index.csv"
   echo "Latest trace index MD: experiments/reports/latest_prompt_evolution_trace_index.md"
-  echo "Published readable Exp 6 reports to: ${SHARED_CHART_DIR}/exp6_*"
-  echo "Run-overview table copy: ${SHARED_CHART_DIR}/prompt_evolution_run_overview.csv"
+  echo "Published readable Exp 6 reports:"
+  echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.csv"
+  echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv"
+  echo "  ${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md"
 } | tee -a "${DRIVER_LOG}"
+
+exit "${BATCH_STATUS}"
 
 
 ##
