@@ -57,6 +57,7 @@ MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
 STOP_DYNAMO_WHEN_DONE="${STOP_DYNAMO_WHEN_DONE:-0}"
 SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
 DEEPAGENTS_READY_HELPER="${DEEPAGENTS_READY_HELPER:-./agentbench/ensure_deepagents_ready.sh}"
+PROMPT_EVOLUTION_BUILD_TRAJECTORY_CATALOG="${PROMPT_EVOLUTION_BUILD_TRAJECTORY_CATALOG:-1}"
 
 BATCH_DIR="experiments/reports/batches/${PROMPT_EVOLUTION_BATCH_ID}"
 DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
@@ -70,6 +71,7 @@ clear_prompt_evolution_public_reports() {
     "${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.csv" \
     "${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv" \
     "${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md" \
+    "${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv" \
     "${SHARED_CHART_DIR}/prompt_evolution_run_overview.csv" \
     "${SHARED_CHART_DIR}/exp6_task_summary_table.csv" \
     "${SHARED_CHART_DIR}/exp6_run_overview_table.csv" \
@@ -85,6 +87,8 @@ clear_prompt_evolution_report_state() {
     experiments/reports/prompt_evolution_task_summary.csv \
     experiments/reports/latest_prompt_evolution_trace_index.csv \
     experiments/reports/latest_prompt_evolution_trace_index.md \
+    experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
+    experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl \
     experiments/reports/all_runs_* \
     experiments/reports/latest_runs_* \
     experiments/reports/latest_run_*
@@ -104,7 +108,8 @@ publish_prompt_evolution_reports() {
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
-    "experiments/reports/latest_runs_execution_prompts.md:exp6_runs_execution_prompts.md"; do
+    "experiments/reports/latest_runs_execution_prompts.md:exp6_runs_execution_prompts.md" \
+    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv"; do
     local source_path="${src%%:*}"
     local target_name="${src##*:}"
     if [[ -f "${source_path}" ]]; then
@@ -372,6 +377,15 @@ set -e
 
 publish_prompt_evolution_reports
 
+if [[ "${PROMPT_EVOLUTION_BUILD_TRAJECTORY_CATALOG}" = "1" ]]; then
+  echo "Building SWE-bench trajectory prompt catalog from Experiment 6 traces..." | tee -a "${DRIVER_LOG}"
+  if ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${DRIVER_LOG}"; then
+    publish_prompt_evolution_reports
+  else
+    echo "Warning: trajectory prompt catalog build failed; continuing with Experiment 6 report publishing." | tee -a "${DRIVER_LOG}"
+  fi
+fi
+
 if [[ "${STOP_DYNAMO_WHEN_DONE}" = "1" ]]; then
   echo "Stopping Dynamo after prompt evolution batch..." | tee -a "${DRIVER_LOG}"
   ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
@@ -393,6 +407,7 @@ fi
   echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.csv"
   echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv"
   echo "  ${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md"
+  echo "  ${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv"
 } | tee -a "${DRIVER_LOG}"
 
 exit "${BATCH_STATUS}"

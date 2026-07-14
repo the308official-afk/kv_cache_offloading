@@ -760,10 +760,13 @@ ls experiments/charts/exp6_*
 cat experiments/charts/exp6_prompt_evolution_run_overview.csv
 cat experiments/charts/exp6_prompt_evolution_task_summary.csv
 cat experiments/charts/exp6_runs_execution_prompts.md
+cat experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 ```
 
 `exp6_prompt_evolution_run_overview.csv` is the manager-facing table used for
 the run-overview slides. It is the first report to inspect after Experiment 6.
+`exp6_swebench_trajectory_prompt_catalog.csv` is the prompt catalog that
+Experiment 9 uses when `RETENTION_REQUEST_SOURCE=swebench_trajectory`.
 
 Batch outputs:
 
@@ -1052,19 +1055,22 @@ For larger retention sweeps, capture enough tasks first. For example,
 - 1 protected task
 - 600 distractor tasks
 
-Step 1: build the trajectory prompt catalog from the captured Experiment 6
+Step 1: confirm the trajectory prompt catalog from the captured Experiment 6
 outputs.
+
+The Experiment 6 wrapper builds this automatically by default and writes:
+
+```bash
+experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
+experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
+```
+
+To rebuild the catalog manually from the latest Experiment 6 traces:
 
 ```bash
 cd ~/kv_cache_offloading
 
 ./agentbench/prepare_swebench_trajectory_prompts.sh
-```
-
-This also copies the catalog CSV used by Experiment 9 into:
-
-```bash
-experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 ```
 
 Step 2: run Experiment 9 against the prepared trajectory catalog.
