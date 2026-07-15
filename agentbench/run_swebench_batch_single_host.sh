@@ -22,6 +22,8 @@ AGENTBENCH_BATCH_CONTINUE_ON_ERROR="${AGENTBENCH_BATCH_CONTINUE_ON_ERROR:-0}"
 AGENTBENCH_SOFT_STOP_RECURSION="${AGENTBENCH_SOFT_STOP_RECURSION:-0}"
 PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES="${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES:-0}"
 PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK:-0}"
+PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK:-0}"
+SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
 
 BATCH_DIR="experiments/reports/batches/${BATCH_ID}"
 PROGRESS_CSV="${BATCH_DIR}/progress_overview.csv"
@@ -232,6 +234,29 @@ refresh_trajectory_catalog_after_task() {
   echo | tee -a "${PROGRESS_LOG}"
 }
 
+publish_public_prompt_evolution_reports_after_task() {
+  local task_index="$1"
+  local run_id="$2"
+  [[ "${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK}" = "1" ]] || return 0
+
+  mkdir -p "${SHARED_CHART_DIR}"
+  local copied=0
+  local src
+  for src in \
+    "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
+    "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
+    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv"; do
+    local source_path="${src%%:*}"
+    local target_name="${src##*:}"
+    if [[ -f "${source_path}" ]]; then
+      cp -f "${source_path}" "${SHARED_CHART_DIR}/${target_name}"
+      copied=$((copied + 1))
+    fi
+  done
+
+  echo "Published ${copied} public Exp 6 report(s) after task ${task_index} (${run_id:-no_run_id}) to ${SHARED_CHART_DIR}." | tee -a "${PROGRESS_LOG}"
+}
+
 echo "Batch ID: ${BATCH_ID}" | tee -a "${PROGRESS_LOG}"
 echo "Model: ${MODEL}" | tee -a "${PROGRESS_LOG}"
 echo "Frontend URL: ${FRONTEND_URL}" | tee -a "${PROGRESS_LOG}"
@@ -241,6 +266,7 @@ echo "Continue on task error: ${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" | tee -a "$
 echo "Soft-stop recursion failures: ${AGENTBENCH_SOFT_STOP_RECURSION}" | tee -a "${PROGRESS_LOG}"
 echo "Skip recursion failures: ${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" | tee -a "${PROGRESS_LOG}"
 echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
+echo "Refresh public Exp 6 reports after each task: ${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"
@@ -284,6 +310,8 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
     "${PYTHON_BIN}" experiments/scripts/agentbench_report/build_run_report.py \
       --agentbench-result-dir "${NEW_RESULT_DIR}" \
       --transfer-log experiments/raw/sglang_transfer_logs/latest_sglang_transfer_events.jsonl >/dev/null 2>&1 || true
+    RUN_ID="$(basename "${NEW_RESULT_DIR}")"
+    publish_public_prompt_evolution_reports_after_task "${INDEX}" "${RUN_ID}"
   fi
 
   if [[ -n "${NEW_RESULT_DIR}" && "${status}" -eq 0 ]]; then
@@ -302,6 +330,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       echo
     } | tee -a "${PROGRESS_LOG}"
     refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
+    publish_public_prompt_evolution_reports_after_task "${INDEX}" "${RUN_ID}"
   elif [[ -n "${NEW_RESULT_DIR}" ]]; then
     RUN_ID="$(basename "${NEW_RESULT_DIR}")"
     {
@@ -324,6 +353,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       if [[ -n "${RUN_ID:-}" ]]; then
         append_trace_index_row "${RUN_ID}" "${INDEX}" || true
         refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
+        publish_public_prompt_evolution_reports_after_task "${INDEX}" "${RUN_ID}"
       fi
       echo "Index ${INDEX} failed; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
@@ -339,6 +369,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
       refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
+      publish_public_prompt_evolution_reports_after_task "${INDEX}" "${RUN_ID}"
     else
       echo "Index ${INDEX} failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0" | tee -a "${PROGRESS_LOG}" >&2
       exit "${status}"
