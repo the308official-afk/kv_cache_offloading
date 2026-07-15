@@ -1,10 +1,12 @@
 {
-  "task_summary_csv": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts/exp6_prompt_evolution_task_summary.csv",
-  "run_overview_csv": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/charts/exp6_prompt_evolution_run_overview.csv",
-  "css": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/presentations/assets/reference_tables.css",
-  "task_summary_fragment": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/presentations/assets/slide9_task_summary_fragment.html",
-  "run_overview_fragment": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/presentations/assets/slide10_run_overview_fragment.html",
-  "preview_html": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/presentations/assets/reference_tables_preview.html",
+  "task_summary_csv": "experiments/charts/exp6_prompt_evolution_task_summary.csv",
+  "run_overview_csv": "experiments/charts/exp6_prompt_evolution_run_overview.csv",
+  "css": "presentations/assets/reference_tables.css",
+  "task_summary_fragment": "presentations/assets/slide9_task_summary_fragment.html",
+  "run_overview_fragment": "presentations/assets/slide10_run_overview_fragment.html",
+  "task_summary_script": "presentations/assets/slide9_task_summary_fragment.js",
+  "run_overview_script": "presentations/assets/slide10_run_overview_fragment.js",
+  "preview_html": "presentations/assets/reference_tables_preview.html",
   "options": {
     "benchmark": "SWE-bench",
     "task_summary_model_label": "",

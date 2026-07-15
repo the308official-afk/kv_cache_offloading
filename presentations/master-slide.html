@@ -1055,6 +1055,9 @@
       line-height: 1.42;
       color: #334155;
     }
+    .reference-slide .generated-reference-block .table-context-line {
+      display: none;
+    }
     .reference-placeholder-frame {
       flex: 1;
       min-height: 0;
@@ -1077,6 +1080,7 @@
       min-height: 0;
       display: flex;
       flex-direction: column;
+      justify-content: stretch;
     }
     .reference-fragment-frame {
       width: 100%;
@@ -1084,6 +1088,19 @@
       border: none;
       background: transparent;
       display: block;
+    }
+    .reference-fragment-host .generated-reference-block {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    .reference-fragment-host .table-wrap {
+      flex: 1;
+      min-height: 0;
+    }
+    .reference-fragment-host table.compact {
+      height: 100%;
     }
     .reference-fragment-placeholder {
       flex: 1;
@@ -1531,11 +1548,7 @@
         <div><strong>Harness:</strong> Deepagents</div>
       </div>
       <div id="slide9-fragment-host" class="reference-fragment-host">
-        <iframe
-          class="reference-fragment-frame"
-          src="assets/slide9_task_summary_fragment.html"
-          title="Slide 9 task summary fragment"
-        ></iframe>
+        <div class="reference-fragment-placeholder">Loading assets/slide9_task_summary_fragment.js</div>
       </div>
       <p class="reference-caption">Representative task-summary sample showing repository, task statement, expected agent action, and patch expectation.</p>
     </div>
@@ -1551,16 +1564,14 @@
         <div><strong>Harness:</strong> Deepagents</div>
       </div>
       <div id="slide10-fragment-host" class="reference-fragment-host">
-        <iframe
-          class="reference-fragment-frame"
-          src="assets/slide10_run_overview_fragment.html"
-          title="Slide 10 run overview fragment"
-        ></iframe>
+        <div class="reference-fragment-placeholder">Loading assets/slide10_run_overview_fragment.js</div>
       </div>
       <p class="reference-caption">Representative run sample showing tasks executed, phases reached, and tools invoked.</p>
     </div>
   </section>
 
+  <script src="assets/slide9_task_summary_fragment.js"></script>
+  <script src="assets/slide10_run_overview_fragment.js"></script>
   <script src="generated/retention_kv_hint_story/story_data.js"></script>
   <script>
     (function () {
@@ -1612,6 +1623,20 @@
       setText('attrib-priority-ready', yesNo(data.attribution.worker_priority_mechanism_ready));
       setText('attrib-policy', data.attribution.worker_radix_eviction_policy || '--');
       setText('attrib-effect-at', fmtInt(data.attribution.hint_runtime_effect_first_observed_at));
+    }());
+
+    (function () {
+      function mountFragment(hostId, globalName) {
+        const host = document.getElementById(hostId);
+        const fragment = window[globalName];
+        if (!host || !fragment) {
+          return;
+        }
+        host.innerHTML = fragment;
+      }
+
+      mountFragment('slide9-fragment-host', 'SLIDE9_TASK_SUMMARY_FRAGMENT');
+      mountFragment('slide10-fragment-host', 'SLIDE10_RUN_OVERVIEW_FRAGMENT');
     }());
   </script>
 </body>

@@ -296,6 +296,9 @@ PREVIEW_HTML = """<!DOCTYPE html>
 """
 
 
+JS_TEMPLATE = """window.{global_name} = {payload};\n"""
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate slide-ready HTML table fragments for task-summary and run-overview slides."
@@ -643,6 +646,10 @@ def fragment_document(content: str) -> str:
     return f"<style>\n{TABLE_CSS}\n</style>\n{content}"
 
 
+def fragment_script(global_name: str, content: str) -> str:
+    return JS_TEMPLATE.format(global_name=global_name, payload=json.dumps(content))
+
+
 def main() -> None:
     args = parse_args()
     task_rows = read_rows(args.task_summary_csv)
@@ -679,12 +686,16 @@ def main() -> None:
     css_path = output_dir / "reference_tables.css"
     task_path = output_dir / "slide9_task_summary_fragment.html"
     run_path = output_dir / "slide10_run_overview_fragment.html"
+    task_js_path = output_dir / "slide9_task_summary_fragment.js"
+    run_js_path = output_dir / "slide10_run_overview_fragment.js"
     preview_path = output_dir / "reference_tables_preview.html"
     manifest_path = output_dir / "reference_tables_manifest.json"
 
     write_text(css_path, TABLE_CSS + "\n")
     write_text(task_path, fragment_document(task_fragment))
     write_text(run_path, fragment_document(run_fragment))
+    write_text(task_js_path, fragment_script("SLIDE9_TASK_SUMMARY_FRAGMENT", task_fragment))
+    write_text(run_js_path, fragment_script("SLIDE10_RUN_OVERVIEW_FRAGMENT", run_fragment))
     write_text(
         preview_path,
         PREVIEW_HTML.format(css=TABLE_CSS, task_html=task_fragment, run_html=run_fragment),
@@ -693,12 +704,14 @@ def main() -> None:
     manifest = {
         "task_summary_csv": str(args.task_summary_csv),
         "run_overview_csv": str(args.run_overview_csv),
-        "css": str(css_path),
-        "task_summary_fragment": str(task_path),
-        "run_overview_fragment": str(run_path),
-        "preview_html": str(preview_path),
-        "options": {
-            "benchmark": args.benchmark,
+            "css": str(css_path),
+            "task_summary_fragment": str(task_path),
+            "run_overview_fragment": str(run_path),
+            "task_summary_script": str(task_js_path),
+            "run_overview_script": str(run_js_path),
+            "preview_html": str(preview_path),
+            "options": {
+                "benchmark": args.benchmark,
             "task_summary_model_label": task_model_label,
             "run_overview_model_label": run_model_label,
             "harness": args.harness,
@@ -714,6 +727,8 @@ def main() -> None:
     print(f"css={css_path}")
     print(f"slide9={task_path}")
     print(f"slide10={run_path}")
+    print(f"slide9_js={task_js_path}")
+    print(f"slide10_js={run_js_path}")
     print(f"preview={preview_path}")
     print(f"manifest={manifest_path}")
 

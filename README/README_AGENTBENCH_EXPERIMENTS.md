@@ -708,14 +708,17 @@ presentation tables and can grow as more slide helpers are added.
 ```bash
 python3 scripts/build_reference_tables.py \
   --task-summary-csv experiments/charts/exp6_prompt_evolution_task_summary.csv \
-  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv
+  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv \
+  --output-dir presentations/assets
 ```
 
 This writes:
 
-- `scripts/slide9_task_summary_fragment.html`
-- `scripts/slide10_run_overview_fragment.html`
-- `scripts/reference_tables_preview.html`
+- `presentations/assets/slide9_task_summary_fragment.html`
+- `presentations/assets/slide10_run_overview_fragment.html`
+- `presentations/assets/slide9_task_summary_fragment.js`
+- `presentations/assets/slide10_run_overview_fragment.js`
+- `presentations/assets/reference_tables_preview.html`
 
 ## Experiment 9: KV Retention Probe
 
