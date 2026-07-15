@@ -713,9 +713,9 @@ python3 scripts/build_reference_tables.py \
 
 This writes:
 
-- `presentations/generated/reference_tables/slide9_task_summary_fragment.html`
-- `presentations/generated/reference_tables/slide10_run_overview_fragment.html`
-- `presentations/generated/reference_tables/reference_tables_preview.html`
+- `scripts/slide9_task_summary_fragment.html`
+- `scripts/slide10_run_overview_fragment.html`
+- `scripts/reference_tables_preview.html`
 
 ## Experiment 9: KV Retention Probe
 
