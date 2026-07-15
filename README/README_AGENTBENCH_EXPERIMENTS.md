@@ -2472,12 +2472,40 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 
 ### Nohup
 
+Use this when you want the selected SWE-bench suite to keep running if your
+terminal disconnects:
+
 ```bash
 cd ~/kv_cache_offloading
 
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_nohup.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+RUN_ID="agentic_hint_sweeps_gh200_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/agentic_hint_sweeps_suite_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
+```
+
+Watch the run:
+
+```bash
+tail -f "${LOG_DIR}/run.log"
+```
+
+If you reconnect later:
+
+```bash
+cd ~/kv_cache_offloading
+
+tail -f "$(ls -td experiments/reports/agentic_hint_sweeps_suite_nohup/* | head -1)/run.log"
 ```
 
 ### Main Suite Knobs
