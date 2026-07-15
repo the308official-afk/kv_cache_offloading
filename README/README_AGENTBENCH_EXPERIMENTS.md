@@ -707,8 +707,8 @@ presentation tables and can grow as more slide helpers are added.
 
 ```bash
 python3 scripts/build_reference_tables.py \
-  --task-summary-csv experiments/reports/all_runs_task_summary.csv \
-  --run-overview-csv experiments/reports/all_runs_overview.csv
+  --task-summary-csv experiments/charts/exp6_prompt_evolution_task_summary.csv \
+  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv
 ```
 
 This writes:

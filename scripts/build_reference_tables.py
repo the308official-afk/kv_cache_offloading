@@ -337,6 +337,13 @@ def boolish(value: str | None) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "y"}
 
 
+def first_present(row: dict[str, str], *keys: str) -> str:
+    for key in keys:
+        if key in row and row.get(key) not in (None, ""):
+            return str(row.get(key, ""))
+    return ""
+
+
 def repo_short(value: str) -> str:
     cleaned = (value or "").strip()
     if "/" in cleaned:
@@ -375,7 +382,7 @@ def model_label_for_rows(rows: Iterable[dict[str, str]], override: str) -> str:
     if override:
         return override
     for row in rows:
-        model = (row.get("model") or "").strip()
+        model = first_present(row, "model", "Model").strip()
         if model:
             return model
     return ""
@@ -446,6 +453,19 @@ def phase_cell(row: dict[str, str], count_key: str, tools_key: str, max_items: i
     return f"{html_text(count)} &middot; {html_text(tools)}"
 
 
+def is_task_summary_chart_schema(rows: list[dict[str, str]]) -> bool:
+    return bool(rows) and "Task Summary" in rows[0]
+
+
+def is_run_overview_chart_schema(rows: list[dict[str, str]]) -> bool:
+    return bool(rows) and "Planning" in rows[0] and "Execution" in rows[0] and "Patch Gen" in rows[0]
+
+
+def patch_nonempty_from_text(value: str) -> bool:
+    cleaned = (value or "").strip().lower()
+    return cleaned not in {"", "0 b", "0 bytes", "0 byte", "0"}
+
+
 def slice_rows(rows: list[dict[str, str]], start_row: int, max_rows: int) -> tuple[list[dict[str, str]], int, int, int]:
     if start_row < 1:
         raise SystemExit("Start rows must be 1-based and >= 1.")
@@ -466,17 +486,18 @@ def task_summary_fragment(
 ) -> str:
     sliced_rows, row_start, row_end, total = slice_rows(rows, start_row, max_rows)
     body_rows = []
+    chart_schema = is_task_summary_chart_schema(rows)
     for row in sliced_rows:
-        patch_expected = boolish(row.get("patch_expected"))
+        patch_expected = boolish(first_present(row, "patch_expected", "Patch"))
         patch_pill = '<span class="yes-pill">Yes</span>' if patch_expected else '<span class="no-pill">No</span>'
         body_rows.append(
             "      <tr>\n"
-            f'        <td class="run-cell">{html_text(run_short(row))}</td>\n'
-            f'        <td class="repo-cell">{html_text(repo_short(row.get("repo", "")))}</td>\n'
-            f'        <td class="task-cell">{html_text(row.get("problem_statement_summary", ""))}</td>\n'
-            f'        <td><span class="action-pill">{html_text(row.get("expected_agent_action", ""))}</span></td>\n'
+            f'        <td class="run-cell">{html_text(first_present(row, "run_short", "Run") or run_short(row))}</td>\n'
+            f'        <td class="repo-cell">{html_text(repo_short(first_present(row, "repo", "Repo")))}</td>\n'
+            f'        <td class="task-cell">{html_text(first_present(row, "problem_statement_summary", "Task Summary"))}</td>\n'
+            f'        <td><span class="action-pill">{html_text(first_present(row, "expected_agent_action", "Expected Action"))}</span></td>\n'
             f"        <td>{patch_pill}</td>\n"
-            f'        <td class="commit-cell">{html_text(commit_short(row.get("base_commit", "")))}</td>\n'
+            f'        <td class="commit-cell">{html_text(commit_short(first_present(row, "base_commit", "Base Commit")))}</td>\n'
             "      </tr>"
         )
     table_html = "\n".join(body_rows)
@@ -524,23 +545,48 @@ def run_overview_fragment(
 ) -> str:
     sliced_rows, row_start, row_end, total = slice_rows(rows, start_row, max_rows)
     body_rows = []
+    chart_schema = is_run_overview_chart_schema(rows)
     for row in sliced_rows:
-        patch_nonempty = boolish(row.get("patch_nonempty")) or boolish(row.get("git_diff_nonempty"))
+        if chart_schema:
+            patch_text = first_present(row, "Patch")
+            patch_nonempty = patch_nonempty_from_text(patch_text)
+            run_text = first_present(row, "Run")
+            repo_text = first_present(row, "Repo")
+            model_text = first_present(row, "Model")
+            steps_text = first_present(row, "Steps")
+            planning_text = first_present(row, "Planning")
+            execution_text = first_present(row, "Execution")
+            patch_gen_text = first_present(row, "Patch Gen")
+            review_text = first_present(row, "Review")
+            other_text = first_present(row, "Other")
+            total_text = first_present(row, "Total")
+        else:
+            patch_nonempty = boolish(row.get("patch_nonempty")) or boolish(row.get("git_diff_nonempty"))
+            patch_text = format_bytes_compact(row.get("patch_bytes", ""), row.get("patch", ""))
+            run_text = run_short(row)
+            repo_text = repo_short(row.get("repo", ""))
+            model_text = compact_model(row.get("model", ""))
+            steps_text = row.get("execution_steps", "")
+            planning_text = phase_cell(row, "planning_tool_calls", "planning_tools", max_tools_per_cell)
+            execution_text = phase_cell(row, "execution_phase_tool_calls", "execution_phase_tools", max_tools_per_cell)
+            patch_gen_text = phase_cell(row, "patch_generation_tool_calls", "patch_generation_tools", max_tools_per_cell)
+            review_text = phase_cell(row, "review_tool_calls", "review_tools", max_tools_per_cell)
+            other_text = phase_cell(row, "other_phase_tool_calls", "other_phase_tools", max_tools_per_cell)
+            total_text = row.get("total_tool_calls", "")
         patch_class = "patch-good" if patch_nonempty else "patch-zero"
-        patch_text = format_bytes_compact(row.get("patch_bytes", ""), row.get("patch", ""))
         row_class = ' class="patch-row"' if patch_nonempty else ""
         body_rows.append(
             f"      <tr{row_class}>\n"
-            f'        <td class="run-cell">{html_text(run_short(row))}</td>\n'
-            f'        <td class="repo-cell">{html_text(repo_short(row.get("repo", "")))}</td>\n'
-            f'        <td class="model-cell">{html_text(compact_model(row.get("model", "")))}</td>\n'
-            f'        <td class="run-cell">{html_text(row.get("execution_steps", ""))}</td>\n'
-            f'        <td class="phase-cell">{phase_cell(row, "planning_tool_calls", "planning_tools", max_tools_per_cell)}</td>\n'
-            f'        <td class="phase-cell">{phase_cell(row, "execution_phase_tool_calls", "execution_phase_tools", max_tools_per_cell)}</td>\n'
-            f'        <td class="phase-cell">{phase_cell(row, "patch_generation_tool_calls", "patch_generation_tools", max_tools_per_cell)}</td>\n'
-            f'        <td class="phase-cell">{phase_cell(row, "review_tool_calls", "review_tools", max_tools_per_cell)}</td>\n'
-            f'        <td class="phase-cell">{phase_cell(row, "other_phase_tool_calls", "other_phase_tools", max_tools_per_cell)}</td>\n'
-            f'        <td class="run-cell">{html_text(row.get("total_tool_calls", ""))}</td>\n'
+            f'        <td class="run-cell">{html_text(run_text)}</td>\n'
+            f'        <td class="repo-cell">{html_text(repo_text)}</td>\n'
+            f'        <td class="model-cell">{html_text(model_text)}</td>\n'
+            f'        <td class="run-cell">{html_text(steps_text)}</td>\n'
+            f'        <td class="phase-cell">{html_text(planning_text)}</td>\n'
+            f'        <td class="phase-cell">{html_text(execution_text)}</td>\n'
+            f'        <td class="phase-cell">{html_text(patch_gen_text)}</td>\n'
+            f'        <td class="phase-cell">{html_text(review_text)}</td>\n'
+            f'        <td class="phase-cell">{html_text(other_text)}</td>\n'
+            f'        <td class="run-cell">{html_text(total_text)}</td>\n'
             f'        <td><span class="{patch_class}">{html_text(patch_text)}</span></td>\n'
             "      </tr>"
         )
