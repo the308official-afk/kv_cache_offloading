@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KV Cache Retention With Frontend Hints</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin=""/>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 56px 0;
+      background: #f8fafc;
+      color: #0f172a;
+      font-family: 'Inter', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 44px;
+    }
+    .slide {
+      width: 1280px;
+      height: 720px;
+      background: #ffffff;
+      padding: 64px 78px 92px 84px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .slide-number {
+      position: absolute;
+      top: 58px;
+      right: 78px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      font-weight: 700;
+      color: #94a3b8;
+    }
+    h1, h2, h3, p { margin: 0; }
+    h2.title {
+      font-size: 31px;
+      font-weight: 700;
+      line-height: 1.15;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      border-left: 5px solid #2563eb;
+      padding-left: 18px;
+      margin-bottom: 18px;
+    }
+    .subtitle {
+      font-size: 19px;
+      line-height: 1.5;
+      color: #475569;
+      max-width: 1080px;
+      margin-bottom: 22px;
+    }
+    .content {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      align-items: stretch;
+    }
+    .panel {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      box-shadow: none;
+    }
+    .eyebrow {
+      display: inline-block;
+      margin-bottom: 10px;
+      padding: 0;
+      color: #0369a1;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+    .panel h3 {
+      font-size: 21px;
+      font-weight: 700;
+      margin-bottom: 10px;
+      color: #0f172a;
+    }
+    .panel p, .panel li {
+      font-size: 16px;
+      line-height: 1.55;
+      color: #475569;
+    }
+    ul {
+      margin: 0;
+      padding-left: 20px;
+    }
+    li + li {
+      margin-top: 8px;
+    }
+    .method-slide h2.title {
+      font-size: 29px;
+      margin-bottom: 18px;
+    }
+    .method-slide .content {
+      gap: 6px;
+      justify-content: flex-start;
+    }
+    .method-slide .subtitle {
+      font-size: 16px;
+      line-height: 1.35;
+      max-width: 1120px;
+      margin-bottom: 2px;
+      color: #64748b;
+    }
+    .method-slide .eyebrow {
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .method-slide ul {
+      padding-left: 30px;
+    }
+    .method-slide .panel li {
+      font-size: 27px;
+      line-height: 1.42;
+      color: #334155;
+    }
+    .method-slide li + li {
+      margin-top: 16px;
+    }
+    .slide-one h2.title {
+      font-size: 34px;
+      margin-bottom: 18px;
+    }
+    .slide-one .subtitle {
+      font-size: 20px;
+      line-height: 1.42;
+      max-width: 1080px;
+      margin-bottom: 6px;
+      color: #475569;
+    }
+    .slide-one .content {
+      gap: 18px;
+      justify-content: center;
+    }
+    .slide-one .pipeline {
+      padding: 14px 16px 12px;
+      max-width: 1180px;
+      margin: 0 auto;
+    }
+    .slide-one .flow-caption {
+      margin-top: 6px;
+      text-align: center;
+      font-size: 16px;
+      line-height: 1.35;
+      color: #64748b;
+    }
+    .slide-one .pillar strong {
+      font-size: 19px;
+    }
+    .slide-one .grid-2 {
+      gap: 28px;
+      align-items: start;
+    }
+    .slide-one .eyebrow {
+      font-size: 13px;
+      margin-bottom: 14px;
+    }
+    .slide-one ul {
+      padding-left: 28px;
+    }
+    .slide-one li {
+      font-size: 23px;
+      line-height: 1.38;
+      color: #1e293b;
+    }
+    .slide-one li + li {
+      margin-top: 12px;
+    }
+    .slide-one .setup-row {
+      padding: 12px 0;
+      border-top: 1px solid #e2e8f0;
+    }
+    .slide-one .setup-row:first-of-type {
+      padding-top: 0;
+      border-top: none;
+    }
+    .slide-one .setup-row:last-of-type {
+      padding-bottom: 0;
+    }
+    .slide-one .label {
+      font-size: 13px;
+      margin-bottom: 4px;
+      color: #0f766e;
+    }
+    .slide-one .value {
+      font-size: 19px;
+      line-height: 1.42;
+      color: #334155;
+    }
+    .slide-one .value .mono {
+      font-size: 18px;
+      color: #0f172a;
+      font-weight: 700;
+    }
+    .slide-two h2.title {
+      font-size: 34px;
+      margin-bottom: 18px;
+    }
+    .slide-two .subtitle {
+      font-size: 20px;
+      line-height: 1.42;
+      max-width: 1080px;
+      margin-bottom: 6px;
+      color: #475569;
+    }
+    .slide-two .content {
+      justify-content: flex-start;
+      gap: 18px;
+    }
+    .slide-two .panel {
+      max-width: 1180px;
+    }
+    .slide-two .eyebrow {
+      font-size: 13px;
+      margin-bottom: 14px;
+      color: #0f766e;
+    }
+    .slide-two ul {
+      padding-left: 30px;
+    }
+    .slide-two li {
+      font-size: 24px;
+      line-height: 1.38;
+      color: #1e293b;
+    }
+    .slide-two li strong {
+      color: #0f172a;
+      font-weight: 800;
+    }
+    .slide-two li + li {
+      margin-top: 14px;
+    }
+    .slide-two .setup-footer {
+      margin-top: auto;
+      padding-top: 12px;
+      border-top: 1px solid #dbe4f0;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 18px;
+    }
+    .slide-two .setup-footer .eyebrow {
+      margin-bottom: 8px;
+      color: #0369a1;
+    }
+    .slide-two .setup-footer .label {
+      font-size: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .slide-two .setup-footer .value {
+      font-size: 16px;
+      line-height: 1.4;
+      color: #334155;
+    }
+    .slide-two .setup-footer .value .mono {
+      display: inline-block;
+      margin-bottom: 4px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #0f172a;
+    }
+    .metric-card {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      padding: 0;
+      min-height: 0;
+    }
+    .metric-card .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: #64748b;
+      text-transform: uppercase;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+    .metric-card .value {
+      font-size: 28px;
+      line-height: 1.05;
+      font-weight: 800;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .metric-card .note {
+      font-size: 12px;
+      line-height: 1.45;
+      color: #64748b;
+    }
+    .pipeline {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px 10px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+    }
+    .pillar {
+      flex: 1;
+      min-height: 0;
+      padding: 14px 12px;
+      text-align: center;
+      background: #ffffff;
+      border: 1px solid #dbe4f0;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
+    }
+    .pillar strong {
+      display: block;
+      font-size: 18px;
+      color: #0f172a;
+      margin-bottom: 6px;
+    }
+    .pillar span {
+      display: block;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }
+    .arrow {
+      font-size: 24px;
+      font-weight: 700;
+      color: #cbd5e1;
+      margin-top: -8px;
+    }
+    .callout {
+      padding: 0;
+      background: transparent;
+      border: none;
+    }
+    .callout strong {
+      display: block;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1d4ed8;
+      margin-bottom: 6px;
+    }
+    .callout p {
+      font-size: 15px;
+      line-height: 1.5;
+      color: #475569;
+    }
+    .proof-grid {
+      margin-top: 6px;
+    }
+    .proof-grid .panel h3 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    .proof-grid .panel p {
+      font-size: 18px;
+      line-height: 1.45;
+      color: #334155;
+    }
+    .proof-chips {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    .proof-chip {
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: #f8fafc;
+      border: 1px solid #dbe4f0;
+      color: #0f172a;
+      font-size: 15px;
+      font-weight: 700;
+    }
+    .proof-chip span {
+      color: #475569;
+      font-weight: 600;
+    }
+    .proof-rule {
+      margin-top: 2px;
+    }
+    .proof-rule strong {
+      font-size: 18px;
+      color: #1d4ed8;
+      margin-bottom: 8px;
+    }
+    .proof-rule p {
+      font-size: 19px;
+      line-height: 1.45;
+      color: #334155;
+      max-width: 1120px;
+    }
+    .setup-row {
+      display: grid;
+      grid-template-columns: 150px 1fr;
+      gap: 14px;
+      padding: 8px 0;
+    }
+    .setup-row:last-child {
+      padding-bottom: 0;
+    }
+    .setup-row .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: #2563eb;
+      padding-top: 3px;
+    }
+    .setup-row .value {
+      font-size: 15px;
+      line-height: 1.5;
+      color: #334155;
+    }
+    .probe-lane {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 14px 0 0;
+    }
+    .probe-step {
+      padding: 12px 14px;
+      min-width: 104px;
+      text-align: center;
+    }
+    .probe-step strong {
+      display: block;
+      font-size: 17px;
+      color: #0f172a;
+      margin-bottom: 4px;
+    }
+    .probe-step span {
+      font-size: 11px;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-weight: 700;
+    }
+    .probe-arrow {
+      color: #cbd5e1;
+      font-size: 22px;
+      font-weight: 700;
+    }
+    .compact-run-panels .panel {
+      padding: 18px 20px;
+    }
+    .compact-run-panels .panel h3 {
+      font-size: 19px;
+      margin-bottom: 8px;
+    }
+    .compact-run-panels .panel p {
+      font-size: 15px;
+      line-height: 1.45;
+    }
+    .slide-three .panel,
+    .slide-three .metric-card,
+    .slide-three .callout,
+    .slide-three .probe-step,
+    .slide-three .pill {
+      background: transparent;
+      border: none;
+      border-radius: 0;
+      box-shadow: none;
+    }
+    .slide-three .panel {
+      padding: 0;
+    }
+    .slide-three .eyebrow {
+      background: transparent;
+      padding: 0;
+      margin-bottom: 12px;
+    }
+    .slide-three .probe-lane {
+      justify-content: center;
+      gap: 26px;
+      padding-top: 22px;
+    }
+    .slide-three .probe-step {
+      min-width: 190px;
+      padding: 0;
+      text-align: center;
+    }
+    .slide-three .probe-step strong {
+      font-size: 26px;
+      margin-bottom: 8px;
+    }
+    .slide-three .probe-step span {
+      font-size: 13px;
+      letter-spacing: 0.07em;
+    }
+    .slide-three .probe-arrow {
+      font-size: 34px;
+      margin-top: 0;
+    }
+    .slide-three .probe-box {
+      margin-top: 8px;
+      padding: 18px 20px 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 14px;
+    }
+    .slide-three .pill-row {
+      justify-content: center;
+      margin-top: 22px;
+      gap: 24px;
+    }
+    .slide-three .pill {
+      padding: 0;
+      font-size: 14px;
+      color: #334155;
+    }
+    .slide-three .compact-run-panels {
+      margin-top: 8px;
+      gap: 44px;
+    }
+    .slide-three .compact-run-panels .panel {
+      padding: 0;
+    }
+    .slide-three .compact-run-panels .panel h3 {
+      font-size: 22px;
+      margin-bottom: 12px;
+    }
+    .slide-three .compact-run-panels .panel p {
+      font-size: 17px;
+      line-height: 1.55;
+      color: #475569;
+    }
+    .chart-frame {
+      flex: 1;
+      min-height: 0;
+      padding: 0;
+      background: transparent;
+      border: none;
+      box-shadow: none;
+    }
+    .chart-frame img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+    }
+    .chart-notes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin-top: 8px;
+    }
+    .tiny {
+      font-size: 13px !important;
+      line-height: 1.45 !important;
+    }
+    .summary-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    .summary-table th,
+    .summary-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #e2e8f0;
+      text-align: left;
+      font-size: 14px;
+      color: #334155;
+    }
+    .summary-table th {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #64748b;
+      background: transparent;
+    }
+    .summary-table td strong {
+      color: #0f172a;
+    }
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .pill {
+      padding: 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      color: #334155;
+    }
+    .takeaway-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .footer-note {
+      margin-top: auto;
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: right;
+    }
+    .mono {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .chart-interpretation {
+      margin-top: 10px;
+      padding-left: 20px;
+    }
+    .chart-interpretation li {
+      font-size: 15px;
+      line-height: 1.4;
+      color: #334155;
+    }
+    .chart-interpretation li + li {
+      margin-top: 6px;
+    }
+    .slide-five {
+      --latency-chart-width: 84%;
+      --latency-chart-height: auto;
+    }
+    .slide-five .chart-frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .slide-five .chart-frame img {
+      width: var(--latency-chart-width);
+      height: var(--latency-chart-height);
+      max-width: none;
+      object-fit: contain;
+    }
+    .slide-six .chart-frame {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 1.78;
+      min-height: 0;
+    }
+    .slide-six .chart-frame img {
+      width: 100%;
+      height: 100%;
+      max-width: none;
+      object-fit: contain;
+    }
+    .slide-six .chart-interpretation {
+      margin-top: 0;
+    }
+    .slide-six .chart-interpretation li {
+      font-size: 16px;
+      line-height: 1.38;
+    }
+    .experiment-slide .subtitle {
+      max-width: 1120px;
+    }
+    .experiment-layout {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 28px;
+      align-items: stretch;
+      min-height: 0;
+      flex: 1;
+    }
+    .experiment-slide .panel li {
+      font-size: 19px;
+      line-height: 1.45;
+      color: #334155;
+    }
+    .experiment-slide .panel li strong {
+      color: #0f172a;
+      font-weight: 800;
+    }
+    .chart-placeholder {
+      height: 100%;
+      min-height: 360px;
+      border: 1px solid #dbe4f0;
+      border-radius: 18px;
+      background:
+        linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.96));
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 28px;
+    }
+    .chart-placeholder .eyebrow {
+      margin-bottom: 14px;
+      color: #2563eb;
+    }
+    .chart-placeholder h3 {
+      font-size: 24px;
+      margin-bottom: 10px;
+      color: #0f172a;
+    }
+    .chart-placeholder p {
+      max-width: 360px;
+      font-size: 17px;
+      line-height: 1.5;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <section class="slide slide-one">
+    <div class="slide-number">01</div>
+    <h2 class="title">KV Cache Retention Under Frontend Hints</h2>
+    <p class="subtitle">
+      We inject frontend-agent hints and measure whether they change worker-side KV retention under controlled cache pressure.
+    </p>
+    <div class="content">
+      <div class="pipeline">
+        <div class="pillar">
+          <strong>Synthetic Benchmark</strong>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>Agent / Glue Scripts</strong>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>Dynamo</strong>
+        </div>
+        <div class="arrow">→</div>
+        <div class="pillar">
+          <strong>SGLang</strong>
+        </div>
+      </div>
+      <p class="flow-caption">End-to-end workflow of the agentic retention measurement stack</p>
+    </div>
+  </section>
+
+  <section class="slide slide-two">
+    <div class="slide-number">02</div>
+    <h2 class="title">Experiment Procedure</h2>
+    <p class="subtitle">
+      The procedure uses a controlled retention microbenchmark so hint effects can be compared at matched pressure levels.
+    </p>
+    <div class="content">
+      <div class="panel blue">
+        <div class="eyebrow">Method Summary</div>
+        <ul>
+          <li><strong>Built</strong> a synthetic <span class="mono">A → distractors → A replay</span> retention microbenchmark.</li>
+          <li><strong>Instrumented</strong> Dynamo and SGLang for request-level worker attribution.</li>
+          <li><strong>Swept</strong> distractor count to progressively increase cache pressure.</li>
+          <li><strong>Compared</strong> a no-hint baseline against a protected-hint arm.</li>
+          <li><strong>Injected</strong> frontend hint metadata only into the protected arm.</li>
+          <li><strong>Recorded</strong> first-pass latency, replay latency, cached tokens, and reuse metrics at each sweep point.</li>
+        </ul>
+      </div>
+      <div class="setup-footer">
+        <div>
+          <div class="label">Model</div>
+          <div class="value"><span class="mono">Quen/Quen3-Coder-30B-A3B-Instruct-FP8</span><br/>Full model path used in the probe run.</div>
+        </div>
+        <div>
+          <div class="label">Benchmark</div>
+          <div class="value">Synthetic Retention Probe<br/>Controlled A → distractors → A replay workload.</div>
+        </div>
+        <div>
+          <div class="label">KV Tier Mode</div>
+          <div class="value"><span class="mono">gpu_only</span><br/>Retention is tested against the GPU-resident cache.</div>
+        </div>
+        <div>
+          <div class="label">Objective</div>
+          <div class="value">Hint Impact<br/>Do hints reduce replay latency and preserve reusable cache?</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-number">03</div>
+    <h2 class="title">Direct Attribution</h2>
+    <p class="subtitle">
+      The stack is instrumented to map frontend hint injection to worker-side scheduling and cache outcomes.
+    </p>
+    <div class="content">
+      <div class="grid-3 proof-grid">
+        <div class="panel blue">
+          <div class="eyebrow">Step 1</div>
+          <h3>Frontend serialized hint</h3>
+          <p>The request envelope carries the hint payload and probe identifier into the runtime path.</p>
+        </div>
+        <div class="panel amber">
+          <div class="eyebrow">Step 2</div>
+          <h3>Worker observed hint</h3>
+          <p>Worker-side logs record whether the hint object was received and parsed.</p>
+        </div>
+        <div class="panel green">
+          <div class="eyebrow">Step 3</div>
+          <h3>Hint was actionable</h3>
+          <p>We record runtime readiness and replay-cache outcome in the same run.</p>
+        </div>
+      </div>
+
+      <div class="callout proof-rule">
+        <strong>Takeaway</strong>
+        <p>
+          Credible attribution requires serialization proof, worker receipt, and an enabled decision path.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide slide-three">
+    <div class="slide-number">04</div>
+    <h2 class="title">Retention Probe Design</h2>
+    <p class="subtitle">
+      Each sweep cell replays an identical request after a configurable distractor burst; control and protected arms are compared at matched distractor counts.
+    </p>
+    <div class="content">
+      <div class="panel amber">
+        <div class="eyebrow">Workload Pattern</div>
+        <h3>A → distractors → A replay</h3>
+        <div class="probe-box">
+          <div class="probe-lane">
+            <div class="probe-step control">
+              <strong>A first</strong>
+              <span>populate cache</span>
+            </div>
+            <div class="probe-arrow">→</div>
+            <div class="probe-step distractor">
+              <strong>D1 … Dn</strong>
+              <span>competing requests</span>
+            </div>
+            <div class="probe-arrow">→</div>
+            <div class="probe-step protected">
+              <strong>A replay</strong>
+              <span>measure reuse</span>
+            </div>
+          </div>
+          <div class="pill-row">
+            <div class="pill">control: <span id="control-profile-chip">none</span></div>
+            <div class="pill">protected: <span id="protected-profile-chip">high-priority</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2 compact-run-panels">
+        <div class="panel slate">
+          <div class="eyebrow">Control Run (No special protection)</div>
+          <p>The control arm omits retention metadata, establishing the baseline eviction threshold under the active policy.</p>
+        </div>
+        <div class="panel green">
+          <div class="eyebrow">Protected Run (Same prompt with high priority hint attached)</div>
+          <p>The protected arm replays the same request with elevated hint metadata; if respected, it should retain reusable KV state at higher distractor counts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide slide-five">
+    <div class="slide-number">05</div>
+    <h2 class="title">Latency Response to Increasing Distractors</h2>
+    <div class="content">
+      <div class="chart-frame">
+        <img id="latency-chart" src="generated/retention_kv_hint_story/latency_vs_distractors.svg" alt="Latency versus distractors chart"/>
+      </div>
+      <ul class="chart-interpretation">
+        <li>Dashed lines show first-pass latency for request A; solid lines show replay latency after distractor injection.</li>
+        <li>The control replay curve (blue) exhibits a step increase at higher distractor counts, consistent with loss of reusable KV state.</li>
+        <li>The protected replay curve (green) remains near baseline deeper into the sweep, indicating delayed eviction.</li>
+        <li>The first-pass curves provide the latency floor before replay-path degradation.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slide slide-six">
+    <div class="slide-number">06</div>
+    <h2 class="title">Cached Tokens Under Increasing Distractors</h2>
+    <div class="content slide-six" style="gap: 8px;">
+      <div class="chart-frame">
+        <img id="tokens-chart" src="generated/retention_kv_hint_story/cached_tokens_vs_distractors.svg" alt="Cached tokens versus distractors chart"/>
+      </div>
+      <ul class="chart-interpretation">
+        <li>The control replay curve (blue) reaches zero cached tokens earlier, indicating earlier loss of retained KV state.</li>
+        <li>The protected replay curve (green) maintains non-zero cached tokens deeper into the sweep, indicating stronger retention.</li>
+        <li>The prompt-size baseline provides the reference token footprint for interpreting replay reuse.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-number">07</div>
+    <h2 class="title">Current Measurement Coverage</h2>
+    <p class="subtitle">
+      The current stack supports repeatable agentic-hint measurements with direct runtime attribution rather than timestamp-only inference.
+    </p>
+    <div class="content">
+      <div class="grid-2">
+        <div class="panel">
+          <div class="eyebrow">Achieved</div>
+          <ul>
+            <li>Established repeatable microbenchmarks for retention, scheduling, prompt evolution, cache control, and speculative prefill.</li>
+            <li>Instrumented Dynamo and SGLang to attribute runtime outcomes to specific runs, requests, and phases.</li>
+            <li>Automated startup, readiness validation, reporting, and machine-profile setup across EC2 and GH200-like environments.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Working Signals</div>
+          <ul>
+            <li><strong>Priority:</strong> worker receipt plus queue-order displacement evidence.</li>
+            <li><strong>Speculative prefill:</strong> worker receipt plus measurable turn-B latency reduction.</li>
+            <li><strong>Prompt evolution:</strong> per-task, per-phase, per-request runtime metrics.</li>
+            <li><strong>Retention:</strong> replay latency, cached tokens, reuse ratio, and eviction threshold.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Still Open</div>
+        <ul>
+          <li>Cache-control metadata is observable, but a retention gain is not yet demonstrated.</li>
+          <li>Some hint families remain unsupported or unproven in worker-side decision logic.</li>
+          <li>Additional branch-level proof is still required for selected SGLang decision paths.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide">
+    <div class="slide-number">08</div>
+    <h2 class="title">Research Value</h2>
+    <p class="subtitle">
+      The objective is to characterize realistic agentic workloads, quantify memory, storage, and scheduling pressure, and use the measurements to guide runtime and hardware design.
+    </p>
+    <div class="content">
+      <div class="grid-2">
+        <div class="panel">
+          <div class="eyebrow">Research Purpose</div>
+          <ul>
+            <li>Reconstruct representative agentic workloads on NVIDIA systems.</li>
+            <li>Measure GPU memory, host memory, storage, and scheduling pressure under controlled conditions.</li>
+            <li>Compare runtime knobs and hardware configurations under a common benchmark.</li>
+          </ul>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Roadmap Value</div>
+          <ul>
+            <li>Identifies which runtime hints materially change system behavior.</li>
+            <li>Localizes where larger memory pools or storage tiers would provide the highest benefit.</li>
+            <li>Provides evidence for discussion with Storage, AIG-SHARKS, DESG, and GPU Architecture teams.</li>
+          </ul>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="eyebrow">Next</div>
+        <ul>
+          <li>Extend validated hint support beyond priority and speculative prefill.</li>
+          <li>Strengthen branch-level proof for cache-control decision paths.</li>
+          <li>Run broader cross-model and cross-platform comparisons to inform hardware choices.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide experiment-slide">
+    <div class="slide-number">09</div>
+    <h2 class="title">Experiment 9: KV Retention Probe</h2>
+    <p class="subtitle">
+      Experiment 9 quantifies whether a protected replay retains reusable KV state longer than a matched control replay under identical distractor pressure.
+    </p>
+    <div class="content">
+      <div class="panel">
+        <div class="eyebrow">Setup</div>
+        <ul>
+          <li><strong>Workload:</strong> <span class="mono">A first -> distractors -> A replay</span> to test replay-time KV reuse after interference.</li>
+          <li><strong>Sweep:</strong> repeat the same control/protected comparison across distractor counts to estimate the retention threshold.</li>
+          <li><strong>Control arm:</strong> run without retention metadata.</li>
+          <li><strong>Protected arm:</strong> run the same request with retention metadata enabled.</li>
+          <li><strong>Primary measure:</strong> compare the distractor count at which control replay loses reuse while protected replay still retains KV state.</li>
+          <li><strong>Purpose:</strong> determine whether frontend hinting increases effective KV retention under pressure.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide experiment-slide">
+    <div class="slide-number">10</div>
+    <h2 class="title">Experiment 9: Expected Retention Signal</h2>
+    <p class="subtitle">
+      The expected outcome is a measurable shift in the replay-retention breakpoint between control and protected arms.
+    </p>
+    <div class="content">
+      <div class="experiment-layout">
+        <div class="chart-placeholder">
+          <div class="eyebrow">Placeholder Chart</div>
+          <h3>Experiment 9 Retention Plot</h3>
+          <p>Replace this with the final Experiment 9 chart showing replay reuse as distractor pressure increases.</p>
+        </div>
+        <div class="panel">
+          <div class="eyebrow">Expected Behavior</div>
+          <ul>
+            <li><strong>Control breakpoint:</strong> control replay should lose reuse at a lower distractor count.</li>
+            <li><strong>Protected delay:</strong> protected replay should retain KV state deeper into the sweep.</li>
+            <li><strong>Latency agreement:</strong> replay latency should rise where cached-token reuse collapses.</li>
+            <li><strong>Threshold gap:</strong> a positive breakpoint gap indicates retention benefit.</li>
+            <li><strong>Validity:</strong> the shift is meaningful only if worker hint receipt is also confirmed.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <script src="generated/retention_kv_hint_story/story_data.js"></script>
+  <script>
+    (function () {
+      const data = window.RETENTION_STORY_DATA;
+      if (!data) {
+        return;
+      }
+
+      function byId(id) {
+        return document.getElementById(id);
+      }
+
+      function setText(id, value) {
+        const element = byId(id);
+        if (element) {
+          element.textContent = value;
+        }
+      }
+
+      function fmtInt(value) {
+        if (value === null || value === undefined || value === '') return '--';
+        return Number(value).toLocaleString();
+      }
+
+      function yesNo(value) {
+        if (value === true) return 'Yes';
+        if (value === false) return 'No';
+        return '--';
+      }
+
+      function titleize(value) {
+        return String(value || '')
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, (match) => match.toUpperCase());
+      }
+
+      const control = data.control_profile;
+      const protectedProfile = data.protected_profile;
+      const controlProfile = data.profiles[control];
+      const protectedData = data.profiles[protectedProfile];
+
+      setText('intro-model', data.model || '--');
+      setText('intro-tier', data.kv_tier_mode || '--');
+      setText('control-profile-chip', control);
+      setText('protected-profile-chip', protectedProfile);
+      setText('tier-chip', data.kv_tier_mode || '--');
+
+      setText('attrib-hint-status', data.attribution.worker_hint_status || '--');
+      setText('attrib-priority-ready', yesNo(data.attribution.worker_priority_mechanism_ready));
+      setText('attrib-policy', data.attribution.worker_radix_eviction_policy || '--');
+      setText('attrib-effect-at', fmtInt(data.attribution.hint_runtime_effect_first_observed_at));
+    }());
+  </script>
+</body>
+</html>
