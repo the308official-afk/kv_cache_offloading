@@ -839,6 +839,19 @@
       display: block;
       margin: 0 auto;
     }
+    .exp-chart-fallback {
+      display: none;
+      width: 100%;
+      height: 100%;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 22px;
+      line-height: 1.35;
+      color: #475569;
+    }
     .exp9-bottom-strip {
       display: grid;
       grid-template-columns: 1.45fr 0.75fr;
@@ -1052,9 +1065,10 @@
       overflow: hidden;
     }
     .reference-placeholder-frame img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
+      width: var(--exp-image-width, var(--reference-image-width, 100%));
+      height: var(--exp-image-height, var(--reference-image-height, 100%));
+      object-fit: var(--exp-image-fit, var(--reference-image-fit, contain));
+      object-position: var(--exp-image-position, var(--reference-image-position, center center));
       display: block;
     }
     .chart-placeholder .caption {
@@ -1177,10 +1191,12 @@
     <div class="content">
       <div class="reference-placeholder-frame exp9-hero-image">
         <img
-          src="assets/run-overview-placeholder-1.png"
-          alt="Run overview placeholder reference slide 1"
+          src="../experiments/charts/exp9_kvretention_latency_vs_distractors.svg"
+          alt="exp9_kvretention_latency_vs_distractors.svg"
           style="--exp-image-width: 100%; --exp-image-height: 100%; --exp-image-fit: contain; --exp-image-position: center center;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
         />
+        <div class="exp-chart-fallback">exp9_kvretention_latency_vs_distractors.svg</div>
       </div>
       <div class="exp9-bottom-strip">
         <div class="exp9-setup-panel">
@@ -1313,10 +1329,12 @@
     <div class="content">
       <div class="reference-placeholder-frame exp9-hero-image">
         <img
-          src="assets/run-overview-placeholder-1.png"
-          alt="Run overview placeholder reference slide 1"
+          src="../experiments/charts/exp11_prioritysched_jump_ahead_vs_arrival_gap.svg"
+          alt="exp11_prioritysched_jump_ahead_vs_arrival_gap.svg"
           style="--exp-image-width: 100%; --exp-image-height: 100%; --exp-image-fit: contain; --exp-image-position: center center;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
         />
+        <div class="exp-chart-fallback">exp11_prioritysched_jump_ahead_vs_arrival_gap.svg</div>
       </div>
       <div class="exp9-bottom-strip">
         <div class="exp9-setup-panel">
@@ -1368,10 +1386,12 @@
     <div class="content">
       <div class="reference-placeholder-frame exp9-hero-image">
         <img
-          src="assets/run-overview-placeholder-1.png"
-          alt="Run overview placeholder reference slide 1"
+          src="../experiments/charts/exp12_specprefill_latency_vs_warmup_wait.svg"
+          alt="exp12_specprefill_latency_vs_warmup_wait.svg"
           style="--exp-image-width: 100%; --exp-image-height: 100%; --exp-image-fit: contain; --exp-image-position: center center;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
         />
+        <div class="exp-chart-fallback">exp12_specprefill_latency_vs_warmup_wait.svg</div>
       </div>
       <div class="exp9-bottom-strip">
         <div class="exp9-setup-panel">
@@ -1423,10 +1443,12 @@
     <div class="content">
       <div class="reference-placeholder-frame exp9-hero-image">
         <img
-          src="assets/run-overview-placeholder-1.png"
-          alt="Run overview placeholder reference slide 1"
+          src="../experiments/charts/exp13_latencysens_jump_ahead_vs_arrival_gap.svg"
+          alt="exp13_latencysens_jump_ahead_vs_arrival_gap.svg"
           style="--exp-image-width: 100%; --exp-image-height: 100%; --exp-image-fit: contain; --exp-image-position: center center;"
+          onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
         />
+        <div class="exp-chart-fallback">exp13_latencysens_jump_ahead_vs_arrival_gap.svg</div>
       </div>
       <div class="exp9-bottom-strip">
         <div class="exp9-setup-panel">
