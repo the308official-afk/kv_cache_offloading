@@ -706,6 +706,8 @@ mode when you want one specific table written to a chosen output folder. Use
 the dual-file mode when you want the standard slide 9 and slide 10 fragments
 generated together for the presentation deck.
 
+Task-summary input:
+
 ```bash
 python3 presentations/build_reference_tables.py \
   --input-file experiments/charts/exp6_prompt_evolution_task_summary.csv \
@@ -719,7 +721,7 @@ This writes:
 - `/tmp/reference-output/reference_tables.css`
 - `/tmp/reference-output/exp6_prompt_evolution_task_summary_preview.html`
 
-Run-overview input works the same way:
+Run-overview input:
 
 ```bash
 python3 presentations/build_reference_tables.py \
