@@ -699,8 +699,11 @@ cat experiments/reports/all_runs_task_summary.csv
 cat experiments/reports/all_runs_execution_prompts.csv
 ```
 
-To generate slide-ready HTML table fragments for the task-summary and
-run-overview slides from those CSVs:
+## Slide Table Fragments
+
+Generate slide-ready HTML table fragments from the task-summary and
+run-overview CSV reports. This section is the base workflow for building the
+presentation tables and can grow as more slide helpers are added.
 
 ```bash
 python3 scripts/build_reference_tables.py \
