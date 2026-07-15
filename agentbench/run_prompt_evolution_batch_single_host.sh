@@ -121,7 +121,6 @@ publish_prompt_evolution_reports() {
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
-    "experiments/reports/latest_runs_execution_prompts.md:exp6_runs_execution_prompts.md" \
     "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv"; do
     local source_path="${src%%:*}"
     local target_name="${src##*:}"
@@ -425,7 +424,6 @@ fi
   echo "Published readable Exp 6 reports:"
   echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_run_overview.csv"
   echo "  ${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv"
-  echo "  ${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md"
   echo "  ${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv"
 } | tee -a "${DRIVER_LOG}"
 

@@ -778,7 +778,6 @@ chart folder:
 ls experiments/charts/exp6_*
 cat experiments/charts/exp6_prompt_evolution_run_overview.csv
 cat experiments/charts/exp6_prompt_evolution_task_summary.csv
-cat experiments/charts/exp6_runs_execution_prompts.md
 cat experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 ```
 
