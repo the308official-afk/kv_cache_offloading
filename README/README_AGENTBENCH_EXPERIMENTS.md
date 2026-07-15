@@ -701,57 +701,34 @@ cat experiments/reports/all_runs_execution_prompts.csv
 
 ## Slide Table Fragments
 
-Generate slide-ready HTML table fragments from CSV reports. Use the single-file
-mode when you want one specific table written to a chosen output folder. Use
-the dual-file mode when you want the standard slide 9 and slide 10 fragments
-generated together for the presentation deck.
-
-Task-summary input:
+Generate simple paste-ready HTML snippets from the two CSV reports. The output
+files are self-contained HTML snippets that you can open, copy, and paste into
+`master-slide.html`.
 
 ```bash
-python3 presentations/build_reference_tables.py \
-  --input-file experiments/charts/exp6_prompt_evolution_task_summary.csv \
-  --output-dir /tmp/reference-output
-```
-
-This writes:
-
-- `/tmp/reference-output/exp6_prompt_evolution_task_summary.html`
-- `/tmp/reference-output/exp6_prompt_evolution_task_summary.js`
-- `/tmp/reference-output/reference_tables.css`
-- `/tmp/reference-output/exp6_prompt_evolution_task_summary_preview.html`
-
-Run-overview input:
-
-```bash
-python3 presentations/build_reference_tables.py \
-  --input-file experiments/charts/exp6_prompt_evolution_run_overview.csv \
-  --output-dir /tmp/reference-output
-```
-
-This writes:
-
-- `/tmp/reference-output/exp6_prompt_evolution_run_overview.html`
-- `/tmp/reference-output/exp6_prompt_evolution_run_overview.js`
-- `/tmp/reference-output/reference_tables.css`
-- `/tmp/reference-output/exp6_prompt_evolution_run_overview_preview.html`
-
-To regenerate the standard deck fragments together:
-
-```bash
-python3 presentations/build_reference_tables.py \
+python3 presentations/build_table_snippets.py \
   --task-summary-csv experiments/charts/exp6_prompt_evolution_task_summary.csv \
-  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv
+  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv \
+  --output-dir /tmp/reference-output
 ```
 
 This writes:
 
-- `presentations/assets/slide9_task_summary_fragment.html`
-- `presentations/assets/slide10_run_overview_fragment.html`
-- `presentations/assets/slide9_task_summary_fragment.js`
-- `presentations/assets/slide10_run_overview_fragment.js`
-- `presentations/assets/reference_tables.css`
-- `presentations/assets/reference_tables_preview.html`
+- `/tmp/reference-output/exp6_prompt_evolution_task_summary.snippet.html`
+- `/tmp/reference-output/exp6_prompt_evolution_run_overview.snippet.html`
+
+Each output file contains:
+
+- one small `<style>` block
+- one `<div>` wrapper
+- one `<table>` rendered directly from the CSV contents
+
+Workflow:
+
+1. Run the script.
+2. Open the `.snippet.html` file you want.
+3. Copy its contents.
+4. Paste the snippet into the desired slide in `master-slide.html`.
 
 ## Experiment 9: KV Retention Probe
 
