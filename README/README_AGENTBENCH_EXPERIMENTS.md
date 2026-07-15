@@ -609,6 +609,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export AGENTBENCH_TRACE_AGENT_STREAM=0
@@ -655,6 +656,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export AGENTBENCH_TRACE_AGENT_STREAM=0
@@ -716,6 +718,10 @@ Note:
   reaches the Deep Agents graph recursion limit and continue with the next task
 - skipped recursion-limit tasks are recorded in the batch-local
   `skipped_tasks.csv`
+- `PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1` refreshes
+  `experiments/reports/latest_swebench_trajectory_prompt_catalog.csv` and
+  `experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv` after each
+  completed or recursion-skipped task
 - the tool-loop preflight defaults to `PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate`
   so it checks a small workspace edit plus validation command
 - the tool-loop preflight is capped by default with
@@ -1046,6 +1052,7 @@ export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=600
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export AGENTBENCH_TRACE_AGENT_STREAM=0

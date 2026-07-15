@@ -20,6 +20,7 @@ WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
 BATCH_ID="${BATCH_ID:-agentbench_batch_$(date +%Y%m%d_%H%M%S)}"
 AGENTBENCH_BATCH_CONTINUE_ON_ERROR="${AGENTBENCH_BATCH_CONTINUE_ON_ERROR:-0}"
 PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES="${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES:-0}"
+PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK:-0}"
 
 BATCH_DIR="experiments/reports/batches/${BATCH_ID}"
 PROGRESS_CSV="${BATCH_DIR}/progress_overview.csv"
@@ -212,6 +213,20 @@ is_recursion_failure_log() {
   grep -qiE "GraphRecursionError|Recursion limit of [0-9]+ reached|recursion limit.*reached" "${log_file}"
 }
 
+refresh_trajectory_catalog_after_task() {
+  local task_index="$1"
+  local run_id="$2"
+  [[ "${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" = "1" ]] || return 0
+
+  echo "Refreshing SWE-bench trajectory prompt catalog after task ${task_index} (${run_id:-no_run_id})..." | tee -a "${PROGRESS_LOG}"
+  if ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${PROGRESS_LOG}"; then
+    echo "Trajectory catalog refreshed after task ${task_index}." | tee -a "${PROGRESS_LOG}"
+  else
+    echo "Warning: trajectory catalog refresh failed after task ${task_index}; continuing batch." | tee -a "${PROGRESS_LOG}"
+  fi
+  echo | tee -a "${PROGRESS_LOG}"
+}
+
 echo "Batch ID: ${BATCH_ID}" | tee -a "${PROGRESS_LOG}"
 echo "Model: ${MODEL}" | tee -a "${PROGRESS_LOG}"
 echo "Frontend URL: ${FRONTEND_URL}" | tee -a "${PROGRESS_LOG}"
@@ -219,6 +234,7 @@ echo "Hint profile: ${HINT_PROFILE}" | tee -a "${PROGRESS_LOG}"
 echo "Hint provider: ${HINT_PROVIDER}" | tee -a "${PROGRESS_LOG}"
 echo "Continue on task error: ${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" | tee -a "${PROGRESS_LOG}"
 echo "Skip recursion failures: ${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" | tee -a "${PROGRESS_LOG}"
+echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"
@@ -278,6 +294,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       echo "Exit status: ${status}"
       echo
     } | tee -a "${PROGRESS_LOG}"
+    refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
   elif [[ -n "${NEW_RESULT_DIR}" ]]; then
     RUN_ID="$(basename "${NEW_RESULT_DIR}")"
     {
@@ -297,16 +314,24 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
 
   if [[ "${status}" -ne 0 ]]; then
     if [[ "${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" = "1" ]]; then
+      if [[ -n "${RUN_ID:-}" ]]; then
+        append_trace_index_row "${RUN_ID}" "${INDEX}" || true
+        refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
+      fi
       echo "Index ${INDEX} failed; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
     elif [[ "${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" = "1" ]] && is_recursion_failure_log "${TASK_LOG}"; then
       RUN_ID="${RUN_ID:-}"
       [[ -z "${RUN_ID}" && -n "${NEW_RESULT_DIR}" ]] && RUN_ID="$(basename "${NEW_RESULT_DIR}")"
+      if [[ -n "${RUN_ID}" ]]; then
+        append_trace_index_row "${RUN_ID}" "${INDEX}" || true
+      fi
       append_skipped_task_row "${INDEX}" "${RUN_ID}" "recursion_limit" "${status}" "${TASK_LOG}" "${NEW_RESULT_DIR}"
       echo "Index ${INDEX} hit the Deep Agents recursion limit; skipping because PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1" | tee -a "${PROGRESS_LOG}"
       echo "Task log: ${TASK_LOG}" | tee -a "${PROGRESS_LOG}"
       echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
+      refresh_trajectory_catalog_after_task "${INDEX}" "${RUN_ID}"
     else
       echo "Index ${INDEX} failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0" | tee -a "${PROGRESS_LOG}" >&2
       exit "${status}"
