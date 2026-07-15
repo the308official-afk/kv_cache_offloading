@@ -591,170 +591,55 @@ range of SWE-bench Pro tasks, including:
 - per-phase planning / execution / review summaries
 - final model behavior for each SWE-bench task
 
-Manual version:
-
-```bash
-cd ~/kv_cache_offloading
-
-export MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8'
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=1
-export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=qwen3_coder
-export DYN_REASONING_PARSER=qwen3
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_FORCE_TOOL_CHOICE=auto
-export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
-export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export AGENTBENCH_SOFT_STOP_RECURSION=1
-export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
-export PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1
-export AGENTBENCH_AGENT_RECURSION_LIMIT=300
-export AGENTBENCH_MODEL_ONLY_PHASES=""
-export AGENTBENCH_TRACE_AGENT_STREAM=0
-export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
-export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
-
-START_INDEX=0 \
-END_INDEX=5 \
-HINT_PROFILE=high-reuse \
-HINT_PROVIDER=agentbench \
-FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
-MODEL="$MODEL_NAME" \
-./agentbench/run_swebench_batch_single_host.sh
-```
-
 Automated version: stop Dynamo, restart it with the chosen model, wait for
 `/v1/models`, run a smoke test, then launch the batch.
 
-These larger-model readiness and smoke-test values are already the default for
-this batch wrapper, but you can re-export them explicitly before starting:
-
-```bash
-export MODEL_READY_RETRIES=900
-export MODEL_READY_DELAY_SECS=3
-export MODEL_READY_STABLE_HITS=2
-export MODEL_SMOKE_RETRIES=180
-export MODEL_SMOKE_DELAY_SECS=15
-export MODEL_COOLDOWN_SECS=60
-```
-
-```bash
+T```bash
 cd ~/kv_cache_offloading
 
-export MODEL_NAME='Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8'
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=1
-export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=qwen3_coder
-export DYN_REASONING_PARSER=qwen3
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_FORCE_TOOL_CHOICE=auto
-export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
-export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export AGENTBENCH_SOFT_STOP_RECURSION=1
-export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
-export PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1
-export AGENTBENCH_AGENT_RECURSION_LIMIT=300
-export AGENTBENCH_MODEL_ONLY_PHASES=""
-export AGENTBENCH_TRACE_AGENT_STREAM=0
-export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
-export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
+RUN_ID="exp6_prompt_evolution_gh200_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/exp6_prompt_evolution_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
 
-START_INDEX=0 \
-END_INDEX=5 \
-HINT_PROFILE=high-reuse \
-HINT_PROVIDER=agentbench \
-FRONTEND_URL="http://127.0.0.1:${DYNAMO_FRONTEND_PORT:-8000}/v1/chat/completions" \
-./agentbench/run_prompt_evolution_batch_single_host.sh \
-  "$MODEL_NAME"
+nohup env \
+  AGENTBENCH_EXECUTION_LOOP=1 \
+  AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3 \
+  AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0 \
+  AGENTBENCH_EXECUTION_GUARD=0 \
+  AGENTBENCH_PRINT_CHECKPOINTS=1 \
+  DYN_TOOL_CALL_PARSER=qwen3_coder \
+  DYN_REASONING_PARSER=qwen3 \
+  AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
+  AGENTBENCH_FORCE_TOOL_CHOICE=auto \
+  AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1 \
+  AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0 \
+  AGENTBENCH_SOFT_STOP_RECURSION=1 \
+  PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1 \
+  PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1 \
+  AGENTBENCH_AGENT_RECURSION_LIMIT=1000 \
+  AGENTBENCH_MODEL_ONLY_PHASES="" \
+  AGENTBENCH_TRACE_AGENT_STREAM=0 \
+  PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
+  PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  PRECISE_START_MODE=clean \
+  PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
+  PROMPT_EVOLUTION_BATCH_END_INDEX=20 \
+  PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
+  ./agentbench/run_prompt_evolution_batch_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
 ```
-
-For `Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8`, use:
-
-```bash
-export DYN_TOOL_CALL_PARSER=qwen3_coder
-export DYN_REASONING_PARSER=qwen3
-```
-
-Do not use `DYN_TOOL_CALL_PARSER=hermes` for this Qwen3-Coder path. The
-wrapper auto-detects `qwen3_coder` and `qwen3` when these variables are not set,
-but exporting them explicitly makes the GH200 run easier to debug.
 
 To watch the worker after the restart:
 
 ```bash
 docker logs -f dynamo-sglang-worker
 ```
-
-Note:
-
-- `run_dynamo_single_host.sh start` uses:
-  - `MODEL_READY_RETRIES`
-  - `MODEL_READY_DELAY_SECS`
-  - `MODEL_READY_STABLE_HITS`
-- this wrapper then uses:
-  - `MODEL_SMOKE_RETRIES`
-  - `MODEL_SMOKE_DELAY_SECS`
-  - `MODEL_COOLDOWN_SECS`
-- for larger models, set both groups
-- before launching the batch, the wrapper now verifies that Deep Agents can
-  execute a real tool loop
-- if `upstream/deepagents` is missing, the wrapper downloads the pinned
-  Deep Agents checkout and installs it automatically
-- for Qwen3-Coder models, the wrapper now defaults to
-  `DYN_TOOL_CALL_PARSER=qwen3_coder` and `DYN_REASONING_PARSER=qwen3`
-- the wrapper defaults to `AGENTBENCH_FORCE_TOOL_CHOICE=auto`; only set
-  `AGENTBENCH_FORCE_TOOL_CHOICE=required` as a diagnostic override
-- the wrapper disables the broad Deep Agents general-purpose subagent by
-  default so Experiment 6 sees direct file/shell tool calls instead of routing
-  through the `task` tool
-- the inner batch defaults to `AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0`, so one
-  unexpected failed SWE-bench task stops the batch instead of producing
-  misleading zero summaries
-- `AGENTBENCH_SOFT_STOP_RECURSION=1` turns a Deep Agents graph recursion-limit
-  hit into a controlled task-level soft stop instead of a hard batch failure
-- soft-stopped tasks still write `others/result.json` with any phase prompts
-  already dispatched, so the trajectory catalog can still use partial prompt
-  evidence
-- soft-stopped recursion-limit tasks are recorded in the batch-local
-  `skipped_tasks.csv` with reason `recursion_soft_stop`
-- `PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1` refreshes
-  `experiments/reports/latest_swebench_trajectory_prompt_catalog.csv` and
-  `experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv` after each
-  completed or recursion-skipped task
-- `PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1` refreshes the clean
-  public Exp6 CSVs in `experiments/charts` after each completed or
-  recursion-soft-stopped task
-- the tool-loop preflight defaults to `PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate`
-  so it checks a small workspace edit plus validation command
-- the tool-loop preflight is capped by default with
-  `AGENTBENCH_TOOL_LOOP_RECURSION_LIMIT=30` and
-  `AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS=180`, so a bad tool loop fails instead
-  of running indefinitely
-- for full SWE-bench Pro task solving, use a larger Deep Agents graph budget:
-  `AGENTBENCH_AGENT_RECURSION_LIMIT=300`
-- keep `AGENTBENCH_TRACE_AGENT_STREAM=0` for normal batch runs; set it to `1`
-  only when debugging one task's internal Deep Agents stream
-- use `AGENTBENCH_MODEL_ONLY_PHASES=""` when you want to preserve the normal
-  Deep Agents planning and execution graph instead of bypassing planning
-- only use `AGENTBENCH_MODEL_ONLY_PHASES=planning` as a diagnostic escape hatch
-  when you specifically want to skip the planning graph and test execution only
-- this preflight is required by default through
-  `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1`
-- dependency auto-install is enabled by default through
-  `AGENTBENCH_DEEPAGENTS_AUTO_INSTALL=1`
-- the helper skips reinstalling Deep Agents when the pinned checkout, Python
-  import, and runtime marker are already valid
-- force a refresh only when needed with
-  `AGENTBENCH_DEEPAGENTS_FORCE_REFRESH=1` or
-  `AGENTBENCH_DEEPAGENTS_FORCE_REINSTALL=1`
-- only set `PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=0` when you intentionally want
-  prompt-only reports and are willing to see `tool_call_count=0`
 
 This produces prompt-evolution summaries such as:
 
@@ -791,16 +676,6 @@ the run-overview slides. It is the first report to inspect after Experiment 6.
 `exp6_swebench_trajectory_prompt_catalog.csv` is the prompt catalog that
 Experiment 9 uses when `RETENTION_REQUEST_SOURCE=swebench_trajectory`.
 
-Batch outputs:
-
-```text
-experiments/reports/batches/<batch_id>/
-  progress.log
-  progress_overview.csv
-  task_trace_index.md
-  task_trace_index.csv
-```
-
 Global summaries:
 
 ```bash
@@ -811,67 +686,6 @@ cat experiments/reports/all_runs_overview.csv
 cat experiments/reports/all_runs_task_summary.csv
 cat experiments/reports/all_runs_execution_prompts.csv
 ```
-
-If you want the slide-style trace for one specific task, inspect:
-
-```bash
-LATEST_TRACE=experiments/reports/latest_prompt_evolution_trace_index.md
-cat "$LATEST_TRACE"
-
-LATEST_RESULT="$(ls -td experiments/raw/agentbench/results/* | head -1)"
-LATEST_REPORT="$(ls -td experiments/reports/runs/* | head -1)"
-
-cat "$LATEST_RESULT/prompt_evolution_report.md"
-cat "$LATEST_RESULT/prompt_evolution_values/03_final_model_request.json"
-cat "$LATEST_RESULT/prompt_evolution_values/05_tool_runtime_context.json"
-cat "$LATEST_RESULT/prompt_evolution_values/07_model_behavior.json"
-cat "$LATEST_REPORT/tool_call_details.md"
-cat "$LATEST_REPORT/phase_summary.md"
-```
-
-What each file means:
-
-- `03_final_model_request.json`: the exact model-facing request payload
-- `05_tool_runtime_context.json`: the tool-capable runtime context before execution
-- `07_model_behavior.json`: the response/tool-orchestration behavior summary
-- `tool_call_details.md`: the exact tools called, with arguments when available
-- `phase_summary.md`: the per-phase behavior summary across planning/execution/review
-
-If Experiment 6 still shows `tool_call_count=0` after starting Dynamo with the
-Qwen3-Coder parser settings, run the tool-call debug wrapper while Dynamo is
-still up:
-
-```bash
-cd ~/kv_cache_offloading
-
-AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
-./agentbench/debug_prompt_evolution_tool_calls.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
-The debug wrapper checks:
-
-- whether the latest Experiment 6 driver log says `Tool-call parser: qwen3_coder`
-- whether the latest Experiment 6 driver log says `Reasoning parser: qwen3`
-- whether recent `all_runs_execution_prompts.csv` rows still show zero tools
-- whether raw Dynamo can return OpenAI-style `tool_calls`
-- whether Deep Agents can execute a multi-tool loop
-
-This wrapper exits nonzero on any critical failure. In particular, it stops if
-raw Dynamo cannot produce structured tool calls, or if Deep Agents cannot
-complete the multi-tool loop.
-
-Output is stored under:
-
-```text
-experiments/reports/tool_call_debug/<run_id>/
-```
-
-Interpretation:
-
-- direct Dynamo fails: Dynamo/SGLang/model is not returning structured tool calls
-- direct Dynamo passes but Deep Agents fails: Deep Agents/LangChain tool binding is the issue
-- both pass: the SWE-bench prompt-evolution loop needs debugging
 
 ## Experiment 9: KV Retention Probe
 
@@ -1071,7 +885,7 @@ nohup env \
   AGENTBENCH_SOFT_STOP_RECURSION=1 \
   PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1 \
   PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1 \
-  AGENTBENCH_AGENT_RECURSION_LIMIT=150 \
+  AGENTBENCH_AGENT_RECURSION_LIMIT=1000 \
   AGENTBENCH_MODEL_ONLY_PHASES="" \
   AGENTBENCH_TRACE_AGENT_STREAM=0 \
   PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
@@ -1079,7 +893,7 @@ nohup env \
   DYNAMO_MACHINE_PROFILE=gh200 \
   PRECISE_START_MODE=clean \
   PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
-  PROMPT_EVOLUTION_BATCH_END_INDEX=10 \
+  PROMPT_EVOLUTION_BATCH_END_INDEX=20 \
   PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
   ./agentbench/run_prompt_evolution_batch_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
