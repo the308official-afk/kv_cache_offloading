@@ -611,6 +611,7 @@ export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
+export AGENTBENCH_TRACE_AGENT_STREAM=0
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -656,6 +657,7 @@ export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
+export AGENTBENCH_TRACE_AGENT_STREAM=0
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
@@ -722,6 +724,8 @@ Note:
   of running indefinitely
 - for full SWE-bench Pro task solving, use a larger Deep Agents graph budget:
   `AGENTBENCH_AGENT_RECURSION_LIMIT=300`
+- keep `AGENTBENCH_TRACE_AGENT_STREAM=0` for normal batch runs; set it to `1`
+  only when debugging one task's internal Deep Agents stream
 - use `AGENTBENCH_MODEL_ONLY_PHASES=""` when you want to preserve the normal
   Deep Agents planning and execution graph instead of bypassing planning
 - only use `AGENTBENCH_MODEL_ONLY_PHASES=planning` as a diagnostic escape hatch
@@ -1044,6 +1048,7 @@ export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
 export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=600
 export AGENTBENCH_MODEL_ONLY_PHASES=""
+export AGENTBENCH_TRACE_AGENT_STREAM=0
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
 export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
 
