@@ -19,6 +19,7 @@ PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT:-1000}"
 WORKFLOW_MODE="${AGENTBENCH_WORKFLOW_MODE:-phased}"
 BATCH_ID="${BATCH_ID:-agentbench_batch_$(date +%Y%m%d_%H%M%S)}"
 AGENTBENCH_BATCH_CONTINUE_ON_ERROR="${AGENTBENCH_BATCH_CONTINUE_ON_ERROR:-0}"
+AGENTBENCH_SOFT_STOP_RECURSION="${AGENTBENCH_SOFT_STOP_RECURSION:-0}"
 PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES="${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES:-0}"
 PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK:-0}"
 
@@ -210,7 +211,11 @@ PY
 is_recursion_failure_log() {
   local log_file="$1"
   [[ -f "${log_file}" ]] || return 1
-  grep -qiE "GraphRecursionError|Recursion limit of [0-9]+ reached|recursion limit.*reached" "${log_file}"
+  grep -qiE "GraphRecursionError|Recursion limit of [0-9]+ reached|recursion limit.*reached|recursion_soft_stop" "${log_file}"
+}
+
+recursion_soft_stop_enabled() {
+  [[ "${AGENTBENCH_SOFT_STOP_RECURSION}" = "1" || "${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" = "1" ]]
 }
 
 refresh_trajectory_catalog_after_task() {
@@ -233,6 +238,7 @@ echo "Frontend URL: ${FRONTEND_URL}" | tee -a "${PROGRESS_LOG}"
 echo "Hint profile: ${HINT_PROFILE}" | tee -a "${PROGRESS_LOG}"
 echo "Hint provider: ${HINT_PROVIDER}" | tee -a "${PROGRESS_LOG}"
 echo "Continue on task error: ${AGENTBENCH_BATCH_CONTINUE_ON_ERROR}" | tee -a "${PROGRESS_LOG}"
+echo "Soft-stop recursion failures: ${AGENTBENCH_SOFT_STOP_RECURSION}" | tee -a "${PROGRESS_LOG}"
 echo "Skip recursion failures: ${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" | tee -a "${PROGRESS_LOG}"
 echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
@@ -252,6 +258,7 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
   status=0
   set +e
   AGENTBENCH_WORKFLOW_MODE="${WORKFLOW_MODE}" \
+  AGENTBENCH_SOFT_STOP_RECURSION="${AGENTBENCH_SOFT_STOP_RECURSION}" \
   "${PYTHON_BIN}" agentbench/deepagents_swebench_single_host.py \
     --app-variant "${APP_VARIANT}" \
     --frontend-url "${FRONTEND_URL}" \
@@ -320,14 +327,14 @@ for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
       fi
       echo "Index ${INDEX} failed; continuing because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=1" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"
-    elif [[ "${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" = "1" ]] && is_recursion_failure_log "${TASK_LOG}"; then
+    elif recursion_soft_stop_enabled && is_recursion_failure_log "${TASK_LOG}"; then
       RUN_ID="${RUN_ID:-}"
       [[ -z "${RUN_ID}" && -n "${NEW_RESULT_DIR}" ]] && RUN_ID="$(basename "${NEW_RESULT_DIR}")"
       if [[ -n "${RUN_ID}" ]]; then
         append_trace_index_row "${RUN_ID}" "${INDEX}" || true
       fi
-      append_skipped_task_row "${INDEX}" "${RUN_ID}" "recursion_limit" "${status}" "${TASK_LOG}" "${NEW_RESULT_DIR}"
-      echo "Index ${INDEX} hit the Deep Agents recursion limit; skipping because PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1" | tee -a "${PROGRESS_LOG}"
+      append_skipped_task_row "${INDEX}" "${RUN_ID}" "recursion_soft_stop" "${status}" "${TASK_LOG}" "${NEW_RESULT_DIR}"
+      echo "Index ${INDEX} hit the Deep Agents recursion limit; soft-stopping this task and continuing." | tee -a "${PROGRESS_LOG}"
       echo "Task log: ${TASK_LOG}" | tee -a "${PROGRESS_LOG}"
       echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"
       echo | tee -a "${PROGRESS_LOG}"

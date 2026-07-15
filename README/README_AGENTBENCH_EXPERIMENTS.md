@@ -608,7 +608,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export AGENTBENCH_SOFT_STOP_RECURSION=1
 export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
@@ -655,7 +655,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export AGENTBENCH_SOFT_STOP_RECURSION=1
 export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
@@ -714,10 +714,13 @@ Note:
 - the inner batch defaults to `AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0`, so one
   unexpected failed SWE-bench task stops the batch instead of producing
   misleading zero summaries
-- `PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1` lets the batch skip a task that
-  reaches the Deep Agents graph recursion limit and continue with the next task
-- skipped recursion-limit tasks are recorded in the batch-local
-  `skipped_tasks.csv`
+- `AGENTBENCH_SOFT_STOP_RECURSION=1` turns a Deep Agents graph recursion-limit
+  hit into a controlled task-level soft stop instead of a hard batch failure
+- soft-stopped tasks still write `others/result.json` with any phase prompts
+  already dispatched, so the trajectory catalog can still use partial prompt
+  evidence
+- soft-stopped recursion-limit tasks are recorded in the batch-local
+  `skipped_tasks.csv` with reason `recursion_soft_stop`
 - `PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1` refreshes
   `experiments/reports/latest_swebench_trajectory_prompt_catalog.csv` and
   `experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv` after each
@@ -1035,6 +1038,11 @@ Use this when direct task-level SWE-bench prompts do not create enough cache pre
 
 Step 0: capture real SWE-bench phase prompts with Experiment 6.
 
+If an Experiment 6 task reaches the Deep Agents graph recursion limit with
+`AGENTBENCH_SOFT_STOP_RECURSION=1`, the task is marked `recursion_soft_stop`.
+Any phase prompts that were already dispatched are still written to
+`others/result.json`, then copied into the trajectory catalog for Experiment 9.
+
 For a quick smoke test:
 
 ```bash
@@ -1051,7 +1059,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
+export AGENTBENCH_SOFT_STOP_RECURSION=1
 export PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=600
 export AGENTBENCH_MODEL_ONLY_PHASES=""

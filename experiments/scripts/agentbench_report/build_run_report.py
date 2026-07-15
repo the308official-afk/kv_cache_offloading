@@ -2234,6 +2234,18 @@ def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
     ]
 
     result_dir = resolve_agentbench_result_dir(report_dir, run)
+    result_payload = (
+        load_json(result_dir / "others/result.json", {})
+        if result_dir and (result_dir / "others/result.json").exists()
+        else {}
+    )
+    result_body = dict_or_empty(result_payload.get("result"))
+    soft_stop = dict_or_empty(result_payload.get("soft_stop")) or dict_or_empty(result_body.get("soft_stop"))
+    task_status = (
+        result_payload.get("status")
+        or result_body.get("status")
+        or ("recursion_soft_stop" if soft_stop else "complete")
+    )
     prompt_behavior = (
         prompt_evolution_model_behavior_summary(result_dir)
         if result_dir and result_dir.exists()
@@ -2277,6 +2289,8 @@ def aggregate_run_tool_summary(report_dir: Path) -> dict[str, Any] | None:
         "runtime": run.get("runtime"),
         "model": run.get("model"),
         "hint_profile": run.get("hint_profile"),
+        "task_status": task_status,
+        "soft_stop_reason": soft_stop.get("reason", ""),
         "execution_steps": run.get("execution_subrequests"),
         "planning_tool_calls": as_int(planning_phase.get("tool_call_count")),
         "planning_tools": planning_phase.get("tools_used", "none"),
@@ -2309,6 +2323,8 @@ def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> 
         "runtime",
         "model",
         "hint_profile",
+        "task_status",
+        "soft_stop_reason",
         "execution_steps",
         "planning_tool_calls",
         "planning_tools",
@@ -2338,6 +2354,7 @@ def write_aggregate_tool_summary_csv(path: Path, rows: list[dict[str, Any]]) -> 
 def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "Run",
+        "Status",
         "Repo",
         "Model",
         "Steps",
@@ -2358,6 +2375,7 @@ def write_prompt_evolution_run_overview_csv(path: Path, rows: list[dict[str, Any
             writer.writerow(
                 {
                     "Run": row.get("run_short", ""),
+                    "Status": row.get("task_status", ""),
                     "Repo": repo_display_name(row.get("repo")),
                     "Model": row.get("model", ""),
                     "Steps": row.get("execution_steps", ""),
@@ -2691,6 +2709,19 @@ def aggregate_task_summary_row(report_dir: Path) -> dict[str, Any] | None:
     if not run:
         return None
     task = task_info_from_report_dir(report_dir, run)
+    result_dir = resolve_agentbench_result_dir(report_dir, run)
+    result_payload = (
+        load_json(result_dir / "others/result.json", {})
+        if result_dir and (result_dir / "others/result.json").exists()
+        else {}
+    )
+    result_body = dict_or_empty(result_payload.get("result"))
+    soft_stop = dict_or_empty(result_payload.get("soft_stop")) or dict_or_empty(result_body.get("soft_stop"))
+    task_status = (
+        result_payload.get("status")
+        or result_body.get("status")
+        or ("recursion_soft_stop" if soft_stop else "complete")
+    )
     return {
         "run_id": run.get("run_id"),
         "run_short": run.get("run_short"),
@@ -2709,6 +2740,8 @@ def aggregate_task_summary_row(report_dir: Path) -> dict[str, Any] | None:
         "runtime": run.get("runtime"),
         "model": run.get("model"),
         "hint_profile": run.get("hint_profile"),
+        "task_status": task_status,
+        "soft_stop_reason": soft_stop.get("reason", ""),
         "patch": "Yes" if as_bool(run.get("patch_nonempty")) is True else "No",
         "patch_bytes": run.get("patch_bytes"),
         "base_commit_short": str(task.get("base_commit") or "")[:8],
@@ -2734,6 +2767,8 @@ def write_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         "runtime",
         "model",
         "hint_profile",
+        "task_status",
+        "soft_stop_reason",
     ]
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
@@ -2745,6 +2780,7 @@ def write_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 def write_prompt_evolution_task_summary_csv(path: Path, rows: list[dict[str, Any]]) -> None:
     fields = [
         "Run",
+        "Status",
         "Repo",
         "Task Summary",
         "Expected Action",
@@ -2759,6 +2795,7 @@ def write_prompt_evolution_task_summary_csv(path: Path, rows: list[dict[str, Any
             writer.writerow(
                 {
                     "Run": row.get("run_short", ""),
+                    "Status": row.get("task_status", ""),
                     "Repo": repo_display_name(row.get("repo")),
                     "Task Summary": row.get("problem_statement_summary", ""),
                     "Expected Action": row.get("expected_agent_action", ""),

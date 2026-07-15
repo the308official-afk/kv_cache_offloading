@@ -75,6 +75,7 @@ if not RESULTS_DIR.is_absolute():
     RESULTS_DIR = REPO_ROOT / RESULTS_DIR
 REPOS_DIR = REPO_ROOT / "agentbench" / "repos"
 DEFAULT_RESULTS_TIMEZONE = "America/Chicago"
+RECURSION_SOFT_STOP_EXIT_CODE = 20
 DEFAULT_HINTS = {
     "priority": 5,
     "reuse_likelihood": 0.9,
@@ -1820,6 +1821,200 @@ def save_result(run_dir: Path, payload: dict, *, filename: str = "result.json") 
         json.dumps(payload, indent=2, default=stringify_unknown),
         encoding="utf-8",
     )
+
+
+def recursion_soft_stop_enabled() -> bool:
+    return env_flag("AGENTBENCH_SOFT_STOP_RECURSION", default=False)
+
+
+def is_recursion_limit_error(exc: BaseException) -> bool:
+    text = f"{type(exc).__name__}: {exc}"
+    return "GraphRecursionError" in text or "Recursion limit" in text or "recursion limit" in text
+
+
+def phase_results_from_lifecycle_events(events: list[dict]) -> list[dict]:
+    phase_results: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    response_by_key: dict[tuple[str, str], dict] = {}
+    response_by_phase: dict[str, dict] = {}
+    for event in events:
+        if event.get("event_kind") != "response":
+            continue
+        phase = str(event.get("phase") or "unknown")
+        request_context = event.get("request_context")
+        request_id = ""
+        if isinstance(request_context, dict):
+            request_id = str(request_context.get("request_id") or "")
+        if request_id:
+            response_by_key[(phase, request_id)] = event
+        response_by_phase[phase] = event
+    for event in events:
+        if event.get("event_kind") != "request_dispatch":
+            continue
+        phase = str(event.get("phase") or "unknown")
+        prompt = str(event.get("prompt") or "")
+        if not prompt.strip():
+            continue
+        request_context = event.get("request_context")
+        if not isinstance(request_context, dict):
+            request_context = {"phase": phase, "step_title": phase.replace("_", " ").title()}
+        key = (phase, request_context.get("request_id") or prompt[:128])
+        if key in seen:
+            continue
+        seen.add(key)
+        response_event = response_by_key.get((phase, str(request_context.get("request_id") or ""))) or response_by_phase.get(phase, {})
+        phase_results.append(
+            {
+                "phase": phase,
+                "sequence_index": len(
+                    [row for row in phase_results if row.get("phase") == phase]
+                ),
+                "hints": event.get("hints") if isinstance(event.get("hints"), dict) else {},
+                "request_context": request_context,
+                "prompt": prompt,
+                "response_text": response_event.get("response_text", ""),
+                "measurement": response_event.get("measurement", {}),
+                "tool_progress": response_event.get("tool_progress", {}),
+                "tool_call_details": [],
+                "status": "recursion_soft_stop",
+            }
+        )
+    if phase_results:
+        return phase_results
+
+    for event in events:
+        if event.get("stage") != "task_prompt_built":
+            continue
+        prompt = str(event.get("prompt") or "")
+        if not prompt.strip():
+            continue
+        phase_results.append(
+            {
+                "phase": "task_prompt",
+                "sequence_index": 0,
+                "hints": {},
+                "request_context": {
+                    "phase": "task_prompt",
+                    "step_title": "Initial SWE-bench task prompt",
+                },
+                "prompt": prompt,
+                "response_text": "",
+                "measurement": {},
+                "tool_progress": {},
+                "tool_call_details": [],
+                "status": "recursion_soft_stop",
+            }
+        )
+        break
+    return phase_results
+
+
+def first_prompt_from_lifecycle_events(events: list[dict], phase_results: list[dict]) -> str:
+    for event in events:
+        if event.get("stage") == "task_prompt_built" and isinstance(event.get("prompt"), str):
+            return str(event["prompt"])
+    for phase_result in phase_results:
+        prompt = phase_result.get("prompt")
+        if isinstance(prompt, str) and prompt.strip():
+            return prompt
+    return ""
+
+
+def write_recursion_soft_stop_result(
+    *,
+    run_started_at: datetime,
+    parent_run_id: str,
+    legacy_instance_slug: str,
+    args: argparse.Namespace,
+    task: dict,
+    task_source: str,
+    base_hints: dict,
+    auto_repo_checkout: dict,
+    workspace_metadata: dict,
+    checkpoint_log_path: Path,
+    lifecycle_log_path: Path,
+    others_dir: Path,
+    exc: BaseException,
+) -> None:
+    raw_lifecycle_events = load_logged_events(lifecycle_log_path)
+    phase_results = phase_results_from_lifecycle_events(raw_lifecycle_events)
+    prompt = first_prompt_from_lifecycle_events(raw_lifecycle_events, phase_results)
+    soft_stop = {
+        "status": "recursion_soft_stop",
+        "reason": "deepagents_recursion_limit",
+        "exception_type": type(exc).__name__,
+        "exception": str(exc),
+        "message": (
+            "Deep Agents reached the LangGraph recursion limit. The task was "
+            "stopped after preserving any phase prompts already dispatched."
+        ),
+        "phase_prompt_count": len(phase_results),
+    }
+    result = {
+        "status": "recursion_soft_stop",
+        "response_text": "",
+        "phase_results": phase_results,
+        "soft_stop": soft_stop,
+    }
+    payload = {
+        "run_started_at": run_started_at.isoformat(),
+        "parent_run_id": parent_run_id,
+        "legacy_instance_slug": legacy_instance_slug,
+        "frontend_url": args.frontend_url,
+        "model": args.model,
+        "hint_profile": args.hint_profile,
+        "hint_provider": args.hint_provider,
+        "hint_json": base_hints,
+        "task": task,
+        "task_source": task_source,
+        "active_harness": "agentbench.deepagents_app",
+        "app_variant": args.app_variant,
+        "checkpoint_log_file": str(checkpoint_log_path),
+        "auto_repo_checkout": auto_repo_checkout,
+        "workspace": workspace_metadata,
+        "prompt": prompt,
+        "decomposition_plan": {
+            "steps": [
+                {
+                    "phase": phase_result.get("phase"),
+                    "title": phase_result.get("request_context", {}).get("step_title", ""),
+                    "status": "recursion_soft_stop",
+                }
+                for phase_result in phase_results
+            ],
+        },
+        "step_results": phase_results,
+        "execution_loop_trace": {
+            "enabled": env_flag("AGENTBENCH_EXECUTION_LOOP", default=False),
+            "completed": False,
+            "final_reason": "recursion_soft_stop",
+            "steps": [],
+        },
+        "measurements": [],
+        "measurements_summary": summarize_measurements([]),
+        "result": result,
+        "soft_stop": soft_stop,
+        "auto_run_report": {
+            "enabled": False,
+            "success": None,
+            "reason": "recursion_soft_stop",
+        },
+    }
+    (others_dir / "soft_stop.json").write_text(
+        json.dumps(soft_stop, indent=2, default=stringify_unknown),
+        encoding="utf-8",
+    )
+    save_result(others_dir, annotate_with_provenance(payload, "result"))
+    log_lifecycle_event(
+        stage="workflow_recursion_soft_stopped",
+        payload={
+            "event_kind": "workflow",
+            "parent_run_id": parent_run_id,
+            "soft_stop": soft_stop,
+        },
+    )
+    set_checkpoint_log_file(None)
+    set_lifecycle_log_file(None)
 
 
 def _strip_ansi(value: str) -> str:
@@ -4492,21 +4687,46 @@ def main() -> None:
             "app_variant": args.app_variant,
         },
     )
-    workflow = run_task_workflow(
-        # Debugging note: this is the exact hand-off from the outer wrapper
-        # into the Deep Agents app layer.
-        frontend_url=args.frontend_url,
-        model=args.model,
-        task=task,
-        base_hints=base_hints,
-        step_limit=args.step_limit,
-        workspace_dir=workspace_dir,
-        app_variant=args.app_variant,
-        task_index=args.index,
-        task_source=task_source,
-        parent_run_id=parent_run_id,
-        hint_provider=args.hint_provider,
-    )
+    try:
+        workflow = run_task_workflow(
+            # Debugging note: this is the exact hand-off from the outer wrapper
+            # into the Deep Agents app layer.
+            frontend_url=args.frontend_url,
+            model=args.model,
+            task=task,
+            base_hints=base_hints,
+            step_limit=args.step_limit,
+            workspace_dir=workspace_dir,
+            app_variant=args.app_variant,
+            task_index=args.index,
+            task_source=task_source,
+            parent_run_id=parent_run_id,
+            hint_provider=args.hint_provider,
+        )
+    except Exception as exc:
+        if not (recursion_soft_stop_enabled() and is_recursion_limit_error(exc)):
+            raise
+        write_recursion_soft_stop_result(
+            run_started_at=run_started_at,
+            parent_run_id=parent_run_id,
+            legacy_instance_slug=legacy_instance_slug,
+            args=args,
+            task=task,
+            task_source=task_source,
+            base_hints=base_hints,
+            auto_repo_checkout=auto_repo_checkout,
+            workspace_metadata=workspace_metadata,
+            checkpoint_log_path=checkpoint_log_path,
+            lifecycle_log_path=lifecycle_log_path,
+            others_dir=others_dir,
+            exc=exc,
+        )
+        print(f"AgentBench run recursion_soft_stop: {parent_run_id}")
+        print(f"Run directory: {run_dir}")
+        print(f"Result file: {others_dir / 'result.json'}")
+        print(f"Soft-stop file: {others_dir / 'soft_stop.json'}")
+        print(f"GraphRecursionError: {exc}", file=sys.stderr)
+        raise SystemExit(RECURSION_SOFT_STOP_EXIT_CODE) from exc
     log_lifecycle_event(
         stage="workflow_invocation_completed",
         payload={
