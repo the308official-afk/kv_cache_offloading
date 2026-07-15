@@ -369,6 +369,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", default="SWE-bench", help="Benchmark label shown above each table.")
     parser.add_argument("--model-label", default="", help="Optional fixed model label shown above each table.")
     parser.add_argument("--harness", default="Deepagents", help="Harness label shown above each table.")
+    parser.add_argument(
+        "--output-prefix",
+        default="",
+        help="Optional output filename prefix for --input-file mode. Defaults to the input CSV stem.",
+    )
     parser.add_argument("--start-row", type=int, default=1, help="1-based start row for --input-file mode.")
     parser.add_argument("--max-rows", type=int, default=14, help="Max rows for --input-file mode.")
     parser.add_argument("--task-summary-start-row", type=int, default=1, help="1-based start row for slide 9.")
@@ -735,6 +740,12 @@ def fragment_script(global_name: str, content: str) -> str:
     return JS_TEMPLATE.format(global_name=global_name, payload=json.dumps(content))
 
 
+def slugify_stem(value: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "_", value.strip())
+    slug = slug.strip("._-")
+    return slug or "reference_table"
+
+
 def write_fragment_set(
     *,
     output_dir: Path,
@@ -788,6 +799,7 @@ def build_single_fragment(args: argparse.Namespace) -> None:
     output_dir = args.output_dir
     output_dir.mkdir(parents=True, exist_ok=True)
     model_label = model_label_for_rows(rows, args.model_label)
+    output_prefix = slugify_stem(args.output_prefix or args.input_file.stem)
 
     if table_kind == "task-summary":
         fragment_html = task_summary_fragment(
@@ -800,7 +812,7 @@ def build_single_fragment(args: argparse.Namespace) -> None:
         )
         write_fragment_set(
             output_dir=output_dir,
-            fragment_basename="task_summary_fragment",
+            fragment_basename=output_prefix,
             global_name="TASK_SUMMARY_FRAGMENT",
             fragment_html=fragment_html,
             preview_title="Task Summary Preview",
@@ -830,7 +842,7 @@ def build_single_fragment(args: argparse.Namespace) -> None:
     )
     write_fragment_set(
         output_dir=output_dir,
-        fragment_basename="run_overview_fragment",
+        fragment_basename=output_prefix,
         global_name="RUN_OVERVIEW_FRAGMENT",
         fragment_html=fragment_html,
         preview_title="Run Overview Preview",

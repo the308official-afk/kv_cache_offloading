@@ -708,16 +708,31 @@ generated together for the presentation deck.
 
 ```bash
 python3 presentations/build_reference_tables.py \
+  --input-file experiments/charts/exp6_prompt_evolution_task_summary.csv \
+  --output-dir /tmp/reference-output
+```
+
+This writes:
+
+- `/tmp/reference-output/exp6_prompt_evolution_task_summary.html`
+- `/tmp/reference-output/exp6_prompt_evolution_task_summary.js`
+- `/tmp/reference-output/reference_tables.css`
+- `/tmp/reference-output/exp6_prompt_evolution_task_summary_preview.html`
+
+Run-overview input works the same way:
+
+```bash
+python3 presentations/build_reference_tables.py \
   --input-file experiments/charts/exp6_prompt_evolution_run_overview.csv \
   --output-dir /tmp/reference-output
 ```
 
 This writes:
 
-- `/tmp/reference-output/run_overview_fragment.html`
-- `/tmp/reference-output/run_overview_fragment.js`
+- `/tmp/reference-output/exp6_prompt_evolution_run_overview.html`
+- `/tmp/reference-output/exp6_prompt_evolution_run_overview.js`
 - `/tmp/reference-output/reference_tables.css`
-- `/tmp/reference-output/run_overview_fragment_preview.html`
+- `/tmp/reference-output/exp6_prompt_evolution_run_overview_preview.html`
 
 To regenerate the standard deck fragments together:
 
