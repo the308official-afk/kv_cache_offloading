@@ -699,6 +699,21 @@ cat experiments/reports/all_runs_task_summary.csv
 cat experiments/reports/all_runs_execution_prompts.csv
 ```
 
+To generate slide-ready HTML table fragments for the task-summary and
+run-overview slides from those CSVs:
+
+```bash
+python3 scripts/build_reference_tables.py \
+  --task-summary-csv experiments/reports/all_runs_task_summary.csv \
+  --run-overview-csv experiments/reports/all_runs_overview.csv
+```
+
+This writes:
+
+- `presentations/generated/reference_tables/slide9_task_summary_fragment.html`
+- `presentations/generated/reference_tables/slide10_run_overview_fragment.html`
+- `presentations/generated/reference_tables/reference_tables_preview.html`
+
 ## Experiment 9: KV Retention Probe
 
 This is the public KV-retention microbenchmark entrypoint.

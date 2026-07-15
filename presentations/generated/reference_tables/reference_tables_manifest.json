@@ -1,0 +1,19 @@
+{
+  "task_summary_csv": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/all_runs_task_summary.csv",
+  "run_overview_csv": "/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/reports/all_runs_overview.csv",
+  "css": "presentations/generated/reference_tables/reference_tables.css",
+  "task_summary_fragment": "presentations/generated/reference_tables/slide9_task_summary_fragment.html",
+  "run_overview_fragment": "presentations/generated/reference_tables/slide10_run_overview_fragment.html",
+  "preview_html": "presentations/generated/reference_tables/reference_tables_preview.html",
+  "options": {
+    "benchmark": "SWE-bench",
+    "task_summary_model_label": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "run_overview_model_label": "Qwen/Qwen2.5-Coder-7B-Instruct",
+    "harness": "Deepagents",
+    "task_summary_start_row": 1,
+    "task_summary_max_rows": 14,
+    "run_overview_start_row": 1,
+    "run_overview_max_rows": 14,
+    "max_tools_per_cell": 4
+  }
+}
