@@ -6,8 +6,12 @@ from __future__ import annotations
 import argparse
 import csv
 import math
+import sys
 from html import escape
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from svg_chart_helpers import visible_tick_indexes
 
 
 def parse_args() -> argparse.Namespace:
@@ -95,14 +99,19 @@ def build_line_chart_svg(
     series: list[dict[str, object]],
     y_label: str,
 ) -> str:
-    width = 1360
-    height = 600
+    width = 1600
+    height = 720
     left = 92
     right = 248
     top = 82 if not subtitle else 96
-    bottom = 76
+    bottom = 102
     plot_width = width - left - right
     plot_height = height - top - bottom
+    dense = len(x_values) > 14
+    tick_indexes = visible_tick_indexes(len(x_values), max_labels=11)
+    marker_radius = 3.6 if dense else 4.8
+    marker_stroke = 2.1 if dense else 2.6
+    line_width = 2.8 if dense else 3.2
 
     numeric_values: list[float | None] = []
     for item in series:
@@ -140,14 +149,15 @@ def build_line_chart_svg(
             f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{label}</text>'
         )
 
-    for x in x_values:
+    for idx, x in enumerate(x_values):
         xpos = x_position(x, min_x, max_x, left, plot_width)
-        parts.append(
-            f'<line x1="{xpos:.2f}" y1="{top}" x2="{xpos:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>'
-        )
-        parts.append(
-            f'<text x="{xpos:.2f}" y="{top + plot_height + 30}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">{x}</text>'
-        )
+        if idx in tick_indexes:
+            parts.append(
+                f'<line x1="{xpos:.2f}" y1="{top}" x2="{xpos:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>'
+            )
+            parts.append(
+                f'<text x="{xpos:.2f}" y="{top + plot_height + 34}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="13" fill="#475569">{x}</text>'
+            )
 
     for item in series:
         values: list[float | None] = item["values"]  # type: ignore[assignment]
@@ -165,11 +175,11 @@ def build_line_chart_svg(
             ]
             if len(points) >= 2:
                 parts.append(
-                    f'<polyline fill="none" stroke="{color}" stroke-width="3.2"{stroke} points="{svg_polyline(points)}"/>'
+                    f'<polyline fill="none" stroke="{color}" stroke-width="{line_width:.1f}"{stroke} points="{svg_polyline(points)}"/>'
                 )
             for point_x, point_y in points:
                 parts.append(
-                    f'<circle cx="{point_x:.2f}" cy="{point_y:.2f}" r="4.8" fill="#ffffff" stroke="{color}" stroke-width="2.6"/>'
+                    f'<circle cx="{point_x:.2f}" cy="{point_y:.2f}" r="{marker_radius:.1f}" fill="#ffffff" stroke="{color}" stroke-width="{marker_stroke:.1f}"/>'
                 )
 
     parts.append(

@@ -2486,6 +2486,69 @@ Main outputs:
 - `latest_agentic_hint_sweeps_suite_driver.log`: suite-level launch log
 - `experiments/charts/`: shared folder containing only the latest chart SVGs and the matrix CSVs they were generated from
 
+### Regenerate Dense-Sweep Charts
+
+Use this if the experiment already finished but the SVGs look cluttered because
+you used many sweep values. These commands rebuild only the charts from the
+latest matrix CSVs; they do not rerun the expensive experiments.
+
+Experiment 9:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+KV_RETENTION_MODE=plot \
+KV_RETENTION_PLOT_MATRIX_CSV=experiments/reports/latest_kv_retention_microbenchmark_matrix.csv \
+./agentbench/run_kv_retention_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Experiment 11:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+PRIORITY_SCHEDULING_MODE=plot \
+PRIORITY_SCHEDULING_PLOT_MATRIX_CSV=experiments/reports/latest_priority_scheduling_microbenchmark_matrix.csv \
+./agentbench/run_priority_scheduling_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Experiment 12:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+SPEC_PREFILL_MODE=plot \
+SPEC_PREFILL_PLOT_MATRIX_CSV=experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv \
+./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Experiment 13:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+LATENCY_SENSITIVITY_MODE=plot \
+PRIORITY_SCHEDULING_PLOT_MATRIX_CSV=experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv \
+./agentbench/run_latency_sensitivity_microbenchmark_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Check the regenerated public chart files:
+
+```bash
+ls -lh experiments/charts/exp9_*.svg
+ls -lh experiments/charts/exp11_*.svg
+ls -lh experiments/charts/exp12_*.svg
+ls -lh experiments/charts/exp13_*.svg
+```
+
 The suite banners show the actual selected case count, for example `1/8`,
 `2/8`, and so on.
 When a wrapper uses `MODE=all`, the banner also shows the resolved behavior, for example:

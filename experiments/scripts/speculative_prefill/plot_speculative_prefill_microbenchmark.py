@@ -5,8 +5,12 @@ from __future__ import annotations
 
 import argparse
 import csv
+import sys
 from html import escape
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from svg_chart_helpers import visible_tick_indexes, x_position_from_index
 
 
 def parse_args() -> argparse.Namespace:
@@ -121,14 +125,18 @@ def build_line_chart_svg(
     series: list[tuple[str, str, list[int]]],
     y_label: str,
 ) -> str:
-    width = 980
-    height = 560
+    width = 1600
+    height = 720
     left = 92
     right = 60
     top = 96
-    bottom = 110
+    bottom = 128
     plot_width = width - left - right
     plot_height = height - top - bottom
+    dense = len(labels) > 14
+    tick_indexes = visible_tick_indexes(len(labels), max_labels=11)
+    point_radius = 3.8 if dense else 5.0
+    line_width = 3.0 if dense else 4.0
     all_values = [value for _, _, values in series for value in values]
     min_y, max_y = series_bounds(all_values)
     if max_y > 0:
@@ -138,7 +146,6 @@ def build_line_chart_svg(
     grid_lines = 5
     y_ticks = [min_y + (max_y - min_y) * step / grid_lines for step in range(grid_lines + 1)]
     count = max(len(labels), 1)
-    x_step = plot_width / max(count - 1, 1)
 
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
@@ -154,22 +161,25 @@ def build_line_chart_svg(
         parts.append(f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{int(round(tick))}</text>')
 
     for idx, label in enumerate(labels):
-        x = left + (idx * x_step if count > 1 else plot_width / 2)
-        parts.append(f'<text x="{x:.2f}" y="{top + plot_height + 24}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
+        if idx not in tick_indexes:
+            continue
+        x = x_position_from_index(index=idx, count=count, labels=labels, left=left, plot_width=plot_width)
+        parts.append(f'<line x1="{x:.2f}" y1="{top}" x2="{x:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>')
+        parts.append(f'<text x="{x:.2f}" y="{top + plot_height + 30}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
 
     legend_x = left
     legend_y = height - 34
     for idx, (name, color, values) in enumerate(series):
         points = []
         for value_idx, value in enumerate(values):
-            x = left + (value_idx * x_step if count > 1 else plot_width / 2)
+            x = x_position_from_index(index=value_idx, count=count, labels=labels, left=left, plot_width=plot_width)
             y = top + plot_height - ((value - min_y) / (max_y - min_y)) * plot_height
             points.append(f"{x:.2f},{y:.2f}")
         if points:
-            parts.append(f'<polyline fill="none" stroke="{color}" stroke-width="4" points="{" ".join(points)}"/>')
+            parts.append(f'<polyline fill="none" stroke="{color}" stroke-width="{line_width:.1f}" points="{" ".join(points)}"/>')
             for point in points:
                 x_str, y_str = point.split(",")
-                parts.append(f'<circle cx="{x_str}" cy="{y_str}" r="5" fill="{color}"/>')
+                parts.append(f'<circle cx="{x_str}" cy="{y_str}" r="{point_radius:.1f}" fill="{color}"/>')
         lx = legend_x + idx * 220
         parts.append(f'<rect x="{lx}" y="{legend_y - 11}" width="18" height="18" rx="5" fill="{color}"/>')
         parts.append(f'<text x="{lx + 26}" y="{legend_y + 3}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">{escape(name)}</text>')
