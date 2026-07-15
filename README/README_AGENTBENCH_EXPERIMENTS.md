@@ -706,10 +706,9 @@ run-overview CSV reports. This section is the base workflow for building the
 presentation tables and can grow as more slide helpers are added.
 
 ```bash
-python3 scripts/build_reference_tables.py \
+python3 presentations/build_reference_tables.py \
   --task-summary-csv experiments/charts/exp6_prompt_evolution_task_summary.csv \
-  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv \
-  --output-dir presentations/assets
+  --run-overview-csv experiments/charts/exp6_prompt_evolution_run_overview.csv
 ```
 
 This writes:
@@ -718,6 +717,7 @@ This writes:
 - `presentations/assets/slide10_run_overview_fragment.html`
 - `presentations/assets/slide9_task_summary_fragment.js`
 - `presentations/assets/slide10_run_overview_fragment.js`
+- `presentations/assets/reference_tables.css`
 - `presentations/assets/reference_tables_preview.html`
 
 ## Experiment 9: KV Retention Probe

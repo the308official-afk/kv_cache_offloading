@@ -308,8 +308,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path(__file__).resolve().parent,
-        help="Directory where the HTML fragments and preview will be written. Defaults to the script directory.",
+        default=Path(__file__).resolve().parent / "assets",
+        help="Directory where the HTML fragments and preview will be written. Defaults to presentations/assets.",
     )
     parser.add_argument("--benchmark", default="SWE-bench", help="Benchmark label shown above each table.")
     parser.add_argument("--model-label", default="", help="Optional fixed model label shown above each table.")
