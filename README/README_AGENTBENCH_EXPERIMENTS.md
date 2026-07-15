@@ -594,7 +594,7 @@ range of SWE-bench Pro tasks, including:
 Automated version: stop Dynamo, restart it with the chosen model, wait for
 `/v1/models`, run a smoke test, then launch the batch.
 
-T```bash
+```bash
 cd ~/kv_cache_offloading
 
 RUN_ID="exp6_prompt_evolution_gh200_$(date +%Y%m%d_%H%M%S)"
