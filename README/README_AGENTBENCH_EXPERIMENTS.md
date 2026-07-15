@@ -1050,14 +1050,6 @@ Any phase prompts that were already dispatched are still written to
 For a quick smoke test:
 
 ```bash
-
-
-
-
-
-
-
-
 cd ~/kv_cache_offloading
 
 export AGENTBENCH_EXECUTION_LOOP=1
