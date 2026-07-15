@@ -604,6 +604,16 @@ range of SWE-bench Pro tasks, including:
 - per-phase planning / execution / review summaries
 - final model behavior for each SWE-bench task
 
+What made tool calling work reliably:
+
+- use `DYN_TOOL_CALL_PARSER=qwen3_coder`
+- use `DYN_REASONING_PARSER=qwen3`
+- use pinned upstream Deep Agents
+- require a tool-loop preflight before the batch
+- let Deep Agents call tools naturally with a small execution loop
+- soft-stop long recursion tasks instead of killing the batch
+- refresh public CSVs after every task
+
 Automated version: stop Dynamo, restart it with the chosen model, wait for
 `/v1/models`, run a smoke test, then launch the batch.
 
