@@ -1078,6 +1078,13 @@
       display: flex;
       flex-direction: column;
     }
+    .reference-fragment-frame {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: transparent;
+      display: block;
+    }
     .reference-fragment-placeholder {
       flex: 1;
       min-height: 0;
@@ -1523,12 +1530,12 @@
         <div><strong>Model:</strong> Qwen/Qwen2.5-Coder-7B-Instruct</div>
         <div><strong>Harness:</strong> Deepagents</div>
       </div>
-      <div
-        id="slide9-fragment-host"
-        class="reference-fragment-host"
-        data-fragment="assets/slide9_task_summary_fragment.html"
-      >
-        <div class="reference-fragment-placeholder">Loading assets/slide9_task_summary_fragment.html</div>
+      <div id="slide9-fragment-host" class="reference-fragment-host">
+        <iframe
+          class="reference-fragment-frame"
+          src="assets/slide9_task_summary_fragment.html"
+          title="Slide 9 task summary fragment"
+        ></iframe>
       </div>
       <p class="reference-caption">Representative task-summary sample showing repository, task statement, expected agent action, and patch expectation.</p>
     </div>
@@ -1543,12 +1550,12 @@
         <div><strong>Model:</strong> Quen/Quen3-Coder-30B-A3B-Instruct-FP8</div>
         <div><strong>Harness:</strong> Deepagents</div>
       </div>
-      <div
-        id="slide10-fragment-host"
-        class="reference-fragment-host"
-        data-fragment="assets/slide10_run_overview_fragment.html"
-      >
-        <div class="reference-fragment-placeholder">Loading assets/slide10_run_overview_fragment.html</div>
+      <div id="slide10-fragment-host" class="reference-fragment-host">
+        <iframe
+          class="reference-fragment-frame"
+          src="assets/slide10_run_overview_fragment.html"
+          title="Slide 10 run overview fragment"
+        ></iframe>
       </div>
       <p class="reference-caption">Representative run sample showing tasks executed, phases reached, and tools invoked.</p>
     </div>
@@ -1557,26 +1564,6 @@
   <script src="generated/retention_kv_hint_story/story_data.js"></script>
   <script>
     (function () {
-      async function loadHtmlFragment(hostId) {
-        const host = document.getElementById(hostId);
-        if (!host) return;
-        const path = host.dataset.fragment;
-        if (!path) return;
-        try {
-          const response = await fetch(path);
-          if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-          }
-          host.innerHTML = await response.text();
-        } catch (error) {
-          host.innerHTML = `<div class="reference-fragment-placeholder">Could not load ${path}</div>`;
-          console.error(`Failed to load fragment ${path}`, error);
-        }
-      }
-
-      loadHtmlFragment("slide9-fragment-host");
-      loadHtmlFragment("slide10-fragment-host");
-
       const data = window.RETENTION_STORY_DATA;
       if (!data) {
         return;

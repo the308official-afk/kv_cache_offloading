@@ -639,6 +639,10 @@ def write_text(path: Path, text: str) -> None:
     path.write_text(text, encoding="utf-8")
 
 
+def fragment_document(content: str) -> str:
+    return f"<style>\n{TABLE_CSS}\n</style>\n{content}"
+
+
 def main() -> None:
     args = parse_args()
     task_rows = read_rows(args.task_summary_csv)
@@ -679,8 +683,8 @@ def main() -> None:
     manifest_path = output_dir / "reference_tables_manifest.json"
 
     write_text(css_path, TABLE_CSS + "\n")
-    write_text(task_path, task_fragment)
-    write_text(run_path, run_fragment)
+    write_text(task_path, fragment_document(task_fragment))
+    write_text(run_path, fragment_document(run_fragment))
     write_text(
         preview_path,
         PREVIEW_HTML.format(css=TABLE_CSS, task_html=task_fragment, run_html=run_fragment),
