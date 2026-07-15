@@ -608,6 +608,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
+export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
@@ -652,6 +653,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
+export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=300
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
@@ -706,8 +708,12 @@ Note:
   default so Experiment 6 sees direct file/shell tool calls instead of routing
   through the `task` tool
 - the inner batch defaults to `AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0`, so one
-  failed SWE-bench task stops the batch instead of producing misleading zero
-  summaries
+  unexpected failed SWE-bench task stops the batch instead of producing
+  misleading zero summaries
+- `PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1` lets the batch skip a task that
+  reaches the Deep Agents graph recursion limit and continue with the next task
+- skipped recursion-limit tasks are recorded in the batch-local
+  `skipped_tasks.csv`
 - the tool-loop preflight defaults to `PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate`
   so it checks a small workspace edit plus validation command
 - the tool-loop preflight is capped by default with
@@ -1035,6 +1041,7 @@ export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
 export AGENTBENCH_FORCE_TOOL_CHOICE=auto
 export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
 export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
+export PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES=1
 export AGENTBENCH_AGENT_RECURSION_LIMIT=600
 export AGENTBENCH_MODEL_ONLY_PHASES=""
 export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
