@@ -296,6 +296,54 @@ PREVIEW_HTML = """<!DOCTYPE html>
 """
 
 
+SINGLE_PREVIEW_HTML = """<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Generated Reference Table</title>
+    <style>
+      body {{
+        margin: 0;
+        padding: 32px;
+        background: #f8fafc;
+        color: #0f172a;
+        font-family: 'IBM Plex Sans', Arial, sans-serif;
+      }}
+      .preview-slide {{
+        width: 1280px;
+        margin: 0 auto;
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 20px;
+        box-shadow: 0 16px 50px rgba(15, 23, 42, 0.08);
+        padding: 36px 42px;
+      }}
+      .preview-title {{
+        margin: 0 0 14px 0;
+        font-size: 30px;
+        line-height: 1.1;
+        font-weight: 700;
+        color: #0f172a;
+      }}
+      .preview-note {{
+        margin: 0 0 20px 0;
+        font-size: 14px;
+        color: #475569;
+      }}
+      {css}
+    </style>
+  </head>
+  <body>
+    <section class="preview-slide">
+      <h1 class="preview-title">{title}</h1>
+      <p class="preview-note">Generated fragment preview</p>
+      {content}
+    </section>
+  </body>
+</html>
+"""
+
+
 JS_TEMPLATE = """window.{global_name} = {payload};\n"""
 
 
@@ -303,8 +351,15 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate slide-ready HTML table fragments for task-summary and run-overview slides."
     )
-    parser.add_argument("--task-summary-csv", type=Path, required=True, help="Path to the task-summary CSV.")
-    parser.add_argument("--run-overview-csv", type=Path, required=True, help="Path to the run-overview CSV.")
+    parser.add_argument("--input-file", type=Path, help="Path to one CSV report to convert into a single fragment.")
+    parser.add_argument(
+        "--table-kind",
+        choices=("auto", "task-summary", "run-overview"),
+        default="auto",
+        help="Fragment type for --input-file mode. Defaults to auto-detect from CSV headers.",
+    )
+    parser.add_argument("--task-summary-csv", type=Path, help="Path to the task-summary CSV.")
+    parser.add_argument("--run-overview-csv", type=Path, help="Path to the run-overview CSV.")
     parser.add_argument(
         "--output-dir",
         type=Path,
@@ -314,6 +369,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--benchmark", default="SWE-bench", help="Benchmark label shown above each table.")
     parser.add_argument("--model-label", default="", help="Optional fixed model label shown above each table.")
     parser.add_argument("--harness", default="Deepagents", help="Harness label shown above each table.")
+    parser.add_argument("--start-row", type=int, default=1, help="1-based start row for --input-file mode.")
+    parser.add_argument("--max-rows", type=int, default=14, help="Max rows for --input-file mode.")
     parser.add_argument("--task-summary-start-row", type=int, default=1, help="1-based start row for slide 9.")
     parser.add_argument("--task-summary-max-rows", type=int, default=14, help="Max rows for slide 9.")
     parser.add_argument("--run-overview-start-row", type=int, default=1, help="1-based start row for slide 10.")
@@ -324,7 +381,13 @@ def parse_args() -> argparse.Namespace:
         default=4,
         help="Maximum number of tool names shown inside each run-overview phase cell.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.input_file:
+        if args.task_summary_csv or args.run_overview_csv:
+            raise SystemExit("Use either --input-file or the pair --task-summary-csv/--run-overview-csv, not both.")
+    elif not (args.task_summary_csv and args.run_overview_csv):
+        raise SystemExit("Provide --input-file, or provide both --task-summary-csv and --run-overview-csv.")
+    return args
 
 
 def read_rows(path: Path) -> list[dict[str, str]]:
@@ -462,6 +525,28 @@ def is_task_summary_chart_schema(rows: list[dict[str, str]]) -> bool:
 
 def is_run_overview_chart_schema(rows: list[dict[str, str]]) -> bool:
     return bool(rows) and "Planning" in rows[0] and "Execution" in rows[0] and "Patch Gen" in rows[0]
+
+
+def is_task_summary_raw_schema(rows: list[dict[str, str]]) -> bool:
+    if not rows:
+        return False
+    keys = rows[0].keys()
+    return "problem_statement_summary" in keys and "expected_agent_action" in keys
+
+
+def is_run_overview_raw_schema(rows: list[dict[str, str]]) -> bool:
+    if not rows:
+        return False
+    keys = rows[0].keys()
+    return "execution_steps" in keys and "total_tool_calls" in keys
+
+
+def detect_table_kind(rows: list[dict[str, str]]) -> str:
+    if is_task_summary_chart_schema(rows) or is_task_summary_raw_schema(rows):
+        return "task-summary"
+    if is_run_overview_chart_schema(rows) or is_run_overview_raw_schema(rows):
+        return "run-overview"
+    raise SystemExit("Could not detect table kind from CSV headers. Use --table-kind to specify it explicitly.")
 
 
 def patch_nonempty_from_text(value: str) -> bool:
@@ -650,8 +735,127 @@ def fragment_script(global_name: str, content: str) -> str:
     return JS_TEMPLATE.format(global_name=global_name, payload=json.dumps(content))
 
 
+def write_fragment_set(
+    *,
+    output_dir: Path,
+    fragment_basename: str,
+    global_name: str,
+    fragment_html: str,
+    preview_title: str,
+    metadata: dict[str, object],
+) -> None:
+    css_path = output_dir / "reference_tables.css"
+    fragment_path = output_dir / f"{fragment_basename}.html"
+    fragment_js_path = output_dir / f"{fragment_basename}.js"
+    preview_path = output_dir / f"{fragment_basename}_preview.html"
+    manifest_path = output_dir / f"{fragment_basename}_manifest.json"
+
+    write_text(css_path, TABLE_CSS + "\n")
+    write_text(fragment_path, fragment_document(fragment_html))
+    write_text(fragment_js_path, fragment_script(global_name, fragment_html))
+    write_text(
+        preview_path,
+        SINGLE_PREVIEW_HTML.format(css=TABLE_CSS, title=preview_title, content=fragment_html),
+    )
+    write_text(
+        manifest_path,
+        json.dumps(
+            {
+                **metadata,
+                "css": str(css_path),
+                "fragment_html": str(fragment_path),
+                "fragment_js": str(fragment_js_path),
+                "preview_html": str(preview_path),
+            },
+            indent=2,
+        )
+        + "\n",
+    )
+
+    print(f"css={css_path}")
+    print(f"fragment_html={fragment_path}")
+    print(f"fragment_js={fragment_js_path}")
+    print(f"preview={preview_path}")
+    print(f"manifest={manifest_path}")
+
+
+def build_single_fragment(args: argparse.Namespace) -> None:
+    rows = read_rows(args.input_file)
+    if not rows:
+        raise SystemExit(f"No rows found in {args.input_file}")
+
+    table_kind = args.table_kind if args.table_kind != "auto" else detect_table_kind(rows)
+    output_dir = args.output_dir
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_label = model_label_for_rows(rows, args.model_label)
+
+    if table_kind == "task-summary":
+        fragment_html = task_summary_fragment(
+            rows=rows,
+            benchmark=args.benchmark,
+            model_label=model_label,
+            harness=args.harness,
+            start_row=args.start_row,
+            max_rows=args.max_rows,
+        )
+        write_fragment_set(
+            output_dir=output_dir,
+            fragment_basename="task_summary_fragment",
+            global_name="TASK_SUMMARY_FRAGMENT",
+            fragment_html=fragment_html,
+            preview_title="Task Summary Preview",
+            metadata={
+                "mode": "single",
+                "table_kind": table_kind,
+                "input_file": str(args.input_file),
+                "options": {
+                    "benchmark": args.benchmark,
+                    "model_label": model_label,
+                    "harness": args.harness,
+                    "start_row": args.start_row,
+                    "max_rows": args.max_rows,
+                },
+            },
+        )
+        return
+
+    fragment_html = run_overview_fragment(
+        rows=rows,
+        benchmark=args.benchmark,
+        model_label=model_label,
+        harness=args.harness,
+        start_row=args.start_row,
+        max_rows=args.max_rows,
+        max_tools_per_cell=args.max_tools_per_cell,
+    )
+    write_fragment_set(
+        output_dir=output_dir,
+        fragment_basename="run_overview_fragment",
+        global_name="RUN_OVERVIEW_FRAGMENT",
+        fragment_html=fragment_html,
+        preview_title="Run Overview Preview",
+        metadata={
+            "mode": "single",
+            "table_kind": table_kind,
+            "input_file": str(args.input_file),
+            "options": {
+                "benchmark": args.benchmark,
+                "model_label": model_label,
+                "harness": args.harness,
+                "start_row": args.start_row,
+                "max_rows": args.max_rows,
+                "max_tools_per_cell": args.max_tools_per_cell,
+            },
+        },
+    )
+
+
 def main() -> None:
     args = parse_args()
+    if args.input_file:
+        build_single_fragment(args)
+        return
+
     task_rows = read_rows(args.task_summary_csv)
     run_rows = read_rows(args.run_overview_csv)
     if not task_rows:
@@ -704,14 +908,14 @@ def main() -> None:
     manifest = {
         "task_summary_csv": str(args.task_summary_csv),
         "run_overview_csv": str(args.run_overview_csv),
-            "css": str(css_path),
-            "task_summary_fragment": str(task_path),
-            "run_overview_fragment": str(run_path),
-            "task_summary_script": str(task_js_path),
-            "run_overview_script": str(run_js_path),
-            "preview_html": str(preview_path),
-            "options": {
-                "benchmark": args.benchmark,
+        "css": str(css_path),
+        "task_summary_fragment": str(task_path),
+        "run_overview_fragment": str(run_path),
+        "task_summary_script": str(task_js_path),
+        "run_overview_script": str(run_js_path),
+        "preview_html": str(preview_path),
+        "options": {
+            "benchmark": args.benchmark,
             "task_summary_model_label": task_model_label,
             "run_overview_model_label": run_model_label,
             "harness": args.harness,

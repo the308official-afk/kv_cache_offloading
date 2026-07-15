@@ -701,9 +701,25 @@ cat experiments/reports/all_runs_execution_prompts.csv
 
 ## Slide Table Fragments
 
-Generate slide-ready HTML table fragments from the task-summary and
-run-overview CSV reports. This section is the base workflow for building the
-presentation tables and can grow as more slide helpers are added.
+Generate slide-ready HTML table fragments from CSV reports. Use the single-file
+mode when you want one specific table written to a chosen output folder. Use
+the dual-file mode when you want the standard slide 9 and slide 10 fragments
+generated together for the presentation deck.
+
+```bash
+python3 presentations/build_reference_tables.py \
+  --input-file experiments/charts/exp6_prompt_evolution_run_overview.csv \
+  --output-dir /tmp/reference-output
+```
+
+This writes:
+
+- `/tmp/reference-output/run_overview_fragment.html`
+- `/tmp/reference-output/run_overview_fragment.js`
+- `/tmp/reference-output/reference_tables.css`
+- `/tmp/reference-output/run_overview_fragment_preview.html`
+
+To regenerate the standard deck fragments together:
 
 ```bash
 python3 presentations/build_reference_tables.py \
