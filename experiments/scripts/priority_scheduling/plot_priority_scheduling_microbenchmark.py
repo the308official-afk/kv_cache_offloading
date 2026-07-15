@@ -10,11 +10,7 @@ from html import escape
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from svg_chart_helpers import (
-    visible_point_label_indexes,
-    visible_tick_indexes,
-    x_position_from_index,
-)
+from svg_chart_helpers import visible_tick_indexes, x_position_from_index
 
 
 def parse_args() -> argparse.Namespace:
@@ -226,7 +222,6 @@ def build_jump_ahead_chart_svg(
     plot_height = height - top - bottom
     dense = len(labels) > 14
     tick_indexes = visible_tick_indexes(len(labels), max_labels=11)
-    point_label_indexes = visible_point_label_indexes(rates, max_labels=7)
     point_radius = 4.0 if dense else 6.0
     point_stroke = 1.7 if dense else 2.0
     line_width = 3.0 if dense else 4.0
@@ -261,14 +256,9 @@ def build_jump_ahead_chart_svg(
         path_points = " ".join(f"{x:.2f},{y:.2f}" for x, y in points)
         parts.append(f'<polyline fill="none" stroke="#2563eb" stroke-width="{line_width:.1f}" stroke-linejoin="round" stroke-linecap="round" points="{path_points}"/>')
 
-    for idx, ((x, y), rate, jump_count, max_count) in enumerate(zip(points, rates, counts, max_counts)):
+    for (x, y), jump_count in zip(points, counts):
         color = "#2563eb" if jump_count > 0 else "#94a3b8"
         parts.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{point_radius:.1f}" fill="{color}" stroke="#ffffff" stroke-width="{point_stroke:.1f}"/>')
-        if idx in point_label_indexes:
-            label_y = max(top + 18, y - 14)
-            count_y = min(top + plot_height - 8, y + 24)
-            parts.append(f'<text x="{x:.2f}" y="{label_y:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="12" fill="#334155">{rate:.1f}%</text>')
-            parts.append(f'<text x="{x:.2f}" y="{count_y:.2f}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="#64748b">{jump_count}/{max_count}</text>')
 
     legend_x = left
     legend_y = height - 34
