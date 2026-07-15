@@ -9,6 +9,19 @@ The runtime path is:
 SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -> reports
 ```
 
+## Experiment Snapshot
+
+- **Experiment 9: KV retention** evaluates whether important prompts stay in KV
+  cache after many competing prompts.
+- **Experiment 10: Cache pinning** evaluates whether `cache_control` TTL hints
+  keep protected prompts warm longer than unpinned prompts.
+- **Experiment 11: Priority scheduling** evaluates whether high-priority
+  requests jump ahead of lower-priority work in the queue.
+- **Experiment 12: Speculative prefill** evaluates whether a current request can
+  warm the KV cache for a likely next request.
+- **Experiment 13: Latency sensitivity** evaluates whether latency-sensitive
+  requests get priority-like queue movement.
+
 ## Quick Decision Guide
 
 - **SWE-bench prompt / tool / behavior traces**: use [Experiment 6](#experiment-6-prompt-evolution-batch).
