@@ -635,6 +635,18 @@ echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
 ```
 
+Watch it:
+
+```bash
+tail -f "${LOG_DIR}/run.log"
+```
+
+If your terminal reconnects later:
+
+```bash
+tail -f "$(ls -td experiments/reports/exp6_prompt_evolution_nohup/* | head -1)/run.log"
+```
+
 To watch the worker after the restart:
 
 ```bash
