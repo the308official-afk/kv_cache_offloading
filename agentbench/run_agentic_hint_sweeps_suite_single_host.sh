@@ -457,6 +457,20 @@ mirror_selected_shared_charts_to_suite_dirs() {
   done
 }
 
+prune_suite_chart_group_dir() {
+  if [[ -z "${SUITE_CHART_GROUP_RESOLVED}" ]]; then
+    return 0
+  fi
+  local group_dir="experiments/charts/${SUITE_CHART_GROUP_RESOLVED}"
+  mkdir -p "${group_dir}"
+  rm -f \
+    "${group_dir}"/exp9_* \
+    "${group_dir}"/exp10_* \
+    "${group_dir}"/exp11_* \
+    "${group_dir}"/exp12_* \
+    "${group_dir}"/exp13_* 2>/dev/null || true
+}
+
 prune_shared_chart_dir_for_suite_selection() {
   local charts_dir="experiments/charts"
   mkdir -p "${charts_dir}"
@@ -1657,6 +1671,7 @@ log "Suite env snapshot: ${SUITE_ENV_SNAPSHOT}"
 log "Driver log: ${SUITE_DRIVER_LOG}"
 
 ensure_suite_experiment_dirs_ready
+prune_suite_chart_group_dir
 prune_shared_chart_dir_for_suite_selection
 ensure_suite_precise_runtime_if_needed
 

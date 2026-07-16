@@ -2384,6 +2384,7 @@ LOG_DIR="experiments/reports/agentic_hint_sweeps_suite_nohup/${RUN_ID}"
 mkdir -p "${LOG_DIR}"
 
 nohup env \
+  AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
   SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
@@ -2489,6 +2490,8 @@ SUITE_CHART_GROUP=gh200_swebench_30values
 The top-level `experiments/charts/` folder remains the latest convenience view.
 The grouped folder keeps the latest charts for that group. The archive folder
 keeps the exact charts and matrices for one suite run.
+At suite start, the selected grouped folder is cleared of old `exp9_` through
+`exp13_` files so it reflects the current grouped run.
 
 Top-level suite outputs:
 
