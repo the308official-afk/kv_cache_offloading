@@ -1300,9 +1300,6 @@
               <li><strong>Purpose:</strong> test whether <span class="mono">nvext.cache_control</span> improves replay retention.</li>
               <li><strong>Workload:</strong> compare <span class="mono">off</span> versus <span class="mono">ephemeral:1h</span> at matched distractor counts.</li>
               <li><strong>Stack requirement:</strong> custom cache-pinning branches: Dynamo PR #6213 and SGLang PR #18941.</li>
-              <li><strong>Validation:</strong> router pin spawned and worker pin applied.</li>
-              <li><strong>Observation:</strong> replay latency rose sharply under pressure, consistent with thrash-like behavior.</li>
-              <li><strong>Outcome:</strong> the sweep remained inconclusive despite a live pin path.</li>
             </ul>
           </div>
           <div class="hint-json-panel">

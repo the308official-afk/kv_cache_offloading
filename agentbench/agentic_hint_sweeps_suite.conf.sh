@@ -26,6 +26,7 @@
 : "${SUITE_INTERACTIVE_BUILD_PROGRESS:=1}"
 : "${SUITE_ENSURE_PRECISE_RUNTIME:=auto}"
 : "${PRECISE_START_MODE:=clean}"
+: "${SUITE_CHART_GROUP:=}"
 
 # Shared logging / proof defaults.
 # This config is tuned to match the current GH200 known-good commands.

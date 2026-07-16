@@ -26,6 +26,7 @@ SUITE_DEFAULT_MODE="${SUITE_DEFAULT_MODE:-sweep}"
 SUITE_INTERACTIVE_BUILD_PROGRESS="${SUITE_INTERACTIVE_BUILD_PROGRESS:-1}"
 SUITE_ENSURE_PRECISE_RUNTIME="${SUITE_ENSURE_PRECISE_RUNTIME:-auto}"
 SUITE_ISOLATION_MODE="${SUITE_ISOLATION_MODE:-per_case}"
+SUITE_CHART_GROUP="${SUITE_CHART_GROUP:-}"
 EXPERIMENT_RESET_MODE="${EXPERIMENT_RESET_MODE:-flush}"
 RETENTION_PROMPT_ISOLATION_MODE="${RETENTION_PROMPT_ISOLATION_MODE:-disjoint}"
 SPEC_PREFILL_PROMPT_ISOLATION_MODE="${SPEC_PREFILL_PROMPT_ISOLATION_MODE:-disjoint}"
@@ -49,6 +50,7 @@ SUITE_SUMMARY_MD="${SUITE_ROOT_DIR}/suite_summary.md"
 SUITE_JSONL="${SUITE_ROOT_DIR}/suite_results.jsonl"
 SUITE_ENV_SNAPSHOT="${SUITE_ROOT_DIR}/suite_env.sh"
 SUITE_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+SUITE_CHART_GROUP_RESOLVED=""
 
 LATEST_SUMMARY_MD="${LATEST_PREFIX}_summary.md"
 LATEST_MANIFEST_JSON="${LATEST_PREFIX}_manifest.json"
@@ -191,6 +193,7 @@ SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS='${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXP
 SUITE_DEFAULT_MODE='${SUITE_DEFAULT_MODE}'
 SUITE_INTERACTIVE_BUILD_PROGRESS='${SUITE_INTERACTIVE_BUILD_PROGRESS}'
 SUITE_ENSURE_PRECISE_RUNTIME='${SUITE_ENSURE_PRECISE_RUNTIME}'
+SUITE_CHART_GROUP='${SUITE_CHART_GROUP}'
 PRECISE_START_MODE='${PRECISE_START_MODE:-}'
 EXPERIMENT_RESET_MODE='${EFFECTIVE_EXPERIMENT_RESET_MODE}'
 WRAPPER_STOP_DYNAMO_WHEN_DONE='${WRAPPER_STOP_DYNAMO_WHEN_DONE}'
@@ -396,6 +399,64 @@ sync_latest_matrices_to_shared_charts() {
   has_selected_experiment 13 && [[ -f "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" ]] && cp -f "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" "${charts_dir}/exp13_latencysens_matrix.csv"
 }
 
+sanitize_chart_group() {
+  local raw="$1"
+  printf '%s' "${raw}" | tr -c 'A-Za-z0-9._-' '_'
+}
+
+infer_suite_chart_group() {
+  if [[ -n "${SUITE_CHART_GROUP:-}" ]]; then
+    sanitize_chart_group "${SUITE_CHART_GROUP}"
+    return 0
+  fi
+
+  local saw_swebench=0
+  local saw_synthetic=0
+  local saw_other=0
+  local run_case=""
+  for run_case in "${SUITE_RUN_SELECTION[@]:-}"; do
+    case "${run_case}" in
+      *_swebench) saw_swebench=1 ;;
+      *_synthetic) saw_synthetic=1 ;;
+      *) saw_other=1 ;;
+    esac
+  done
+
+  if [[ "${saw_swebench}" = "1" && "${saw_synthetic}" = "0" && "${saw_other}" = "0" ]]; then
+    echo "swebench"
+  elif [[ "${saw_synthetic}" = "1" && "${saw_swebench}" = "0" && "${saw_other}" = "0" ]]; then
+    echo "synthetic"
+  elif [[ "${saw_swebench}${saw_synthetic}${saw_other}" = "001" ]]; then
+    echo "other"
+  else
+    echo "mixed"
+  fi
+}
+
+copy_chart_asset_to_suite_dirs() {
+  local src="$1"
+  if [[ ! -f "${src}" || -z "${SUITE_CHART_GROUP_RESOLVED}" ]]; then
+    return 0
+  fi
+
+  local basename
+  basename="$(basename "${src}")"
+  local group_dir="experiments/charts/${SUITE_CHART_GROUP_RESOLVED}"
+  local archive_dir="experiments/charts/archive/${SUITE_ID}"
+  mkdir -p "${group_dir}" "${archive_dir}"
+  cp -f "${src}" "${group_dir}/${basename}"
+  cp -f "${src}" "${archive_dir}/${basename}"
+}
+
+mirror_selected_shared_charts_to_suite_dirs() {
+  local charts_dir="experiments/charts"
+  local path=""
+  for path in "${charts_dir}"/exp9_* "${charts_dir}"/exp10_* "${charts_dir}"/exp11_* "${charts_dir}"/exp12_* "${charts_dir}"/exp13_*; do
+    [[ -f "${path}" ]] || continue
+    copy_chart_asset_to_suite_dirs "${path}"
+  done
+}
+
 prune_shared_chart_dir_for_suite_selection() {
   local charts_dir="experiments/charts"
   mkdir -p "${charts_dir}"
@@ -469,6 +530,7 @@ sync_shared_assets_for_experiment() {
     local dest="$2"
     if [[ -f "${src}" ]]; then
       cp -f "${src}" "${dest}"
+      copy_chart_asset_to_suite_dirs "${dest}"
       published_any=1
     fi
   }
@@ -660,7 +722,10 @@ build_suite_outputs() {
     "${SUITE_ENV_SNAPSHOT}" \
     "${SUITE_DRIVER_LOG}" \
     "${SUITE_STARTED_AT}" \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    "${SUITE_CHART_GROUP_RESOLVED}" \
+    "experiments/charts/${SUITE_CHART_GROUP_RESOLVED}" \
+    "experiments/charts/archive/${SUITE_ID}"
 from __future__ import annotations
 import json
 import sys
@@ -681,6 +746,9 @@ env_snapshot = sys.argv[11]
 driver_log = sys.argv[12]
 suite_started_at = sys.argv[13]
 suite_finished_at = sys.argv[14]
+suite_chart_group = sys.argv[15]
+suite_chart_group_dir = sys.argv[16]
+suite_chart_archive_dir = sys.argv[17]
 
 results = []
 if jsonl_path.exists():
@@ -699,6 +767,9 @@ manifest = {
     "generated_at_utc": datetime.now(timezone.utc).isoformat(),
     "started_at_utc": suite_started_at,
     "finished_at_utc": suite_finished_at,
+    "suite_chart_group": suite_chart_group,
+    "suite_chart_group_dir": str(Path(suite_chart_group_dir).resolve()),
+    "suite_chart_archive_dir": str(Path(suite_chart_archive_dir).resolve()),
     "suite_env_snapshot": str(Path(env_snapshot).resolve()),
     "suite_driver_log": str(Path(driver_log).resolve()),
     "results": results,
@@ -717,6 +788,9 @@ lines = [
     f"- continue_on_error: `{continue_on_error}`",
     f"- started_at_utc: `{suite_started_at}`",
     f"- finished_at_utc: `{suite_finished_at}`",
+    f"- chart_group: `{suite_chart_group}`",
+    f"- chart_group_dir: `{suite_chart_group_dir}`",
+    f"- chart_archive_dir: `{suite_chart_archive_dir}`",
     f"- env_snapshot: `{env_snapshot}`",
     f"- driver_log: `{driver_log}`",
     "",
@@ -1533,6 +1607,12 @@ run_suite_case() {
 
 declare -a SUITE_RUN_SELECTION=()
 build_suite_run_selection
+SUITE_CHART_GROUP_RESOLVED="$(infer_suite_chart_group)"
+cat >> "${SUITE_ENV_SNAPSHOT}" <<EOF
+SUITE_CHART_GROUP_RESOLVED='${SUITE_CHART_GROUP_RESOLVED}'
+SUITE_CHART_GROUP_DIR='experiments/charts/${SUITE_CHART_GROUP_RESOLVED}'
+SUITE_CHART_ARCHIVE_DIR='experiments/charts/archive/${SUITE_ID}'
+EOF
 
 banner "AGENTIC HINT SWEEPS SUITE" | tee -a "${SUITE_DRIVER_LOG}"
 log "Suite id: ${SUITE_ID}"
@@ -1542,6 +1622,9 @@ log "Machine profile: ${DYNAMO_MACHINE_PROFILE:-default}"
 log "Suite runs: ${SUITE_RUN_SELECTION[*]}"
 log "Legacy experiments: ${SUITE_EXPERIMENTS:-<unset>}"
 log "Suite isolation mode: ${SUITE_ISOLATION_MODE}"
+log "Suite chart group: ${SUITE_CHART_GROUP_RESOLVED}"
+log "Suite chart group dir: experiments/charts/${SUITE_CHART_GROUP_RESOLVED}"
+log "Suite chart archive dir: experiments/charts/archive/${SUITE_ID}"
 log "Continue on error: ${SUITE_CONTINUE_ON_ERROR}"
 log "Stop Dynamo between experiments: ${EFFECTIVE_SUITE_STOP_DYNAMO_BETWEEN_EXPERIMENTS}"
 log "Default mode: ${SUITE_DEFAULT_MODE}"
@@ -1609,6 +1692,7 @@ build_suite_outputs
 
 prune_shared_chart_dir_for_suite_selection
 sync_latest_matrices_to_shared_charts
+mirror_selected_shared_charts_to_suite_dirs
 
 banner "AGENTIC HINT SWEEPS SUITE READY" | tee -a "${SUITE_DRIVER_LOG}"
 log "Suite run dir: ${SUITE_ROOT_DIR}"
@@ -1617,6 +1701,8 @@ log "Suite manifest: ${SUITE_MANIFEST_JSON}"
 log "Latest summary: ${LATEST_SUMMARY_MD}"
 log "Latest manifest: ${LATEST_MANIFEST_JSON}"
 log "Latest driver log: ${LATEST_DRIVER_LOG}"
+log "Grouped charts: experiments/charts/${SUITE_CHART_GROUP_RESOLVED}"
+log "Archived charts: experiments/charts/archive/${SUITE_ID}"
 
 if [[ "${suite_ok}" != "1" ]]; then
   exit 1

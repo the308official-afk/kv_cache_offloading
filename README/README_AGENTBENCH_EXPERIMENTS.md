@@ -2421,6 +2421,7 @@ SUITE_ISOLATION_MODE
 SUITE_CONTINUE_ON_ERROR
 SUITE_INTERACTIVE_BUILD_PROGRESS
 SUITE_ENSURE_PRECISE_RUNTIME
+SUITE_CHART_GROUP
 RETENTION_PROMPT_ISOLATION_MODE
 SPEC_PREFILL_PROMPT_ISOLATION_MODE
 ```
@@ -2463,6 +2464,31 @@ Charts are copied into [`experiments/charts/`](/Users/oluwolejaiyeoba/Documents/
 
 The suite also removes chart files for experiments that are not in the current
 `SUITE_RUNS` selection, so stale chart files do not linger when you run a subset.
+
+The suite also keeps separated chart copies:
+
+```text
+experiments/charts/swebench/
+experiments/charts/synthetic/
+experiments/charts/mixed/
+experiments/charts/archive/<suite_id>/
+```
+
+Default grouping:
+
+- all selected `*_swebench` cases -> `experiments/charts/swebench/`
+- all selected `*_synthetic` cases -> `experiments/charts/synthetic/`
+- mixed selections -> `experiments/charts/mixed/`
+
+Override the group name when you want a custom folder:
+
+```bash
+SUITE_CHART_GROUP=gh200_swebench_30values
+```
+
+The top-level `experiments/charts/` folder remains the latest convenience view.
+The grouped folder keeps the latest charts for that group. The archive folder
+keeps the exact charts and matrices for one suite run.
 
 Top-level suite outputs:
 
