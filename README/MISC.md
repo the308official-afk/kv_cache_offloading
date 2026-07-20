@@ -1,5 +1,31 @@
 # Misc Debug Notes
 
+
+
+
+NVIDIA Dynamo is an orchestration platform for LLM inference. It does not implement the transformer model itself. Instead, it coordinates where requests run, separates prefill and decode, routes requests using KV-cache awareness, manages the KV cache across the memory hierarchy, and moves data efficiently between machines so inference remains fast and scalable.
+
+
+Here are concise, slide-friendly descriptions for each major component:
+
+API Server – Receives LLM requests and forwards them into Dynamo for processing.
+Planner – Continuously optimizes scheduling and resource usage.
+Smart Router – Routes requests to the best worker, prioritizing KV cache reuse.
+Prefill Worker – Processes the input prompt and builds the initial KV cache.
+Decode Worker – Generates output tokens using the existing KV cache.
+Distributed KV Cache – Stores and shares KV cache across workers for reuse.
+KV Cache Manager – Decides where KV cache should live (GPU, CPU, or object storage).
+NIXL (Inference Transfer Engine) – Moves data efficiently between GPUs and nodes.
+Event Plane – Monitors system health, performance, and metrics across all components.
+Host Memory – Provides larger, slower storage for offloaded KV cache.
+Object Storage – Stores long-lived KV cache beyond GPU and CPU memory.
+Disaggregated Serving – Separates prefill and decode onto specialized workers for higher efficiency.
+
+
+
+
+
+
 ```bash
 Run	Status	Repo	Model	Steps	Planning	Execution	Exec Size Î”	Patch Gen	Review	Other	Total	Patch
 5310	recursion_soft_stop	NodeBB	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
