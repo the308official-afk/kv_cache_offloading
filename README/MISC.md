@@ -2,6 +2,16 @@
 
 
 
+For a presentation, I'd keep it to these core capabilities:
+
+LLM orchestration platform for scalable inference.
+KV cache-aware routing to maximize cache reuse and reduce recomputation.
+Disaggregated serving by coordinating separate prefill and decode workers.
+Distributed KV cache management with offloading across GPU, CPU, and storage.
+High-performance multi-node communication for efficient data movement between workers.
+
+
+
 
 NVIDIA Dynamo is an orchestration platform for LLM inference. It does not implement the transformer model itself. Instead, it coordinates where requests run, separates prefill and decode, routes requests using KV-cache awareness, manages the KV cache across the memory hierarchy, and moves data efficiently between machines so inference remains fast and scalable.
 
