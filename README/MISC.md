@@ -1,6 +1,14 @@
 # Misc Debug Notes
 
 
+LLM orchestration platform – Coordinates all the components needed to run LLM inference efficiently.
+KV cache-aware routing – Sends requests to the worker that already has the needed KV cache to avoid recomputing it.
+Disaggregated serving – Separates prompt processing (prefill) and token generation (decode) so each can run on the best resources.
+Distributed KV cache management – Stores and moves KV cache across GPU, CPU, and storage to support larger workloads.
+High-performance multi-node communication – Transfers requests and KV cache quickly between GPUs and servers with low latency.
+
+
+
 
 For a presentation, I'd keep it to these core capabilities:
 
