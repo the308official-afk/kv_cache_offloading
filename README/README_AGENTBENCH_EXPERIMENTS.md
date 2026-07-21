@@ -1006,6 +1006,32 @@ cd ~/kv_cache_offloading
 ./agentbench/prepare_swebench_trajectory_prompts.sh
 ```
 
+Quickly check whether the current catalog has enough `planning` tasks for the
+smoke test below:
+
+```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+p = Path("experiments/reports/latest_swebench_trajectory_prompt_catalog.csv")
+rows = list(csv.DictReader(p.open()))
+planning_tasks = sorted({
+    r.get("task_index")
+    for r in rows
+    if r.get("stage_name") == "planning" or r.get("phase") == "planning"
+})
+print("planning task count:", len(planning_tasks))
+print("need at least:", 21, "for protected task + 20 distractor tasks")
+print("first task indexes:", planning_tasks[:25])
+PY
+```
+
+If the count is below 21, either wait for more Experiment 6 tasks to finish or
+lower the largest distractor count.
+
 Step 2: run Experiment 9 against the prepared trajectory catalog.
 
 For the quick smoke-test catalog above:
