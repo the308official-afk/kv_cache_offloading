@@ -1,6 +1,6 @@
 # Misc Debug Notes
 
-
+```bash
 Published 3 public Exp 6 report(s) after task 24 (agentbench-20260721_150945) to experiments/charts.
 ===== Running SWE-bench index 25 =====
 Traceback (most recent call last):
@@ -64,7 +64,7 @@ Published readable Exp 6 reports:
   experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 
 
-
+```
 
 
 
