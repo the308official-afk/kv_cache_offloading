@@ -75,8 +75,12 @@ experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv
 experiments/reports/latest_latency_sensitivity_microbenchmark_summary.md
 experiments/reports/latest_latency_sensitivity_microbenchmark_run_contract.json
 experiments/reports/latest_latency_sensitivity_microbenchmark_jump_ahead.svg
+experiments/reports/latest_exp13_decision_proof.csv
+experiments/reports/latest_exp13_decision_proof.md
 experiments/charts/exp13_latencysens_matrix.csv
 experiments/charts/exp13_latencysens_jump_ahead_vs_arrival_gap.svg
+experiments/charts/exp13_decision_proof.csv
+experiments/charts/exp13_decision_proof.md
 ```
 
 ## Success Signals

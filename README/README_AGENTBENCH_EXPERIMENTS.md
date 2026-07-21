@@ -1878,8 +1878,10 @@ PRIORITY_INTER_REQUEST_GAP_MS=20 \
 cat experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv
 cat experiments/reports/latest_latency_sensitivity_microbenchmark_summary.md
 cat experiments/reports/latest_latency_sensitivity_microbenchmark_run_contract.json
+cat experiments/reports/latest_exp13_decision_proof.md
 
 ls experiments/charts/exp13_latencysens_*
+ls experiments/charts/exp13_decision_proof.*
 ```
 
 Main outputs:
@@ -1889,6 +1891,8 @@ Main outputs:
 - `latest_latency_sensitivity_microbenchmark_run_contract.json`: exact resolved settings
 - `latest_latency_sensitivity_microbenchmark_jump_ahead.svg`: line chart of jump-ahead rate versus arrival gap
 - `experiments/charts/exp13_latencysens_jump_ahead_vs_arrival_gap.svg`: same chart in the shared chart folder
+- `latest_exp13_decision_proof.md`: generated code-path and runtime-evidence proof
+- `experiments/charts/exp13_decision_proof.md`: same proof in the shared chart folder
 
 Main matrix columns:
 
@@ -1909,24 +1913,60 @@ Strongest proof in this setup:
 
 ### Decision Proof
 
-- [`contracts/latency_sensitivity_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.sh)
-  Contract. Sets `PRIORITY_HINT_KIND=latency_sensitivity`, disables top-level
-  priority by default, and redirects outputs to `latest_latency_sensitivity_*`.
+Exp13 now emits a generated decision-proof table after `sweep`, `all`, and
+`plot` runs. The table is both documentation and run evidence: it names the code
+location, shows the relevant snippet, names the runtime/report signal, and then
+sets `checked_true` from the latest run artifacts.
 
-- [`agentbench/run_latency_sensitivity_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_latency_sensitivity_microbenchmark_single_host.sh)
-  Public wrapper. Loads the latency-sensitivity contract and delegates to the
-  proven priority-scheduling harness.
+Generated proof files:
 
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py) `build_hint_payload(...)`
-  Script layer. Builds either `agent_hints.priority` or
-  `agent_hints.latency_sensitivity` based on `PRIORITY_HINT_KIND`.
+- `experiments/reports/latest_exp13_decision_proof.csv`
+- `experiments/reports/latest_exp13_decision_proof.md`
+- `experiments/charts/exp13_decision_proof.csv`
+- `experiments/charts/exp13_decision_proof.md`
 
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py) `runtime_agent_hints(...)`
-  Report layer. Reads worker-side `agent_hints` from runtime JSON logs.
+Inspect the latest proof:
 
-- [`experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py)
-  Report builder. Emits the compact `hint_kind`, `hint_seen`,
-  `hint_path_status`, and jump-ahead columns.
+```bash
+cat experiments/reports/latest_exp13_decision_proof.md
+cat experiments/charts/exp13_decision_proof.md
+```
+
+Decision-proof columns:
+
+- `step`: chronological proof step
+- `when`: when the logging/check happens
+- `where`: exact source file and line
+- `what_it_means`: plain-English meaning
+- `code_snippet`: source snippet being checked
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_source`: file/log/report used for the check
+- `evidence_value`: actual observed value from the latest run
+- `request_role`: low request, high request, or whole-run scope
+- `sensitivity_class`: low-sensitivity, high-sensitivity, or whole-run scope
+- `order_metric`: arrival, attach, completion, or jump-ahead metric
+- `checked_true`: whether the latest run produced the expected evidence
+- `failure_meaning`: what to debug if the check is false
+
+| Step | When | Where | What It Means | Code Snippet | Runtime Signal |
+|---:|---|---|---|---|---|
+| 1 | Contract selects latency-sensitivity mode | [`latency_sensitivity_microbenchmark.contract.sh:18`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.sh:18) | The public Exp13 wrapper forces the shared harness to send `latency_sensitivity` hints. | `: "${PRIORITY_HINT_KIND:=latency_sensitivity}"` | `run_contract.json` `PRIORITY_HINT_KIND` / matrix `hint_kind` |
+| 2 | Harness builds low/high request specs | [`run_priority_scheduling_probe.py:724`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:724) | The shared harness creates a mixed burst of low-sensitivity and high-sensitivity requests. | `priority_class="low-priority"`<br>`priority_class="high-priority"` | request/proof CSV rows with both classes |
+| 3 | Harness attaches latency-sensitivity hint | [`run_priority_scheduling_probe.py:489`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:489) | Each request gets `nvext.agent_hints.latency_sensitivity`; high requests get the high value and low requests get the low value. | `if args.hint_kind == "latency_sensitivity":`<br>`payload["latency_sensitivity"] = ...` | `agent_hints_latency_sensitivity` / `worker_latency_sensitivity` |
+| 4 | Contract disables top-level priority | [`latency_sensitivity_microbenchmark.contract.sh:21`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/latency_sensitivity_microbenchmark.contract.sh:21) | Exp13 isolates the latency-sensitivity hint by not sending OpenAI top-level `priority`. | `: "${PRIORITY_TOP_LEVEL_PRIORITY_MODE:=disable}"` | `sent_top_prio=false` / `top_prio_compat=not_attempted` |
+| 5 | Frontend preprocesses request | [`sglang_processor.py:436`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:436) | Dynamo frontend tokenizes/preprocesses the hinted request and logs the `agent_hints` payload. | `emit_runtime_event(...)`<br>`"frontend.request.preprocessed"` | `frontend.request.preprocessed` |
+| 6 | Frontend dispatches request | [`sglang_processor.py:579`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:579) | Dynamo frontend hands the preprocessed request to the router/worker path. | `emit_runtime_event(...)`<br>`"frontend.request.dispatched"` | `frontend.request.dispatched` |
+| 7 | Worker receives request | [`decode_handler.py:482`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:482) | Dynamo worker receives the request before generation starts. | `emit_runtime_event(...)`<br>`"worker.decode.request_received"` | `worker.decode.request_received` |
+| 8 | Worker runtime payload includes agent hints | [`decode_handler.py:56`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:56) | The worker-side runtime event includes sanitized `agent_hints`, including `latency_sensitivity` when present. | `**agent_hint_log_fields(request)` | worker runtime JSON `agent_hints.latency_sensitivity` |
+| 9 | Runtime helper extracts agent hints | [`runtime_logging.py:145`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/common/runtime_logging.py:145) | The shared runtime logger extracts and emits the hint keys and values. | `def agent_hint_log_fields(request: dict[str, Any])` | `agent_hints_keys` includes `latency_sensitivity` |
+| 10 | Report parses worker-side latency hint | [`run_priority_scheduling_probe.py:1273`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1273) | Postprocess reads `agent_hints.latency_sensitivity` from worker runtime JSON. | `hint_latency_sensitivity = maybe_float(hints.get("latency_sensitivity"))` | `worker_agent_hints_latency_sensitivity` |
+| 11 | Report copies latency hint onto rows | [`run_priority_scheduling_probe.py:1402`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1402) | The request rows receive `worker_agent_hints_latency_sensitivity`, which becomes the readable proof column. | `row["worker_agent_hints_latency_sensitivity"] = ...` | `worker_latency_sensitivity` |
+| 12 | Report assigns attach order | [`run_priority_scheduling_probe.py:1410`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1410) | Postprocess sorts worker attach timestamps and assigns `attached_rank`. | `attached_rows.sort(...)`<br>`row["attached_rank"] = index` | `attached_rank` |
+| 13 | Report computes high-sensitivity jump-ahead count | [`run_priority_scheduling_probe.py:1445`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1445) | For each high-sensitivity request, postprocess counts earlier low-sensitivity requests it attached before. | `if low_attached is not None and low_attached > high_attached:`<br>`attached_leapfrogs += 1` | `beat_low_attach` / `high_jump_ahead_count` |
+| 14 | Summary marks worker hint status | [`run_priority_scheduling_probe.py:1596`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1596) | For latency-sensitivity runs, the summary checks the high rows for the expected float hint value. | `request_float_status(...)`<br>`field="worker_agent_hints_latency_sensitivity"` | `worker_hint_status=full` / `hint_seen=yes` |
+| 15 | Microbenchmark report preserves hint kind | [`build_priority_scheduling_microbenchmark_report.py:240`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:240) | The compact matrix records that this was a `latency_sensitivity` run. | `hint_kind = str(summary.get("hint_kind") or "priority")` | `hint_kind=latency_sensitivity` |
+| 16 | Microbenchmark report computes jump-ahead rate | [`build_priority_scheduling_microbenchmark_report.py:259`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:259) | The compact matrix converts raw leapfrogs into `high_jump_ahead_count` and `high_jump_ahead_rate`. | `"high_jump_ahead_count": jump_count`<br>`"high_jump_ahead_rate": percent_text(...)` | `high_jump_ahead_count` / `high_jump_ahead_rate` |
+| 17 | Matrix reports final verdict | [`build_priority_scheduling_microbenchmark_report.py:247`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:247) | The public matrix marks the run reordered when at least one high-sensitivity request jumped ahead. | `result = f"{prefix}_reordered" if jump_count > 0 else "no_visible_reorder"` | `result=latency_sensitivity_reordered` |
 
 ## Experiment 12: Speculative Prefill Probe
 

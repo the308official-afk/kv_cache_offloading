@@ -26,6 +26,11 @@ ROOT_DIR="${ROOT_DIR:-$(cd "${CONTRACT_DIR}/.." && pwd)}"
 : "${PRIORITY_SCHEDULING_SHARED_MATRIX_NAME:=exp13_latencysens_matrix.csv}"
 : "${PRIORITY_SCHEDULING_SHARED_JUMP_AHEAD_NAME:=exp13_latencysens_jump_ahead_vs_arrival_gap.svg}"
 : "${PRIORITY_SCHEDULING_PUBLIC_WRAPPER:=${ROOT_DIR}/agentbench/run_latency_sensitivity_microbenchmark_single_host.sh}"
+: "${PRIORITY_SCHEDULING_DECISION_PROOF_HELPER:=experiments/scripts/priority_scheduling/build_latency_sensitivity_decision_proof.py}"
+: "${PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_CSV:=experiments/reports/latest_exp13_decision_proof.csv}"
+: "${PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_MD:=experiments/reports/latest_exp13_decision_proof.md}"
+: "${PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_CSV:=experiments/charts/exp13_decision_proof.csv}"
+: "${PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_MD:=experiments/charts/exp13_decision_proof.md}"
 
 # shellcheck disable=SC1091
 source "${CONTRACT_DIR}/priority_scheduling_microbenchmark.contract.sh"
@@ -45,3 +50,8 @@ export PRIORITY_SCHEDULING_OUT_ROOT_REL
 export PRIORITY_SCHEDULING_SHARED_MATRIX_NAME
 export PRIORITY_SCHEDULING_SHARED_JUMP_AHEAD_NAME
 export PRIORITY_SCHEDULING_PUBLIC_WRAPPER
+export PRIORITY_SCHEDULING_DECISION_PROOF_HELPER
+export PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_CSV
+export PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_MD
+export PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_CSV
+export PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_MD

@@ -36,6 +36,11 @@ MICROBENCH_OUT_DIR="${MICROBENCH_OUT_ROOT}/${BASE_ID}"
 SHARED_CHART_DIR="experiments/charts"
 SHARED_CHART_MATRIX_NAME="${PRIORITY_SCHEDULING_SHARED_MATRIX_NAME:-exp11_prioritysched_matrix.csv}"
 SHARED_CHART_JUMP_AHEAD_NAME="${PRIORITY_SCHEDULING_SHARED_JUMP_AHEAD_NAME:-exp11_prioritysched_jump_ahead_vs_arrival_gap.svg}"
+MICROBENCH_DECISION_PROOF_HELPER="${PRIORITY_SCHEDULING_DECISION_PROOF_HELPER:-experiments/scripts/priority_scheduling/build_priority_scheduling_decision_proof.py}"
+MICROBENCH_DECISION_PROOF_REPORTS_CSV="${PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_CSV:-experiments/reports/latest_exp11_decision_proof.csv}"
+MICROBENCH_DECISION_PROOF_REPORTS_MD="${PRIORITY_SCHEDULING_DECISION_PROOF_REPORTS_MD:-experiments/reports/latest_exp11_decision_proof.md}"
+MICROBENCH_DECISION_PROOF_CHARTS_CSV="${PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_CSV:-${SHARED_CHART_DIR}/exp11_decision_proof.csv}"
+MICROBENCH_DECISION_PROOF_CHARTS_MD="${PRIORITY_SCHEDULING_DECISION_PROOF_CHARTS_MD:-${SHARED_CHART_DIR}/exp11_decision_proof.md}"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -57,8 +62,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
-  "experiments/reports/latest_exp11_decision_proof.csv"
-  "experiments/reports/latest_exp11_decision_proof.md"
+  "${MICROBENCH_DECISION_PROOF_REPORTS_CSV}"
+  "${MICROBENCH_DECISION_PROOF_REPORTS_MD}"
 )
 
 LAST_PROBE_RUN_ID=""
@@ -85,8 +90,8 @@ prepare_shared_chart_dir() {
   rm -f \
     "${SHARED_CHART_DIR}/${SHARED_CHART_MATRIX_NAME}" \
     "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}" \
-    "${SHARED_CHART_DIR}/exp11_decision_proof.csv" \
-    "${SHARED_CHART_DIR}/exp11_decision_proof.md"
+    "${MICROBENCH_DECISION_PROOF_CHARTS_CSV}" \
+    "${MICROBENCH_DECISION_PROOF_CHARTS_MD}"
 }
 
 usage() {
@@ -238,8 +243,8 @@ reset_microbenchmark_plot_outputs() {
     "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg" \
     "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" \
-    "experiments/reports/latest_exp11_decision_proof.csv" \
-    "experiments/reports/latest_exp11_decision_proof.md"
+    "${MICROBENCH_DECISION_PROOF_REPORTS_CSV}" \
+    "${MICROBENCH_DECISION_PROOF_REPORTS_MD}"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
 }
@@ -379,13 +384,13 @@ build_microbenchmark_charts() {
 
 build_decision_proof() {
   local matrix_csv="$1"
-  "${PYTHON_BIN}" experiments/scripts/priority_scheduling/build_priority_scheduling_decision_proof.py \
+  "${PYTHON_BIN}" "${MICROBENCH_DECISION_PROOF_HELPER}" \
     --matrix-csv "${matrix_csv}" \
     --run-contract-json "${MICROBENCH_OUT_DIR}/run_contract.json" \
-    --reports-csv "experiments/reports/latest_exp11_decision_proof.csv" \
-    --reports-md "experiments/reports/latest_exp11_decision_proof.md" \
-    --charts-csv "${SHARED_CHART_DIR}/exp11_decision_proof.csv" \
-    --charts-md "${SHARED_CHART_DIR}/exp11_decision_proof.md"
+    --reports-csv "${MICROBENCH_DECISION_PROOF_REPORTS_CSV}" \
+    --reports-md "${MICROBENCH_DECISION_PROOF_REPORTS_MD}" \
+    --charts-csv "${MICROBENCH_DECISION_PROOF_CHARTS_CSV}" \
+    --charts-md "${MICROBENCH_DECISION_PROOF_CHARTS_MD}"
 }
 
 finalize_runtime_cleanup() {
@@ -528,8 +533,8 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${PRIORITY_SCHEDULING_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
 Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
-Decision proof: experiments/reports/latest_exp11_decision_proof.md
-Shared proof: ${SHARED_CHART_DIR}/exp11_decision_proof.md
+Decision proof: ${MICROBENCH_DECISION_PROOF_REPORTS_MD}
+Shared proof: ${MICROBENCH_DECISION_PROOF_CHARTS_MD}
 EOF
     return
   fi
@@ -540,8 +545,8 @@ Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
 Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
-Decision proof: experiments/reports/latest_exp11_decision_proof.md
-Shared proof: ${SHARED_CHART_DIR}/exp11_decision_proof.md
+Decision proof: ${MICROBENCH_DECISION_PROOF_REPORTS_MD}
+Shared proof: ${MICROBENCH_DECISION_PROOF_CHARTS_MD}
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF
