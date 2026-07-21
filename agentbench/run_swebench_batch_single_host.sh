@@ -24,7 +24,8 @@ PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES="${PROMPT_EVOLUTION_SKIP_RECURSION_FAIL
 PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK:-0}"
 PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK:-0}"
 SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID:-swebench_trajectory_prompts_${BATCH_ID}}"
-PROMPT_EVOLUTION_RESUME="${PROMPT_EVOLUTION_RESUME:-0}"
+PROMPT_EVOLUTION_RUN_POLICY="${PROMPT_EVOLUTION_RUN_POLICY:-resume_or_start}"
+PROMPT_EVOLUTION_RESUME="${PROMPT_EVOLUTION_RESUME:-auto}"
 PROMPT_EVOLUTION_RESUME_MODE="${PROMPT_EVOLUTION_RESUME_MODE:-skip_completed}"
 PROMPT_EVOLUTION_RERUN_FAILED="${PROMPT_EVOLUTION_RERUN_FAILED:-0}"
 SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
@@ -37,12 +38,35 @@ TRACE_INDEX_CSV="${BATCH_DIR}/task_trace_index.csv"
 TRACE_INDEX_MD="${BATCH_DIR}/task_trace_index.md"
 LATEST_TRACE_INDEX_CSV="experiments/reports/latest_prompt_evolution_trace_index.csv"
 LATEST_TRACE_INDEX_MD="experiments/reports/latest_prompt_evolution_trace_index.md"
+BATCH_DIR_ALREADY_EXISTS=0
+[[ -d "${BATCH_DIR}" ]] && BATCH_DIR_ALREADY_EXISTS=1
 mkdir -p "${BATCH_DIR}"
+
+if [[ "${PROMPT_EVOLUTION_RUN_POLICY}" != "resume_or_start" ]]; then
+  echo "Unsupported PROMPT_EVOLUTION_RUN_POLICY=${PROMPT_EVOLUTION_RUN_POLICY}. Supported: resume_or_start" >&2
+  exit 2
+fi
+
+if [[ "${PROMPT_EVOLUTION_RESUME}" = "auto" ]]; then
+  if [[ "${BATCH_DIR_ALREADY_EXISTS}" = "1" ]]; then
+    PROMPT_EVOLUTION_RESUME=1
+  else
+    PROMPT_EVOLUTION_RESUME=0
+  fi
+fi
+
+if [[ "${PROMPT_EVOLUTION_RESUME}" != "0" && "${PROMPT_EVOLUTION_RESUME}" != "1" ]]; then
+  echo "Unsupported PROMPT_EVOLUTION_RESUME=${PROMPT_EVOLUTION_RESUME}. Use auto, 0, or 1." >&2
+  exit 2
+fi
 
 if [[ "${PROMPT_EVOLUTION_RESUME}" = "1" && "${PROMPT_EVOLUTION_RESUME_MODE}" != "skip_completed" ]]; then
   echo "Unsupported PROMPT_EVOLUTION_RESUME_MODE=${PROMPT_EVOLUTION_RESUME_MODE}. Supported: skip_completed" >&2
   exit 2
 fi
+
+PROMPT_EVOLUTION_BATCH_ACTION="fresh_start"
+[[ "${PROMPT_EVOLUTION_RESUME}" = "1" ]] && PROMPT_EVOLUTION_BATCH_ACTION="resume_existing"
 
 if [[ "${PROMPT_EVOLUTION_RERUN_FAILED}" != "0" && "${PROMPT_EVOLUTION_RERUN_FAILED}" != "1" ]]; then
   echo "Unsupported PROMPT_EVOLUTION_RERUN_FAILED=${PROMPT_EVOLUTION_RERUN_FAILED}. Use 0 or 1." >&2
@@ -365,8 +389,7 @@ echo "Skip recursion failures: ${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" | te
 echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Refresh public Exp 6 reports after each task: ${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Trajectory catalog ID: ${SWEBENCH_TRAJECTORY_CATALOG_ID}" | tee -a "${PROGRESS_LOG}"
-echo "Resume existing batch: ${PROMPT_EVOLUTION_RESUME}" | tee -a "${PROGRESS_LOG}"
-echo "Resume mode: ${PROMPT_EVOLUTION_RESUME_MODE}" | tee -a "${PROGRESS_LOG}"
+echo "Batch action: ${PROMPT_EVOLUTION_BATCH_ACTION}" | tee -a "${PROGRESS_LOG}"
 echo "Rerun failed/skipped tasks: ${PROMPT_EVOLUTION_RERUN_FAILED}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
@@ -378,7 +401,7 @@ echo | tee -a "${PROGRESS_LOG}"
 for INDEX in $(seq "${START_INDEX}" "${END_INDEX}"); do
   if RESUME_SKIP_REASON="$(resume_skip_reason "${INDEX}")"; then
     echo "===== Skipping SWE-bench index ${INDEX} =====" | tee -a "${PROGRESS_LOG}"
-    echo "PROMPT_EVOLUTION_RESUME=1 and task ${INDEX} is already ${RESUME_SKIP_REASON}." | tee -a "${PROGRESS_LOG}"
+    echo "Task ${INDEX} is already ${RESUME_SKIP_REASON}." | tee -a "${PROGRESS_LOG}"
     echo | tee -a "${PROGRESS_LOG}"
     continue
   fi
