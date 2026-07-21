@@ -938,94 +938,8 @@ Mental model:
 
 === This uses multi-stage SWE-bench trajectory prompts ===
 
-Use this when direct task-level SWE-bench prompts do not create enough cache pressure.
-
-Step 0: capture real SWE-bench phase prompts with Experiment 6.
-
-If an Experiment 6 task reaches the Deep Agents graph recursion limit with
-`AGENTBENCH_SOFT_STOP_RECURSION=1`, the task is marked `recursion_soft_stop`.
-Any phase prompts that were already dispatched are still written to
-`others/result.json`, then copied into the trajectory catalog for Experiment 9.
-
-For a quick smoke test:
-
-```bash
-cd ~/kv_cache_offloading
-
-RUN_ID="exp6_prompt_evolution_gh200_$(date +%Y%m%d_%H%M%S)"
-LOG_DIR="experiments/reports/exp6_prompt_evolution_nohup/${RUN_ID}"
-mkdir -p "${LOG_DIR}"
-
-nohup env \
-  AGENTBENCH_EXECUTION_LOOP=1 \
-  AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3 \
-  AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0 \
-  AGENTBENCH_EXECUTION_GUARD=0 \
-  AGENTBENCH_PRINT_CHECKPOINTS=1 \
-  DYN_TOOL_CALL_PARSER=qwen3_coder \
-  DYN_REASONING_PARSER=qwen3 \
-  AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
-  AGENTBENCH_FORCE_TOOL_CHOICE=auto \
-  AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1 \
-  AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0 \
-  AGENTBENCH_SOFT_STOP_RECURSION=1 \
-  PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1 \
-  PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1 \
-  AGENTBENCH_AGENT_RECURSION_LIMIT=1000 \
-  AGENTBENCH_MODEL_ONLY_PHASES="" \
-  AGENTBENCH_TRACE_AGENT_STREAM=0 \
-  PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
-  PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate \
-  PROMPT_EVOLUTION_BATCH_ID="${RUN_ID}" \
-  DYNAMO_MACHINE_PROFILE=gh200 \
-  PRECISE_START_MODE=clean \
-  PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
-  PROMPT_EVOLUTION_BATCH_END_INDEX=20 \
-  PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
-  ./agentbench/run_prompt_evolution_batch_single_host.sh \
-    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
-  >> "${LOG_DIR}/run.log" 2>&1 < /dev/null &
-
-echo "RUN_ID=${RUN_ID}"
-echo "LOG=${LOG_DIR}/run.log"
-echo "PID=$!"
-```
-
-Watch it:
-
-```bash
-tail -f "${LOG_DIR}/run.log"
-```
-
-If your terminal reconnects later:
-
-```bash
-tail -f "$(ls -td experiments/reports/exp6_prompt_evolution_nohup/* | head -1)/run.log"
-```
-
-For larger retention sweeps, capture enough tasks first. For example,
-`DISTRACTOR_COUNTS="600"` needs at least 601 captured tasks:
-
-- 1 protected task
-- 600 distractor tasks
-
-Step 1: confirm the trajectory prompt catalog from the captured Experiment 6
-outputs.
-
-The Experiment 6 wrapper builds this automatically by default and writes:
-
-```bash
-experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
-experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
-```
-
-To rebuild the catalog manually from the latest Experiment 6 traces:
-
-```bash
-cd ~/kv_cache_offloading
-
-./agentbench/prepare_swebench_trajectory_prompts.sh
-```
+Use this after Experiment 6 has already produced
+`experiments/reports/latest_swebench_trajectory_prompt_catalog.csv`.
 
 Quickly check whether the current catalog has enough `planning` tasks for the
 smoke test below:
@@ -1050,8 +964,8 @@ print("first task indexes:", planning_tasks[:25])
 PY
 ```
 
-If the count is below 21, either wait for more Experiment 6 tasks to finish or
-lower the largest distractor count.
+If the count is below 21, use smaller distractor counts or wait until the
+catalog has more `planning` tasks.
 
 Step 2: run Experiment 9 against the prepared trajectory catalog.
 
@@ -1075,19 +989,14 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-For the larger run after capturing enough Experiment 6 tasks, change:
+For a larger run, change:
 
 ```text
 DISTRACTOR_COUNTS="100 200 400 600"
 ```
 
-Mental model:
-
-- Experiment 6 captures real SWE-bench phase prompts first
-- the preparer turns those captured prompts into a replay catalog
-- one protected task stage becomes A
-- many stages from other tasks become distractors
-- Experiment 9 only replays prompts; it does not run tools/tests/code edits
+This mode replays prepared trajectory prompts only. It does not run
+tools/tests/code edits again.
 
 ```bash
 cd ~/kv_cache_offloading
