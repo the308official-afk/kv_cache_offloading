@@ -644,6 +644,7 @@ nohup env \
   AGENTBENCH_TRACE_AGENT_STREAM=0 \
   PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
   PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate \
+  PROMPT_EVOLUTION_BATCH_ID="${RUN_ID}" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   PRECISE_START_MODE=clean \
   PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
@@ -692,12 +693,14 @@ cat experiments/reports/latest_prompt_evolution_trace_index.md
 cat experiments/reports/latest_prompt_evolution_trace_index.csv
 ```
 
-The wrapper clears old Experiment 6 report state at the beginning of each run,
+Fresh runs clear old Experiment 6 report state at the beginning of the run,
 including cumulative `all_runs_*`, `latest_runs_*`, `latest_run_*`,
-`prompt_evolution_*`, prior `runs/`, prior `prompt_evolution_batch_*`
-directories, and old Experiment 6 public files in `experiments/charts`.
-Then it copies only the latest readable Experiment 6 outputs into the shared
-chart folder:
+`prompt_evolution_*`, prior `runs/`, prior `prompt_evolution_batch_*` /
+`exp6_prompt_evolution_*` batch directories, and old Experiment 6 public files
+in `experiments/charts`.
+Resume runs keep the existing batch rows and continue from the first missing
+task. Both fresh and resume runs copy the latest readable Experiment 6 outputs
+into the shared chart folder:
 
 ```bash
 ls experiments/charts/exp6_*
@@ -710,6 +713,65 @@ cat experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
 the run-overview slides. It is the first report to inspect after Experiment 6.
 `exp6_swebench_trajectory_prompt_catalog.csv` is the prompt catalog that
 Experiment 9 uses when `RETENTION_REQUEST_SOURCE=swebench_trajectory`.
+
+To resume after a machine disconnect, script error, or manual stop, reuse the
+same `RUN_ID` / `PROMPT_EVOLUTION_BATCH_ID` and set
+`PROMPT_EVOLUTION_RESUME=1`:
+
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="exp6_prompt_evolution_gh200_<use_the_original_timestamp>"
+LOG_DIR="experiments/reports/exp6_prompt_evolution_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  AGENTBENCH_EXECUTION_LOOP=1 \
+  AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=3 \
+  AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=0 \
+  AGENTBENCH_EXECUTION_GUARD=0 \
+  AGENTBENCH_PRINT_CHECKPOINTS=1 \
+  DYN_TOOL_CALL_PARSER=qwen3_coder \
+  DYN_REASONING_PARSER=qwen3 \
+  AGENTBENCH_DEEPAGENTS_SOURCE=upstream \
+  AGENTBENCH_FORCE_TOOL_CHOICE=auto \
+  AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1 \
+  AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0 \
+  AGENTBENCH_SOFT_STOP_RECURSION=1 \
+  PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK=1 \
+  PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK=1 \
+  PROMPT_EVOLUTION_RESUME=1 \
+  PROMPT_EVOLUTION_RESUME_MODE=skip_completed \
+  PROMPT_EVOLUTION_RERUN_FAILED=0 \
+  AGENTBENCH_AGENT_RECURSION_LIMIT=1000 \
+  AGENTBENCH_MODEL_ONLY_PHASES="" \
+  AGENTBENCH_TRACE_AGENT_STREAM=0 \
+  PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
+  PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate \
+  PROMPT_EVOLUTION_BATCH_ID="${RUN_ID}" \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  PRECISE_START_MODE=clean \
+  PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
+  PROMPT_EVOLUTION_BATCH_END_INDEX=730 \
+  PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
+  ./agentbench/run_prompt_evolution_batch_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/resume.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/resume.log"
+echo "PID=$!"
+```
+
+Resume behavior:
+
+- task IDs already in the batch trace index are skipped
+- task IDs already in `skipped_tasks.csv` are skipped by default
+- if the stopped task never wrote a row, it is treated as missing and runs next
+- reports keep the rows already produced
+- public files in `experiments/charts/` keep refreshing as new tasks finish
+- set `PROMPT_EVOLUTION_RERUN_FAILED=1` only when you explicitly want to rerun
+  tasks that were previously skipped or failed
 
 Global summaries:
 
@@ -956,6 +1018,7 @@ nohup env \
   AGENTBENCH_TRACE_AGENT_STREAM=0 \
   PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1 \
   PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate \
+  PROMPT_EVOLUTION_BATCH_ID="${RUN_ID}" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   PRECISE_START_MODE=clean \
   PROMPT_EVOLUTION_BATCH_START_INDEX=0 \

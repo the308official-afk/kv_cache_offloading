@@ -64,6 +64,9 @@ PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP="${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP:-1}"
 PROMPT_EVOLUTION_TOOL_LOOP_CASE="${PROMPT_EVOLUTION_TOOL_LOOP_CASE:-edit-validate}"
 PROMPT_EVOLUTION_BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID:-prompt_evolution_batch_$(date +%Y%m%d_%H%M%S)}"
 SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID:-swebench_trajectory_prompts_${PROMPT_EVOLUTION_BATCH_ID}}"
+PROMPT_EVOLUTION_RESUME="${PROMPT_EVOLUTION_RESUME:-0}"
+PROMPT_EVOLUTION_RESUME_MODE="${PROMPT_EVOLUTION_RESUME_MODE:-skip_completed}"
+PROMPT_EVOLUTION_RERUN_FAILED="${PROMPT_EVOLUTION_RERUN_FAILED:-0}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY_SECS}}"
 MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
@@ -79,6 +82,16 @@ DRIVER_LOG="${BATCH_DIR}/prompt_evolution_batch_driver.log"
 SMOKE_LOG="${BATCH_DIR}/prompt_evolution_batch_smoke_test.log"
 TOOL_LOOP_PREFLIGHT_LOG="${BATCH_DIR}/prompt_evolution_tool_loop_preflight.log"
 TOOL_LOOP_PREFLIGHT_DIR="${BATCH_DIR}/tool_loop_preflight"
+
+if [[ "${PROMPT_EVOLUTION_RESUME}" = "1" && "${PROMPT_EVOLUTION_RESUME_MODE}" != "skip_completed" ]]; then
+  echo "Unsupported PROMPT_EVOLUTION_RESUME_MODE=${PROMPT_EVOLUTION_RESUME_MODE}. Supported: skip_completed" >&2
+  exit 2
+fi
+
+if [[ "${PROMPT_EVOLUTION_RERUN_FAILED}" != "0" && "${PROMPT_EVOLUTION_RERUN_FAILED}" != "1" ]]; then
+  echo "Unsupported PROMPT_EVOLUTION_RERUN_FAILED=${PROMPT_EVOLUTION_RERUN_FAILED}. Use 0 or 1." >&2
+  exit 2
+fi
 
 clear_prompt_evolution_public_reports() {
   mkdir -p "${SHARED_CHART_DIR}"
@@ -112,7 +125,7 @@ clear_prompt_evolution_report_state() {
     -mindepth 1 \
     -maxdepth 1 \
     -type d \
-    -name 'prompt_evolution_batch_*' \
+    \( -name 'prompt_evolution_batch_*' -o -name 'exp6_prompt_evolution_*' \) \
     -exec rm -rf -- {} +
 }
 
@@ -132,8 +145,13 @@ publish_prompt_evolution_reports() {
   done
 }
 
-clear_prompt_evolution_report_state
-clear_prompt_evolution_public_reports
+if [[ "${PROMPT_EVOLUTION_RESUME}" = "1" ]]; then
+  mkdir -p "${BATCH_DIR}"
+  publish_prompt_evolution_reports
+else
+  clear_prompt_evolution_report_state
+  clear_prompt_evolution_public_reports
+fi
 mkdir -p "${BATCH_DIR}"
 
 usage() {
@@ -152,6 +170,12 @@ This wrapper:
   4. runs a smoke-test request
   5. verifies Deep Agents can execute a real tool loop
   6. launches the SWE-bench prompt-evolution batch
+
+Resume knobs:
+  PROMPT_EVOLUTION_BATCH_ID=<same batch id>
+  PROMPT_EVOLUTION_RESUME=1
+  PROMPT_EVOLUTION_RESUME_MODE=skip_completed
+  PROMPT_EVOLUTION_RERUN_FAILED=0
 EOF
 }
 
@@ -336,6 +360,9 @@ PY
   echo "Trace agent stream mode: ${AGENTBENCH_TRACE_AGENT_STREAM_MODE}"
   echo "Require tool loop: ${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP}"
   echo "Tool-loop preflight case: ${PROMPT_EVOLUTION_TOOL_LOOP_CASE}"
+  echo "Resume existing batch: ${PROMPT_EVOLUTION_RESUME}"
+  echo "Resume mode: ${PROMPT_EVOLUTION_RESUME_MODE}"
+  echo "Rerun failed/skipped tasks: ${PROMPT_EVOLUTION_RERUN_FAILED}"
   echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}"
   echo "Refresh public Exp 6 reports after each task: ${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK}"
   echo "Deep Agents ready helper: ${DEEPAGENTS_READY_HELPER}"
@@ -395,6 +422,9 @@ HINT_PROVIDER="${HINT_PROVIDER}" \
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}" \
 BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID}" \
 SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID}" \
+PROMPT_EVOLUTION_RESUME="${PROMPT_EVOLUTION_RESUME}" \
+PROMPT_EVOLUTION_RESUME_MODE="${PROMPT_EVOLUTION_RESUME_MODE}" \
+PROMPT_EVOLUTION_RERUN_FAILED="${PROMPT_EVOLUTION_RERUN_FAILED}" \
 ./agentbench/run_swebench_batch_single_host.sh 2>&1 | tee -a "${DRIVER_LOG}"
 BATCH_STATUS="${PIPESTATUS[0]}"
 set -e
