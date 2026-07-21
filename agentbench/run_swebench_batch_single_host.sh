@@ -23,6 +23,7 @@ AGENTBENCH_SOFT_STOP_RECURSION="${AGENTBENCH_SOFT_STOP_RECURSION:-0}"
 PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES="${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES:-0}"
 PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK:-0}"
 PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK="${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK:-0}"
+SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID:-swebench_trajectory_prompts_${BATCH_ID}}"
 SHARED_CHART_DIR="${SHARED_CHART_DIR:-experiments/charts}"
 
 BATCH_DIR="experiments/reports/batches/${BATCH_ID}"
@@ -226,7 +227,7 @@ refresh_trajectory_catalog_after_task() {
   [[ "${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" = "1" ]] || return 0
 
   echo "Refreshing SWE-bench trajectory prompt catalog after task ${task_index} (${run_id:-no_run_id})..." | tee -a "${PROGRESS_LOG}"
-  if ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${PROGRESS_LOG}"; then
+  if SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID}" ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${PROGRESS_LOG}"; then
     echo "Trajectory catalog refreshed after task ${task_index}." | tee -a "${PROGRESS_LOG}"
   else
     echo "Warning: trajectory catalog refresh failed after task ${task_index}; continuing batch." | tee -a "${PROGRESS_LOG}"
@@ -267,6 +268,7 @@ echo "Soft-stop recursion failures: ${AGENTBENCH_SOFT_STOP_RECURSION}" | tee -a 
 echo "Skip recursion failures: ${PROMPT_EVOLUTION_SKIP_RECURSION_FAILURES}" | tee -a "${PROGRESS_LOG}"
 echo "Refresh trajectory catalog after each task: ${PROMPT_EVOLUTION_REFRESH_TRAJECTORY_CATALOG_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
 echo "Refresh public Exp 6 reports after each task: ${PROMPT_EVOLUTION_REFRESH_PUBLIC_REPORTS_EACH_TASK}" | tee -a "${PROGRESS_LOG}"
+echo "Trajectory catalog ID: ${SWEBENCH_TRAJECTORY_CATALOG_ID}" | tee -a "${PROGRESS_LOG}"
 echo "Progress log: ${PROGRESS_LOG}" | tee -a "${PROGRESS_LOG}"
 echo "Progress CSV: ${PROGRESS_CSV}" | tee -a "${PROGRESS_LOG}"
 echo "Skipped CSV: ${SKIPPED_CSV}" | tee -a "${PROGRESS_LOG}"

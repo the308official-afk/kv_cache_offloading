@@ -63,6 +63,7 @@ AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS="${AGENTBENCH_TOOL_LOOP_TIMEOUT_SECONDS:-18
 PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP="${PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP:-1}"
 PROMPT_EVOLUTION_TOOL_LOOP_CASE="${PROMPT_EVOLUTION_TOOL_LOOP_CASE:-edit-validate}"
 PROMPT_EVOLUTION_BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID:-prompt_evolution_batch_$(date +%Y%m%d_%H%M%S)}"
+SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID:-swebench_trajectory_prompts_${PROMPT_EVOLUTION_BATCH_ID}}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
 MODEL_SMOKE_DELAY_SECS="${MODEL_SMOKE_DELAY_SECS:-${AGENTBENCH_MODEL_SMOKE_DELAY_SECS}}"
 MODEL_COOLDOWN_SECS="${MODEL_COOLDOWN_SECS:-${AGENTBENCH_MODEL_COOLDOWN_SECS}}"
@@ -316,6 +317,7 @@ PY
 
 {
   echo "Prompt evolution batch ID: ${PROMPT_EVOLUTION_BATCH_ID}"
+  echo "Trajectory catalog ID: ${SWEBENCH_TRAJECTORY_CATALOG_ID}"
   echo "Model: ${MODEL}"
   echo "Task range: ${START_INDEX}-${END_INDEX}"
   echo "Hint profile: ${HINT_PROFILE}"
@@ -392,6 +394,7 @@ HINT_PROFILE="${HINT_PROFILE}" \
 HINT_PROVIDER="${HINT_PROVIDER}" \
 PROMPT_EVOLUTION_VALUE_CHAR_LIMIT="${PROMPT_EVOLUTION_VALUE_CHAR_LIMIT}" \
 BATCH_ID="${PROMPT_EVOLUTION_BATCH_ID}" \
+SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID}" \
 ./agentbench/run_swebench_batch_single_host.sh 2>&1 | tee -a "${DRIVER_LOG}"
 BATCH_STATUS="${PIPESTATUS[0]}"
 set -e
@@ -400,7 +403,7 @@ publish_prompt_evolution_reports
 
 if [[ "${PROMPT_EVOLUTION_BUILD_TRAJECTORY_CATALOG}" = "1" ]]; then
   echo "Building SWE-bench trajectory prompt catalog from Experiment 6 traces..." | tee -a "${DRIVER_LOG}"
-  if ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${DRIVER_LOG}"; then
+  if SWEBENCH_TRAJECTORY_CATALOG_ID="${SWEBENCH_TRAJECTORY_CATALOG_ID}" ./agentbench/prepare_swebench_trajectory_prompts.sh 2>&1 | tee -a "${DRIVER_LOG}"; then
     publish_prompt_evolution_reports
   else
     echo "Warning: trajectory prompt catalog build failed; continuing with Experiment 6 report publishing." | tee -a "${DRIVER_LOG}"
