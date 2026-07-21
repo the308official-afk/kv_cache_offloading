@@ -1699,6 +1699,58 @@ def run_command(command: list[str], *, cwd: Path | None = None, check: bool = Tr
         ) from exc
 
 
+def git_checkout_with_fetch_repair(repo_dir: Path, checkout_commit: str) -> dict[str, object]:
+    """Checkout a commit, fetching the missing object once if the local cache is stale."""
+    attempts: list[dict[str, object]] = []
+
+    def record(name: str, result: subprocess.CompletedProcess) -> None:
+        attempts.append(
+            {
+                "name": name,
+                "command": " ".join(result.args if isinstance(result.args, list) else [str(result.args)]),
+                "returncode": result.returncode,
+                "stdout": result.stdout[-4000:],
+                "stderr": result.stderr[-4000:],
+            }
+        )
+
+    checkout = run_command(["git", "checkout", "--detach", checkout_commit], cwd=repo_dir, check=False)
+    record("checkout_initial", checkout)
+    if checkout.returncode == 0:
+        return {"checked_out": True, "repair_needed": False, "attempts": attempts}
+
+    fetch_all = run_command(["git", "fetch", "--all", "--tags", "--prune"], cwd=repo_dir, check=False)
+    record("fetch_all_tags_prune", fetch_all)
+
+    fetch_commit = run_command(["git", "fetch", "origin", checkout_commit], cwd=repo_dir, check=False)
+    record("fetch_origin_commit", fetch_commit)
+
+    object_check = run_command(["git", "cat-file", "-e", f"{checkout_commit}^{{commit}}"], cwd=repo_dir, check=False)
+    record("cat_file_commit", object_check)
+
+    checkout_retry = run_command(["git", "checkout", "--detach", checkout_commit], cwd=repo_dir, check=False)
+    record("checkout_retry", checkout_retry)
+    if checkout_retry.returncode == 0:
+        return {"checked_out": True, "repair_needed": True, "attempts": attempts}
+
+    details = "\n".join(
+        (
+            f"- {attempt['name']} rc={attempt['returncode']}\n"
+            f"  command: {attempt['command']}\n"
+            f"  stderr: {str(attempt['stderr']).strip() or '<empty>'}"
+        )
+        for attempt in attempts
+    )
+    raise SystemExit(
+        "Unable to checkout the SWE-bench base commit after fetch repair.\n"
+        f"repo_dir: {repo_dir}\n"
+        f"checkout_commit: {checkout_commit}\n"
+        f"{details}\n"
+        "If this persists, remove the stale shared repo cache for this repository under "
+        f"{REPOS_DIR} and rerun the same PROMPT_EVOLUTION_BATCH_ID to resume."
+    )
+
+
 def infer_swebench_repo_url(task: dict) -> str | None:
     # Debugging note: this is the SWE-bench -> GitHub adaptation hook.
     # It teaches the wrapper how to turn dataset repo metadata into a cloneable URL.
@@ -4183,8 +4235,9 @@ def prepare_workspace(
                     "workspace_path": str(workspace_dir),
                 }
         if checkout_commit and (workspace_dir / ".git").exists():
-            run_command(["git", "checkout", checkout_commit], cwd=workspace_dir)
+            checkout_metadata = git_checkout_with_fetch_repair(workspace_dir, checkout_commit)
             metadata["checked_out_commit"] = checkout_commit
+            metadata["checkout_metadata"] = checkout_metadata
         return workspace_dir, metadata
 
     if shared_repo_source is not None:
@@ -4194,7 +4247,9 @@ def prepare_workspace(
         if clean_shared_checkout:
             clean_metadata = clean_git_checkout(shared_repo_source)
         if checkout_commit:
-            run_command(["git", "checkout", checkout_commit], cwd=shared_repo_source)
+            checkout_metadata = git_checkout_with_fetch_repair(shared_repo_source, checkout_commit)
+        else:
+            checkout_metadata = {"checked_out": False, "repair_needed": False, "attempts": []}
         metadata = {
             "workspace_mode": "shared_checkout_in_place",
             "source_repo_url": repo_url,
@@ -4202,6 +4257,7 @@ def prepare_workspace(
             "shared_repo_path": str(shared_repo_source),
             "clean_shared_checkout": clean_shared_checkout,
             "clean_metadata": clean_metadata,
+            "checkout_metadata": checkout_metadata,
         }
         if checkout_commit:
             metadata["checked_out_commit"] = checkout_commit
@@ -4215,8 +4271,9 @@ def prepare_workspace(
         "workspace_path": str(workspace_dir),
     }
     if checkout_commit:
-        run_command(["git", "checkout", checkout_commit], cwd=workspace_dir)
+        checkout_metadata = git_checkout_with_fetch_repair(workspace_dir, checkout_commit)
         metadata["checked_out_commit"] = checkout_commit
+        metadata["checkout_metadata"] = checkout_metadata
     return workspace_dir, metadata
 
 

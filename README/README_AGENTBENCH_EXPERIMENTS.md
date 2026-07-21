@@ -701,6 +701,12 @@ name. If that batch folder already exists, the run continues from the first
 missing task and keeps the rows already produced. If it does not exist, the run
 starts fresh and clears old Experiment 6 public/report state.
 
+If a task fails during SWE-bench repo checkout with `git checkout <commit>`
+exit status `128`, rerun with the same `RUN_ID` after pulling the latest scripts.
+The workspace prep now fetches the missing commit and retries the checkout once.
+If it still fails, the error prints the stale shared repo cache under
+`agentbench/repos/`; remove only that repo cache and rerun the same `RUN_ID`.
+
 To confirm on GH200 before launching:
 
 ```bash
