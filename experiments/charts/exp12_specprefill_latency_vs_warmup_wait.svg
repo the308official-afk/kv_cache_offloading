@@ -1,40 +1,45 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="560" viewBox="0 0 980 560">
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720" viewBox="0 0 1600 720">
 <rect width="100%" height="100%" fill="#ffffff"/>
 <text x="92" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">Speculative Prefill Sweep: Turn B Latency</text>
 <text x="92" y="70" font-family="Inter, Arial, sans-serif" font-size="14" fill="#64748b">If background prefill helps, the protected curve should sit below control.</text>
-<rect x="92" y="96" width="828" height="354" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>
-<line x1="92" y1="450.00" x2="920" y2="450.00" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="455.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">0</text>
-<line x1="92" y1="379.20" x2="920" y2="379.20" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="384.70" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">625</text>
-<line x1="92" y1="308.40" x2="920" y2="308.40" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="313.90" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1249</text>
-<line x1="92" y1="237.60" x2="920" y2="237.60" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="243.10" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1874</text>
-<line x1="92" y1="166.80" x2="920" y2="166.80" stroke="#e2e8f0" stroke-width="1"/>
-<text x="78" y="172.30" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">2499</text>
-<line x1="92" y1="96.00" x2="920" y2="96.00" stroke="#e2e8f0" stroke-width="1"/>
+<rect x="92" y="96" width="1448" height="496" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>
+<line x1="92" y1="592.00" x2="1540" y2="592.00" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="597.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">0</text>
+<line x1="92" y1="492.80" x2="1540" y2="492.80" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="498.30" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">625</text>
+<line x1="92" y1="393.60" x2="1540" y2="393.60" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="399.10" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1249</text>
+<line x1="92" y1="294.40" x2="1540" y2="294.40" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="299.90" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1874</text>
+<line x1="92" y1="195.20" x2="1540" y2="195.20" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="200.70" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">2499</text>
+<line x1="92" y1="96.00" x2="1540" y2="96.00" stroke="#e2e8f0" stroke-width="1"/>
 <text x="78" y="101.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">3124</text>
-<text x="92.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">0</text>
-<text x="299.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">100</text>
-<text x="506.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">250</text>
-<text x="713.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">500</text>
-<text x="920.00" y="474" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">1000</text>
-<polyline fill="none" stroke="#94a3b8" stroke-width="4" points="92.00,136.42 299.00,133.93 506.00,134.27 713.00,134.95 920.00,134.84"/>
-<circle cx="92.00" cy="136.42" r="5" fill="#94a3b8"/>
-<circle cx="299.00" cy="133.93" r="5" fill="#94a3b8"/>
-<circle cx="506.00" cy="134.27" r="5" fill="#94a3b8"/>
-<circle cx="713.00" cy="134.95" r="5" fill="#94a3b8"/>
-<circle cx="920.00" cy="134.84" r="5" fill="#94a3b8"/>
-<rect x="92" y="515" width="18" height="18" rx="5" fill="#94a3b8"/>
-<text x="118" y="529" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Control</text>
-<polyline fill="none" stroke="#16a34a" stroke-width="4" points="92.00,355.60 299.00,348.00 506.00,369.42 713.00,356.05 920.00,356.05"/>
-<circle cx="92.00" cy="355.60" r="5" fill="#16a34a"/>
-<circle cx="299.00" cy="348.00" r="5" fill="#16a34a"/>
-<circle cx="506.00" cy="369.42" r="5" fill="#16a34a"/>
-<circle cx="713.00" cy="356.05" r="5" fill="#16a34a"/>
-<circle cx="920.00" cy="356.05" r="5" fill="#16a34a"/>
-<rect x="312" y="515" width="18" height="18" rx="5" fill="#16a34a"/>
-<text x="338" y="529" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Protected</text>
-<text x="28" y="273.00" transform="rotate(-90 28 273.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Turn B Latency (ms)</text>
+<line x1="92.00" y1="96" x2="92.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="92.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">0</text>
+<line x1="236.80" y1="96" x2="236.80" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="236.80" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">100</text>
+<line x1="454.00" y1="96" x2="454.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="454.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">250</text>
+<line x1="816.00" y1="96" x2="816.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="816.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">500</text>
+<line x1="1540.00" y1="96" x2="1540.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="1540.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">1000</text>
+<polyline fill="none" stroke="#94a3b8" stroke-width="4.0" points="92.00,152.64 236.80,149.14 454.00,149.62 816.00,150.57 1540.00,150.41"/>
+<circle cx="92.00" cy="152.64" r="5.0" fill="#94a3b8"/>
+<circle cx="236.80" cy="149.14" r="5.0" fill="#94a3b8"/>
+<circle cx="454.00" cy="149.62" r="5.0" fill="#94a3b8"/>
+<circle cx="816.00" cy="150.57" r="5.0" fill="#94a3b8"/>
+<circle cx="1540.00" cy="150.41" r="5.0" fill="#94a3b8"/>
+<rect x="92" y="675" width="18" height="18" rx="5" fill="#94a3b8"/>
+<text x="118" y="689" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Control</text>
+<polyline fill="none" stroke="#16a34a" stroke-width="4.0" points="92.00,459.73 236.80,449.09 454.00,479.10 816.00,460.37 1540.00,460.37"/>
+<circle cx="92.00" cy="459.73" r="5.0" fill="#16a34a"/>
+<circle cx="236.80" cy="449.09" r="5.0" fill="#16a34a"/>
+<circle cx="454.00" cy="479.10" r="5.0" fill="#16a34a"/>
+<circle cx="816.00" cy="460.37" r="5.0" fill="#16a34a"/>
+<circle cx="1540.00" cy="460.37" r="5.0" fill="#16a34a"/>
+<rect x="312" y="675" width="18" height="18" rx="5" fill="#16a34a"/>
+<text x="338" y="689" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Protected</text>
+<text x="28" y="344.00" transform="rotate(-90 28 344.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Turn B Latency (ms)</text>
 </svg>

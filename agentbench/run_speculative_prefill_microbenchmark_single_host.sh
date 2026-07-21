@@ -55,6 +55,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+  "experiments/reports/latest_exp12_decision_proof.csv"
+  "experiments/reports/latest_exp12_decision_proof.md"
 )
 
 LAST_PROBE_RUN_ID=""
@@ -77,7 +79,7 @@ ensure_experiment_dirs_ready() {
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name '*.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg" \
@@ -87,7 +89,9 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
-    "${SHARED_CHART_DIR}/exp12_specprefill_turna_latency_vs_warmup_wait.svg"
+    "${SHARED_CHART_DIR}/exp12_specprefill_turna_latency_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_decision_proof.csv" \
+    "${SHARED_CHART_DIR}/exp12_decision_proof.md"
 }
 
 usage() {
@@ -229,7 +233,9 @@ reset_microbenchmark_plot_outputs() {
     "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg" \
     "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg" \
-    "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+    "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" \
+    "experiments/reports/latest_exp12_decision_proof.csv" \
+    "experiments/reports/latest_exp12_decision_proof.md"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
 }
@@ -339,6 +345,7 @@ build_microbenchmark_report() {
     --sweep-axis "${SPEC_PREFILL_SWEEP_AXIS}" \
     --sweep-values "${SPEC_PREFILL_SWEEP_VALUES}"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv" "${MICROBENCH_LATEST_PREFIX}_matrix.csv"
+  cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv" "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   cp -f "${MICROBENCH_OUT_DIR}/microbenchmark_summary.md" "${MICROBENCH_LATEST_PREFIX}_summary.md"
   cp -f "${MICROBENCH_OUT_DIR}/run_contract.json" "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
 }
@@ -356,6 +363,18 @@ build_microbenchmark_charts() {
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
   fi
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
+}
+
+build_decision_proof() {
+  local matrix_csv="$1"
+  "${PYTHON_BIN}" experiments/scripts/speculative_prefill/build_speculative_prefill_decision_proof.py \
+    --matrix-csv "${matrix_csv}" \
+    --summary-csv "${MICROBENCH_OUT_DIR}/microbenchmark_summary.csv" \
+    --run-contract-json "${MICROBENCH_OUT_DIR}/run_contract.json" \
+    --reports-csv "experiments/reports/latest_exp12_decision_proof.csv" \
+    --reports-md "experiments/reports/latest_exp12_decision_proof.md" \
+    --charts-csv "${SHARED_CHART_DIR}/exp12_decision_proof.csv" \
+    --charts-md "${SHARED_CHART_DIR}/exp12_decision_proof.md"
 }
 
 finalize_runtime_cleanup() {
@@ -472,6 +491,7 @@ run_plot_mode() {
   banner "SPECULATIVE PREFILL MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
   build_microbenchmark_charts "${matrix_csv}"
+  build_decision_proof "${matrix_csv}"
 }
 
 print_final_status() {
@@ -483,6 +503,8 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${SPEC_PREFILL_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
 Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
+Decision proof: experiments/reports/latest_exp12_decision_proof.md
+Shared proof: ${SHARED_CHART_DIR}/exp12_decision_proof.md
 EOF
     return
   fi
@@ -493,6 +515,8 @@ Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
 Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
+Decision proof: experiments/reports/latest_exp12_decision_proof.md
+Shared proof: ${SHARED_CHART_DIR}/exp12_decision_proof.md
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF
@@ -533,6 +557,7 @@ update_run_contract_with_helper_ids
 if [[ "${SPEC_PREFILL_MODE}" != "plot" ]]; then
   build_microbenchmark_report
   build_microbenchmark_charts "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
+  build_decision_proof "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 fi
 
 finalize_runtime_cleanup

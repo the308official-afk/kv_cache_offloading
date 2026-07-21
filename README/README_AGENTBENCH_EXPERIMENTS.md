@@ -2130,63 +2130,62 @@ docker logs -f dynamo-sglang-worker
 
 ### Decision Proof
 
-Use these as the exact places to inspect when you want to prove that Dynamo
-made a speculative-prefill decision.
+Exp12 now emits a generated decision-proof table after `sweep`, `all`, and
+`plot` runs. The table is both documentation and run evidence: it names the code
+location, shows the relevant snippet, names the runtime/report signal, and then
+sets `checked_true` from the latest run artifacts.
 
-- [`contracts/speculative_prefill_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/speculative_prefill_microbenchmark.contract.sh)  
-  Contract. Owns the public defaults for the two-turn workload,
-  precise-runtime settings, and top-level latest outputs.
+Generated proof files:
 
-- [`agentbench/run_speculative_prefill_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_speculative_prefill_microbenchmark_single_host.sh)  
-  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`, clears
-  stale latest outputs, and writes the consolidated report and chart artifacts.
+- `experiments/reports/latest_exp12_decision_proof.csv`
+- `experiments/reports/latest_exp12_decision_proof.md`
+- `experiments/charts/exp12_decision_proof.csv`
+- `experiments/charts/exp12_decision_proof.md`
 
-- [`experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py)  
-  Report builder. Normalizes the probe matrix into one compact matrix, one
-  summary row, one markdown summary, and one `run_contract.json`.
+Inspect the latest proof:
 
-- [`experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/plot_speculative_prefill_microbenchmark.py)  
-  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
+```bash
+cat experiments/reports/latest_exp12_decision_proof.md
+cat experiments/charts/exp12_decision_proof.md
+```
 
-- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:413) `"speculative_prefill": spec_prefill`  
-  Script layer. Attaches the `speculative_prefill` hint to the protected arm.
+Decision-proof columns:
 
-- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:415`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:415) `"spec_prefill_target_request_id": target_request_id`  
-  Script layer. Attaches the exact turn-B request identity that the warmup is
-  supposed to target.
+- `step`: chronological proof step
+- `when`: when the logging/check happens
+- `where`: exact source file and line
+- `what_it_means`: plain-English meaning
+- `code_snippet`: source snippet being checked
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_source`: file/log/report used for the check
+- `evidence_value`: actual observed value from the latest run
+- `request_role`: `turn_a`, `turn_b`, warmup, or whole-run scope
+- `arm`: control or protected arm
+- `prefill_metric`: which prefill proof metric the row checks
+- `checked_true`: whether the latest run produced the expected evidence
+- `failure_meaning`: what to debug if the check is false
 
-- [`upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426) `pub speculative_prefill: Option<bool>`  
-  Dynamo. Declares the typed hint field on `AgentHints`.
+| Step | When | Where | What It Means | Code Snippet | Runtime Signal |
+|---:|---|---|---|---|---|
+| 1 | Harness attaches speculative-prefill hint | [`run_speculative_prefill_probe.py:716`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:716) | The protected arm sends `nvext.agent_hints.speculative_prefill=true`. | `"speculative_prefill": spec_prefill` | `hint_status=on` / `spec_prefill=True` |
+| 2 | Harness names the target turn B request | [`run_speculative_prefill_probe.py:718`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:718) | The hint carries the exact turn-B request id that the warmup should target. | `"spec_prefill_target_request_id": target_request_id` | `spec_prefill_target_request_id` / `prefill_target_seen` |
+| 3 | Dynamo declares the typed hint field | [`nvext.rs:426`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426) | Dynamo's OpenAI `nvext` schema has a real `speculative_prefill` field. | `pub speculative_prefill: Option<bool>` | source schema + protected hint row |
+| 4 | Dynamo calls the speculative-prefill wrapper | [`preprocessor.rs:1819`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:1819) | The normal response stream passes through the speculative-prefill decision path. | `let final_stream = speculative_prefill::maybe_wrap_stream(` | `worker.spec_prefill.wrap_checked` |
+| 5 | Prefill gate reads the hint | [`speculative_prefill.rs:198`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198) | The decision gate reads `hints.speculative_prefill` and decides whether to continue. | `.and_then(\|hints\| hints.speculative_prefill)` | `worker.spec_prefill.wrap_checked enabled=true` |
+| 6 | Prefill task is spawned | [`speculative_prefill.rs:219`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:219) | Dynamo launches the background task that will build the next-turn warmup. | `"worker.spec_prefill.task_spawned"` | `worker.spec_prefill.task_spawned` / `prefill_spawned` |
+| 7 | Warmup prompt is rendered | [`speculative_prefill.rs:327`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:327) | Dynamo rendered the predicted next-turn prefix and counted its tokens. | `"worker.spec_prefill.prefill_rendered"` | `worker.spec_prefill.prefill_rendered` / `prefill_tokens` |
+| 8 | Warmup request is sent | [`speculative_prefill.rs:356`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:356) | Dynamo sends the synthetic `max_tokens=1` warmup request into the backend path. | `"worker.spec_prefill.prefill_sent"` | `worker.spec_prefill.prefill_sent` / `prefill_sent` |
+| 9 | Warmup request completes | [`speculative_prefill.rs:374`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:374) | Dynamo drains the warmup stream so the prefill lifecycle completes. | `"worker.spec_prefill.prefill_completed"` | `worker.spec_prefill.prefill_completed` / `prefill_done` |
+| 10 | Probe parses worker speculative-prefill events | [`run_speculative_prefill_probe.py:1000`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1000) | Postprocess collects `worker.spec_prefill.*` events from the worker runtime log. | `elif event_type.startswith("worker.spec_prefill."):` | `spec_events` |
+| 11 | Probe maps events into proof columns | [`run_speculative_prefill_probe.py:1166`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1166) | The raw runtime events become `prefill_wrap`, `prefill_spawned`, `prefill_sent`, `prefill_done`, and `prefill_target_seen`. | `"prefill_wrap": wrap_status`<br>`"prefill_spawned": "worker.spec_prefill.task_spawned" in event_types` | `prefill_*` columns |
+| 12 | Probe classifies the effect | [`run_speculative_prefill_probe.py:1221`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1221) | The probe marks whether the protected arm had direct/inferred prefill evidence and whether turn B was faster. | `effect_status = "faster_direct"` | `effect_status` / `effect` |
+| 13 | Microbenchmark report normalizes matrix rows | [`build_speculative_prefill_microbenchmark_report.py:176`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:176) | The public report carries the probe proof fields into one compact matrix. | `def normalize_matrix_rows(` | `latest_speculative_prefill_microbenchmark_matrix.csv` |
+| 14 | Microbenchmark report carries prefill columns | [`build_speculative_prefill_microbenchmark_report.py:205`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:205) | The compact matrix keeps the direct proof columns used by slides and debugging. | `"prefill_wrap": pick(row, "prefill_wrap")` | `prefill_wrap` / `prefill_sent` / `prefill_done` |
+| 15 | Microbenchmark report writes public outputs | [`build_speculative_prefill_microbenchmark_report.py:352`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:352) | The final public matrix and summary are written from the normalized rows. | `write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)` | `microbenchmark_matrix.csv` / `microbenchmark_summary.csv` |
 
-- [`upstream/dynamo/lib/llm/src/preprocessor.rs:1810`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:1810) `speculative_prefill::maybe_wrap_stream(...)`  
-  Dynamo. Calls into the real speculative-prefill decision path.
-
-- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198) reads `hints.speculative_prefill`  
-  Dynamo. This is the exact line that reads the hint.
-
-- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:202`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:202) emits `worker.spec_prefill.wrap_checked`  
-  Dynamo. Proof that Dynamo reached the decision gate and recorded whether the
-  hint was enabled.
-
-- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:219`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:219) emits `worker.spec_prefill.task_spawned`  
-  Dynamo. Proof that it decided to launch the background speculative-prefill
-  task.
-
-- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:355`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:355) emits `worker.spec_prefill.prefill_sent`  
-  Dynamo. Strong proof that the synthetic warmup request was actually sent.
-
-- [`upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:373`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:373) emits `worker.spec_prefill.prefill_completed`  
-  Dynamo. Strong proof that the synthetic warmup request completed.
-
-- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:669`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:669) matches `worker.spec_prefill.wrap_checked`  
-  Report builder. Pulls the decision-path runtime events back into the report.
-
-- [`experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:677`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:677) `prefill_spawned`, `prefill_sent`, `prefill_done`  
-  Report builder. Converts those raw runtime events into the compact proof
-  columns in the matrix.
-
-Strongest proof in this setup: `worker.spec_prefill.prefill_sent` followed by
-`worker.spec_prefill.prefill_completed`.
+Simple reading: the first rows prove the harness sent the hint and target, the
+middle rows prove Dynamo executed the speculative-prefill path, and the final
+rows prove the public matrix preserved the evidence.
 
 ### Lower-Level Wrapper
 
