@@ -35,6 +35,10 @@ Primary outputs:
 - `experiments/reports/latest_cache_pinning_microbenchmark_summary.csv`
 - `experiments/reports/latest_cache_pinning_microbenchmark_summary.md`
 - `experiments/reports/latest_cache_pinning_microbenchmark_run_contract.json`
+- `experiments/reports/latest_exp10_decision_proof.csv`
+- `experiments/reports/latest_exp10_decision_proof.md`
+- `experiments/charts/exp10_decision_proof.csv`
+- `experiments/charts/exp10_decision_proof.md`
 - `experiments/reports/latest_cache_pinning_microbenchmark_validation_latency.svg`
 - `experiments/reports/latest_cache_pinning_microbenchmark_validation_cached_tokens.svg`
 - `experiments/reports/latest_cache_pinning_microbenchmark_sweep_replay_latency.svg`

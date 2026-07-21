@@ -1403,9 +1403,11 @@ cat experiments/reports/latest_cache_pinning_microbenchmark_matrix.csv
 cat experiments/reports/latest_cache_pinning_microbenchmark_summary.csv
 cat experiments/reports/latest_cache_pinning_microbenchmark_summary.md
 cat experiments/reports/latest_cache_pinning_microbenchmark_run_contract.json
+cat experiments/reports/latest_exp10_decision_proof.md
 
 ls experiments/reports/latest_cache_pinning_microbenchmark_*.svg
 cat experiments/reports/latest_cache_pinning_microbenchmark_chart_manifest.json
+ls experiments/charts/exp10_decision_proof.*
 ```
 
 Main outputs:
@@ -1413,77 +1415,74 @@ Main outputs:
 - `latest_cache_pinning_microbenchmark_matrix.csv`: validation + sweep table
 - `latest_cache_pinning_microbenchmark_summary.csv`: one-row summary
 - `latest_cache_pinning_microbenchmark_run_contract.json`: exact resolved settings
+- `latest_exp10_decision_proof.md`: generated code-path and runtime-evidence proof
+- `experiments/charts/exp10_decision_proof.md`: same proof in the shared chart folder
 - `validation_latency.svg` / `validation_cached_tokens.svg`
 - `sweep_replay_latency.svg` / `sweep_replay_cached_tokens.svg`
 
 ### Decision Proof
 
-These are the exact places to inspect when you want to prove the signal path.
+Exp10 now emits a generated decision-proof table after `validate`, `sweep`,
+`all`, and `plot` runs. The table is both documentation and run evidence: it
+names the code location, shows the relevant snippet, names the runtime/report
+signal, and then sets `checked_true` from the latest run artifacts.
 
-- [`contracts/cache_pinning_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh)  
-  Contract. Owns the pinned repos, commits, frontend flag behavior, router mode,
-  request type, TTL, pinned ratio, HiCache knobs, and readiness defaults.
+Generated proof files:
 
-- [`agentbench/run_cache_pinning_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_microbenchmark_single_host.sh)  
-  Public wrapper. Reads the contract, runs validate/sweep/all/plot, clears stale
-  latest outputs, and writes the consolidated report and chart artifacts.
+- `experiments/reports/latest_exp10_decision_proof.csv`
+- `experiments/reports/latest_exp10_decision_proof.md`
+- `experiments/charts/exp10_decision_proof.csv`
+- `experiments/charts/exp10_decision_proof.md`
 
-- [`experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py)  
-  Report builder. Merges validation and sweep evidence into one compact matrix,
-  one summary row, one markdown summary, and one `run_contract.json`.
+Inspect the latest proof:
 
-- [`experiments/scripts/cache_pinning/plot_cache_pinning_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/plot_cache_pinning_microbenchmark.py)  
-  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
+```bash
+cat experiments/reports/latest_exp10_decision_proof.md
+cat experiments/charts/exp10_decision_proof.md
+```
 
-- [`runtime_instrumentation/repair_cache_pinning_dynamo_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py)  
-  Local patcher for Dynamo. Adds router-side logs:
-  - `router.cache_control_seen`
-  - `router.pin_state_created`
-  - `router.pin_state_skipped`
-  - `router.pin_prefix_spawned`
-  - and patches `init_llm.py` so the worker serves the live `cache_control` endpoint
+Decision-proof columns:
 
-- [`runtime_instrumentation/repair_cache_pinning_sglang_source.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_sglang_source.py)  
-  Local patcher for SGLang. Adds worker-side logs:
-  - `worker.pin_prefix_applied`
-  - `worker.pin_refreshed_host_insert`
-  - `worker.pin_refreshed_cache_hit`
+- `step`: chronological proof step
+- `when`: when the logging/check happens
+- `where`: exact source file and line
+- `what_it_means`: plain-English meaning
+- `code_snippet`: source snippet being checked
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_source`: file/log/report used for the check
+- `evidence_value`: actual observed value from the latest run
+- `experiment_part`: validate, sweep, report, or whole-run scope
+- `cache_control_path`: contract, request, router, worker, or report layer
+- `evidence_metric`: the proof metric being checked
+- `checked_true`: whether the latest run produced the expected evidence
+- `failure_meaning`: what to debug if the check is false
 
-### Feature Codepaths Under Test
+| Step | When | Where | What It Means | Code Snippet | Runtime Signal |
+|---:|---|---|---|---|---|
+| 1 | Contract pins isolated upstream stack | [`cache_pinning_microbenchmark.contract.sh:19`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh:19) | Exp10 uses isolated Dynamo and SGLang cache-pinning PR refs instead of the generic precise stack. | `CACHE_PINNING_DYNAMO_SOURCE_REF`<br>`CACHE_PINNING_SGLANG_SOURCE_REF` | `run_contract.json` source refs |
+| 2 | Contract enables cache-control frontend path | [`cache_pinning_microbenchmark.contract.sh:35`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh:35) | The frontend is expected to expose the cache-control flag and use KV-router mode. | `CACHE_PINNING_FRONTEND_FLAG_VALUE:=--enable-cache-control`<br>`CACHE_PINNING_ROUTER_MODE:=kv` | frontend flag / router mode |
+| 3 | Contract enables HiCache pin budget | [`cache_pinning_microbenchmark.contract.sh:44`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/cache_pinning_microbenchmark.contract.sh:44) | Cache pinning needs hierarchical cache plus a nonzero pinned ratio. | `CACHE_PINNING_PINNED_RATIO:=0.1`<br>`SGLANG_HICACHE_MAX_PINNED_RATIO` | pinned ratio / HiCache write policy |
+| 4 | Wrapper launches doc validation | [`run_cache_pinning_microbenchmark_single_host.sh:280`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_microbenchmark_single_host.sh:280) | The public wrapper runs the doc-style validation path with the contract TTL and pinning knobs. | `CACHE_PINNING_DOC_ID`<br>`CACHE_PINNING_TTL`<br>`CACHE_PINNING_PINNED_RATIO` | validation run id |
+| 5 | Validation request sends cache-control | [`run_cache_pinning_doc_validation.py:317`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py:317) | Both validation turns send `nvext.cache_control` with the requested type and TTL. | `"nvext": {"cache_control": {"type": args.cache_control_type, "ttl": args.ttl}}` | matrix `cache_control=ephemeral:<ttl>` |
+| 6 | Router logs cache-control receipt | [`repair_cache_pinning_dynamo_source.py:98`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py:98) | The Dynamo router logs when it sees cache-control TTL on the routed request. | `"event_type": "router.cache_control_seen"` | `router.cache_control_seen` |
+| 7 | Router creates pin state | [`repair_cache_pinning_dynamo_source.py:128`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py:128) | The router builds pin state with TTL, token ids, and worker id. | `"event_type": "router.pin_state_created"` | `router.pin_state_created` / `router_pin` |
+| 8 | Router spawns pin-prefix request | [`repair_cache_pinning_dynamo_source.py:175`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py:175) | After generation, the router sends the prefix-pin RPC to the worker. | `"event_type": "router.pin_prefix_spawned"` | `router.pin_prefix_spawned` / `router_pin=spawned` |
+| 9 | Worker exposes cache-control endpoint | [`repair_cache_pinning_dynamo_source.py:54`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_dynamo_source.py:54) | The Dynamo worker serves the cache-control endpoint used by the router pin RPC. | `cache_control_endpoint.serve_endpoint(` | source readiness / live validation |
+| 10 | SGLang worker logs pin-prefix applied | [`repair_cache_pinning_sglang_source.py:51`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_sglang_source.py:51) | The SGLang radix cache applies TTL pinning to the protected prefix. | `"worker.pin_prefix_applied"` | `worker.pin_prefix_applied` / `worker_pin=applied` |
+| 11 | SGLang can refresh pinned-prefix TTL | [`repair_cache_pinning_sglang_source.py:90`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/repair_cache_pinning_sglang_source.py:90) | On a cache hit, pinned nodes can refresh their TTL. | `"worker.pin_refreshed_cache_hit"` | `worker.pin_refreshed_cache_hit` / `worker_refreshes` |
+| 12 | Validation parser summarizes router pin | [`run_cache_pinning_doc_validation.py:163`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py:163) | The validation report converts router cache-pinning events into `router_pin` status. | `def summarize_router_pin(frontend_log: Path)` | `router_pin=spawned` |
+| 13 | Validation parser summarizes worker pin | [`run_cache_pinning_doc_validation.py:199`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py:199) | The validation report converts worker pin events into `worker_pin` status. | `def summarize_worker_pin(worker_log: Path)` | `worker_pin=applied` |
+| 14 | Validation confirms cache reuse | [`run_cache_pinning_doc_validation.py:235`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py:235) | The second validation turn should report cached prompt tokens. | `turn2_cached = row2.get("cached_tokens", "")` | `turn2_cached > 0` / `cache_hit=hit` |
+| 15 | Validation final verdict is strong | [`run_cache_pinning_doc_validation.py:250`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/run_cache_pinning_doc_validation.py:250) | The validation result is strongest when router pin, worker pin, and cache reuse all happen. | `pin_path_applied_and_cache_reused` | `result=pin_path_applied_and_cache_reused` |
+| 16 | Wrapper launches retention sweep | [`run_cache_pinning_microbenchmark_single_host.sh:304`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_cache_pinning_microbenchmark_single_host.sh:304) | The public wrapper runs the pressure sweep after validation in `all` mode or directly in `sweep` mode. | `RETENTION_SWEEP_ID`<br>`PROTECTED_CACHE_CONTROL_PROFILES` | sweep run id / sweep rows |
+| 17 | Sweep compares control and protected arms | [`compact_cache_pinning_retention_reports.py:96`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/compact_cache_pinning_retention_reports.py:96) | The sweep has a control arm with cache-control off and a protected arm with `ephemeral:1h`. | `"arm": pick(row, "arm")`<br>`"cache_control": pick(row, "cache_control", "protected_cache", ...)` | matrix arm/cache-control rows |
+| 18 | Sweep report records request cache-control | [`compact_cache_pinning_retention_reports.py:110`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/compact_cache_pinning_retention_reports.py:110) | The component report records whether request metadata showed cache-control on the protected arm. | `"req_cache_status": pick(row, "req_cache_status", ...)` | `req_cache_status` / protected `cache_control` |
+| 19 | Microbenchmark report normalizes sweep rows | [`build_cache_pinning_microbenchmark_report.py:269`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py:269) | The main matrix preserves replay latency, cached tokens, warm status, and reuse signal for each arm. | `def matrix_rows_from_sweep(` | `microbenchmark_matrix.csv` sweep rows |
+| 20 | Sweep summary compares retention threshold | [`build_cache_pinning_microbenchmark_report.py:381`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/cache_pinning/build_cache_pinning_microbenchmark_report.py:381) | The summary compares the deepest warm distractor count for control and protected arms. | `"control_last_warm"`<br>`"protected_last_warm"` | `protected_last_warm > control_last_warm` |
 
-- `upstream/dynamo_cache_pinning/lib/llm/src/preprocessor.rs` (Dynamo)  
-  Reads `nvext.cache_control` and carries TTL into routing metadata.
-
-- `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/push_router.rs` (Dynamo)  
-  Builds pin state and spawns the pin-prefix request after generation.
-
-- `upstream/dynamo_cache_pinning/lib/llm/src/kv_router/cache_control.rs` (Dynamo)  
-  Sends the TTL pin RPC toward the worker.
-
-- `upstream/dynamo_cache_pinning/components/src/dynamo/sglang/init_llm.py` (Dynamo)  
-  Serves the live `cache_control` endpoint on the worker.
-
-- `upstream/dynamo_cache_pinning/components/src/dynamo/frontend/frontend_args.py` (Dynamo)  
-  Exposes the cache-control frontend flag.
-
-- `upstream/sglang_cache_pinning/python/sglang/srt/mem_cache/hiradix_cache.py` (SGLang)  
-  Implements `pin_prefix(...)` and refresh-on-hit TTL behavior.
-
-- `upstream/sglang_cache_pinning/python/sglang/srt/managers/scheduler.py` (SGLang)  
-  Enforces pin-budget gating.
-
-### Success Reading
-
-- Validation success:
-  - `turn2_cached > 0`
-  - `router_pin=spawned`
-  - `worker_pin=applied`
-
-- Sweep success:
-  - protected arm stays warm deeper than control
-
-- If both arms turn cold at the same point:
-  - cache pinning did not improve retention in that setup
+Simple reading: validation proves the cache-control pin path exists
+end-to-end, and the sweep proves whether protected `ephemeral:1h` requests stay
+warm deeper than control requests.
 
 ### Lower-Level Wrappers
 

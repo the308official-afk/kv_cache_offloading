@@ -77,6 +77,13 @@ MACHINE_PROFILE="${DYNAMO_MACHINE_PROFILE:-default}"
 : "${SGLANG_TRANSFER_LOG_PROFILE:=off}"
 : "${WORKER_BASE_ARGS:=--enable-cache-report --radix-eviction-policy lru}"
 
+# Generated decision-proof outputs
+: "${CACHE_PINNING_DECISION_PROOF_HELPER:=experiments/scripts/cache_pinning/build_cache_pinning_decision_proof.py}"
+: "${CACHE_PINNING_DECISION_PROOF_REPORTS_CSV:=experiments/reports/latest_exp10_decision_proof.csv}"
+: "${CACHE_PINNING_DECISION_PROOF_REPORTS_MD:=experiments/reports/latest_exp10_decision_proof.md}"
+: "${CACHE_PINNING_DECISION_PROOF_CHARTS_CSV:=experiments/charts/exp10_decision_proof.csv}"
+: "${CACHE_PINNING_DECISION_PROOF_CHARTS_MD:=experiments/charts/exp10_decision_proof.md}"
+
 # Recommended readiness defaults
 : "${MODEL_READY_RETRIES:=900}"
 : "${MODEL_READY_DELAY_SECS:=3}"
@@ -141,6 +148,11 @@ export RETENTION_PROMPT_ISOLATION_MODE
 export MAX_CONTEXT_TOKENS
 export SGLANG_TRANSFER_LOG_PROFILE
 export WORKER_BASE_ARGS
+export CACHE_PINNING_DECISION_PROOF_HELPER
+export CACHE_PINNING_DECISION_PROOF_REPORTS_CSV
+export CACHE_PINNING_DECISION_PROOF_REPORTS_MD
+export CACHE_PINNING_DECISION_PROOF_CHARTS_CSV
+export CACHE_PINNING_DECISION_PROOF_CHARTS_MD
 export MODEL_READY_RETRIES
 export MODEL_READY_DELAY_SECS
 export MODEL_READY_STABLE_HITS

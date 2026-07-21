@@ -34,6 +34,11 @@ MICROBENCH_OUT_DIR="experiments/reports/cache_pinning_microbenchmark/${BASE_ID}"
 MICROBENCH_CHART_DIR="${MICROBENCH_OUT_DIR}/charts"
 MICROBENCH_MATRIX_PATH="${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 SHARED_CHART_DIR="experiments/charts"
+CACHE_PINNING_DECISION_PROOF_HELPER="${CACHE_PINNING_DECISION_PROOF_HELPER:-experiments/scripts/cache_pinning/build_cache_pinning_decision_proof.py}"
+CACHE_PINNING_DECISION_PROOF_REPORTS_CSV="${CACHE_PINNING_DECISION_PROOF_REPORTS_CSV:-experiments/reports/latest_exp10_decision_proof.csv}"
+CACHE_PINNING_DECISION_PROOF_REPORTS_MD="${CACHE_PINNING_DECISION_PROOF_REPORTS_MD:-experiments/reports/latest_exp10_decision_proof.md}"
+CACHE_PINNING_DECISION_PROOF_CHARTS_CSV="${CACHE_PINNING_DECISION_PROOF_CHARTS_CSV:-${SHARED_CHART_DIR}/exp10_decision_proof.csv}"
+CACHE_PINNING_DECISION_PROOF_CHARTS_MD="${CACHE_PINNING_DECISION_PROOF_CHARTS_MD:-${SHARED_CHART_DIR}/exp10_decision_proof.md}"
 LATEST_POINTERS=(
   "${MICROBENCH_LATEST_PREFIX}_contract_sh_path.txt"
   "${MICROBENCH_LATEST_PREFIX}_contract_doc_path.txt"
@@ -46,6 +51,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_summary.csv"
   "${MICROBENCH_LATEST_PREFIX}_summary.md"
   "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
+  "${CACHE_PINNING_DECISION_PROOF_REPORTS_CSV}"
+  "${CACHE_PINNING_DECISION_PROOF_REPORTS_MD}"
 )
 LATEST_CHART_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_validation_latency.svg"
@@ -88,7 +95,9 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_cache_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_latency_gain_vs_distractors.svg" \
-    "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.svg"
+    "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.svg" \
+    "${CACHE_PINNING_DECISION_PROOF_CHARTS_CSV}" \
+    "${CACHE_PINNING_DECISION_PROOF_CHARTS_MD}"
 }
 
 usage() {
@@ -255,7 +264,9 @@ reset_microbenchmark_report_outputs() {
 }
 
 reset_microbenchmark_plot_outputs() {
-  rm -f "${LATEST_CHART_OUTPUTS[@]}"
+  rm -f "${LATEST_CHART_OUTPUTS[@]}" \
+    "${CACHE_PINNING_DECISION_PROOF_REPORTS_CSV}" \
+    "${CACHE_PINNING_DECISION_PROOF_REPORTS_MD}"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
 }
@@ -384,6 +395,22 @@ build_microbenchmark_charts() {
   fi
 }
 
+build_decision_proof() {
+  local matrix_csv="$1"
+  local run_contract_json="${MICROBENCH_OUT_DIR}/run_contract.json"
+  if [[ ! -f "${run_contract_json}" ]]; then
+    run_contract_json="${MICROBENCH_LATEST_PREFIX}_run_contract.json"
+  fi
+  python3 "${CACHE_PINNING_DECISION_PROOF_HELPER}" \
+    --matrix-csv "${matrix_csv}" \
+    --summary-csv "${MICROBENCH_LATEST_PREFIX}_summary.csv" \
+    --run-contract-json "${run_contract_json}" \
+    --reports-csv "${CACHE_PINNING_DECISION_PROOF_REPORTS_CSV}" \
+    --reports-md "${CACHE_PINNING_DECISION_PROOF_REPORTS_MD}" \
+    --charts-csv "${CACHE_PINNING_DECISION_PROOF_CHARTS_CSV}" \
+    --charts-md "${CACHE_PINNING_DECISION_PROOF_CHARTS_MD}"
+}
+
 clear_microbenchmark_latest_pointers
 if [[ "${CACHE_PINNING_MODE}" = "plot" ]]; then
   reset_microbenchmark_plot_outputs
@@ -428,9 +455,11 @@ if [[ "${CACHE_PINNING_MODE}" = "plot" ]]; then
   cp -f "${MICROBENCH_CHART_DIR}/sweep_cache_gain.svg" "${MICROBENCH_LATEST_PREFIX}_sweep_cache_gain.svg" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" 2>/dev/null || true
   cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg" 2>/dev/null || true
+  build_decision_proof "${plot_matrix_csv}"
 else
   build_microbenchmark_report
   build_microbenchmark_charts
+  build_decision_proof "${MICROBENCH_MATRIX_PATH}"
 fi
 
 banner "CACHE PINNING MICROBENCH DONE"
@@ -445,3 +474,5 @@ echo "Latest validation latency chart: ${MICROBENCH_LATEST_PREFIX}_validation_la
 echo "Latest validation cached chart: ${MICROBENCH_LATEST_PREFIX}_validation_cached_tokens.svg"
 echo "Latest sweep latency chart: ${MICROBENCH_LATEST_PREFIX}_sweep_replay_latency.svg"
 echo "Latest sweep cached chart: ${MICROBENCH_LATEST_PREFIX}_sweep_replay_cached_tokens.svg"
+echo "Decision proof: ${CACHE_PINNING_DECISION_PROOF_REPORTS_MD}"
+echo "Shared proof: ${CACHE_PINNING_DECISION_PROOF_CHARTS_MD}"
