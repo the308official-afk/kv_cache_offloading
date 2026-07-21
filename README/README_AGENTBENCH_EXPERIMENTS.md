@@ -1214,65 +1214,57 @@ Main outputs:
 
 ### Decision Proof
 
-Use these as the exact places to inspect when you want to prove that priority
-retention signals were attached, read, applied, and summarized.
+Exp9 now emits a generated decision-proof table after `sweep`, `all`, and
+`plot` runs. The table is both documentation and run evidence: it names the code
+location, shows the relevant snippet, names the runtime/report signal, and then
+sets `checked_true` from the latest run artifacts.
 
-- [`contracts/kv_retention_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/kv_retention_microbenchmark.contract.sh)  
-  Contract. Owns the public defaults for probe vs sweep, hint arms,
-  distractor pressure, precise-runtime settings, and top-level latest outputs.
+Generated proof files:
 
-- [`agentbench/run_kv_retention_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_kv_retention_microbenchmark_single_host.sh)  
-  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`,
-  clears stale latest outputs, and writes the consolidated report and chart
-  artifacts.
+- `experiments/reports/latest_exp9_decision_proof.csv`
+- `experiments/reports/latest_exp9_decision_proof.md`
+- `experiments/charts/exp9_decision_proof.csv`
+- `experiments/charts/exp9_decision_proof.md`
 
-- [`experiments/scripts/retention_probe/build_kv_retention_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/build_kv_retention_microbenchmark_report.py)  
-  Report builder. Merges probe and sweep evidence into one compact matrix, one
-  summary row, one markdown summary, and one `run_contract.json`.
+Inspect the latest proof:
 
-- [`experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/plot_kv_retention_microbenchmark.py)  
-  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
+```bash
+cat experiments/reports/latest_exp9_decision_proof.md
+cat experiments/charts/exp9_decision_proof.md
+```
 
-- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:523`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:523) `send_probe_request(...)`  
-  Script layer. Builds the probe request and attaches the hint payload for
-  `a_first`, distractors, and `a_replay`.
+Decision-proof columns:
 
-- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:667`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:667) `payload["priority"] = priority if priority is not None else ""`  
-  Script layer. Records whether top-level priority was actually sent on the
-  request path.
+- `step`: chronological proof step
+- `when`: when the logging/check happens
+- `where`: exact source file and line
+- `what_it_means`: plain-English meaning
+- `code_snippet`: source snippet being checked
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_source`: file/log/report used for the check
+- `evidence_value`: actual observed value from the latest run
+- `request_role`: `a_first`, `a_replay`, `protected`, or whole-run scope
+- `checked_true`: whether the latest run produced the expected evidence
+- `failure_meaning`: what to debug if the check is false
 
-- [`upstream/dynamo/lib/llm/src/preprocessor.rs:174`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:174) `runtime_observability_extra_args_from_nvext(...)`  
-  Dynamo. Preserves `nvext.agent_hints` and request metadata into runtime
-  observability so later logs can still identify the request.
+| Step | When | Where | What It Means | Code Snippet | Runtime Signal |
+|---:|---|---|---|---|---|
+| 1 | Harness sends request | [`run_kv_retention_probe.py:1295`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1295) | AgentBench starts timing the HTTP request and sends the prompt plus `nvext` metadata. | `start = time.perf_counter()`<br>`status, response_json, error = post_json(...)` | `retention_probe_requests.csv` rows with request metadata |
+| 2 | Frontend finishes preprocessing | [`sglang_processor.py:436`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:436) | Dynamo frontend tokenized/preprocessed the request while preserving request context and hints. | `emit_runtime_event(...)`<br>`"frontend.request.preprocessed"` | `frontend.request.preprocessed` |
+| 3 | Frontend dispatches request | [`sglang_processor.py:579`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:579) | Dynamo frontend handed the preprocessed request to the router/worker path. | `emit_runtime_event(...)`<br>`"frontend.request.dispatched"` | `frontend.request.dispatched` |
+| 4 | Worker receives request | [`decode_handler.py:482`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:482) | Dynamo worker received the request before generation starts. | `emit_runtime_event(...)`<br>`"worker.decode.request_received"` | `worker.decode.request_received` |
+| 5 | Worker reads routed priority | [`decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) | Worker extracts the routed top-level priority value when that path is enabled. | `priority = (request.get("routing") or {}).get("priority")` | request CSV priority / matrix `req_prio_status` |
+| 6 | Worker forwards priority into SGLang | [`decode_handler.py:528`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528) | Worker forwards the routed priority into the live SGLang generation call. | `decode = await self.engine.async_generate(...)`<br>`**self._priority_kwargs(priority)` | `worker_prio_status` / SGLang priority metadata |
+| 7 | Worker attaches to SGLang request id | [`decode_handler.py:647`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:647) | SGLang produced a request id, allowing Dynamo request rows to join with SGLang runtime events. | `emit_runtime_event(...)`<br>`"worker.decode.request_attached"`<br>`sglang_request_id=sglang_request_id` | `worker.decode.request_attached` |
+| 8 | SGLang priority/cache path executes | [`patch_sglang_transfer_logging.py:1542`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:1542) | Instrumented SGLang emits priority/cache events when the patched runtime path executes. | `payload = {"event": "sglang.priority", ...}`<br>`print(line, file=sys.stderr, flush=True)` | `sglang.priority` or `sglang.cache` |
+| 9 | Worker completes request | [`decode_handler.py:730`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:730) | Worker logs final usage, cached-token evidence, finish reason, and request context. | `emit_runtime_event(...)`<br>`"worker.decode.request_completed"`<br>`completion_usage=out["completion_usage"]` | `worker.decode.request_completed` |
+| 10 | Frontend completes stream | [`sglang_processor.py:667`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:667) | Frontend observed the final response chunk and logged completion. | `emit_runtime_event(...)`<br>`"frontend.request.completed"` | `frontend.request.completed` |
+| 11 | Harness records CSV row | [`run_kv_retention_probe.py:1363`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1363) | AgentBench records latency, prompt hash, hint metadata, cached tokens, and status. | `return {`<br>`  "latency_ms": round_ms(latency_ms),`<br>`  "cached_prompt_tokens": cached_tokens,`<br>`}` | `retention_probe_requests.csv` status/latency/cached fields |
+| 12 | Postprocess maps logs to report columns | [`run_kv_retention_probe.py:1772`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1772) | Postprocessing parses runtime logs and collapses them into public matrix fields. | `event = parse_sglang_event_line(line)`<br>`if event.get("event") == "sglang.priority":`<br>`  row["sglang_priority_events"] += 1` | `latest_kv_retention_microbenchmark_matrix.csv` |
 
-- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`  
-  Dynamo. Reads the routed priority value inside the live worker handler.
-
-- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:528) `async_generate(..., **self._priority_kwargs(priority))`  
-  Dynamo. Applies the priority by forwarding it into the live generation call.
-
-- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`  
-  SGLang instrumentation patcher. Inserts the logging hooks that watch the
-  priority path inside patched SGLang code.
-
-- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`  
-  SGLang instrumentation patcher. Hooks the eviction path so we can see whether
-  priority-related evidence shows up when cache entries are removed.
-
-- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1085`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1085) `if action == "priority_hint_seen":`  
-  Report builder. Interprets raw `sglang.priority` events as “SGLang saw the
-  priority hint.”
-
-- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1087`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1087) `if action == "scheduler_priority_applied":`  
-  Report builder. Interprets raw `sglang.priority` events as “SGLang says it
-  actually applied scheduling priority.”
-
-- [`experiments/scripts/retention_probe/run_kv_retention_probe.py:1197`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/retention_probe/run_kv_retention_probe.py:1197) `worker_priority_status(...)`  
-  Report builder. Collapses the raw worker/SGLang evidence into the compact
-  `worker_prio_status` field in the matrix.
-
-Strongest proof in this setup: `scheduler_priority_applied` in the raw
-`sglang.priority` event stream.
+Simple reading: the first rows prove the harness and frontend path, the middle
+rows prove the worker-to-SGLang bridge, and the final rows prove the report
+joined runtime evidence back into the public CSV.
 
 ### Lower-Level Wrappers
 

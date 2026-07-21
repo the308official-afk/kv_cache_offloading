@@ -816,6 +816,15 @@ capture_worker_runtime_log() {
   docker logs dynamo-sglang-worker > "${out_path}" 2>&1
 }
 
+capture_frontend_runtime_log() {
+  local out_path="$1"
+  mkdir -p "$(dirname "${out_path}")"
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  docker logs dynamo-frontend > "${out_path}" 2>&1
+}
+
 rebuild_batch_matrix() {
   "${PYTHON_BIN}" - <<'PY' "${BATCH_PROGRESS}" "${BATCH_MATRIX}"
 import csv
@@ -1357,6 +1366,7 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
       CURRENT_HOST_FILE_STORAGE_PATH=""
       SMOKE_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_smoke_test.log"
       WORKER_RUNTIME_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_worker_runtime.log"
+      FRONTEND_RUNTIME_LOG="${BATCH_DIR}/${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${HINT_SAFE_NAME}_${CACHE_CONTROL_SAFE_NAME}_frontend_runtime.log"
 
       if [[ "${KV_TIER_MODE}" = "gpu_cpu_storage" ]]; then
         CURRENT_FILE_STORAGE_PATH="${FILE_STORAGE_PATH}"
@@ -1392,6 +1402,9 @@ for MODEL_NAME in "${MODELS_TO_RUN[@]}"; do
         "${RETENTION_PROBE_ID}_${MODEL_SAFE_NAME}_${KV_TIER_SAFE_NAME}_${RUN_ID_SUFFIX}" \
         "${WORKER_RUNTIME_LOG}"; then
         sleep 2
+
+        capture_frontend_runtime_log "${FRONTEND_RUNTIME_LOG}" || \
+          echo "Warning: could not capture frontend runtime log for ${HINT_PROFILE}" | tee -a "${BATCH_LOG}"
 
         if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
           postprocess_probe \

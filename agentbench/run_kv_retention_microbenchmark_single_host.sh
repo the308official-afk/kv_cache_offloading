@@ -47,6 +47,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+  "experiments/reports/latest_exp9_decision_proof.csv"
+  "experiments/reports/latest_exp9_decision_proof.md"
 )
 
 LAST_PROBE_RUN_ID=""
@@ -80,7 +82,9 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp9_kvretention_latency_gain_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp9_kvretention_cache_gain_vs_distractors.svg" \
-    "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg"
+    "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_decision_proof.csv" \
+    "${SHARED_CHART_DIR}/exp9_decision_proof.md"
 }
 
 usage() {
@@ -466,6 +470,17 @@ build_microbenchmark_charts() {
   fi
 }
 
+build_decision_proof() {
+  local matrix_csv="${1}"
+  "${PYTHON_BIN}" experiments/scripts/retention_probe/build_kv_retention_decision_proof.py \
+    --matrix-csv "${matrix_csv}" \
+    --run-contract-json "${MICROBENCH_OUT_DIR}/run_contract.json" \
+    --reports-csv "experiments/reports/latest_exp9_decision_proof.csv" \
+    --reports-md "experiments/reports/latest_exp9_decision_proof.md" \
+    --charts-csv "${SHARED_CHART_DIR}/exp9_decision_proof.csv" \
+    --charts-md "${SHARED_CHART_DIR}/exp9_decision_proof.md"
+}
+
 finalize_runtime_cleanup() {
   if [[ "${STOP_DYNAMO_WHEN_DONE}" != "1" || "${KV_RETENTION_MODE}" = "plot" ]]; then
     return 0
@@ -485,8 +500,10 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${KV_RETENTION_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Replay latency chart: ${MICROBENCH_OUT_DIR}/charts/replay_latency.svg
 Replay cached chart: ${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg
+Decision proof: experiments/reports/latest_exp9_decision_proof.md
 Shared charts: ${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg
                ${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg
+Shared proof: ${SHARED_CHART_DIR}/exp9_decision_proof.md
 
 Current status:
   - public wrapper: ready
@@ -505,8 +522,10 @@ Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Replay latency chart: ${MICROBENCH_OUT_DIR}/charts/replay_latency.svg
 Replay cached chart: ${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg
+Decision proof: experiments/reports/latest_exp9_decision_proof.md
 Shared charts: ${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg
                ${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg
+Shared proof: ${SHARED_CHART_DIR}/exp9_decision_proof.md
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Last sweep run id: ${LAST_SWEEP_RUN_ID:-<none>}
 
@@ -643,6 +662,7 @@ run_plot_mode() {
   banner "KV RETENTION MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
   build_microbenchmark_charts "${matrix_csv}"
+  build_decision_proof "${matrix_csv}"
 }
 
 clear_microbenchmark_latest_pointers
@@ -679,6 +699,7 @@ update_run_contract_with_helper_ids
 if [[ "${KV_RETENTION_MODE}" != "plot" ]]; then
   build_microbenchmark_report
   build_microbenchmark_charts "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
+  build_decision_proof "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 fi
 
 finalize_runtime_cleanup
