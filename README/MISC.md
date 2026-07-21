@@ -1,11 +1,72 @@
 # Misc Debug Notes
 
+```bash
+Published 3 public Exp 6 report(s) after task 24 (agentbench-20260721_150945) to experiments/charts.
+===== Running SWE-bench index 25 =====
+Traceback (most recent call last):
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 5231, in <module>
+    main()
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4644, in main
+    workspace_dir, workspace_metadata = prepare_workspace(
+                                        ^^^^^^^^^^^^^^^^^^
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4197, in prepare_workspace
+    run_command(["git", "checkout", checkout_commit], cwd=shared_repo_source)
+  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 1686, in run_command
+    return subprocess.run(
+           ^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.11/subprocess.py", line 569, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['git', 'checkout', 'c35133622a7950d2aa96d1db03ad8b96ccd65df9']' returned non-zero exit status 128.
+Published 3 public Exp 6 report(s) after task 25 (agentbench-20260721_151210) to experiments/charts.
+Run failed: agentbench-20260721_151210
+Partial result dir: experiments/raw/agentbench/results/agentbench-20260721_151210
+Partial report dir: experiments/reports/runs/agentbench-20260721_151210
+Exit status: 1
 
-LLM orchestration platform – Coordinates all the components needed to run LLM inference efficiently.
-KV cache-aware routing – Sends requests to the worker that already has the needed KV cache to avoid recomputing it.
-Disaggregated serving – Separates prompt processing (prefill) and token generation (decode) so each can run on the best resources.
-Distributed KV cache management – Stores and moves KV cache across GPU, CPU, and storage to support larger workloads.
-High-performance multi-node communication – Transfers requests and KV cache quickly between GPUs and servers with low latency.
+Index 25 failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
+Building SWE-bench trajectory prompt catalog from Experiment 6 traces...
+Preparing SWE-bench trajectory prompts...
+Trace index: experiments/reports/latest_prompt_evolution_trace_index.csv
+Catalog ID: swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1
+Stages: planning execution patch_generation review
+Min prompt chars: 200
+Max tasks: 0
+
+SWE-bench trajectory prompt catalog ready.
+catalog_id: swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1
+trace_index: experiments/reports/latest_prompt_evolution_trace_index.csv
+catalog_csv: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/swebench_trajectory_prompts/swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1/swebench_trajectory_pro    mpt_catalog.csv
+catalog_jsonl: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/swebench_trajectory_prompts/swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1/swebench_trajectory_p    rompt_catalog.jsonl
+latest_csv: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
+latest_jsonl: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl
+task_count: 25
+prompt_count: 93
+stage_filter: planning execution patch_generation review
+min_prompt_chars: 200
+
+Latest catalog CSV: experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
+Latest catalog JSONL: experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl
+Published catalog CSV to: experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
+
+Prompt evolution batch finished.
+Batch dir: experiments/reports/batches/exp6_prompt_evolution_gh200_1
+Driver log: experiments/reports/batches/exp6_prompt_evolution_gh200_1/prompt_evolution_batch_driver.log
+Smoke log: experiments/reports/batches/exp6_prompt_evolution_gh200_1/prompt_evolution_batch_smoke_test.log
+Progress CSV: experiments/reports/batches/exp6_prompt_evolution_gh200_1/progress_overview.csv
+Trace index CSV: experiments/reports/batches/exp6_prompt_evolution_gh200_1/task_trace_index.csv
+Trace index MD: experiments/reports/batches/exp6_prompt_evolution_gh200_1/task_trace_index.md
+Prompt evolution summary: experiments/reports/prompt_evolution_run_overview.csv
+Latest trace index CSV: experiments/reports/latest_prompt_evolution_trace_index.csv
+Latest trace index MD: experiments/reports/latest_prompt_evolution_trace_index.md
+Published readable Exp 6 reports:
+  experiments/charts/exp6_prompt_evolution_run_overview.csv
+  experiments/charts/exp6_prompt_evolution_task_summary.csv
+  experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
+
+
+```
+
+
 
 
 
