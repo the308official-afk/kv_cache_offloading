@@ -701,6 +701,21 @@ name. If that batch folder already exists, the run continues from the first
 missing task and keeps the rows already produced. If it does not exist, the run
 starts fresh and clears old Experiment 6 public/report state.
 
+To confirm on GH200 before launching:
+
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="exp6_prompt_evolution_gh200_1"
+BATCH_DIR="experiments/reports/batches/${RUN_ID}"
+
+if [[ -d "$BATCH_DIR" ]]; then
+  echo "Will resume: $BATCH_DIR"
+else
+  echo "Will start fresh: $BATCH_DIR"
+fi
+```
+
 The latest readable Experiment 6 outputs are copied into the shared chart
 folder:
 
