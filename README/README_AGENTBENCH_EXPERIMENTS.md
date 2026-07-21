@@ -620,7 +620,7 @@ Automated version: stop Dynamo, restart it with the chosen model, wait for
 ```bash
 cd ~/kv_cache_offloading
 
-RUN_ID="exp6_prompt_evolution_gh200_$(date +%Y%m%d_%H%M%S)"
+RUN_ID="exp6_prompt_evolution_gh200_1"
 LOG_DIR="experiments/reports/exp6_prompt_evolution_nohup/${RUN_ID}"
 mkdir -p "${LOG_DIR}"
 
@@ -652,7 +652,7 @@ nohup env \
   PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
   ./agentbench/run_prompt_evolution_batch_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
-  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+  >> "${LOG_DIR}/run.log" 2>&1 < /dev/null &
 
 echo "RUN_ID=${RUN_ID}"
 echo "LOG=${LOG_DIR}/run.log"
@@ -969,7 +969,7 @@ nohup env \
   PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
   ./agentbench/run_prompt_evolution_batch_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
-  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+  >> "${LOG_DIR}/run.log" 2>&1 < /dev/null &
 
 echo "RUN_ID=${RUN_ID}"
 echo "LOG=${LOG_DIR}/run.log"
