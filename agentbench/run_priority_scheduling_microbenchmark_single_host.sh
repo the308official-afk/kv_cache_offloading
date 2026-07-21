@@ -57,6 +57,8 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg"
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+  "experiments/reports/latest_exp11_decision_proof.csv"
+  "experiments/reports/latest_exp11_decision_proof.md"
 )
 
 LAST_PROBE_RUN_ID=""
@@ -82,7 +84,9 @@ prepare_shared_chart_dir() {
   find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name 'README.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/${SHARED_CHART_MATRIX_NAME}" \
-    "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}"
+    "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}" \
+    "${SHARED_CHART_DIR}/exp11_decision_proof.csv" \
+    "${SHARED_CHART_DIR}/exp11_decision_proof.md"
 }
 
 usage() {
@@ -233,7 +237,9 @@ reset_microbenchmark_plot_outputs() {
     "${MICROBENCH_LATEST_PREFIX}_wait_gain.svg" \
     "${MICROBENCH_LATEST_PREFIX}_latency_vs_arrival_gap.svg" \
     "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg" \
-    "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
+    "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json" \
+    "experiments/reports/latest_exp11_decision_proof.csv" \
+    "experiments/reports/latest_exp11_decision_proof.md"
   rm -rf "${MICROBENCH_OUT_DIR}"
   mkdir -p "${MICROBENCH_OUT_DIR}"
 }
@@ -371,6 +377,17 @@ build_microbenchmark_charts() {
   fi
 }
 
+build_decision_proof() {
+  local matrix_csv="$1"
+  "${PYTHON_BIN}" experiments/scripts/priority_scheduling/build_priority_scheduling_decision_proof.py \
+    --matrix-csv "${matrix_csv}" \
+    --run-contract-json "${MICROBENCH_OUT_DIR}/run_contract.json" \
+    --reports-csv "experiments/reports/latest_exp11_decision_proof.csv" \
+    --reports-md "experiments/reports/latest_exp11_decision_proof.md" \
+    --charts-csv "${SHARED_CHART_DIR}/exp11_decision_proof.csv" \
+    --charts-md "${SHARED_CHART_DIR}/exp11_decision_proof.md"
+}
+
 finalize_runtime_cleanup() {
   if [[ "${STOP_DYNAMO_WHEN_DONE}" != "1" || "${PRIORITY_SCHEDULING_MODE}" = "plot" ]]; then
     return 0
@@ -499,6 +516,7 @@ run_plot_mode() {
   banner "${MICROBENCH_DISPLAY_NAME} MICROBENCH PLOT"
   echo "Building charts from: ${matrix_csv}"
   build_microbenchmark_charts "${matrix_csv}"
+  build_decision_proof "${matrix_csv}"
 }
 
 print_final_status() {
@@ -510,6 +528,8 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${PRIORITY_SCHEDULING_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
 Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
+Decision proof: experiments/reports/latest_exp11_decision_proof.md
+Shared proof: ${SHARED_CHART_DIR}/exp11_decision_proof.md
 EOF
     return
   fi
@@ -520,6 +540,8 @@ Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Jump-ahead chart: ${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg
 Shared chart: ${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}
+Decision proof: experiments/reports/latest_exp11_decision_proof.md
+Shared proof: ${SHARED_CHART_DIR}/exp11_decision_proof.md
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}
 Sweep run ids: ${LAST_SWEEP_RUN_IDS[*]:-<none>}
 EOF
@@ -560,6 +582,7 @@ update_run_contract_with_helper_ids
 if [[ "${PRIORITY_SCHEDULING_MODE}" != "plot" ]]; then
   build_microbenchmark_report
   build_microbenchmark_charts "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
+  build_decision_proof "${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv"
 fi
 
 finalize_runtime_cleanup

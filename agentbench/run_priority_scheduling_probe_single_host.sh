@@ -51,6 +51,7 @@ EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_
 RUN_DIR="experiments/reports/priority_scheduling/${PRIORITY_SCHEDULING_ID}"
 DRIVER_LOG="${RUN_DIR}/priority_scheduling_driver.log"
 SMOKE_LOG="${RUN_DIR}/priority_scheduling_smoke_test.log"
+FRONTEND_RUNTIME_LOG="${RUN_DIR}/priority_scheduling_frontend_runtime.log"
 WORKER_RUNTIME_LOG="${RUN_DIR}/priority_scheduling_worker_runtime.log"
 mkdir -p "${RUN_DIR}"
 
@@ -268,6 +269,15 @@ capture_worker_runtime_log() {
   docker logs dynamo-sglang-worker > "${out_path}" 2>&1
 }
 
+capture_frontend_runtime_log() {
+  local out_path="$1"
+  mkdir -p "$(dirname "${out_path}")"
+  if ! command -v docker >/dev/null 2>&1; then
+    return 1
+  fi
+  docker logs dynamo-frontend > "${out_path}" 2>&1
+}
+
 build_runtime_signature() {
   printf '%s\n' \
     "model=${MODEL}" \
@@ -398,6 +408,7 @@ warn_if_worker_runtime_missing() {
   echo "Request-context mode: ${PRIORITY_REQUEST_CONTEXT_MODE}"
   echo "Driver log: ${DRIVER_LOG}"
   echo "Smoke log: ${SMOKE_LOG}"
+  echo "Frontend runtime log: ${FRONTEND_RUNTIME_LOG}"
   echo "Worker runtime log: ${WORKER_RUNTIME_LOG}"
   if [[ "${PREPARED_SGLANG_PRIORITY_MARKERS_PRESENT:-1}" = "0" ]]; then
     echo "Priority-path markers: unavailable on this extracted SGLang version; run will continue with worker/runtime attribution only."
@@ -522,6 +533,10 @@ fi
 
 echo "Running priority scheduling probe..." | tee -a "${DRIVER_LOG}"
 "${probe_cmd[@]}" 2>&1 | tee -a "${DRIVER_LOG}"
+
+if capture_frontend_runtime_log "${FRONTEND_RUNTIME_LOG}"; then
+  echo "Captured frontend runtime log: ${FRONTEND_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
+fi
 
 if capture_worker_runtime_log "${WORKER_RUNTIME_LOG}"; then
   echo "Captured worker runtime log: ${WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"

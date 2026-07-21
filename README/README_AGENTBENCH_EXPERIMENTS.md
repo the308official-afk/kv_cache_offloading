@@ -1697,68 +1697,62 @@ docker logs -f dynamo-sglang-worker
 
 ### Decision Proof
 
-Use these as the exact places to inspect when you want to prove that queue
-priority was attached, read, applied, and observed.
+Exp11 now emits a generated decision-proof table after `sweep`, `all`, and
+`plot` runs. The table is both documentation and run evidence: it names the code
+location, shows the relevant snippet, names the runtime/report signal, and then
+sets `checked_true` from the latest run artifacts.
 
-- [`contracts/priority_scheduling_microbenchmark.contract.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/contracts/priority_scheduling_microbenchmark.contract.sh)  
-  Contract. Owns the public defaults for burst shape, priority values,
-  precise-runtime settings, and top-level latest outputs.
+Generated proof files:
 
-- [`agentbench/run_priority_scheduling_microbenchmark_single_host.sh`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/run_priority_scheduling_microbenchmark_single_host.sh)  
-  Public wrapper. Reads the contract, runs `probe` / `sweep` / `all` / `plot`, clears
-  stale latest outputs, and writes the consolidated report and chart artifacts.
+- `experiments/reports/latest_exp11_decision_proof.csv`
+- `experiments/reports/latest_exp11_decision_proof.md`
+- `experiments/charts/exp11_decision_proof.csv`
+- `experiments/charts/exp11_decision_proof.md`
 
-- [`experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py)  
-  Report builder. Normalizes the probe’s readable request table into one compact
-  matrix, one summary row, one markdown summary, and one `run_contract.json`.
+Inspect the latest proof:
 
-- [`experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/plot_priority_scheduling_microbenchmark.py)  
-  Plotter. Reads only the matrix CSV and generates slide-ready SVG charts.
+```bash
+cat experiments/reports/latest_exp11_decision_proof.md
+cat experiments/charts/exp11_decision_proof.md
+```
 
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:350) `build_hint_payload(...)`  
-  Script layer. Builds `agent_hints.priority`.
+Decision-proof columns:
 
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:356`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:356) `payload["priority"] = priority_value`  
-  Script layer. Adds top-level request priority when the frontend supports it.
+- `step`: chronological proof step
+- `when`: when the logging/check happens
+- `where`: exact source file and line
+- `what_it_means`: plain-English meaning
+- `code_snippet`: source snippet being checked
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_source`: file/log/report used for the check
+- `evidence_value`: actual observed value from the latest run
+- `request_role`: low request, high request, or whole-run scope
+- `priority_class`: which priority class the check applies to
+- `order_metric`: arrival, attach, completion, or jump-ahead metric
+- `checked_true`: whether the latest run produced the expected evidence
+- `failure_meaning`: what to debug if the check is false
 
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:608) `priority = top_level_priority_from_hints(hints)`  
-  Script layer. Decides what priority value should be attempted for the live
-  request.
+| Step | When | Where | What It Means | Code Snippet | Runtime Signal |
+|---:|---|---|---|---|---|
+| 1 | Harness builds low/high request specs | [`run_priority_scheduling_probe.py:797`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:797) | AgentBench creates a mixed burst with low-priority requests and high-priority requests. | `priority_class="low-priority"`<br>`priority_class="high-priority"` | request/proof CSV rows with both priority classes |
+| 2 | Harness attaches priority hint | [`run_priority_scheduling_probe.py:496`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:496) | Each request gets an `nvext.agent_hints.priority` value. | `payload["priority"] = priority_value` | `worker_hint_prio` / `hint_seen` |
+| 3 | Harness optionally sends top-level priority | [`run_priority_scheduling_probe.py:913`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:913) | When supported, the script also sends a top-level OpenAI-compatible `priority` field. | `payload["priority"] = priority` | `sent_top_prio` / top-level priority status |
+| 4 | Frontend preprocesses request | [`sglang_processor.py:436`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:436) | Dynamo frontend tokenizes/preprocesses the hinted request. | `emit_runtime_event(...)`<br>`"frontend.request.preprocessed"` | `frontend.request.preprocessed` |
+| 5 | Frontend dispatches request | [`sglang_processor.py:579`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/frontend/sglang_processor.py:579) | Dynamo frontend hands the request to the router/worker path. | `emit_runtime_event(...)`<br>`"frontend.request.dispatched"` | `frontend.request.dispatched` |
+| 6 | Worker receives request | [`decode_handler.py:482`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:482) | Dynamo worker receives the request before generation starts. | `emit_runtime_event(...)`<br>`"worker.decode.request_received"` | `worker.decode.request_received` |
+| 7 | Worker reads routed priority | [`decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) | Worker extracts routed priority from request routing metadata. | `priority = (request.get("routing") or {}).get("priority")` | worker priority fields / hint-path status |
+| 8 | Worker forwards priority into SGLang | [`decode_handler.py:542`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542) | Worker forwards priority into the live SGLang generation call. | `**self._priority_kwargs(priority)` | worker/SGLang priority metadata |
+| 9 | Worker attaches request to SGLang id | [`decode_handler.py:647`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:647) | SGLang produced a request id, so worker runtime timestamps can be joined to the script request rows. | `emit_runtime_event(...)`<br>`"worker.decode.request_attached"`<br>`sglang_request_id=sglang_request_id` | `worker_request_attached_timestamp` / `attached_rank` |
+| 10 | Worker completes request | [`decode_handler.py:730`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:730) | Worker logs completion, giving completion timestamps and request usage. | `emit_runtime_event(...)`<br>`"worker.decode.request_completed"` | `worker_request_completed_timestamp` / `completed_rank` |
+| 11 | Report assigns attach order | [`run_priority_scheduling_probe.py:1410`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1410) | Postprocess sorts worker attach timestamps and assigns `attached_rank`. | `attached_rows.sort(...)`<br>`row["attached_rank"] = index` | `attached_rank` |
+| 12 | Report computes high-priority jump-ahead count | [`run_priority_scheduling_probe.py:1445`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1445) | For each high-priority request, postprocess counts earlier low-priority requests it attached before. | `if low_attached is not None and low_attached > high_attached:`<br>`attached_leapfrogs += 1` | `beat_low_attach` / `high_jump_ahead_count` |
+| 13 | Microbenchmark report computes jump-ahead rate | [`build_priority_scheduling_microbenchmark_report.py:243`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:243) | The compact matrix converts raw leapfrogs into `high_jump_ahead_count` and `high_jump_ahead_rate`. | `max_jump_ahead = low_requests * high_requests`<br>`high_jump_ahead_rate = percent_text(...)` | `high_jump_ahead_count` / `high_jump_ahead_rate` |
+| 14 | Matrix reports hint path | [`build_priority_scheduling_microbenchmark_report.py:262`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:262) | The public matrix reports whether the worker saw priority hints. | `"hint_seen": priority_hint_seen_status(...)` | `hint_seen=yes` / `worker_hint_status=full` |
+| 15 | Matrix reports final verdict | [`build_priority_scheduling_microbenchmark_report.py:247`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/build_priority_scheduling_microbenchmark_report.py:247) | The public matrix marks the run reordered when at least one high-priority request jumped ahead. | `result = f"{prefix}_reordered" if jump_count > 0 else "no_visible_reorder"` | `result=priority_reordered` |
 
-- [`upstream/dynamo/lib/llm/src/preprocessor.rs:408`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:408) `RoutingHints { ... priority_jump, priority ... }`  
-  Dynamo. Carries priority through the routed request structure.
-
-- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:493) `priority = (request.get("routing") or {}).get("priority")`  
-  Dynamo. Reads the routed priority inside the live worker handler.
-
-- [`upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/components/src/dynamo/sglang/request_handlers/llm/decode_handler.py:542) `_priority_kwargs(...)`  
-  Dynamo. Applies the priority by forwarding it to generation.
-
-- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2253) `wrap_priority_event_function(...)`  
-  SGLang instrumentation patcher. Injects priority-path logging into patched
-  SGLang code.
-
-- [`runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/runtime_instrumentation/sglang_transfer_logging/patch_sglang_transfer_logging.py:2700) `wrap_priority_event_function(text, "evict", "radix_cache.evict")`  
-  SGLang instrumentation patcher. Hooks eviction-time priority evidence too.
-
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1052) parses `sglang.priority` events  
-  Report builder. Turns raw SGLang priority logs into structured report fields.
-
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1166) `worker_priority_path_status(...)`  
-  Report builder. Decides whether the worker-side priority proof is strong,
-  partial, or missing.
-
-- [`experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/priority_scheduling/run_priority_scheduling_probe.py:1212) computes leapfrogs and wait-time comparison  
-  Report builder. Converts raw timing/order into the user-facing scheduling
-  proof columns.
-
-Strongest proof in this setup:
-
-- `hint_kind=priority`
-- `hint_seen=yes`
-- `high_jump_ahead_count > 0`
-- `high_jump_ahead_rate > 0%`
-- `result=priority_reordered`
+Simple reading: the first rows prove the harness created low/high requests and
+sent hints, the middle rows prove the worker saw and ordered the requests, and
+the final rows prove the public matrix computed the jump-ahead result.
 
 ### Lower-Level Wrapper
 
