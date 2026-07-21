@@ -1,5 +1,49 @@
 # Misc Debug Notes
 
+
+LLM orchestration platform – Coordinates all the components needed to run LLM inference efficiently.
+KV cache-aware routing – Sends requests to the worker that already has the needed KV cache to avoid recomputing it.
+Disaggregated serving – Separates prompt processing (prefill) and token generation (decode) so each can run on the best resources.
+Distributed KV cache management – Stores and moves KV cache across GPU, CPU, and storage to support larger workloads.
+High-performance multi-node communication – Transfers requests and KV cache quickly between GPUs and servers with low latency.
+
+
+
+
+For a presentation, I'd keep it to these core capabilities:
+
+LLM orchestration platform for scalable inference.
+KV cache-aware routing to maximize cache reuse and reduce recomputation.
+Disaggregated serving by coordinating separate prefill and decode workers.
+Distributed KV cache management with offloading across GPU, CPU, and storage.
+High-performance multi-node communication for efficient data movement between workers.
+
+
+
+
+NVIDIA Dynamo is an orchestration platform for LLM inference. It does not implement the transformer model itself. Instead, it coordinates where requests run, separates prefill and decode, routes requests using KV-cache awareness, manages the KV cache across the memory hierarchy, and moves data efficiently between machines so inference remains fast and scalable.
+
+
+Here are concise, slide-friendly descriptions for each major component:
+
+API Server – Receives LLM requests and forwards them into Dynamo for processing.
+Planner – Continuously optimizes scheduling and resource usage.
+Smart Router – Routes requests to the best worker, prioritizing KV cache reuse.
+Prefill Worker – Processes the input prompt and builds the initial KV cache.
+Decode Worker – Generates output tokens using the existing KV cache.
+Distributed KV Cache – Stores and shares KV cache across workers for reuse.
+KV Cache Manager – Decides where KV cache should live (GPU, CPU, or object storage).
+NIXL (Inference Transfer Engine) – Moves data efficiently between GPUs and nodes.
+Event Plane – Monitors system health, performance, and metrics across all components.
+Host Memory – Provides larger, slower storage for offloaded KV cache.
+Object Storage – Stores long-lived KV cache beyond GPU and CPU memory.
+Disaggregated Serving – Separates prefill and decode onto specialized workers for higher efficiency.
+
+
+
+
+
+
 ```bash
 Run	Status	Repo	Model	Steps	Planning	Execution	Exec Size Î”	Patch Gen	Review	Other	Total	Patch
 5310	recursion_soft_stop	NodeBB	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
