@@ -1,6 +1,13 @@
 # Misc Debug Notes
 
 ```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="exp6_prompt_evolution_gh200_1"
+grep '^25,' "experiments/reports/batches/${RUN_ID}/task_trace_index.csv" || echo "task 25 not completed; resume should retry it"
+```
+
+```bash
 Published 3 public Exp 6 report(s) after task 24 (agentbench-20260721_150945) to experiments/charts.
 ===== Running SWE-bench index 25 =====
 Traceback (most recent call last):
