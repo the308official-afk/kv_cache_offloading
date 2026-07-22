@@ -2,7 +2,7 @@
 
 
 
-
+```bash
 Anticipated Direction	Value	Why There Is Opportunity for Value	Can Hints Power It?
 Lifecycle-aware KV management	Very High	Agent KV can be retained while active and removed immediately when the agent or subagent finishes, reducing both recomputation and wasted memory.	Yes. Session identity, parent-session and completion signals can guide retention and cleanup.
 Direct tool-call-aware KV prefetch	Very High	Agents often pause during tool calls. Moving KV back to GPU before the tool returns could hide transfer latency and speed up the next reasoning step.	Yes. Future timing or tool-state hints could trigger direct storage-to-GPU prefetch.
@@ -13,7 +13,7 @@ Explicit latency objectives	High	Actual TTFT and inter-token-latency targets are
 Hardware and worker-pool placement	Medium–High	Long-context or latency-sensitive requests may benefit from workers with more HBM, faster interconnects or specialized configurations.	Yes. Routing constraints can require or prefer workers with selected characteristics.
 Agent-phase awareness	Potentially High	Planning, tool waiting, synthesis and final-response stages have different latency, compute and cache needs.	Yes, if added. A future phase hint could select different scheduling, retention and prefetch policies.
 Expected resume-time awareness	Potentially High	Knowing when an agent will return helps decide whether KV should remain in GPU, move to CPU or be prefetched shortly before reuse.	Yes, if added. A future timing hint could coordinate memory placement and prefetching.
-
+```
 
 
 
