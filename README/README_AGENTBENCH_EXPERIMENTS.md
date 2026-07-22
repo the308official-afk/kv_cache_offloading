@@ -671,6 +671,30 @@ If your terminal reconnects later:
 tail -f "$(ls -td experiments/reports/exp6_prompt_evolution_nohup/* | head -1)/run.log"
 ```
 
+To pause the Exp6 nohup run and resume another day:
+
+```bash
+cd ~/kv_cache_offloading
+
+# Stop the Exp6 batch wrapper and child SWE-bench batch loop.
+pkill -f run_prompt_evolution_batch_single_host.sh || true
+pkill -f run_swebench_batch_single_host.sh || true
+
+# Stop the live Dynamo runtime.
+./run_dynamo_single_host.sh stop || true
+```
+
+To resume, rerun the same nohup command with the same:
+
+```bash
+RUN_ID="exp6_prompt_evolution_gh200_1"
+PROMPT_EVOLUTION_BATCH_ID="${RUN_ID}"
+```
+
+The batch will skip tasks already recorded in
+`experiments/reports/batches/${RUN_ID}/task_trace_index.csv` and retry the first
+missing task.
+
 To watch the worker after the restart:
 
 ```bash
