@@ -1118,6 +1118,73 @@
       text-align: center;
       padding: 24px;
     }
+    .dynamo-developments-slide .content {
+      gap: 14px;
+    }
+    .dynamo-developments-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+      border: 1px solid #dbe4f0;
+      background: #ffffff;
+    }
+    .dynamo-developments-table th {
+      background: #f4f7fb;
+      color: #334155;
+      text-align: left;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+      line-height: 1.15;
+      padding: 10px 10px;
+      border-bottom: 2px solid #d6deea;
+      vertical-align: top;
+    }
+    .dynamo-developments-table td {
+      color: #334155;
+      font-size: 12px;
+      line-height: 1.32;
+      padding: 10px 10px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+      word-break: break-word;
+    }
+    .dynamo-developments-table tr:nth-child(even) td {
+      background: #fbfdff;
+    }
+    .dynamo-developments-table tr:last-child td {
+      border-bottom: none;
+    }
+    .dynamo-developments-table td:first-child,
+    .dynamo-developments-table td:nth-child(2) {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11.5px;
+      color: #1e293b;
+    }
+    .dynamo-developments-table th:nth-child(1),
+    .dynamo-developments-table td:nth-child(1) {
+      width: 17%;
+    }
+    .dynamo-developments-table th:nth-child(2),
+    .dynamo-developments-table td:nth-child(2) {
+      width: 15%;
+    }
+    .dynamo-developments-table th:nth-child(3),
+    .dynamo-developments-table td:nth-child(3) {
+      width: 34%;
+    }
+    .dynamo-developments-table th:nth-child(4),
+    .dynamo-developments-table td:nth-child(4) {
+      width: 34%;
+    }
+    .dynamo-developments-note {
+      font-size: 14px;
+      line-height: 1.45;
+      color: #475569;
+      max-width: 1000px;
+    }
     .chart-placeholder .caption {
       margin-top: 18px;
       max-width: 420px;
@@ -1564,6 +1631,80 @@
         <div class="reference-fragment-placeholder">Loading assets/slide10_run_overview_fragment.js</div>
       </div>
       <p class="reference-caption">Representative run sample showing tasks executed, phases reached, and tools invoked.</p>
+    </div>
+  </section>
+
+  <section class="slide dynamo-developments-slide">
+    <div class="slide-number">11</div>
+    <h2 class="title">Recent NVIDIA Dynamo Developments</h2>
+    <div class="content">
+      <p class="dynamo-developments-note">Recent milestones show Dynamo maturing from an inference runtime into a broader AI inference orchestration platform.</p>
+      <table class="dynamo-developments-table">
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Approx. Release</th>
+            <th>Latest Development</th>
+            <th>Why It Matters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Production Release</td>
+            <td>Mar 2026</td>
+            <td>Dynamo 1.0 became production-ready for distributed inference.</td>
+            <td>Mature orchestration platform for AI inference.</td>
+          </tr>
+          <tr>
+            <td>Reasoning and Agentic AI</td>
+            <td>Mar 2026</td>
+            <td>Optimized for reasoning models and agentic inference.</td>
+            <td>Better throughput and latency for long-running AI agents.</td>
+          </tr>
+          <tr>
+            <td>Disaggregated Serving</td>
+            <td>Mar 2025 to Mar 2026</td>
+            <td>Expanded support for Prefill/Decode and Encode/Prefill/Decode (EPD).</td>
+            <td>Improves GPU utilization and scalability.</td>
+          </tr>
+          <tr>
+            <td>KV Cache Management</td>
+            <td>Mar 2026</td>
+            <td>Smarter KV routing, cache pinning, multi-tier cache, and object-storage support.</td>
+            <td>Reduces recomputation and improves cache reuse.</td>
+          </tr>
+          <tr>
+            <td>Planner</td>
+            <td>2025 to Mar 2026</td>
+            <td>Enhanced scheduling, autoscaling, and topology-aware GPU placement.</td>
+            <td>Better resource allocation and SLA management.</td>
+          </tr>
+          <tr>
+            <td>Multimodal Inference</td>
+            <td>Mar 2026</td>
+            <td>Native Encode to Prefill to Decode (EPD) pipeline.</td>
+            <td>Efficient serving of multimodal foundation models.</td>
+          </tr>
+          <tr>
+            <td>Ecosystem Integration</td>
+            <td>Mar 2026</td>
+            <td>Deeper integration with SGLang, TensorRT-LLM, vLLM, LangChain, LMCache, and llm-d.</td>
+            <td>Easier deployment using existing inference engines.</td>
+          </tr>
+          <tr>
+            <td>Hardware Optimization</td>
+            <td>Mar 2026</td>
+            <td>Optimized for Blackwell GPUs, NVLink/NIXL, and multi-node clusters.</td>
+            <td>Higher throughput and lower inference cost.</td>
+          </tr>
+          <tr>
+            <td>Platform Vision</td>
+            <td>Mar 2026</td>
+            <td>Evolved into an <strong>AI inference orchestration platform</strong>.</td>
+            <td>Coordinates scheduling, routing, memory, and compute across GPU clusters.</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   </section>
 
