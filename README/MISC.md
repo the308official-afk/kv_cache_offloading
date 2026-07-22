@@ -1,5 +1,30 @@
 # Misc Debug Notes
 
+
+
+
+Anticipated Direction	Value	Why There Is Opportunity for Value	Can Hints Power It?
+Lifecycle-aware KV management	Very High	Agent KV can be retained while active and removed immediately when the agent or subagent finishes, reducing both recomputation and wasted memory.	Yes. Session identity, parent-session and completion signals can guide retention and cleanup.
+Direct tool-call-aware KV prefetch	Very High	Agents often pause during tool calls. Moving KV back to GPU before the tool returns could hide transfer latency and speed up the next reasoning step.	Yes. Future timing or tool-state hints could trigger direct storage-to-GPU prefetch.
+Cache-value / semantic awareness	Very High	System prompts and tool definitions are highly reusable, while temporary reasoning and finished-subagent KV may have little value. Treating them differently improves memory efficiency.	Partly. Hints could identify content type or reuse value, but Dynamo and the runtime must enforce block-level policies.
+Cross-worker and subagent KV sharing	Very High	Shared prompts could be computed once and reused by multiple workers or subagents, avoiding repeated prefill across the cluster.	Partly. Session and shared-prefix hints help identify related requests, but shared storage, indexing and NIXL perform the actual sharing.
+Learned routing and automatic hints	High	Harnesses may not predict output length, reuse or the best worker accurately. Learned policies can improve routing automatically from past performance.	Partly. Hints provide context, but runtime telemetry and an online-learning router make the final prediction.
+Explicit latency objectives	High	Actual TTFT and inter-token-latency targets are more useful than a vague urgency score and can guide pool selection and scheduling.	Yes. Dynamo already accepts per-request ttft_target and itl_target router parameters.
+Hardware and worker-pool placement	Medium–High	Long-context or latency-sensitive requests may benefit from workers with more HBM, faster interconnects or specialized configurations.	Yes. Routing constraints can require or prefer workers with selected characteristics.
+Agent-phase awareness	Potentially High	Planning, tool waiting, synthesis and final-response stages have different latency, compute and cache needs.	Yes, if added. A future phase hint could select different scheduling, retention and prefetch policies.
+Expected resume-time awareness	Potentially High	Knowing when an agent will return helps decide whether KV should remain in GPU, move to CPU or be prefetched shortly before reuse.	Yes, if added. A future timing hint could coordinate memory placement and prefetching.
+
+
+
+
+
+
+
+
+
+
+
+
 ```bash
 cd ~/kv_cache_offloading
 
