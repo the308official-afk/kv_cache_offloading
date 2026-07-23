@@ -615,7 +615,7 @@ What made tool calling work reliably:
 - refresh public CSVs after every task
 
 Automated version: stop Dynamo, restart it with the chosen model, wait for
-`/v1/models`, run a smoke test, then launch the batch.
+`/v1/models`, run a smoke test, then launch the batch.xxx
 
 ```bash
 cd ~/kv_cache_offloading
