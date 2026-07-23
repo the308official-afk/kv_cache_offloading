@@ -2497,6 +2497,28 @@ echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
 ```
 
+Nohup version for only the trajectory Exp11 priority-scheduling case:
+
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="exp11_trajectory_gh200_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/agentic_hint_sweeps_suite_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
+  SUITE_RUNS="exp11_trajectory" \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
+```
+
 Watch the run:
 
 ```bash
