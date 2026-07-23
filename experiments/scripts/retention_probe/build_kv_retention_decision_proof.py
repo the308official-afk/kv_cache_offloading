@@ -180,6 +180,69 @@ PROOF_STEPS = [
     ),
 ]
 
+PROOF_STEP_METADATA = {
+    "harness_rows": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "AgentBench sent and recorded requests.",
+    },
+    "frontend_preprocessed": {
+        "component": "frontend",
+        "severity": "warning",
+        "meaning_short": "Frontend preprocessing evidence was captured.",
+    },
+    "frontend_dispatched": {
+        "component": "frontend",
+        "severity": "warning",
+        "meaning_short": "Frontend dispatch evidence was captured.",
+    },
+    "worker_received": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Dynamo worker received the requests.",
+    },
+    "request_priority": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "Protected requests carried priority metadata.",
+    },
+    "worker_priority": {
+        "component": "worker/sglang",
+        "severity": "warning",
+        "meaning_short": "Runtime priority action evidence was visible.",
+    },
+    "worker_attached": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Worker exposed SGLang request ids for attribution.",
+    },
+    "sglang_events": {
+        "component": "sglang",
+        "severity": "critical",
+        "meaning_short": "SGLang cache/priority instrumentation emitted events.",
+    },
+    "worker_completed": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Worker completed requests and logged usage.",
+    },
+    "frontend_completed": {
+        "component": "frontend",
+        "severity": "warning",
+        "meaning_short": "Frontend stream completion evidence was captured.",
+    },
+    "request_csv_complete": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "Request CSV rows include status and latency.",
+    },
+    "matrix_rows": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "Final Exp9 matrix was produced.",
+    },
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -477,16 +540,19 @@ def md_escape(value: object) -> str:
 def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: list[Path]) -> None:
     fieldnames = [
         "step",
+        "checked_true",
+        "severity",
+        "component",
         "when",
+        "runtime_signal",
+        "evidence_value",
+        "meaning_short",
+        "failure_meaning",
         "where",
         "what_it_means",
         "code_snippet",
-        "runtime_signal",
         "evidence_source",
-        "evidence_value",
         "request_role",
-        "checked_true",
-        "failure_meaning",
     ]
     for path in csv_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -497,13 +563,22 @@ def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: l
 
     for path in md_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
+        false_rows = [row for row in rows if row.get("checked_true") != "true"]
+        false_critical = [row for row in false_rows if row.get("severity") == "critical"]
+        false_warning = [row for row in false_rows if row.get("severity") == "warning"]
         lines = [
             "# Experiment 9 Decision Proof",
             "",
             "This table is generated from the latest KV retention run artifacts. The `checked_true` column is runtime/report evidence, not a hand-written claim.",
             "",
-            "| Step | When | Where | What It Means | Code Snippet | Runtime Signal | Evidence Source | Evidence Value | Request Role | Checked True | Failure Meaning |",
-            "|---:|---|---|---|---|---|---|---|---|---|---|",
+            "## Quick Read",
+            "",
+            f"- rows: `{len(rows)}`",
+            f"- false critical rows: `{len(false_critical)}`",
+            f"- false warning rows: `{len(false_warning)}`",
+            "",
+            "| Step | Checked True | Severity | Component | When | Runtime Signal | Evidence Value | Meaning Short | Failure Meaning | Where | What It Means | Code Snippet | Evidence Source | Request Role |",
+            "|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
             lines.append(
@@ -512,16 +587,19 @@ def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: l
                     md_escape(row[key])
                     for key in (
                         "step",
+                        "checked_true",
+                        "severity",
+                        "component",
                         "when",
+                        "runtime_signal",
+                        "evidence_value",
+                        "meaning_short",
+                        "failure_meaning",
                         "where",
                         "what_it_means",
                         "code_snippet",
-                        "runtime_signal",
                         "evidence_source",
-                        "evidence_value",
                         "request_role",
-                        "checked_true",
-                        "failure_meaning",
                     )
                 )
                 + " |"
@@ -557,6 +635,14 @@ def main() -> int:
 
     rows: list[dict[str, str]] = []
     for step in PROOF_STEPS:
+        metadata = PROOF_STEP_METADATA.get(
+            step.check_name,
+            {
+                "component": "unknown",
+                "severity": "warning",
+                "meaning_short": step.what_it_means,
+            },
+        )
         checked, evidence_source, evidence_value = checks.get(
             step.check_name,
             (False, "generator", "missing check implementation"),
@@ -567,16 +653,19 @@ def main() -> int:
         rows.append(
             {
                 "step": str(step.step),
+                "checked_true": "true" if checked and source_ok else "false",
+                "severity": str(metadata["severity"]),
+                "component": str(metadata["component"]),
                 "when": step.when,
+                "runtime_signal": step.runtime_signal,
+                "evidence_value": evidence_value,
+                "meaning_short": str(metadata["meaning_short"]),
+                "failure_meaning": step.failure_meaning,
                 "where": markdown_link(step),
                 "what_it_means": step.what_it_means,
                 "code_snippet": step.code_snippet,
-                "runtime_signal": step.runtime_signal,
                 "evidence_source": evidence_source,
-                "evidence_value": evidence_value,
                 "request_role": step.request_role,
-                "checked_true": "true" if checked and source_ok else "false",
-                "failure_meaning": step.failure_meaning,
             }
         )
 

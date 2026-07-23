@@ -1043,6 +1043,34 @@ the actual model-facing prompts captured during Experiment 6. If
 its captured planning prompt. If you include more stages, each task can
 contribute multiple prompt requests.
 
+To compare the exact prompts that dataset mode and trajectory mode would send:
+
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/compare_exp9_prompt_sources.sh \
+  --dataset ScaleAI/SWE-bench_Pro \
+  --split test \
+  --dataset-protected-index 0 \
+  --dataset-distractor-counts "200 400 730" \
+  --trajectory-catalog experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
+  --trajectory-protected-task-index 0 \
+  --trajectory-protected-stage planning \
+  --trajectory-stages "planning" \
+  --trajectory-distractor-counts "100 200 300 390"
+```
+
+This writes:
+
+```bash
+cat experiments/charts/exp9_prompt_source_summary.csv
+cat experiments/charts/exp9_prompt_source_prompts.csv
+cat experiments/charts/exp9_prompt_source_summary.md
+```
+
+The full prompt text files are kept under
+`experiments/reports/exp9_prompt_source_comparison/.../prompts/`.
+
 ```bash
 cd ~/kv_cache_offloading
 
@@ -1169,9 +1197,8 @@ Main outputs:
 ### Decision Proof
 
 Exp9 now emits a generated decision-proof table after `sweep`, `all`, and
-`plot` runs. The table is both documentation and run evidence: it names the code
-location, shows the relevant snippet, names the runtime/report signal, and then
-sets `checked_true` from the latest run artifacts.
+`plot` runs. The generated CSV/MD puts the quick-scan fields first, then keeps
+the source-code evidence columns at the end.
 
 Generated proof files:
 
@@ -1190,16 +1217,21 @@ cat experiments/charts/exp9_decision_proof.md
 Decision-proof columns:
 
 - `step`: chronological proof step
-- `when`: when the logging/check happens
-- `where`: exact source file and line
-- `what_it_means`: plain-English meaning
-- `code_snippet`: source snippet being checked
-- `runtime_signal`: log/report signal expected from the run
-- `evidence_source`: file/log/report used for the check
-- `evidence_value`: actual observed value from the latest run
-- `request_role`: `a_first`, `a_replay`, `protected`, or whole-run scope
 - `checked_true`: whether the latest run produced the expected evidence
+- `severity`: `critical`, `warning`, or `info`
+- `component`: `harness`, `frontend`, `worker`, `sglang`, or `postprocess`
+- `when`: when the logging/check happens
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_value`: actual observed value from the latest run
+- `meaning_short`: short plain-English verdict for the row
 - `failure_meaning`: what to debug if the check is false
+- `where`: exact source file and line
+- `what_it_means`: full plain-English meaning
+- `code_snippet`: source snippet being checked
+- `evidence_source`: file/log/report used for the check
+- `request_role`: `a_first`, `a_replay`, `protected`, or whole-run scope
+
+The reference table below lists the code path and expected runtime signal.
 
 | Step | When | Where | What It Means | Code Snippet | Runtime Signal |
 |---:|---|---|---|---|---|
