@@ -1,5 +1,63 @@
 # Misc Debug Notes
 
+```bash
+ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import csv
+from pathlib import Path
+
+matrix = list(csv.DictReader(Path("experiments/reports/latest_kv_retention_microbenchmark_matrix.csv").open()))
+run_ids = sorted({r["run_id"] for r in matrix if r.get("run_id")})
+root = Path("experiments/reports/retention_probe")
+
+cols = [
+    "cell", "request_role", "hint_profile",
+    "agent_hints_priority",
+    "top_level_priority_mode",
+    "top_level_priority_sent",
+    "top_level_priority_fallback_used",
+    "top_level_priority_unsupported",
+    "request_context_sent",
+    "status",
+    "latency_ms",
+]
+
+print("\t".join(cols))
+for run_id in run_ids:
+    for path in sorted(root.glob(f"{run_id}*/retention_probe_requests.csv")):
+        for r in csv.DictReader(path.open()):
+            if r.get("request_role") in {"a_first", "a_replay"}:
+                print("\t".join([
+                    path.parent.name,
+                    r.get("request_role", ""),
+                    r.get("hint_profile", ""),
+                    r.get("agent_hints_priority", ""),
+                    r.get("top_level_priority_mode", ""),
+                    r.get("top_level_priority_sent", ""),
+                    r.get("top_level_priority_fallback_used", ""),
+                    r.get("top_level_priority_unsupported", ""),
+                    r.get("request_context_sent", ""),
+                    r.get("status", ""),
+                    r.get("latency_ms", ""),
+                ]))
+PY
+cell    request_role    hint_profile    agent_hints_priority    top_level_priority_mode top_level_priority_sent top_level_priority_fallback_used        top_level_priority_unsupported  request_context_sent status  latency_ms
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     262
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     32
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     264
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     31
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     263
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     32
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     261
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     32
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     260
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     31
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     263
+kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     32
+ojaiyeob@gracehopper:~/kv_cache_offloading$
+
+```
 
 ```bash
 ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
