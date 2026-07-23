@@ -1,61 +1,15 @@
 # Misc Debug Notes
 
 ```bash
-ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
+source	requested_distractor_count	available_distractor_tasks	selected_distractor_tasks	enough_tasks_for_count	distractor_prompt_requests	protected_prompt_chars	protected_prompt_words	protected_prompt_hash	distractor_total_prompt_chars	distractor_total_prompt_words	distractor_min_prompt_chars	distractor_median_prompt_chars	distractor_mean_prompt_chars	distractor_max_prompt_chars
+swebench_dataset	200	730	200	TRUE	200	7692	1082	20faa6eab038d4de	1118752	150299	2865	5063	5593	12886
+swebench_dataset	400	730	400	TRUE	400	7692	1082	20faa6eab038d4de	2269007	304235	2648	5059	5672	17479
+swebench_dataset	730	730	730	TRUE	730	7692	1082	20faa6eab038d4de	4095445	550302	2648	5071	5610	17479
+swebench_trajectory	100	399	100	TRUE	100	8429	1196	1fe42a000e137af7	656954	88689	3650	5934	6569	13625
+swebench_trajectory	200	399	200	TRUE	200	8429	1196	1fe42a000e137af7	1267468	173099	3610	5802	6337	13625
+swebench_trajectory	300	399	300	TRUE	300	8429	1196	1fe42a000e137af7	1908547	259290	3395	5770	6361	16708
+swebench_trajectory	390	399	390	TRUE	390	8429	1196	1fe42a000e137af7	2504173	341409	3395	5800	6420	18225
 
-python3 - <<'PY'
-import csv
-from pathlib import Path
-
-matrix = list(csv.DictReader(Path("experiments/reports/latest_kv_retention_microbenchmark_matrix.csv").open()))
-run_ids = sorted({r["run_id"] for r in matrix if r.get("run_id")})
-root = Path("experiments/reports/retention_probe")
-
-cols = [
-    "cell", "request_role", "hint_profile",
-    "agent_hints_priority",
-    "top_level_priority_mode",
-    "top_level_priority_sent",
-    "top_level_priority_fallback_used",
-    "top_level_priority_unsupported",
-    "request_context_sent",
-    "status",
-    "latency_ms",
-]
-
-print("\t".join(cols))
-for run_id in run_ids:
-    for path in sorted(root.glob(f"{run_id}*/retention_probe_requests.csv")):
-        for r in csv.DictReader(path.open()):
-            if r.get("request_role") in {"a_first", "a_replay"}:
-                print("\t".join([
-                    path.parent.name,
-                    r.get("request_role", ""),
-                    r.get("hint_profile", ""),
-                    r.get("agent_hints_priority", ""),
-                    r.get("top_level_priority_mode", ""),
-                    r.get("top_level_priority_sent", ""),
-                    r.get("top_level_priority_fallback_used", ""),
-                    r.get("top_level_priority_unsupported", ""),
-                    r.get("request_context_sent", ""),
-                    r.get("status", ""),
-                    r.get("latency_ms", ""),
-                ]))
-PY
-cell    request_role    hint_profile    agent_hints_priority    top_level_priority_mode top_level_priority_sent top_level_priority_fallback_used        top_level_priority_unsupported  request_context_sent status  latency_ms
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     262
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     32
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     264
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d100_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     31
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     263
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     32
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     261
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d200_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     32
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_first high-priority        10      auto    False   True    True    True    200     260
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__high-priority__off_   a_replay    high-priority    10      auto    False   True    True    True    200     31
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_first noneauto     False   False   False   True    200     263
-kv_retention_microbenchmark_20260723_165537__sweep_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__d300_Qwen_Qwen3-Coder-30B-A3B-Instruct-FP8__gpu_only__none__off__control    a_replay    none             auto    False   False   False   True    200     32
-ojaiyeob@gracehopper:~/kv_cache_offloading$
 
 ```
 
