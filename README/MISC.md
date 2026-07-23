@@ -1,14 +1,14 @@
 # Misc Debug Notes
 
 ```bash
-source	requested_distractor_count	available_distractor_tasks	selected_distractor_tasks	enough_tasks_for_count	distractor_prompt_requests	protected_prompt_chars	protected_prompt_words	protected_prompt_hash	distractor_total_prompt_chars	distractor_total_prompt_words	distractor_min_prompt_chars	distractor_median_prompt_chars	distractor_mean_prompt_chars	distractor_max_prompt_chars
-swebench_dataset	200	730	200	TRUE	200	7692	1082	20faa6eab038d4de	1118752	150299	2865	5063	5593	12886
-swebench_dataset	400	730	400	TRUE	400	7692	1082	20faa6eab038d4de	2269007	304235	2648	5059	5672	17479
-swebench_dataset	730	730	730	TRUE	730	7692	1082	20faa6eab038d4de	4095445	550302	2648	5071	5610	17479
-swebench_trajectory	100	399	100	TRUE	100	8429	1196	1fe42a000e137af7	656954	88689	3650	5934	6569	13625
-swebench_trajectory	200	399	200	TRUE	200	8429	1196	1fe42a000e137af7	1267468	173099	3610	5802	6337	13625
-swebench_trajectory	300	399	300	TRUE	300	8429	1196	1fe42a000e137af7	1908547	259290	3395	5770	6361	16708
-swebench_trajectory	390	399	390	TRUE	390	8429	1196	1fe42a000e137af7	2504173	341409	3395	5800	6420	18225
+source	requested_distractor_count	available_distractor_tasks	selected_distractor_tasks	enough_tasks_for_count	distractor_prompt_requests	protected_prompt_chars	protected_prompt_words	protected_prompt_hash	distractor_total_prompt_chars	distractor_total_prompt_words	unique_prefix_256_count	unique_prefix_512_count	unique_prefix_1024_count	unique_prefix_256_rate	unique_prefix_512_rate	unique_prefix_1024_rate	distractor_min_prompt_chars	distractor_median_prompt_chars	distractor_mean_prompt_chars	distractor_max_prompt_chars
+swebench_dataset	200	730	200	TRUE	200	7692	1082	20faa6eab038d4de	1118752	150299	200	200	200	1	1	1	2865	5063	5593	12886
+swebench_dataset	400	730	400	TRUE	400	7692	1082	20faa6eab038d4de	2269007	304235	400	400	400	1	1	1	2648	5059	5672	17479
+swebench_dataset	730	730	730	TRUE	730	7692	1082	20faa6eab038d4de	4095445	550302	730	730	730	1	1	1	2648	5071	5610	17479
+swebench_trajectory	100	399	100	TRUE	100	8429	1196	1fe42a000e137af7	656954	88689	1	1	100	0.01	0.01	1	3650	5934	6569	13625
+swebench_trajectory	200	399	200	TRUE	200	8429	1196	1fe42a000e137af7	1267468	173099	1	1	200	0.005	0.005	1	3610	5802	6337	13625
+swebench_trajectory	300	399	300	TRUE	300	8429	1196	1fe42a000e137af7	1908547	259290	1	1	300	0.0033	0.0033	1	3395	5770	6361	16708
+swebench_trajectory	390	399	390	TRUE	390	8429	1196	1fe42a000e137af7	2504173	341409	1	1	390	0.0026	0.0026	1	3395	5800	6420	18225
 
 
 ```
