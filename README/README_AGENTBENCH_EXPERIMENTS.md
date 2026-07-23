@@ -1021,6 +1021,7 @@ RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajecto
 RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0 \
 RETENTION_TRAJECTORY_PROTECTED_STAGE=planning \
 RETENTION_TRAJECTORY_STAGES="planning" \
+RETENTION_TRAJECTORY_REPLAY_HEADER_MODE=task_stage \
 KV_RETENTION_RESET_MODE=restart \
 DISTRACTOR_COUNTS="100 200 300 390" \
 PROTECTED_HINT_PROFILES="high-priority" \
@@ -1028,11 +1029,22 @@ PROTECTED_HINT_PROFILES="high-priority" \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-For a larger run, change:
+For a larger planning-only run, change:
 
 ```text
 DISTRACTOR_COUNTS="100 200 400 600"
 ```
+
+For a fuller trajectory-pressure run, use more captured stages:
+
+```text
+RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review"
+```
+
+In trajectory mode, `DISTRACTOR_COUNTS` means distractor tasks. If you include
+four stages, each distractor task may send multiple prompt requests. This gives
+Exp9 more realistic pressure from real agent planning, execution, patch, and
+review prompts.
 
 This mode replays prepared trajectory prompts only. It does not run
 tools/tests/code edits again.
@@ -1042,6 +1054,11 @@ the actual model-facing prompts captured during Experiment 6. If
 `RETENTION_TRAJECTORY_STAGES="planning"`, each distractor task contributes only
 its captured planning prompt. If you include more stages, each task can
 contribute multiple prompt requests.
+
+`RETENTION_TRAJECTORY_REPLAY_HEADER_MODE=task_stage` prepends a short
+task/stage-specific replay header before each trajectory prompt. This keeps
+`A_first` and `A_replay` identical, but makes different distractor tasks diverge
+early so trajectory prompts create cleaner KV-cache pressure.
 
 To compare the exact prompts that dataset mode and trajectory mode would send:
 
@@ -1057,6 +1074,7 @@ cd ~/kv_cache_offloading
   --trajectory-protected-task-index 0 \
   --trajectory-protected-stage planning \
   --trajectory-stages "planning" \
+  --trajectory-replay-header-mode task_stage \
   --trajectory-distractor-counts "100 200 300 390"
 ```
 
@@ -1112,6 +1130,7 @@ RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX
 RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID
 RETENTION_TRAJECTORY_PROTECTED_STAGE
 RETENTION_TRAJECTORY_STAGES
+RETENTION_TRAJECTORY_REPLAY_HEADER_MODE
 RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX
 RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE
 KV_RETENTION_RESET_MODE

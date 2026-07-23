@@ -150,6 +150,8 @@ REQUEST_COLUMNS = [
     "source_catalog_id",
     "source_catalog_prompt_hash",
     "source_prompt_chars",
+    "trajectory_replay_header_mode",
+    "trajectory_replay_header_chars",
     "status",
     "error",
 ]
@@ -182,6 +184,7 @@ SUMMARY_COLUMNS = [
     "protected_source_stage_index",
     "trajectory_prompt_catalog",
     "trajectory_stages",
+    "trajectory_replay_header_mode",
     "trajectory_distractor_tasks",
     "trajectory_distractor_stage_requests",
     "a_first_status",
@@ -383,6 +386,16 @@ def parse_args() -> argparse.Namespace:
         "--trajectory-stages",
         default=os.environ.get("RETENTION_TRAJECTORY_STAGES", "planning execution patch_generation review"),
         help="Whitespace-separated phase names to use from distractor tasks.",
+    )
+    parser.add_argument(
+        "--trajectory-replay-header-mode",
+        choices=("none", "task_stage"),
+        default=os.environ.get("RETENTION_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        help=(
+            "For swebench_trajectory, prepend a deterministic task/stage header before each prompt. "
+            "This makes different trajectory tasks diverge in the first tokens while preserving "
+            "the captured prompt body. Use 'none' for legacy raw catalog prompts."
+        ),
     )
     parser.add_argument(
         "--trajectory-distractor-start-task-index",
@@ -686,6 +699,32 @@ def prompt_text_from_catalog_row(row: dict[str, str]) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def trajectory_replay_header(row: dict[str, str], mode: str) -> str:
+    if mode == "none":
+        return ""
+    if mode != "task_stage":
+        raise SystemExit(f"Unsupported RETENTION_TRAJECTORY_REPLAY_HEADER_MODE: {mode}")
+    task_index = catalog_int(row, "task_index", -1)
+    stage = str(row.get("stage_name") or row.get("phase") or "unknown")
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
+    repo = str(row.get("repo") or "unknown")
+    prompt_hash = str(row.get("prompt_hash") or "")
+    return (
+        "[KV_REPLAY_TASK_ID="
+        f"task_{task_index:04d}|stage={stage}|instance={instance_id}|repo={repo}|prompt_hash={prompt_hash}"
+        "]\n\n"
+    )
+
+
+def apply_trajectory_replay_header(
+    prompt: str,
+    row: dict[str, str],
+    mode: str,
+) -> tuple[str, str]:
+    header = trajectory_replay_header(row, mode)
+    return f"{header}{prompt}", header
+
+
 def trajectory_catalog_meta(row: dict[str, str], *, role: str) -> dict[str, Any]:
     task_index = catalog_int(row, "task_index")
     stage_index = catalog_int(row, "stage_index")
@@ -708,6 +747,8 @@ def trajectory_catalog_meta(row: dict[str, str], *, role: str) -> dict[str, Any]
         "catalog_id": row.get("catalog_id", ""),
         "catalog_prompt_hash": row.get("prompt_hash", ""),
         "catalog_prompt_path": row.get("prompt_text_path", ""),
+        "trajectory_replay_header_mode": "",
+        "trajectory_replay_header_chars": "",
     }
 
 
@@ -776,9 +817,15 @@ def select_swebench_trajectory_workload(
     catalog_rows = read_trajectory_catalog(args.trajectory_prompt_catalog)
     protected_row = select_trajectory_protected_row(catalog_rows, args)
     protected_task_index = catalog_int(protected_row, "task_index")
-    protected_prompt = prompt_text_from_catalog_row(protected_row)
+    protected_prompt, protected_header = apply_trajectory_replay_header(
+        prompt_text_from_catalog_row(protected_row),
+        protected_row,
+        args.trajectory_replay_header_mode,
+    )
     protected_meta = trajectory_catalog_meta(protected_row, role="protected")
     protected_meta["prompt_chars"] = len(protected_prompt)
+    protected_meta["trajectory_replay_header_mode"] = args.trajectory_replay_header_mode
+    protected_meta["trajectory_replay_header_chars"] = len(protected_header)
 
     allowed_phases = parse_stage_filter(args.trajectory_stages)
     if not allowed_phases:
@@ -826,9 +873,15 @@ def select_swebench_trajectory_workload(
     distractor_request_count = 0
     for task_position, task_index in enumerate(selected_task_indices):
         for stage_position, row in enumerate(task_rows[task_index]):
-            prompt = prompt_text_from_catalog_row(row)
+            prompt, header = apply_trajectory_replay_header(
+                prompt_text_from_catalog_row(row),
+                row,
+                args.trajectory_replay_header_mode,
+            )
             meta = trajectory_catalog_meta(row, role="distractor")
             meta["prompt_chars"] = len(prompt)
+            meta["trajectory_replay_header_mode"] = args.trajectory_replay_header_mode
+            meta["trajectory_replay_header_chars"] = len(header)
             sequence.append(
                 (
                     f"distractor_{task_position:04d}_{stage_position:02d}",
@@ -858,6 +911,7 @@ def select_swebench_trajectory_workload(
         "distractor_pool_size": len(task_indices),
         "trajectory_prompt_catalog": str(catalog_path),
         "trajectory_stages": " ".join(sorted(allowed_phases)),
+        "trajectory_replay_header_mode": args.trajectory_replay_header_mode,
         "trajectory_distractor_tasks": len(selected_task_indices),
         "trajectory_distractor_stage_requests": distractor_request_count,
     }
@@ -1411,6 +1465,12 @@ def send_probe_request(
         "source_catalog_id": "" if not source_meta else source_meta.get("catalog_id", ""),
         "source_catalog_prompt_hash": "" if not source_meta else source_meta.get("catalog_prompt_hash", ""),
         "source_prompt_chars": "" if not source_meta else int_or_empty(source_meta.get("prompt_chars")),
+        "trajectory_replay_header_mode": (
+            "" if not source_meta else source_meta.get("trajectory_replay_header_mode", "")
+        ),
+        "trajectory_replay_header_chars": (
+            "" if not source_meta else int_or_empty(source_meta.get("trajectory_replay_header_chars"))
+        ),
         "status": status,
         "error": error,
     }
@@ -2093,6 +2153,9 @@ def build_summary(
             else ""
         ),
         "trajectory_stages": args.trajectory_stages if args.request_source == "swebench_trajectory" else "",
+        "trajectory_replay_header_mode": (
+            args.trajectory_replay_header_mode if args.request_source == "swebench_trajectory" else ""
+        ),
         "trajectory_distractor_tasks": (
             len(distractor_task_indices) if args.request_source == "swebench_trajectory" else ""
         ),
@@ -2187,6 +2250,7 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- protected_source_stage_index: `{summary['protected_source_stage_index']}`",
         f"- trajectory_prompt_catalog: `{summary['trajectory_prompt_catalog']}`",
         f"- trajectory_stages: `{summary['trajectory_stages']}`",
+        f"- trajectory_replay_header_mode: `{summary['trajectory_replay_header_mode']}`",
         f"- trajectory_distractor_tasks: `{summary['trajectory_distractor_tasks']}`",
         f"- trajectory_distractor_stage_requests: `{summary['trajectory_distractor_stage_requests']}`",
         "",
