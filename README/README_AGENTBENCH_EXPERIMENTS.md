@@ -1068,6 +1068,18 @@ cat experiments/charts/exp9_prompt_source_prompts.csv
 cat experiments/charts/exp9_prompt_source_summary.md
 ```
 
+Use the prefix columns to check whether trajectory prompts share the same early
+wrapper:
+
+```text
+unique_prefix_256_count
+unique_prefix_512_count
+unique_prefix_1024_count
+prompt_prefix_hash_256
+prompt_prefix_hash_512
+prompt_prefix_hash_1024
+```
+
 The full prompt text files are kept under
 `experiments/reports/exp9_prompt_source_comparison/.../prompts/`.
 

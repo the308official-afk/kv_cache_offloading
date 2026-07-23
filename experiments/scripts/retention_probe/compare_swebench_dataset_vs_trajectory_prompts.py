@@ -63,6 +63,10 @@ def short_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
+def prefix_hash(text: str, width: int) -> str:
+    return short_hash(text[:width])
+
+
 def safe_name(value: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9_.-]+", "_", value.strip())
     return cleaned.strip("_") or "unknown"
@@ -176,6 +180,9 @@ def prompt_row(
         "phase": phase,
         "stage_name": stage_name,
         "prompt_hash": short_hash(prompt),
+        "prompt_prefix_hash_256": prefix_hash(prompt, 256),
+        "prompt_prefix_hash_512": prefix_hash(prompt, 512),
+        "prompt_prefix_hash_1024": prefix_hash(prompt, 1024),
         "prompt_chars": len(prompt),
         "prompt_words": len(words),
         "prompt_text_path": maybe_relative(prompt_path),
@@ -465,6 +472,9 @@ def summarize_source(
         ]
         chars = [int(row["prompt_chars"]) for row in count_distractors]
         words = [int(row["prompt_words"]) for row in count_distractors]
+        prefix_256 = {str(row.get("prompt_prefix_hash_256", "")) for row in count_distractors}
+        prefix_512 = {str(row.get("prompt_prefix_hash_512", "")) for row in count_distractors}
+        prefix_1024 = {str(row.get("prompt_prefix_hash_1024", "")) for row in count_distractors}
         summaries.append(
             {
                 "source": source,
@@ -478,6 +488,12 @@ def summarize_source(
                 "protected_prompt_hash": protected_row.get("prompt_hash", ""),
                 "distractor_total_prompt_chars": sum(chars),
                 "distractor_total_prompt_words": sum(words),
+                "unique_prefix_256_count": len(prefix_256),
+                "unique_prefix_512_count": len(prefix_512),
+                "unique_prefix_1024_count": len(prefix_1024),
+                "unique_prefix_256_rate": round(len(prefix_256) / len(count_distractors), 4) if count_distractors else "",
+                "unique_prefix_512_rate": round(len(prefix_512) / len(count_distractors), 4) if count_distractors else "",
+                "unique_prefix_1024_rate": round(len(prefix_1024) / len(count_distractors), 4) if count_distractors else "",
                 "distractor_min_prompt_chars": min(chars) if chars else "",
                 "distractor_median_prompt_chars": int(statistics.median(chars)) if chars else "",
                 "distractor_mean_prompt_chars": int(sum(chars) / len(chars)) if chars else "",
@@ -497,8 +513,8 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
         "",
         "## Summary",
         "",
-        "| Source | Count | Enough Tasks | Distractor Prompt Requests | Protected Chars | Median Distractor Chars | Total Distractor Chars |",
-        "|---|---:|---|---:|---:|---:|---:|",
+        "| Source | Count | Enough Tasks | Distractor Prompt Requests | Unique Prefix 256 | Unique Prefix 512 | Unique Prefix 1024 | Protected Chars | Median Distractor Chars | Total Distractor Chars |",
+        "|---|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summary_rows:
         lines.append(
@@ -510,6 +526,9 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
                     "requested_distractor_count",
                     "enough_tasks_for_count",
                     "distractor_prompt_requests",
+                    "unique_prefix_256_count",
+                    "unique_prefix_512_count",
+                    "unique_prefix_1024_count",
                     "protected_prompt_chars",
                     "distractor_median_prompt_chars",
                     "distractor_total_prompt_chars",
@@ -522,8 +541,8 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
             "",
             "## First Prompts",
             "",
-            "| Source | Role | Request Role | Index | Stage | Chars | Words | Hash | Prompt Text Path | Preview |",
-            "|---|---|---|---|---|---:|---:|---|---|---|",
+            "| Source | Role | Request Role | Index | Stage | Chars | Words | Hash | Prefix 256 | Prefix 512 | Prefix 1024 | Prompt Text Path | Preview |",
+            "|---|---|---|---|---|---:|---:|---|---|---|---|---|---|",
         ]
     )
     for row in prompt_rows[:40]:
@@ -540,6 +559,9 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
                     str(row.get("prompt_chars", "")),
                     str(row.get("prompt_words", "")),
                     str(row.get("prompt_hash", "")),
+                    str(row.get("prompt_prefix_hash_256", "")),
+                    str(row.get("prompt_prefix_hash_512", "")),
+                    str(row.get("prompt_prefix_hash_1024", "")),
                     f"`{row.get('prompt_text_path', '')}`",
                     preview,
                 ]
@@ -649,6 +671,9 @@ def main() -> int:
         "phase",
         "stage_name",
         "prompt_hash",
+        "prompt_prefix_hash_256",
+        "prompt_prefix_hash_512",
+        "prompt_prefix_hash_1024",
         "prompt_chars",
         "prompt_words",
         "prompt_text_path",
@@ -666,6 +691,12 @@ def main() -> int:
         "protected_prompt_hash",
         "distractor_total_prompt_chars",
         "distractor_total_prompt_words",
+        "unique_prefix_256_count",
+        "unique_prefix_512_count",
+        "unique_prefix_1024_count",
+        "unique_prefix_256_rate",
+        "unique_prefix_512_rate",
+        "unique_prefix_1024_rate",
         "distractor_min_prompt_chars",
         "distractor_median_prompt_chars",
         "distractor_mean_prompt_chars",
