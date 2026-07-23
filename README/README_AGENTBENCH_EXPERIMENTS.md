@@ -2452,34 +2452,6 @@ Default prompt-isolation policy:
 
 ### Run
 
-To run only the SWE-bench cases:
-
-```bash
-cd ~/kv_cache_offloading
-
-SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
-To run only the full-trajectory Exp9 case:
-
-```bash
-cd ~/kv_cache_offloading
-
-SUITE_RUNS="exp9_trajectory" \
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-```
-
-This uses full trajectory prompts by default:
-`planning execution patch_generation review`, `flush` between sweep values, and
-`DISTRACTOR_COUNTS="5 30 55 80 105 130 155 180 205 230 255 280 305 330 355 380 395"`.
-
-### Nohup
-
 Use this when you want the selected SWE-bench suite to keep running if your
 terminal disconnects:
 
