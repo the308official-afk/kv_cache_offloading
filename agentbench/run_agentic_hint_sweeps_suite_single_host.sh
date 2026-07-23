@@ -263,7 +263,7 @@ EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX='${EXP9_RETENTION_TRAJECTORY_PROT
 EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID='${EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:-}'
 EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE='${EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE:-}'
 EXP9_RETENTION_TRAJECTORY_STAGES='${EXP9_RETENTION_TRAJECTORY_STAGES:-}'
-EXP9_RETENTION_TRAJECTORY_REPLAY_HEADER_MODE='${EXP9_RETENTION_TRAJECTORY_REPLAY_HEADER_MODE:-}'
+EXP9_RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE='${EXP9_RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE:-}'
 EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX='${EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:-}'
 EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE='${EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE:-}'
 EXP9_RETENTION_ATTRIBUTION_MODE='${EXP9_RETENTION_ATTRIBUTION_MODE:-}'
@@ -912,7 +912,7 @@ run_experiment_9() {
   exp9_retention_trajectory_protected_instance_id="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID)"
   exp9_retention_trajectory_protected_stage="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE RETENTION_TRAJECTORY_PROTECTED_STAGE)"
   exp9_retention_trajectory_stages="$(resolve_value EXP9_RETENTION_TRAJECTORY_STAGES RETENTION_TRAJECTORY_STAGES)"
-  exp9_retention_trajectory_replay_header_mode="$(resolve_value EXP9_RETENTION_TRAJECTORY_REPLAY_HEADER_MODE RETENTION_TRAJECTORY_REPLAY_HEADER_MODE)"
+  exp9_retention_trajectory_prompt_prefix_mode="$(resolve_value EXP9_RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE)"
   exp9_retention_trajectory_distractor_start_task_index="$(resolve_value EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX)"
   exp9_retention_trajectory_allow_distractor_reuse="$(resolve_value EXP9_RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE)"
   exp9_retention_attribution_mode="$(resolve_value EXP9_RETENTION_ATTRIBUTION_MODE RETENTION_ATTRIBUTION_MODE)"
@@ -989,7 +989,7 @@ EOF
   [[ -n "${exp9_retention_trajectory_protected_instance_id}" ]] && env_args+=(RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID="${exp9_retention_trajectory_protected_instance_id}")
   [[ -n "${exp9_retention_trajectory_protected_stage}" ]] && env_args+=(RETENTION_TRAJECTORY_PROTECTED_STAGE="${exp9_retention_trajectory_protected_stage}")
   [[ -n "${exp9_retention_trajectory_stages}" ]] && env_args+=(RETENTION_TRAJECTORY_STAGES="${exp9_retention_trajectory_stages}")
-  [[ -n "${exp9_retention_trajectory_replay_header_mode}" ]] && env_args+=(RETENTION_TRAJECTORY_REPLAY_HEADER_MODE="${exp9_retention_trajectory_replay_header_mode}")
+  [[ -n "${exp9_retention_trajectory_prompt_prefix_mode}" ]] && env_args+=(RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE="${exp9_retention_trajectory_prompt_prefix_mode}")
   [[ -n "${exp9_retention_trajectory_distractor_start_task_index}" ]] && env_args+=(RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX="${exp9_retention_trajectory_distractor_start_task_index}")
   [[ -n "${exp9_retention_trajectory_allow_distractor_reuse}" ]] && env_args+=(RETENTION_TRAJECTORY_ALLOW_DISTRACTOR_REUSE="${exp9_retention_trajectory_allow_distractor_reuse}")
   [[ -n "${exp9_retention_request_context_mode}" ]] && env_args+=(RETENTION_REQUEST_CONTEXT_MODE="${exp9_retention_request_context_mode}")

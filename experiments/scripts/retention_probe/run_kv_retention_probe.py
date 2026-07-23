@@ -150,8 +150,8 @@ REQUEST_COLUMNS = [
     "source_catalog_id",
     "source_catalog_prompt_hash",
     "source_prompt_chars",
-    "trajectory_replay_header_mode",
-    "trajectory_replay_header_chars",
+    "trajectory_prompt_prefix_mode",
+    "trajectory_prompt_prefix_chars",
     "status",
     "error",
 ]
@@ -184,7 +184,7 @@ SUMMARY_COLUMNS = [
     "protected_source_stage_index",
     "trajectory_prompt_catalog",
     "trajectory_stages",
-    "trajectory_replay_header_mode",
+    "trajectory_prompt_prefix_mode",
     "trajectory_distractor_tasks",
     "trajectory_distractor_stage_requests",
     "a_first_status",
@@ -388,9 +388,9 @@ def parse_args() -> argparse.Namespace:
         help="Whitespace-separated phase names to use from distractor tasks.",
     )
     parser.add_argument(
-        "--trajectory-replay-header-mode",
+        "--trajectory-prompt-prefix-mode",
         choices=("none", "task_stage"),
-        default=os.environ.get("RETENTION_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        default=os.environ.get("RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE", "task_stage"),
         help=(
             "For swebench_trajectory, prepend a deterministic task/stage header before each prompt. "
             "This makes different trajectory tasks diverge in the first tokens while preserving "
@@ -703,7 +703,7 @@ def trajectory_replay_header(row: dict[str, str], mode: str) -> str:
     if mode == "none":
         return ""
     if mode != "task_stage":
-        raise SystemExit(f"Unsupported RETENTION_TRAJECTORY_REPLAY_HEADER_MODE: {mode}")
+        raise SystemExit(f"Unsupported RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE: {mode}")
     task_index = catalog_int(row, "task_index", -1)
     stage = str(row.get("stage_name") or row.get("phase") or "unknown")
     instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
@@ -747,8 +747,8 @@ def trajectory_catalog_meta(row: dict[str, str], *, role: str) -> dict[str, Any]
         "catalog_id": row.get("catalog_id", ""),
         "catalog_prompt_hash": row.get("prompt_hash", ""),
         "catalog_prompt_path": row.get("prompt_text_path", ""),
-        "trajectory_replay_header_mode": "",
-        "trajectory_replay_header_chars": "",
+        "trajectory_prompt_prefix_mode": "",
+        "trajectory_prompt_prefix_chars": "",
     }
 
 
@@ -820,12 +820,12 @@ def select_swebench_trajectory_workload(
     protected_prompt, protected_header = apply_trajectory_replay_header(
         prompt_text_from_catalog_row(protected_row),
         protected_row,
-        args.trajectory_replay_header_mode,
+        args.trajectory_prompt_prefix_mode,
     )
     protected_meta = trajectory_catalog_meta(protected_row, role="protected")
     protected_meta["prompt_chars"] = len(protected_prompt)
-    protected_meta["trajectory_replay_header_mode"] = args.trajectory_replay_header_mode
-    protected_meta["trajectory_replay_header_chars"] = len(protected_header)
+    protected_meta["trajectory_prompt_prefix_mode"] = args.trajectory_prompt_prefix_mode
+    protected_meta["trajectory_prompt_prefix_chars"] = len(protected_header)
 
     allowed_phases = parse_stage_filter(args.trajectory_stages)
     if not allowed_phases:
@@ -876,12 +876,12 @@ def select_swebench_trajectory_workload(
             prompt, header = apply_trajectory_replay_header(
                 prompt_text_from_catalog_row(row),
                 row,
-                args.trajectory_replay_header_mode,
+                args.trajectory_prompt_prefix_mode,
             )
             meta = trajectory_catalog_meta(row, role="distractor")
             meta["prompt_chars"] = len(prompt)
-            meta["trajectory_replay_header_mode"] = args.trajectory_replay_header_mode
-            meta["trajectory_replay_header_chars"] = len(header)
+            meta["trajectory_prompt_prefix_mode"] = args.trajectory_prompt_prefix_mode
+            meta["trajectory_prompt_prefix_chars"] = len(header)
             sequence.append(
                 (
                     f"distractor_{task_position:04d}_{stage_position:02d}",
@@ -911,7 +911,7 @@ def select_swebench_trajectory_workload(
         "distractor_pool_size": len(task_indices),
         "trajectory_prompt_catalog": str(catalog_path),
         "trajectory_stages": " ".join(sorted(allowed_phases)),
-        "trajectory_replay_header_mode": args.trajectory_replay_header_mode,
+        "trajectory_prompt_prefix_mode": args.trajectory_prompt_prefix_mode,
         "trajectory_distractor_tasks": len(selected_task_indices),
         "trajectory_distractor_stage_requests": distractor_request_count,
     }
@@ -1465,11 +1465,11 @@ def send_probe_request(
         "source_catalog_id": "" if not source_meta else source_meta.get("catalog_id", ""),
         "source_catalog_prompt_hash": "" if not source_meta else source_meta.get("catalog_prompt_hash", ""),
         "source_prompt_chars": "" if not source_meta else int_or_empty(source_meta.get("prompt_chars")),
-        "trajectory_replay_header_mode": (
-            "" if not source_meta else source_meta.get("trajectory_replay_header_mode", "")
+        "trajectory_prompt_prefix_mode": (
+            "" if not source_meta else source_meta.get("trajectory_prompt_prefix_mode", "")
         ),
-        "trajectory_replay_header_chars": (
-            "" if not source_meta else int_or_empty(source_meta.get("trajectory_replay_header_chars"))
+        "trajectory_prompt_prefix_chars": (
+            "" if not source_meta else int_or_empty(source_meta.get("trajectory_prompt_prefix_chars"))
         ),
         "status": status,
         "error": error,
@@ -2153,8 +2153,8 @@ def build_summary(
             else ""
         ),
         "trajectory_stages": args.trajectory_stages if args.request_source == "swebench_trajectory" else "",
-        "trajectory_replay_header_mode": (
-            args.trajectory_replay_header_mode if args.request_source == "swebench_trajectory" else ""
+        "trajectory_prompt_prefix_mode": (
+            args.trajectory_prompt_prefix_mode if args.request_source == "swebench_trajectory" else ""
         ),
         "trajectory_distractor_tasks": (
             len(distractor_task_indices) if args.request_source == "swebench_trajectory" else ""
@@ -2250,7 +2250,7 @@ def write_summary_md(path: Path, summary: dict[str, Any]) -> None:
         f"- protected_source_stage_index: `{summary['protected_source_stage_index']}`",
         f"- trajectory_prompt_catalog: `{summary['trajectory_prompt_catalog']}`",
         f"- trajectory_stages: `{summary['trajectory_stages']}`",
-        f"- trajectory_replay_header_mode: `{summary['trajectory_replay_header_mode']}`",
+        f"- trajectory_prompt_prefix_mode: `{summary['trajectory_prompt_prefix_mode']}`",
         f"- trajectory_distractor_tasks: `{summary['trajectory_distractor_tasks']}`",
         f"- trajectory_distractor_stage_requests: `{summary['trajectory_distractor_stage_requests']}`",
         "",

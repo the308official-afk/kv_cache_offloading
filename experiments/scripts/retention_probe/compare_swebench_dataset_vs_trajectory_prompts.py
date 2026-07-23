@@ -173,8 +173,8 @@ def prompt_row(
     prompt: str,
     prompt_path: Path,
     preview_chars: int,
-    trajectory_replay_header_mode: str = "",
-    trajectory_replay_header_chars: int | str = "",
+    trajectory_prompt_prefix_mode: str = "",
+    trajectory_prompt_prefix_chars: int | str = "",
 ) -> dict[str, Any]:
     words = prompt.split()
     preview = prompt[:preview_chars].replace("\r", " ").replace("\n", "\\n")
@@ -197,8 +197,8 @@ def prompt_row(
         "prompt_words": len(words),
         "prompt_text_path": maybe_relative(prompt_path),
         "prompt_preview": preview,
-        "trajectory_replay_header_mode": trajectory_replay_header_mode,
-        "trajectory_replay_header_chars": trajectory_replay_header_chars,
+        "trajectory_prompt_prefix_mode": trajectory_prompt_prefix_mode,
+        "trajectory_prompt_prefix_chars": trajectory_prompt_prefix_chars,
     }
 
 
@@ -331,7 +331,7 @@ def build_trajectory_rows(
     protected_task_index: int,
     protected_stage: str,
     trajectory_stages: str,
-    trajectory_replay_header_mode: str,
+    trajectory_prompt_prefix_mode: str,
     distractor_counts: list[int],
     prompt_dir: Path,
     preview_chars: int,
@@ -361,7 +361,7 @@ def build_trajectory_rows(
     protected_prompt, protected_header = apply_trajectory_replay_header(
         read_catalog_prompt(protected_row),
         protected_row,
-        trajectory_replay_header_mode,
+        trajectory_prompt_prefix_mode,
     )
 
     task_rows: dict[int, list[dict[str, str]]] = {}
@@ -402,8 +402,8 @@ def build_trajectory_rows(
             prompt=protected_prompt,
             prompt_path=protected_path,
             preview_chars=preview_chars,
-            trajectory_replay_header_mode=trajectory_replay_header_mode,
-            trajectory_replay_header_chars=len(protected_header),
+            trajectory_prompt_prefix_mode=trajectory_prompt_prefix_mode,
+            trajectory_prompt_prefix_chars=len(protected_header),
         )
     )
 
@@ -413,7 +413,7 @@ def build_trajectory_rows(
             prompt, header = apply_trajectory_replay_header(
                 read_catalog_prompt(row),
                 row,
-                trajectory_replay_header_mode,
+                trajectory_prompt_prefix_mode,
             )
             prompt_path = write_prompt_file(
                 prompt_dir,
@@ -437,8 +437,8 @@ def build_trajectory_rows(
                     prompt=prompt,
                     prompt_path=prompt_path,
                     preview_chars=preview_chars,
-                    trajectory_replay_header_mode=trajectory_replay_header_mode,
-                    trajectory_replay_header_chars=len(header),
+                    trajectory_prompt_prefix_mode=trajectory_prompt_prefix_mode,
+                    trajectory_prompt_prefix_chars=len(header),
                 )
             )
             request_position += 1
@@ -465,8 +465,8 @@ def build_trajectory_rows(
             prompt=protected_prompt,
             prompt_path=replay_path,
             preview_chars=preview_chars,
-            trajectory_replay_header_mode=trajectory_replay_header_mode,
-            trajectory_replay_header_chars=len(protected_header),
+            trajectory_prompt_prefix_mode=trajectory_prompt_prefix_mode,
+            trajectory_prompt_prefix_chars=len(protected_header),
         )
     )
 
@@ -476,7 +476,7 @@ def build_trajectory_rows(
         available_distractor_tasks=len(task_rows),
         selected_distractor_tasks=len(selected_task_indices),
         rows=rows_out,
-        trajectory_replay_header_mode=trajectory_replay_header_mode,
+        trajectory_prompt_prefix_mode=trajectory_prompt_prefix_mode,
     )
     return rows_out, summaries
 
@@ -488,7 +488,7 @@ def summarize_source(
     available_distractor_tasks: int,
     selected_distractor_tasks: int,
     rows: list[dict[str, Any]],
-    trajectory_replay_header_mode: str = "",
+    trajectory_prompt_prefix_mode: str = "",
 ) -> list[dict[str, Any]]:
     distractors = [row for row in rows if row["role"] == "distractor"]
     protected = [row for row in rows if row["role"] == "protected" and row["request_role"] == "a_first"]
@@ -507,7 +507,7 @@ def summarize_source(
         summaries.append(
             {
                 "source": source,
-                "trajectory_replay_header_mode": trajectory_replay_header_mode,
+                "trajectory_prompt_prefix_mode": trajectory_prompt_prefix_mode,
                 "requested_distractor_count": count,
                 "available_distractor_tasks": available_distractor_tasks,
                 "selected_distractor_tasks": min(selected_distractor_tasks, count),
@@ -543,7 +543,7 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
         "",
         "## Summary",
         "",
-        "| Source | Header Mode | Count | Enough Tasks | Distractor Prompt Requests | Unique Prefix 256 | Unique Prefix 512 | Unique Prefix 1024 | Protected Chars | Median Distractor Chars | Total Distractor Chars |",
+        "| Source | Prefix Mode | Count | Enough Tasks | Distractor Prompt Requests | Unique Prefix 256 | Unique Prefix 512 | Unique Prefix 1024 | Protected Chars | Median Distractor Chars | Total Distractor Chars |",
         "|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in summary_rows:
@@ -553,7 +553,7 @@ def write_markdown(path: Path, summary_rows: list[dict[str, Any]], prompt_rows: 
                 str(row.get(key, ""))
                 for key in (
                     "source",
-                    "trajectory_replay_header_mode",
+                    "trajectory_prompt_prefix_mode",
                     "requested_distractor_count",
                     "enough_tasks_for_count",
                     "distractor_prompt_requests",
@@ -632,9 +632,9 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("RETENTION_TRAJECTORY_STAGES", "planning"),
     )
     parser.add_argument(
-        "--trajectory-replay-header-mode",
+        "--trajectory-prompt-prefix-mode",
         choices=("none", "task_stage"),
-        default=os.environ.get("RETENTION_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        default=os.environ.get("RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE", "task_stage"),
     )
     parser.add_argument(
         "--trajectory-distractor-counts",
@@ -688,7 +688,7 @@ def main() -> int:
         protected_task_index=args.trajectory_protected_task_index,
         protected_stage=args.trajectory_protected_stage,
         trajectory_stages=args.trajectory_stages,
-        trajectory_replay_header_mode=args.trajectory_replay_header_mode,
+        trajectory_prompt_prefix_mode=args.trajectory_prompt_prefix_mode,
         distractor_counts=trajectory_counts,
         prompt_dir=prompt_dir,
         preview_chars=args.preview_chars,
@@ -715,12 +715,12 @@ def main() -> int:
         "prompt_words",
         "prompt_text_path",
         "prompt_preview",
-        "trajectory_replay_header_mode",
-        "trajectory_replay_header_chars",
+        "trajectory_prompt_prefix_mode",
+        "trajectory_prompt_prefix_chars",
     ]
     summary_fieldnames = [
         "source",
-        "trajectory_replay_header_mode",
+        "trajectory_prompt_prefix_mode",
         "requested_distractor_count",
         "available_distractor_tasks",
         "selected_distractor_tasks",
