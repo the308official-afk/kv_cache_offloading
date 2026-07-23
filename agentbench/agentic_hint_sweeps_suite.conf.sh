@@ -122,6 +122,25 @@
 : "${EXP11_SWEBENCH_PRIORITY_INTER_REQUEST_GAP_MS:=20}"
 
 ###############################################################################
+# Experiment 11 trajectory prompts: Priority scheduling over Exp6 captured prompts
+###############################################################################
+
+: "${EXP11_TRAJECTORY_MODE:=all}"
+: "${EXP11_TRAJECTORY_RESET_MODE:=flush}"
+: "${EXP11_TRAJECTORY_PRIORITY_REQUEST_SOURCE:=swebench_trajectory}"
+: "${EXP11_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_AXIS:=PRIORITY_ARRIVAL_GAP_MS}"
+: "${EXP11_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_VALUES:=25 40 50 60 75 90 100 125 150 175 200 225 250 275 300 325 350 375 400 450 500 550 600 700 800 900 1000 1250 1500 2000}"
+: "${EXP11_TRAJECTORY_LOW_PRIORITY_COUNT:=8}"
+: "${EXP11_TRAJECTORY_HIGH_PRIORITY_COUNT:=4}"
+: "${EXP11_TRAJECTORY_PRIORITY_OUTPUT_LEN:=128}"
+: "${EXP11_TRAJECTORY_PRIORITY_INTER_REQUEST_GAP_MS:=20}"
+: "${EXP11_PRIORITY_TRAJECTORY_PROMPT_CATALOG:=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
+: "${EXP11_PRIORITY_TRAJECTORY_STAGES:=planning execution patch_generation review}"
+: "${EXP11_PRIORITY_TRAJECTORY_START_TASK_INDEX:=0}"
+: "${EXP11_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE:=task_stage}"
+: "${EXP11_PRIORITY_TRAJECTORY_ALLOW_REUSE:=0}"
+
+###############################################################################
 # Experiment 12 synthetic: Speculative prefill
 ###############################################################################
 

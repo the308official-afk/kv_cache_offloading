@@ -16,6 +16,8 @@ Synthetic or direct SWE-bench task-level mixed-priority burst:
 - we check whether the later high-priority requests move ahead anyway
 - in `PRIORITY_REQUEST_SOURCE=swebench_dataset`, each request prompt is one
   SWE-bench Pro task row
+- in `PRIORITY_REQUEST_SOURCE=swebench_trajectory`, each request prompt is one
+  captured Experiment 6 trajectory prompt row
 
 Public entrypoint
 -----------------
@@ -72,6 +74,11 @@ Public control surface
 - `PRIORITY_SWEBENCH_SPLIT`
 - `PRIORITY_SWEBENCH_START_INDEX`
 - `PRIORITY_SWEBENCH_ALLOW_REUSE`
+- `PRIORITY_TRAJECTORY_PROMPT_CATALOG`
+- `PRIORITY_TRAJECTORY_STAGES`
+- `PRIORITY_TRAJECTORY_START_TASK_INDEX`
+- `PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE`
+- `PRIORITY_TRAJECTORY_ALLOW_REUSE`
 - `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`

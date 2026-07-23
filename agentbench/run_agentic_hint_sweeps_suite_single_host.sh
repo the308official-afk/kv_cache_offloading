@@ -290,6 +290,11 @@ EXP11_PRIORITY_SWEBENCH_DATASET='${EXP11_PRIORITY_SWEBENCH_DATASET:-}'
 EXP11_PRIORITY_SWEBENCH_SPLIT='${EXP11_PRIORITY_SWEBENCH_SPLIT:-}'
 EXP11_PRIORITY_SWEBENCH_START_INDEX='${EXP11_PRIORITY_SWEBENCH_START_INDEX:-}'
 EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE='${EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE:-}'
+EXP11_PRIORITY_TRAJECTORY_PROMPT_CATALOG='${EXP11_PRIORITY_TRAJECTORY_PROMPT_CATALOG:-}'
+EXP11_PRIORITY_TRAJECTORY_STAGES='${EXP11_PRIORITY_TRAJECTORY_STAGES:-}'
+EXP11_PRIORITY_TRAJECTORY_START_TASK_INDEX='${EXP11_PRIORITY_TRAJECTORY_START_TASK_INDEX:-}'
+EXP11_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE='${EXP11_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE:-}'
+EXP11_PRIORITY_TRAJECTORY_ALLOW_REUSE='${EXP11_PRIORITY_TRAJECTORY_ALLOW_REUSE:-}'
 EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS='${EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
 EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES='${EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
 EXP11_LOW_PRIORITY_COUNT='${EXP11_LOW_PRIORITY_COUNT:-}'
@@ -622,6 +627,7 @@ canonical_suite_run() {
     exp10|exp10_cache_pinning|cache_pinning) echo "exp10" ;;
     exp11_synthetic|11_synthetic|priority_synthetic|priority_scheduling_synthetic) echo "exp11_synthetic" ;;
     exp11_swebench|11_swebench|priority_swebench|priority_scheduling_swebench) echo "exp11_swebench" ;;
+    exp11_trajectory|11_trajectory|priority_trajectory|priority_scheduling_trajectory) echo "exp11_trajectory" ;;
     exp12_synthetic|12_synthetic|spec_prefill_synthetic|speculative_prefill_synthetic) echo "exp12_synthetic" ;;
     exp12_swebench|12_swebench|spec_prefill_swebench|speculative_prefill_swebench) echo "exp12_swebench" ;;
     exp13_synthetic|13_synthetic|latency_sensitivity_synthetic) echo "exp13_synthetic" ;;
@@ -1133,6 +1139,11 @@ run_experiment_11() {
   local exp11_swebench_split
   local exp11_swebench_start_index
   local exp11_swebench_allow_reuse
+  local exp11_trajectory_prompt_catalog
+  local exp11_trajectory_stages
+  local exp11_trajectory_start_task_index
+  local exp11_trajectory_prompt_prefix_mode
+  local exp11_trajectory_allow_reuse
   local exp11_experiment_reset_mode
   exp11_sweep_axis="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
   exp11_sweep_values="$(resolve_value EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
@@ -1146,6 +1157,11 @@ run_experiment_11() {
   exp11_swebench_split="$(resolve_value EXP11_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
   exp11_swebench_start_index="$(resolve_value EXP11_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
   exp11_swebench_allow_reuse="$(resolve_value EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
+  exp11_trajectory_prompt_catalog="$(resolve_value EXP11_PRIORITY_TRAJECTORY_PROMPT_CATALOG PRIORITY_TRAJECTORY_PROMPT_CATALOG)"
+  exp11_trajectory_stages="$(resolve_value EXP11_PRIORITY_TRAJECTORY_STAGES PRIORITY_TRAJECTORY_STAGES)"
+  exp11_trajectory_start_task_index="$(resolve_value EXP11_PRIORITY_TRAJECTORY_START_TASK_INDEX PRIORITY_TRAJECTORY_START_TASK_INDEX)"
+  exp11_trajectory_prompt_prefix_mode="$(resolve_value EXP11_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE)"
+  exp11_trajectory_allow_reuse="$(resolve_value EXP11_PRIORITY_TRAJECTORY_ALLOW_REUSE PRIORITY_TRAJECTORY_ALLOW_REUSE)"
   exp11_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
@@ -1172,6 +1188,11 @@ priority_swebench_dataset=${exp11_swebench_dataset}
 priority_swebench_split=${exp11_swebench_split}
 priority_swebench_start_index=${exp11_swebench_start_index}
 priority_swebench_allow_reuse=${exp11_swebench_allow_reuse}
+priority_trajectory_prompt_catalog=${exp11_trajectory_prompt_catalog}
+priority_trajectory_stages=${exp11_trajectory_stages}
+priority_trajectory_start_task_index=${exp11_trajectory_start_task_index}
+priority_trajectory_prompt_prefix_mode=${exp11_trajectory_prompt_prefix_mode}
+priority_trajectory_allow_reuse=${exp11_trajectory_allow_reuse}
 EOF
   local -a env_args=(
     env
@@ -1199,6 +1220,11 @@ EOF
   [[ -n "${exp11_swebench_split}" ]] && env_args+=(PRIORITY_SWEBENCH_SPLIT="${exp11_swebench_split}")
   [[ -n "${exp11_swebench_start_index}" ]] && env_args+=(PRIORITY_SWEBENCH_START_INDEX="${exp11_swebench_start_index}")
   [[ -n "${exp11_swebench_allow_reuse}" ]] && env_args+=(PRIORITY_SWEBENCH_ALLOW_REUSE="${exp11_swebench_allow_reuse}")
+  [[ -n "${exp11_trajectory_prompt_catalog}" ]] && env_args+=(PRIORITY_TRAJECTORY_PROMPT_CATALOG="${exp11_trajectory_prompt_catalog}")
+  [[ -n "${exp11_trajectory_stages}" ]] && env_args+=(PRIORITY_TRAJECTORY_STAGES="${exp11_trajectory_stages}")
+  [[ -n "${exp11_trajectory_start_task_index}" ]] && env_args+=(PRIORITY_TRAJECTORY_START_TASK_INDEX="${exp11_trajectory_start_task_index}")
+  [[ -n "${exp11_trajectory_prompt_prefix_mode}" ]] && env_args+=(PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE="${exp11_trajectory_prompt_prefix_mode}")
+  [[ -n "${exp11_trajectory_allow_reuse}" ]] && env_args+=(PRIORITY_TRAJECTORY_ALLOW_REUSE="${exp11_trajectory_allow_reuse}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 11 wrapper failed"
@@ -1550,6 +1576,22 @@ configure_suite_case() {
       EXP11_PRIORITY_INPUT_LEN=""
       EXP11_PRIORITY_OUTPUT_LEN="${EXP11_SWEBENCH_PRIORITY_OUTPUT_LEN}"
       EXP11_PRIORITY_INTER_REQUEST_GAP_MS="${EXP11_SWEBENCH_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      ;;
+    exp11_trajectory)
+      set_case_reset_modes "${EXP11_TRAJECTORY_RESET_MODE}"
+      EXP11_MODE="${EXP11_TRAJECTORY_MODE}"
+      EXP11_PRIORITY_REQUEST_SOURCE="${EXP11_TRAJECTORY_PRIORITY_REQUEST_SOURCE}"
+      EXP11_PRIORITY_SWEBENCH_DATASET=""
+      EXP11_PRIORITY_SWEBENCH_SPLIT=""
+      EXP11_PRIORITY_SWEBENCH_START_INDEX=""
+      EXP11_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP11_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP11_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP11_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP11_LOW_PRIORITY_COUNT="${EXP11_TRAJECTORY_LOW_PRIORITY_COUNT}"
+      EXP11_HIGH_PRIORITY_COUNT="${EXP11_TRAJECTORY_HIGH_PRIORITY_COUNT}"
+      EXP11_PRIORITY_INPUT_LEN=""
+      EXP11_PRIORITY_OUTPUT_LEN="${EXP11_TRAJECTORY_PRIORITY_OUTPUT_LEN}"
+      EXP11_PRIORITY_INTER_REQUEST_GAP_MS="${EXP11_TRAJECTORY_PRIORITY_INTER_REQUEST_GAP_MS}"
       EXP11_PRIORITY_SWEBENCH_ALLOW_REUSE=""
       ;;
     exp12_synthetic)

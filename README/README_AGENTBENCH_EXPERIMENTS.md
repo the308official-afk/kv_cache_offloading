@@ -2406,6 +2406,7 @@ exp9_swebench
 exp9_trajectory
 exp11_synthetic
 exp11_swebench
+exp11_trajectory
 exp12_synthetic
 exp12_swebench
 exp13_synthetic
@@ -2432,6 +2433,7 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 9 trajectory: KV retention over Exp6 captured trajectory prompts
 - Experiment 11 synthetic: priority scheduling
 - Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
+- Experiment 11 trajectory: priority scheduling over Exp6 captured trajectory prompts
 - Experiment 12 synthetic: speculative prefill
 - Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts
 - Experiment 13 synthetic: latency sensitivity

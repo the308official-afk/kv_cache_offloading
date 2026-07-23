@@ -162,6 +162,10 @@ SUMMARY_COLUMNS = [
     "swebench_dataset",
     "swebench_split",
     "swebench_start_index",
+    "trajectory_prompt_catalog",
+    "trajectory_stages",
+    "trajectory_start_task_index",
+    "trajectory_prompt_prefix_mode",
     "low_n",
     "high_n",
     "input_words",
@@ -254,7 +258,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--request-source",
         default=os.environ.get("PRIORITY_REQUEST_SOURCE", "synthetic"),
-        choices=("synthetic", "swebench_dataset"),
+        choices=("synthetic", "swebench_dataset", "swebench_trajectory"),
         help="Prompt source for priority requests.",
     )
     parser.add_argument(
@@ -279,6 +283,41 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("PRIORITY_SWEBENCH_ALLOW_REUSE", "0").strip().lower()
         in {"1", "true", "yes"},
         help="Allow cycling SWE-bench rows if the split is smaller than the burst.",
+    )
+    parser.add_argument(
+        "--trajectory-prompt-catalog",
+        default=os.environ.get(
+            "PRIORITY_TRAJECTORY_PROMPT_CATALOG",
+            str(REPO_ROOT / "experiments" / "reports" / "latest_swebench_trajectory_prompt_catalog.csv"),
+        ),
+        help="Prompt catalog CSV built from Experiment 6 traces.",
+    )
+    parser.add_argument(
+        "--trajectory-stages",
+        default=os.environ.get("PRIORITY_TRAJECTORY_STAGES", "planning execution patch_generation review"),
+        help="Whitespace-separated trajectory stages to use as priority request prompts.",
+    )
+    parser.add_argument(
+        "--trajectory-start-task-index",
+        type=int,
+        default=int(os.environ.get("PRIORITY_TRAJECTORY_START_TASK_INDEX", "0")),
+        help="First catalog task_index to use for trajectory prompts.",
+    )
+    parser.add_argument(
+        "--trajectory-prompt-prefix-mode",
+        choices=("none", "task_stage"),
+        default=os.environ.get(
+            "PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE",
+            os.environ.get("PRIORITY_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        ),
+        help="Prefix trajectory prompts with a task/stage identifier so prompts diverge early.",
+    )
+    parser.add_argument(
+        "--trajectory-allow-reuse",
+        action="store_true",
+        default=os.environ.get("PRIORITY_TRAJECTORY_ALLOW_REUSE", "0").strip().lower()
+        in {"1", "true", "yes"},
+        help="Allow cycling trajectory prompt rows if the catalog has too few rows.",
     )
     parser.add_argument(
         "--prompt-isolation-mode",
@@ -366,6 +405,75 @@ def swebench_task_source_meta(task: dict[str, Any], *, dataset_index: int) -> di
         "source_repo": str(task.get("repo", "")),
         "source_instance_id": str(task.get("instance_id", f"swebench_index_{dataset_index}")),
         "source_task_index": str(dataset_index),
+    }
+
+
+def parse_stage_filter(value: str) -> set[str]:
+    return {item.strip() for item in value.split() if item.strip()}
+
+
+def catalog_int(row: dict[str, str], key: str, default: int = 0) -> int:
+    try:
+        return int(row.get(key, "") or default)
+    except ValueError:
+        return default
+
+
+def read_trajectory_catalog(path_value: str) -> list[dict[str, str]]:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(
+            f"SWE-bench trajectory prompt catalog not found: {path}\n"
+            "Run Experiment 6 first so latest_swebench_trajectory_prompt_catalog.csv exists."
+        )
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise SystemExit(f"SWE-bench trajectory prompt catalog is empty: {path}")
+    return rows
+
+
+def trajectory_prompt_text(row: dict[str, str]) -> str:
+    raw_path = row.get("prompt_text_path") or ""
+    if not raw_path:
+        raise SystemExit(f"Trajectory catalog row is missing prompt_text_path: {row}")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(f"Trajectory prompt file not found: {path}")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def trajectory_prompt_prefix(row: dict[str, str], mode: str) -> str:
+    if mode == "none":
+        return ""
+    if mode != "task_stage":
+        raise SystemExit(f"Unsupported PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE: {mode}")
+    task_index = catalog_int(row, "task_index", -1)
+    stage = str(row.get("stage_name") or row.get("phase") or "unknown")
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
+    repo = str(row.get("repo") or "unknown")
+    prompt_hash = str(row.get("prompt_hash") or "")
+    return (
+        "[PRIORITY_TRAJECTORY_PROMPT="
+        f"task_{task_index:04d}|stage={stage}|instance={instance_id}|repo={repo}|prompt_hash={prompt_hash}"
+        "]\n\n"
+    )
+
+
+def trajectory_source_meta(row: dict[str, str]) -> dict[str, str]:
+    task_index = catalog_int(row, "task_index", -1)
+    stage_index = catalog_int(row, "stage_index", -1)
+    stage = str(row.get("stage_name") or row.get("phase") or "unknown")
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
+    return {
+        "request_source": "swebench_trajectory",
+        "source_repo": str(row.get("repo") or ""),
+        "source_instance_id": f"{instance_id}::{stage}",
+        "source_task_index": f"{task_index}:{stage_index}",
     }
 
 
@@ -786,9 +894,92 @@ def build_swebench_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
     return specs
 
 
+def build_trajectory_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
+    catalog_rows = read_trajectory_catalog(args.trajectory_prompt_catalog)
+    stage_filter = parse_stage_filter(args.trajectory_stages)
+    if not stage_filter:
+        raise SystemExit("PRIORITY_TRAJECTORY_STAGES / --trajectory-stages must not be empty")
+
+    prompt_rows = [
+        row
+        for row in catalog_rows
+        if (
+            (row.get("stage_name") in stage_filter or row.get("phase") in stage_filter)
+            and catalog_int(row, "task_index", -1) >= args.trajectory_start_task_index
+        )
+    ]
+    prompt_rows.sort(
+        key=lambda row: (
+            catalog_int(row, "task_index", -1),
+            catalog_int(row, "stage_index", -1),
+            str(row.get("stage_name") or row.get("phase") or ""),
+        )
+    )
+
+    total_requests = args.low_priority_count + args.high_priority_count
+    if len(prompt_rows) < total_requests and not args.trajectory_allow_reuse:
+        raise SystemExit(
+            "Not enough SWE-bench trajectory prompt rows for this priority burst without reuse. "
+            f"need={total_requests} available={len(prompt_rows)}. "
+            "Use smaller LOW_PRIORITY_COUNT/HIGH_PRIORITY_COUNT or set PRIORITY_TRAJECTORY_ALLOW_REUSE=1."
+        )
+    if not prompt_rows and total_requests > 0:
+        raise SystemExit("No SWE-bench trajectory prompt rows matched PRIORITY_TRAJECTORY_STAGES.")
+
+    def row_for(offset: int) -> tuple[str, dict[str, str]]:
+        if not args.trajectory_allow_reuse and offset >= len(prompt_rows):
+            raise SystemExit("Internal trajectory row selection overflow without reuse.")
+        row = prompt_rows[offset % len(prompt_rows)]
+        prompt = trajectory_prompt_prefix(row, args.trajectory_prompt_prefix_mode) + trajectory_prompt_text(row)
+        return prompt, row
+
+    specs: list[RequestSpec] = []
+    arrival_index = 0
+    row_offset = 0
+    for idx in range(args.low_priority_count):
+        request_role = f"low_{idx:04d}"
+        prompt, row = row_for(row_offset)
+        row_offset += 1
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="low-priority",
+                priority_value=args.low_priority_value,
+                hint_profile="low-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=idx * args.inter_request_gap_ms,
+                prompt=prompt,
+                **trajectory_source_meta(row),
+            )
+        )
+        arrival_index += 1
+
+    high_start_ms = args.arrival_gap_ms
+    for idx in range(args.high_priority_count):
+        request_role = f"high_{idx:04d}"
+        prompt, row = row_for(row_offset)
+        row_offset += 1
+        specs.append(
+            RequestSpec(
+                request_role=request_role,
+                priority_class="high-priority",
+                priority_value=args.high_priority_value,
+                hint_profile="high-priority",
+                arrival_index=arrival_index,
+                planned_offset_ms=high_start_ms + idx * args.inter_request_gap_ms,
+                prompt=prompt,
+                **trajectory_source_meta(row),
+            )
+        )
+        arrival_index += 1
+    return specs
+
+
 def build_request_specs(args: argparse.Namespace) -> list[RequestSpec]:
     if args.request_source == "swebench_dataset":
         return build_swebench_request_specs(args)
+    if args.request_source == "swebench_trajectory":
+        return build_trajectory_request_specs(args)
 
     specs: list[RequestSpec] = []
     arrival_index = 0
@@ -1578,9 +1769,19 @@ def build_summary(
         "swebench_start_index": (
             args.swebench_start_index if args.request_source == "swebench_dataset" else ""
         ),
+        "trajectory_prompt_catalog": (
+            args.trajectory_prompt_catalog if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_stages": args.trajectory_stages if args.request_source == "swebench_trajectory" else "",
+        "trajectory_start_task_index": (
+            args.trajectory_start_task_index if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_prompt_prefix_mode": (
+            args.trajectory_prompt_prefix_mode if args.request_source == "swebench_trajectory" else ""
+        ),
         "low_n": args.low_priority_count,
         "high_n": args.high_priority_count,
-        "input_words": args.input_len_words if args.request_source == "synthetic" else "dataset",
+        "input_words": args.input_len_words if args.request_source == "synthetic" else args.request_source,
         "output_tokens": args.output_len_tokens,
         "arrival_gap_ms": args.arrival_gap_ms,
         "inter_gap_ms": args.inter_request_gap_ms,

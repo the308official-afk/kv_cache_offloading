@@ -33,6 +33,12 @@ PRIORITY_SWEBENCH_DATASET="${PRIORITY_SWEBENCH_DATASET:-ScaleAI/SWE-bench_Pro}"
 PRIORITY_SWEBENCH_SPLIT="${PRIORITY_SWEBENCH_SPLIT:-test}"
 PRIORITY_SWEBENCH_START_INDEX="${PRIORITY_SWEBENCH_START_INDEX:-0}"
 PRIORITY_SWEBENCH_ALLOW_REUSE="${PRIORITY_SWEBENCH_ALLOW_REUSE:-0}"
+PRIORITY_TRAJECTORY_PROMPT_CATALOG="${PRIORITY_TRAJECTORY_PROMPT_CATALOG:-experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
+PRIORITY_TRAJECTORY_STAGES="${PRIORITY_TRAJECTORY_STAGES:-planning execution patch_generation review}"
+PRIORITY_TRAJECTORY_START_TASK_INDEX="${PRIORITY_TRAJECTORY_START_TASK_INDEX:-0}"
+PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE="${PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE:-${PRIORITY_TRAJECTORY_REPLAY_HEADER_MODE:-task_stage}}"
+PRIORITY_TRAJECTORY_REPLAY_HEADER_MODE="${PRIORITY_TRAJECTORY_REPLAY_HEADER_MODE:-${PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE}}"
+PRIORITY_TRAJECTORY_ALLOW_REUSE="${PRIORITY_TRAJECTORY_ALLOW_REUSE:-0}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-600}"
 SGLANG_TRANSFER_LOG_PROFILE="${SGLANG_TRANSFER_LOG_PROFILE:-full}"
 MODEL_SMOKE_RETRIES="${MODEL_SMOKE_RETRIES:-${AGENTBENCH_MODEL_SMOKE_RETRIES}}"
@@ -404,6 +410,11 @@ warn_if_worker_runtime_missing() {
   echo "SWE-bench split: ${PRIORITY_SWEBENCH_SPLIT}"
   echo "SWE-bench start index: ${PRIORITY_SWEBENCH_START_INDEX}"
   echo "SWE-bench allow reuse: ${PRIORITY_SWEBENCH_ALLOW_REUSE}"
+  echo "Trajectory catalog: ${PRIORITY_TRAJECTORY_PROMPT_CATALOG}"
+  echo "Trajectory stages: ${PRIORITY_TRAJECTORY_STAGES}"
+  echo "Trajectory start task index: ${PRIORITY_TRAJECTORY_START_TASK_INDEX}"
+  echo "Trajectory prompt prefix mode: ${PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE}"
+  echo "Trajectory allow reuse: ${PRIORITY_TRAJECTORY_ALLOW_REUSE}"
   echo "Top-level priority mode: ${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
   echo "Request-context mode: ${PRIORITY_REQUEST_CONTEXT_MODE}"
   echo "Driver log: ${DRIVER_LOG}"
@@ -518,6 +529,10 @@ probe_cmd=(
   --swebench-dataset "${PRIORITY_SWEBENCH_DATASET}"
   --swebench-split "${PRIORITY_SWEBENCH_SPLIT}"
   --swebench-start-index "${PRIORITY_SWEBENCH_START_INDEX}"
+  --trajectory-prompt-catalog "${PRIORITY_TRAJECTORY_PROMPT_CATALOG}"
+  --trajectory-stages "${PRIORITY_TRAJECTORY_STAGES}"
+  --trajectory-start-task-index "${PRIORITY_TRAJECTORY_START_TASK_INDEX}"
+  --trajectory-prompt-prefix-mode "${PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE}"
   --request-timeout "${REQUEST_TIMEOUT}"
   --top-level-priority-mode "${PRIORITY_TOP_LEVEL_PRIORITY_MODE}"
   --request-context-mode "${PRIORITY_REQUEST_CONTEXT_MODE}"
@@ -526,6 +541,9 @@ probe_cmd=(
 )
 if [[ "${PRIORITY_SWEBENCH_ALLOW_REUSE}" = "1" ]]; then
   probe_cmd+=(--swebench-allow-reuse)
+fi
+if [[ "${PRIORITY_TRAJECTORY_ALLOW_REUSE}" = "1" ]]; then
+  probe_cmd+=(--trajectory-allow-reuse)
 fi
 if [[ "${IGNORE_EOS}" = "1" ]]; then
   probe_cmd+=(--ignore-eos)
