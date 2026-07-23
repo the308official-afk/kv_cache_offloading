@@ -366,7 +366,8 @@ publish_public_prompt_evolution_reports_after_task() {
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
-    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv"; do
+    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv" \
+    "experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv:exp6_swebench_trajectory_task_prompt_counts.csv"; do
     local source_path="${src%%:*}"
     local target_name="${src##*:}"
     if [[ -f "${source_path}" ]]; then

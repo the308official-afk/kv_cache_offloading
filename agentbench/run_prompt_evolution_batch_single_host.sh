@@ -122,6 +122,7 @@ clear_prompt_evolution_public_reports() {
     "${SHARED_CHART_DIR}/exp6_prompt_evolution_task_summary.csv" \
     "${SHARED_CHART_DIR}/exp6_runs_execution_prompts.md" \
     "${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv" \
+    "${SHARED_CHART_DIR}/exp6_swebench_trajectory_task_prompt_counts.csv" \
     "${SHARED_CHART_DIR}/prompt_evolution_run_overview.csv" \
     "${SHARED_CHART_DIR}/exp6_task_summary_table.csv" \
     "${SHARED_CHART_DIR}/exp6_run_overview_table.csv" \
@@ -138,6 +139,7 @@ clear_prompt_evolution_report_state() {
     experiments/reports/latest_prompt_evolution_trace_index.csv \
     experiments/reports/latest_prompt_evolution_trace_index.md \
     experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
+    experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv \
     experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl \
     experiments/reports/all_runs_* \
     experiments/reports/latest_runs_* \
@@ -158,7 +160,8 @@ publish_prompt_evolution_reports() {
   for src in \
     "experiments/reports/prompt_evolution_task_summary.csv:exp6_prompt_evolution_task_summary.csv" \
     "experiments/reports/prompt_evolution_run_overview.csv:exp6_prompt_evolution_run_overview.csv" \
-    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv"; do
+    "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv:exp6_swebench_trajectory_prompt_catalog.csv" \
+    "experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv:exp6_swebench_trajectory_task_prompt_counts.csv"; do
     local source_path="${src%%:*}"
     local target_name="${src##*:}"
     if [[ -f "${source_path}" ]]; then

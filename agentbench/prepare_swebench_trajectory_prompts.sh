@@ -31,8 +31,14 @@ if [[ -f experiments/reports/latest_swebench_trajectory_prompt_catalog.csv ]]; t
   cp -f experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
     "${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv"
 fi
+if [[ -f experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv ]]; then
+  cp -f experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv \
+    "${SHARED_CHART_DIR}/exp6_swebench_trajectory_task_prompt_counts.csv"
+fi
 
 echo
 echo "Latest catalog CSV: experiments/reports/latest_swebench_trajectory_prompt_catalog.csv"
 echo "Latest catalog JSONL: experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl"
+echo "Latest task prompt counts CSV: experiments/reports/latest_swebench_trajectory_task_prompt_counts.csv"
 echo "Published catalog CSV to: ${SHARED_CHART_DIR}/exp6_swebench_trajectory_prompt_catalog.csv"
+echo "Published task prompt counts CSV to: ${SHARED_CHART_DIR}/exp6_swebench_trajectory_task_prompt_counts.csv"

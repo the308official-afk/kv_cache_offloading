@@ -754,12 +754,15 @@ ls experiments/charts/exp6_*
 cat experiments/charts/exp6_prompt_evolution_run_overview.csv
 cat experiments/charts/exp6_prompt_evolution_task_summary.csv
 cat experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
+cat experiments/charts/exp6_swebench_trajectory_task_prompt_counts.csv
 ```
 
 `exp6_prompt_evolution_run_overview.csv` is the manager-facing table used for
 the run-overview slides. It is the first report to inspect after Experiment 6.
 `exp6_swebench_trajectory_prompt_catalog.csv` is the prompt catalog that
 Experiment 9 uses when `RETENTION_REQUEST_SOURCE=swebench_trajectory`.
+`exp6_swebench_trajectory_task_prompt_counts.csv` shows how many captured
+model-facing prompts each SWE-bench task contributes by stage.
 
 Global summaries:
 
@@ -997,6 +1000,12 @@ PY
 If the count is below 21, use smaller distractor counts or wait until the
 catalog has more `planning` tasks.
 
+To see how many prompts each task contributes by stage:
+
+```bash
+cat experiments/charts/exp6_swebench_trajectory_task_prompt_counts.csv
+```
+
 Step 2: run Experiment 9 against the prepared trajectory catalog.
 
 For the quick smoke-test catalog above:
@@ -1027,6 +1036,12 @@ DISTRACTOR_COUNTS="100 200 400 600"
 
 This mode replays prepared trajectory prompts only. It does not run
 tools/tests/code edits again.
+
+Compared with `RETENTION_REQUEST_SOURCE=swebench_dataset`, trajectory mode uses
+the actual model-facing prompts captured during Experiment 6. If
+`RETENTION_TRAJECTORY_STAGES="planning"`, each distractor task contributes only
+its captured planning prompt. If you include more stages, each task can
+contribute multiple prompt requests.
 
 ```bash
 cd ~/kv_cache_offloading

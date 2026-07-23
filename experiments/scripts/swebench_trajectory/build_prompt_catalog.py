@@ -18,7 +18,11 @@ DEFAULT_TRACE_INDEX = REPO_ROOT / "experiments" / "reports" / "latest_prompt_evo
 DEFAULT_OUT_ROOT = REPO_ROOT / "experiments" / "reports" / "swebench_trajectory_prompts"
 DEFAULT_LATEST_CSV = REPO_ROOT / "experiments" / "reports" / "latest_swebench_trajectory_prompt_catalog.csv"
 DEFAULT_LATEST_JSONL = REPO_ROOT / "experiments" / "reports" / "latest_swebench_trajectory_prompt_catalog.jsonl"
+DEFAULT_LATEST_TASK_COUNTS_CSV = (
+    REPO_ROOT / "experiments" / "reports" / "latest_swebench_trajectory_task_prompt_counts.csv"
+)
 DEFAULT_STAGE_FILTER = "planning execution patch_generation review"
+CORE_PHASES = ("planning", "execution", "patch_generation", "review")
 
 
 def parse_args() -> argparse.Namespace:
@@ -51,6 +55,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--latest-jsonl",
         default=os.environ.get("SWEBENCH_TRAJECTORY_LATEST_JSONL", str(DEFAULT_LATEST_JSONL)),
+    )
+    parser.add_argument(
+        "--latest-task-counts-csv",
+        default=os.environ.get(
+            "SWEBENCH_TRAJECTORY_LATEST_TASK_COUNTS_CSV",
+            str(DEFAULT_LATEST_TASK_COUNTS_CSV),
+        ),
     )
     parser.add_argument(
         "--stage-filter",
@@ -219,6 +230,67 @@ def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
 
+def safe_int(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def build_task_prompt_count_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[tuple[str, str, str, str, str], dict[str, Any]] = {}
+    for row in rows:
+        key = (
+            str(row.get("catalog_id") or ""),
+            str(row.get("task_index") or ""),
+            str(row.get("run_id") or ""),
+            str(row.get("repo") or ""),
+            str(row.get("instance_id") or ""),
+        )
+        bucket = grouped.setdefault(
+            key,
+            {
+                "catalog_id": key[0],
+                "task_index": key[1],
+                "run_id": key[2],
+                "repo": key[3],
+                "instance_id": key[4],
+                "total_prompts": 0,
+                "planning_prompts": 0,
+                "execution_prompts": 0,
+                "patch_generation_prompts": 0,
+                "review_prompts": 0,
+                "other_prompts": 0,
+                "stages_present": set(),
+                "total_prompt_chars": 0,
+                "total_prompt_words": 0,
+                "min_prompt_chars": None,
+                "max_prompt_chars": 0,
+            },
+        )
+        phase = str(row.get("phase") or "")
+        phase_key = phase if phase in CORE_PHASES else "other"
+        bucket["total_prompts"] += 1
+        bucket[f"{phase_key}_prompts"] += 1
+        bucket["stages_present"].add(str(row.get("stage_name") or phase or "unknown"))
+        prompt_chars = safe_int(row.get("prompt_chars"))
+        prompt_words = safe_int(row.get("prompt_words"))
+        bucket["total_prompt_chars"] += prompt_chars
+        bucket["total_prompt_words"] += prompt_words
+        current_min = bucket["min_prompt_chars"]
+        bucket["min_prompt_chars"] = prompt_chars if current_min is None else min(current_min, prompt_chars)
+        bucket["max_prompt_chars"] = max(bucket["max_prompt_chars"], prompt_chars)
+
+    out_rows: list[dict[str, Any]] = []
+    for row in grouped.values():
+        clean = dict(row)
+        clean["stages_present"] = " ".join(sorted(clean["stages_present"]))
+        clean["min_prompt_chars"] = clean["min_prompt_chars"] or 0
+        out_rows.append(clean)
+
+    return sorted(out_rows, key=lambda item: safe_int(item.get("task_index")))
+
+
 def main() -> int:
     args = parse_args()
     trace_index = Path(args.trace_index)
@@ -275,18 +347,43 @@ def main() -> int:
     ]
     catalog_csv = out_dir / "swebench_trajectory_prompt_catalog.csv"
     catalog_jsonl = out_dir / "swebench_trajectory_prompt_catalog.jsonl"
+    task_counts_csv = out_dir / "swebench_trajectory_task_prompt_counts.csv"
     write_csv(catalog_csv, rows, fieldnames)
     write_jsonl(catalog_jsonl, rows)
     write_csv(Path(args.latest_csv), rows, fieldnames)
     write_jsonl(Path(args.latest_jsonl), rows)
+
+    task_count_fieldnames = [
+        "catalog_id",
+        "task_index",
+        "run_id",
+        "repo",
+        "instance_id",
+        "total_prompts",
+        "planning_prompts",
+        "execution_prompts",
+        "patch_generation_prompts",
+        "review_prompts",
+        "other_prompts",
+        "stages_present",
+        "total_prompt_chars",
+        "total_prompt_words",
+        "min_prompt_chars",
+        "max_prompt_chars",
+    ]
+    task_count_rows = build_task_prompt_count_rows(rows)
+    write_csv(task_counts_csv, task_count_rows, task_count_fieldnames)
+    write_csv(Path(args.latest_task_counts_csv), task_count_rows, task_count_fieldnames)
 
     summary = {
         "catalog_id": args.catalog_id,
         "trace_index": str(trace_index),
         "catalog_csv": str(catalog_csv),
         "catalog_jsonl": str(catalog_jsonl),
+        "task_prompt_counts_csv": str(task_counts_csv),
         "latest_csv": str(args.latest_csv),
         "latest_jsonl": str(args.latest_jsonl),
+        "latest_task_prompt_counts_csv": str(args.latest_task_counts_csv),
         "task_count": len({row["task_index"] for row in rows}),
         "prompt_count": len(rows),
         "stage_filter": args.stage_filter,
