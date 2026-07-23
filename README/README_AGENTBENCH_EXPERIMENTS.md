@@ -2475,18 +2475,18 @@ echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
 ```
 
-Nohup version for only the full-trajectory Exp9 case:
+Nohup version for the trajectory suite cases currently wired:
 
 ```bash
 cd ~/kv_cache_offloading
 
-RUN_ID="exp9_trajectory_gh200_$(date +%Y%m%d_%H%M%S)"
+RUN_ID="agentic_hint_trajectory_gh200_$(date +%Y%m%d_%H%M%S)"
 LOG_DIR="experiments/reports/agentic_hint_sweeps_suite_nohup/${RUN_ID}"
 mkdir -p "${LOG_DIR}"
 
 nohup env \
   AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
-  SUITE_RUNS="exp9_trajectory" \
+  SUITE_RUNS="exp9_trajectory exp11_trajectory" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
@@ -2497,7 +2497,8 @@ echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
 ```
 
-Nohup version for only the trajectory Exp11 priority-scheduling case:
+To run only one trajectory experiment, keep just that name in `SUITE_RUNS`.
+For example:
 
 ```bash
 cd ~/kv_cache_offloading
