@@ -2,8 +2,8 @@
 
 # Readable suite config for the sequential agentic-hint wrappers.
 # Edit this file when you want one place with clearly separated settings
-# for the known-good synthetic and SWE-bench variants of Experiments 9, 11,
-# 12, and 13.
+# for the known-good synthetic, SWE-bench, and trajectory variants of
+# Experiments 9, 11, 12, and 13.
 #
 # Run with:
 #   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh <model>
@@ -70,13 +70,18 @@
 : "${EXP9_SWEBENCH_PROTECTED_HINT_PROFILES:=high-priority}"
 
 ###############################################################################
-# Experiment 9 trajectory prompts: optional advanced mode
+# Experiment 9 trajectory prompts: KV retention over Exp6 captured prompts
 ###############################################################################
 
+: "${EXP9_TRAJECTORY_MODE:=sweep}"
+: "${EXP9_TRAJECTORY_RESET_MODE:=flush}"
+: "${EXP9_TRAJECTORY_RETENTION_REQUEST_SOURCE:=swebench_trajectory}"
+: "${EXP9_TRAJECTORY_DISTRACTOR_COUNTS:=5 30 55 80 105 130 155 180 205 230 255 280 305 330 355 380 395}"
+: "${EXP9_TRAJECTORY_PROTECTED_HINT_PROFILES:=high-priority}"
 : "${EXP9_RETENTION_TRAJECTORY_PROMPT_CATALOG:=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
 : "${EXP9_RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX:=0}"
 : "${EXP9_RETENTION_TRAJECTORY_PROTECTED_INSTANCE_ID:=}"
-: "${EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE:=patch_generation}"
+: "${EXP9_RETENTION_TRAJECTORY_PROTECTED_STAGE:=planning}"
 : "${EXP9_RETENTION_TRAJECTORY_STAGES:=planning execution patch_generation review}"
 : "${EXP9_RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE:=${EXP9_RETENTION_TRAJECTORY_REPLAY_HEADER_MODE:-task_stage}}"
 : "${EXP9_RETENTION_TRAJECTORY_DISTRACTOR_START_TASK_INDEX:=-1}"

@@ -2403,6 +2403,7 @@ Available `SUITE_RUNS` cases:
 ```text
 exp9_synthetic
 exp9_swebench
+exp9_trajectory
 exp11_synthetic
 exp11_swebench
 exp12_synthetic
@@ -2428,6 +2429,7 @@ Edit the suite config file directly. It is already split into sections:
 - shared suite settings
 - Experiment 9 synthetic: KV retention
 - Experiment 9 SWE-bench: KV retention over real SWE-bench Pro task prompts
+- Experiment 9 trajectory: KV retention over Exp6 captured trajectory prompts
 - Experiment 11 synthetic: priority scheduling
 - Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
 - Experiment 12 synthetic: speculative prefill
@@ -2459,6 +2461,21 @@ DYNAMO_MACHINE_PROFILE=gh200 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
+To run only the full-trajectory Exp9 case:
+
+```bash
+cd ~/kv_cache_offloading
+
+SUITE_RUNS="exp9_trajectory" \
+DYNAMO_MACHINE_PROFILE=gh200 \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+This uses full trajectory prompts by default:
+`planning execution patch_generation review`, `flush` between sweep values, and
+`DISTRACTOR_COUNTS="5 30 55 80 105 130 155 180 205 230 255 280 305 330 355 380 395"`.
+
 ### Nohup
 
 Use this when you want the selected SWE-bench suite to keep running if your
@@ -2474,6 +2491,28 @@ mkdir -p "${LOG_DIR}"
 nohup env \
   AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
   SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
+  DYNAMO_MACHINE_PROFILE=gh200 \
+  ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+    Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
+  > "${LOG_DIR}/run.log" 2>&1 < /dev/null &
+
+echo "RUN_ID=${RUN_ID}"
+echo "LOG=${LOG_DIR}/run.log"
+echo "PID=$!"
+```
+
+Nohup version for only the full-trajectory Exp9 case:
+
+```bash
+cd ~/kv_cache_offloading
+
+RUN_ID="exp9_trajectory_gh200_$(date +%Y%m%d_%H%M%S)"
+LOG_DIR="experiments/reports/agentic_hint_sweeps_suite_nohup/${RUN_ID}"
+mkdir -p "${LOG_DIR}"
+
+nohup env \
+  AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
+  SUITE_RUNS="exp9_trajectory" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \

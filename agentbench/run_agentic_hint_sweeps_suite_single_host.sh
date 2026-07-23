@@ -618,6 +618,7 @@ canonical_suite_run() {
   case "$1" in
     exp9_synthetic|9_synthetic|kv_retention_synthetic) echo "exp9_synthetic" ;;
     exp9_swebench|9_swebench|kv_retention_swebench) echo "exp9_swebench" ;;
+    exp9_trajectory|9_trajectory|kv_retention_trajectory|trajectory_retention) echo "exp9_trajectory" ;;
     exp10|exp10_cache_pinning|cache_pinning) echo "exp10" ;;
     exp11_synthetic|11_synthetic|priority_synthetic|priority_scheduling_synthetic) echo "exp11_synthetic" ;;
     exp11_swebench|11_swebench|priority_swebench|priority_scheduling_swebench) echo "exp11_swebench" ;;
@@ -948,6 +949,7 @@ trajectory_protected_task_index=${exp9_retention_trajectory_protected_task_index
 trajectory_protected_instance_id=${exp9_retention_trajectory_protected_instance_id}
 trajectory_protected_stage=${exp9_retention_trajectory_protected_stage}
 trajectory_stages=${exp9_retention_trajectory_stages}
+trajectory_prompt_prefix_mode=${exp9_retention_trajectory_prompt_prefix_mode}
 trajectory_distractor_start_task_index=${exp9_retention_trajectory_distractor_start_task_index}
 trajectory_allow_distractor_reuse=${exp9_retention_trajectory_allow_distractor_reuse}
 retention_attribution_mode=${exp9_retention_attribution_mode}
@@ -1495,6 +1497,25 @@ configure_suite_case() {
       EXP9_PROTECTED_INPUT_LEN=""
       EXP9_DISTRACTOR_INPUT_LEN=""
       EXP9_PROTECTED_HINT_PROFILES="${EXP9_SWEBENCH_PROTECTED_HINT_PROFILES}"
+      EXP9_RETENTION_SWEBENCH_INSTANCE_ID=""
+      EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=""
+      EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
+      ;;
+    exp9_trajectory)
+      set_case_reset_modes "${EXP9_TRAJECTORY_RESET_MODE}" "${EXP9_TRAJECTORY_RESET_MODE}"
+      EXP9_MODE="${EXP9_TRAJECTORY_MODE}"
+      EXP9_RETENTION_REQUEST_SOURCE="${EXP9_TRAJECTORY_RETENTION_REQUEST_SOURCE}"
+      EXP9_RETENTION_SWEBENCH_DATASET=""
+      EXP9_RETENTION_SWEBENCH_SPLIT=""
+      EXP9_RETENTION_SWEBENCH_INDEX=""
+      EXP9_RETENTION_ATTRIBUTION_MODE=""
+      EXP9_RETENTION_REQUEST_CONTEXT_MODE=""
+      EXP9_RETENTION_TOP_LEVEL_PRIORITY_MODE=""
+      EXP9_STOP_ON_PROBE_FAILURE=""
+      EXP9_DISTRACTOR_COUNTS="${EXP9_TRAJECTORY_DISTRACTOR_COUNTS}"
+      EXP9_PROTECTED_INPUT_LEN=""
+      EXP9_DISTRACTOR_INPUT_LEN=""
+      EXP9_PROTECTED_HINT_PROFILES="${EXP9_TRAJECTORY_PROTECTED_HINT_PROFILES}"
       EXP9_RETENTION_SWEBENCH_INSTANCE_ID=""
       EXP9_RETENTION_SWEBENCH_DISTRACTOR_START_INDEX=""
       EXP9_RETENTION_SWEBENCH_ALLOW_DISTRACTOR_REUSE=""
