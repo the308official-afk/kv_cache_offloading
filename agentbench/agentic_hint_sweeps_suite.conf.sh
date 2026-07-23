@@ -176,7 +176,7 @@
 : "${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS:=128}"
 
 ###############################################################################
-# Experiment 12 trajectory prompts: Speculative prefill over Exp6 captured prompts
+# Experiment 12 trajectory prompts: Speculative prefill over Exp6 captured prompts.
 ###############################################################################
 
 : "${EXP12_TRAJECTORY_MODE:=all}"
