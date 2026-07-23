@@ -3,6 +3,27 @@
 
 
 ```bash
+cd ~/kv_cache_offloading
+
+python3 - <<'PY'
+import csv
+from collections import Counter
+from pathlib import Path
+
+p = Path("experiments/reports/latest_swebench_trajectory_prompt_catalog.csv")
+rows = list(csv.DictReader(p.open()))
+stage_counts = Counter(r.get("stage_name") or r.get("phase") for r in rows)
+
+print("total prompt rows:", len(rows))
+print("stage counts:")
+for k, v in sorted(stage_counts.items()):
+    print(f"  {k}: {v}")
+PY
+
+```
+
+
+```bash
 Anticipated Direction	Value	Why There Is Opportunity for Value	Can Hints Power It?
 Lifecycle-aware KV management	Very High	Agent KV can be retained while active and removed immediately when the agent or subagent finishes, reducing both recomputation and wasted memory.	Yes. Session identity, parent-session and completion signals can guide retention and cleanup.
 Direct tool-call-aware KV prefetch	Very High	Agents often pause during tool calls. Moving KV back to GPU before the tool returns could hide transfer latency and speed up the next reasoning step.	Yes. Future timing or tool-state hints could trigger direct storage-to-GPU prefetch.
