@@ -195,7 +195,7 @@
 : "${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE:=task_stage}"
 
 ###############################################################################
-# Experiment 13 synthetic: Latency sensitivity
+# Experiment 13 synthetic: Latency sensitivity.
 ###############################################################################
 
 : "${EXP13_SYNTHETIC_MODE:=all}"
