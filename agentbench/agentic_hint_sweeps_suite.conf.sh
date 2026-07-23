@@ -180,7 +180,7 @@
 ###############################################################################
 
 : "${EXP12_TRAJECTORY_MODE:=all}"
-: "${EXP12_TRAJECTORY_RESET_MODE:=restart}"
+: "${EXP12_TRAJECTORY_RESET_MODE:=flush}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_REQUEST_SOURCE:=swebench_trajectory}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_COMPARISON_MODE:=same_task_isolated}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_SWEEP_AXIS:=SPEC_PREFILL_WARMUP_WAIT_MS}"
