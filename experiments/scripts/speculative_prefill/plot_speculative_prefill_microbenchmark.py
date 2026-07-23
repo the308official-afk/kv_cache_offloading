@@ -10,7 +10,7 @@ from html import escape
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from svg_chart_helpers import visible_tick_indexes, x_position_from_index
+from svg_chart_helpers import numeric_tick_indexes_for_values, write_svg_with_png, x_position_from_index
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,8 +59,7 @@ def color_for_arm(arm: str) -> str:
 
 
 def write_svg(path: Path, svg: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(svg, encoding="utf-8")
+    write_svg_with_png(path, svg)
 
 
 def build_bar_chart_svg(
@@ -134,7 +133,7 @@ def build_line_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     dense = len(labels) > 14
-    tick_indexes = visible_tick_indexes(len(labels), max_labels=11)
+    tick_indexes = numeric_tick_indexes_for_values(labels, preferred_step=500, max_labels=9)
     point_radius = 3.8 if dense else 5.0
     line_width = 3.0 if dense else 4.0
     all_values = [value for _, _, values in series for value in values]
@@ -166,6 +165,10 @@ def build_line_chart_svg(
         x = x_position_from_index(index=idx, count=count, labels=labels, left=left, plot_width=plot_width)
         parts.append(f'<line x1="{x:.2f}" y1="{top}" x2="{x:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>')
         parts.append(f'<text x="{x:.2f}" y="{top + plot_height + 30}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">{escape(label)}</text>')
+
+    if min_y < 0 < max_y:
+        zero_y = top + plot_height - ((0 - min_y) / (max_y - min_y)) * plot_height
+        parts.append(f'<line x1="{left}" y1="{zero_y:.2f}" x2="{left + plot_width}" y2="{zero_y:.2f}" stroke="#64748b" stroke-width="1.4"/>')
 
     legend_x = left
     legend_y = height - 34
@@ -212,14 +215,27 @@ def main() -> None:
         write_svg(
             out_dir / "turnb_latency.svg",
             build_line_chart_svg(
-                title="Speculative Prefill Sweep: Turn B Latency",
-                subtitle="If background prefill helps, the protected curve should sit below control.",
+                title="Experiment 12: Turn B Latency vs Warmup Wait",
+                subtitle="If background prefill helps, the speculative-prefill curve should sit below control.",
                 labels=labels,
                 series=[
                     ("Control", "#94a3b8", control_latency),
-                    ("Protected", "#16a34a", protected_latency),
+                    ("Speculative prefill", "#16a34a", protected_latency),
                 ],
                 y_label="Turn B Latency (ms)",
+            ),
+        )
+        gains: list[int] = []
+        for control, protected in zip(control_latency, protected_latency):
+            gains.append(control - protected)
+        write_svg(
+            out_dir / "turnb_gain.svg",
+            build_line_chart_svg(
+                title="Experiment 12: Turn B Latency Gain vs Warmup Wait",
+                subtitle="Positive values mean speculative prefill made Turn B faster than control.",
+                labels=labels,
+                series=[("Speculative prefill gain", "#16a34a", gains)],
+                y_label="Turn B Latency Gain (ms)",
             ),
         )
 

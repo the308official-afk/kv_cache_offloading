@@ -82,20 +82,30 @@ ensure_experiment_dirs_ready() {
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name '*.md' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.png' -o -name '*.csv' -o -name '*.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_matrix.csv" \
     "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_latency.png" \
     "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_cached_tokens.svg" \
+    "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_validation_cached_tokens.png" \
     "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_latency.png" \
     "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_cached_tokens.svg" \
+    "${SHARED_CHART_DIR}/latest_cache_pinning_microbenchmark_sweep_replay_cached_tokens.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_matrix.csv" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_validation_latency.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_validation_latency.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_validation_cache.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_validation_cache.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_cache_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_cache_vs_distractors.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_latency_gain_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_latency_gain_vs_distractors.png" \
     "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp10_cachepinning_cache_gain_vs_distractors.png" \
     "${CACHE_PINNING_DECISION_PROOF_CHARTS_CSV}" \
     "${CACHE_PINNING_DECISION_PROOF_CHARTS_MD}"
 }
@@ -388,8 +398,12 @@ build_microbenchmark_charts() {
     if [[ -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" ]]; then
       cp -f "${MICROBENCH_CHART_DIR}/${chart_name}.svg" "${MICROBENCH_LATEST_PREFIX}_${chart_name}.svg"
     fi
+    if [[ -f "${MICROBENCH_CHART_DIR}/${chart_name}.png" ]]; then
+      cp -f "${MICROBENCH_CHART_DIR}/${chart_name}.png" "${MICROBENCH_LATEST_PREFIX}_${chart_name}.png"
+    fi
   done
   [[ -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.svg" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.svg"
+  [[ -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.png" ]] && cp -f "${MICROBENCH_CHART_DIR}/sweep_replay_latency.png" "${SHARED_CHART_DIR}/exp10_cachepinning_latency_vs_distractors.png"
   if [[ -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" ]]; then
     cp -f "${MICROBENCH_CHART_DIR}/chart_manifest.json" "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
   fi

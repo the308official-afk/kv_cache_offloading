@@ -52,7 +52,10 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_summary.md"
   "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
   "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_latency.png"
   "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_gain.svg"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_gain.png"
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
@@ -80,15 +83,24 @@ ensure_experiment_dirs_ready() {
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name '*.md' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.png' -o -name '*.csv' -o -name '*.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.png" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_cached.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_gain.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_gain.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_matrix.csv" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.png" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.png" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turna_latency_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_decision_proof.csv" \
@@ -377,7 +389,24 @@ build_microbenchmark_charts() {
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
   fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.png"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_gain.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${MICROBENCH_LATEST_PREFIX}_turnb_gain.png"
+  fi
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.png"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.png"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.png"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.png"
+  return 0
 }
 
 build_decision_proof() {

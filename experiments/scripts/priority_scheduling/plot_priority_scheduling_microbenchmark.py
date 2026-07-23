@@ -10,7 +10,7 @@ from html import escape
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from svg_chart_helpers import visible_tick_indexes, x_position_from_index
+from svg_chart_helpers import numeric_tick_indexes_for_values, write_svg_with_png, x_position_from_index
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,8 +73,7 @@ def prio_color(value: str) -> str:
 
 
 def write_svg(path: Path, svg: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(svg, encoding="utf-8")
+    write_svg_with_png(path, svg)
 
 
 def build_bar_chart_svg(
@@ -148,7 +147,7 @@ def build_line_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     dense = len(labels) > 14
-    tick_indexes = visible_tick_indexes(len(labels), max_labels=11)
+    tick_indexes = numeric_tick_indexes_for_values(labels, preferred_step=50, max_labels=9)
     point_radius = 3.8 if dense else 5.0
     line_width = 3.0 if dense else 4.0
     all_values = [value for _, _, values in series for value in values]
@@ -221,7 +220,7 @@ def build_jump_ahead_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     dense = len(labels) > 14
-    tick_indexes = visible_tick_indexes(len(labels), max_labels=11)
+    tick_indexes = numeric_tick_indexes_for_values(labels, preferred_step=50, max_labels=9)
     point_radius = 4.0 if dense else 6.0
     point_stroke = 1.7 if dense else 2.0
     line_width = 3.0 if dense else 4.0
@@ -233,7 +232,7 @@ def build_jump_ahead_chart_svg(
     parts = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
         '<rect width="100%" height="100%" fill="#ffffff"/>',
-        f'<text x="{left}" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">{escape(title)}</text>',
+        f'<text x="{left}" y="42" font-family="Inter, Arial, sans-serif" font-size="27" font-weight="700" fill="#0f172a">{escape(title)}</text>',
         f'<text x="{left}" y="70" font-family="Inter, Arial, sans-serif" font-size="14" fill="#64748b">{escape(subtitle)}</text>',
         f'<rect x="{left}" y="{top}" width="{plot_width}" height="{plot_height}" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>',
     ]
@@ -266,6 +265,8 @@ def build_jump_ahead_chart_svg(
     parts.append(f'<circle cx="{legend_x + 16}" cy="{legend_y - 3}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>')
     parts.append(f'<text x="{legend_x + 44}" y="{legend_y + 2}" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">High-urgency jump-ahead rate</text>')
 
+    zero_y = top + plot_height
+    parts.append(f'<line x1="{left}" y1="{zero_y:.2f}" x2="{left + plot_width}" y2="{zero_y:.2f}" stroke="#64748b" stroke-width="1.4"/>')
     parts.append(f'<text x="28" y="{top + plot_height / 2:.2f}" transform="rotate(-90 28 {top + plot_height / 2:.2f})" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Jump-Ahead Rate</text>')
     parts.append(f'<text x="{left + plot_width / 2:.2f}" y="{height - 40}" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="14" font-weight="700" fill="#334155">Arrival Gap (ms)</text>')
     parts.append("</svg>")

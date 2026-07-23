@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="720" viewBox="0 0 1600 720">
+<rect width="100%" height="100%" fill="#ffffff"/>
+<text x="92" y="42" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="700" fill="#0f172a">Experiment 12: Turn B Latency Gain vs Warmup Wait</text>
+<text x="92" y="70" font-family="Inter, Arial, sans-serif" font-size="14" fill="#64748b">Positive values mean speculative prefill made Turn B faster than control.</text>
+<rect x="92" y="96" width="1448" height="496" rx="14" fill="#f8fafc" stroke="#dbe4f0"/>
+<line x1="92" y1="592.00" x2="1540" y2="592.00" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="597.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">0</text>
+<line x1="92" y1="492.80" x2="1540" y2="492.80" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="498.30" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">465</text>
+<line x1="92" y1="393.60" x2="1540" y2="393.60" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="399.10" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">930</text>
+<line x1="92" y1="294.40" x2="1540" y2="294.40" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="299.90" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1394</text>
+<line x1="92" y1="195.20" x2="1540" y2="195.20" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="200.70" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">1859</text>
+<line x1="92" y1="96.00" x2="1540" y2="96.00" stroke="#e2e8f0" stroke-width="1"/>
+<text x="78" y="101.50" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">2324</text>
+<line x1="92.00" y1="96" x2="92.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="92.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">0</text>
+<line x1="236.80" y1="96" x2="236.80" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="236.80" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">100</text>
+<line x1="454.00" y1="96" x2="454.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="454.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">250</text>
+<line x1="816.00" y1="96" x2="816.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="816.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">500</text>
+<line x1="1540.00" y1="96" x2="1540.00" y2="592" stroke="#eef2f7" stroke-width="1"/>
+<text x="1540.00" y="622" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="12" fill="#475569">1000</text>
+<polyline fill="none" stroke="#16a34a" stroke-width="4.0" points="92.00,179.24 236.80,188.84 454.00,149.14 816.00,175.61 1540.00,175.39"/>
+<circle cx="92.00" cy="179.24" r="5.0" fill="#16a34a"/>
+<circle cx="236.80" cy="188.84" r="5.0" fill="#16a34a"/>
+<circle cx="454.00" cy="149.14" r="5.0" fill="#16a34a"/>
+<circle cx="816.00" cy="175.61" r="5.0" fill="#16a34a"/>
+<circle cx="1540.00" cy="175.39" r="5.0" fill="#16a34a"/>
+<rect x="92" y="675" width="18" height="18" rx="5" fill="#16a34a"/>
+<text x="118" y="689" font-family="Inter, Arial, sans-serif" font-size="13" fill="#334155">Speculative prefill gain</text>
+<text x="28" y="344.00" transform="rotate(-90 28 344.00)" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="#334155">Turn B Latency Gain (ms)</text>
+</svg>

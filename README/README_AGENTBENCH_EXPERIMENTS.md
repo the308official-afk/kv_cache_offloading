@@ -2275,6 +2275,8 @@ Main outputs:
 - `latest_speculative_prefill_microbenchmark_summary.md`: readable summary
 - `latest_speculative_prefill_microbenchmark_run_contract.json`: exact resolved settings
 - `experiments/charts/exp12_specprefill_latency_vs_warmup_wait.svg`
+- `experiments/charts/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg`: clearer alias for the main Turn B latency chart
+- `experiments/charts/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg`: optional gain chart; positive values mean speculative prefill helped
 
 ### Debug
 
@@ -2632,9 +2634,19 @@ Main outputs:
 
 ### Regenerate Dense-Sweep Charts
 
-Use this if the experiment already finished but the SVGs look cluttered because
-you used many sweep values. These commands rebuild only the charts from the
-latest matrix CSVs; they do not rerun the expensive experiments.
+Use this if the experiment already finished but the charts look cluttered
+because you used many sweep values. These commands rebuild only the charts from
+the latest matrix CSVs; they do not rerun the expensive experiments.
+
+The regenerated charts use presentation-style defaults:
+
+- sparse x-axis ticks for dense sweeps
+- no point-value labels on line charts
+- larger slide-friendly text
+- SVG output always
+- PNG output too when `rsvg-convert`, `inkscape`, ImageMagick, or `cairosvg` is available
+
+Disable PNG export with `CHART_EXPORT_PNG=0`.
 
 Experiment 9:
 
@@ -2688,9 +2700,13 @@ Check the regenerated public chart files:
 
 ```bash
 ls -lh experiments/charts/exp9_*.svg
+ls -lh experiments/charts/exp9_*.png 2>/dev/null || true
 ls -lh experiments/charts/exp11_*.svg
+ls -lh experiments/charts/exp11_*.png 2>/dev/null || true
 ls -lh experiments/charts/exp12_*.svg
+ls -lh experiments/charts/exp12_*.png 2>/dev/null || true
 ls -lh experiments/charts/exp13_*.svg
+ls -lh experiments/charts/exp13_*.png 2>/dev/null || true
 ```
 
 The suite banners show the actual selected case count, for example `1/8`,

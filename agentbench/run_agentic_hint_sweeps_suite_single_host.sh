@@ -508,7 +508,13 @@ prune_shared_chart_dir_for_suite_selection() {
     if has_selected_experiment "${experiment_id}"; then
       return 0
     fi
-    rm -f "$@"
+    local target=""
+    for target in "$@"; do
+      rm -f "${target}"
+      if [[ "${target}" == *.svg ]]; then
+        rm -f "${target%.svg}.png"
+      fi
+    done
   }
 
   prune_one_experiment 9 \
@@ -548,6 +554,8 @@ prune_shared_chart_dir_for_suite_selection() {
   prune_one_experiment 12 \
     "${charts_dir}/exp12_specprefill_matrix.csv" \
     "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_cache_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
@@ -572,6 +580,10 @@ sync_shared_assets_for_experiment() {
     if [[ -f "${src}" ]]; then
       cp -f "${src}" "${dest}"
       copy_chart_asset_to_suite_dirs "${dest}"
+      if [[ "${src}" == *.svg && -f "${src%.svg}.png" ]]; then
+        cp -f "${src%.svg}.png" "${dest%.svg}.png"
+        copy_chart_asset_to_suite_dirs "${dest%.svg}.png"
+      fi
       published_any=1
     fi
   }
@@ -598,6 +610,8 @@ sync_shared_assets_for_experiment() {
     12)
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv" "${charts_dir}/exp12_specprefill_matrix.csv"
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_gain.svg" "${charts_dir}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg"
       ;;
     13)
       sync_one "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" "${charts_dir}/exp13_latencysens_matrix.csv"

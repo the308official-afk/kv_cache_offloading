@@ -11,7 +11,7 @@ from html import escape
 from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from svg_chart_helpers import visible_tick_indexes
+from svg_chart_helpers import numeric_tick_indexes_for_values, write_svg_with_png
 
 
 def parse_args() -> argparse.Namespace:
@@ -108,7 +108,7 @@ def build_line_chart_svg(
     plot_width = width - left - right
     plot_height = height - top - bottom
     dense = len(x_values) > 14
-    tick_indexes = visible_tick_indexes(len(x_values), max_labels=11)
+    tick_indexes = numeric_tick_indexes_for_values(x_values, preferred_step=100, max_labels=9)
     marker_radius = 3.6 if dense else 4.8
     marker_stroke = 2.1 if dense else 2.6
     line_width = 2.8 if dense else 3.2
@@ -284,8 +284,7 @@ def build_bar_chart_svg(
 
 
 def write_svg(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    write_svg_with_png(path, content)
 
 
 def select_rows(rows: list[dict[str, str]], *, part: str) -> list[dict[str, str]]:

@@ -7,8 +7,12 @@ import argparse
 import csv
 import json
 import math
+import sys
 from html import escape
 from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from svg_chart_helpers import numeric_tick_indexes_for_values, write_svg_with_png
 
 
 def parse_args() -> argparse.Namespace:
@@ -100,6 +104,11 @@ def build_line_chart_svg(
     bottom = 76
     plot_width = width - left - right
     plot_height = height - top - bottom
+    dense = len(x_values) > 14
+    tick_indexes = numeric_tick_indexes_for_values(x_values, preferred_step=100, max_labels=9)
+    marker_radius = 3.6 if dense else 4.8
+    marker_stroke = 2.1 if dense else 2.6
+    line_width = 2.8 if dense else 3.2
 
     numeric_values: list[float | None] = []
     for item in series:
@@ -137,7 +146,9 @@ def build_line_chart_svg(
             f'<text x="{left - 14}" y="{y + 5.5:.2f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="13" fill="#64748b">{label}</text>'
         )
 
-    for x in x_values:
+    for idx, x in enumerate(x_values):
+        if idx not in tick_indexes:
+            continue
         xpos = x_position(x, min_x, max_x, left, plot_width)
         parts.append(
             f'<line x1="{xpos:.2f}" y1="{top}" x2="{xpos:.2f}" y2="{top + plot_height}" stroke="#eef2f7" stroke-width="1"/>'
@@ -162,11 +173,11 @@ def build_line_chart_svg(
             ]
             if len(points) >= 2:
                 parts.append(
-                    f'<polyline fill="none" stroke="{color}" stroke-width="3.2"{stroke} points="{svg_polyline(points)}"/>'
+                    f'<polyline fill="none" stroke="{color}" stroke-width="{line_width:.1f}"{stroke} points="{svg_polyline(points)}"/>'
                 )
             for point_x, point_y in points:
                 parts.append(
-                    f'<circle cx="{point_x:.2f}" cy="{point_y:.2f}" r="4.8" fill="#ffffff" stroke="{color}" stroke-width="2.6"/>'
+                    f'<circle cx="{point_x:.2f}" cy="{point_y:.2f}" r="{marker_radius:.1f}" fill="#ffffff" stroke="{color}" stroke-width="{marker_stroke:.1f}"/>'
                 )
 
     parts.append(
@@ -271,8 +282,7 @@ def build_bar_chart_svg(
 
 
 def write_svg(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
+    write_svg_with_png(path, content)
 
 
 def select_rows(rows: list[dict[str, str]], *, part: str, row_kind: str) -> list[dict[str, str]]:

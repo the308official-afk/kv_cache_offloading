@@ -86,10 +86,11 @@ ensure_experiment_dirs_ready() {
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name '*.md' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.png' -o -name '*.csv' -o -name '*.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/${SHARED_CHART_MATRIX_NAME}" \
     "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}" \
+    "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME%.svg}.png" \
     "${MICROBENCH_DECISION_PROOF_CHARTS_CSV}" \
     "${MICROBENCH_DECISION_PROOF_CHARTS_MD}"
 }
@@ -389,6 +390,10 @@ build_microbenchmark_charts() {
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${MICROBENCH_LATEST_PREFIX}_jump_ahead.svg"
     cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.svg" "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME}"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.png" "${MICROBENCH_LATEST_PREFIX}_jump_ahead.png"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/jump_ahead.png" "${SHARED_CHART_DIR}/${SHARED_CHART_JUMP_AHEAD_NAME%.svg}.png"
   fi
 }
 

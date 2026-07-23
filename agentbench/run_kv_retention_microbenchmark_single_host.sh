@@ -71,15 +71,20 @@ ensure_experiment_dirs_ready() {
 
 prepare_shared_chart_dir() {
   mkdir -p "${SHARED_CHART_DIR}"
-  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.csv' -o -name '*.md' \) -delete
+  find "${SHARED_CHART_DIR}" -maxdepth 1 -type f ! \( -name '*.svg' -o -name '*.png' -o -name '*.csv' -o -name '*.md' \) -delete
   rm -f \
     "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_matrix.csv" \
     "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_latency.svg" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_latency.png" \
     "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_cached_tokens.svg" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_replay_cached_tokens.png" \
     "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_survival_curve.svg" \
+    "${SHARED_CHART_DIR}/latest_kv_retention_microbenchmark_survival_curve.png" \
     "${SHARED_CHART_DIR}/exp9_kvretention_matrix.csv" \
     "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.png" \
     "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg" \
+    "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.png" \
     "${SHARED_CHART_DIR}/exp9_kvretention_latency_gain_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp9_kvretention_cache_gain_vs_distractors.svg" \
     "${SHARED_CHART_DIR}/exp9_kvretention_survival_vs_distractors.svg" \
@@ -467,9 +472,17 @@ build_microbenchmark_charts() {
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${MICROBENCH_LATEST_PREFIX}_replay_latency.svg"
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.svg" "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.svg"
   fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.png" "${MICROBENCH_LATEST_PREFIX}_replay_latency.png"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_latency.png" "${SHARED_CHART_DIR}/exp9_kvretention_latency_vs_distractors.png"
+  fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.svg"
     cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.svg" "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.png" "${MICROBENCH_LATEST_PREFIX}_replay_cached_tokens.png"
+    cp -f "${MICROBENCH_OUT_DIR}/charts/replay_cached_tokens.png" "${SHARED_CHART_DIR}/exp9_kvretention_cache_vs_distractors.png"
   fi
 }
 

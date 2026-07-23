@@ -557,7 +557,7 @@ def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: l
     for path in csv_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
 
