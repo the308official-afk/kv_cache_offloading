@@ -2412,6 +2412,7 @@ exp12_swebench
 exp12_trajectory
 exp13_synthetic
 exp13_swebench
+exp13_trajectory
 ```
 
 Default selection in the config:
@@ -2440,6 +2441,7 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts
 - Experiment 13 synthetic: latency sensitivity
 - Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
+- Experiment 13 trajectory: latency sensitivity over Exp6 captured trajectory prompts
 
 The config file is:
 
@@ -2488,7 +2490,7 @@ mkdir -p "${LOG_DIR}"
 
 nohup env \
   AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
-  SUITE_RUNS="exp9_trajectory exp11_trajectory exp12_trajectory" \
+  SUITE_RUNS="exp9_trajectory exp11_trajectory exp12_trajectory exp13_trajectory" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \

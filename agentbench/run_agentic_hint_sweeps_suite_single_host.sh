@@ -342,6 +342,11 @@ EXP13_PRIORITY_SWEBENCH_DATASET='${EXP13_PRIORITY_SWEBENCH_DATASET:-}'
 EXP13_PRIORITY_SWEBENCH_SPLIT='${EXP13_PRIORITY_SWEBENCH_SPLIT:-}'
 EXP13_PRIORITY_SWEBENCH_START_INDEX='${EXP13_PRIORITY_SWEBENCH_START_INDEX:-}'
 EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE='${EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE:-}'
+EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG='${EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG:-}'
+EXP13_PRIORITY_TRAJECTORY_STAGES='${EXP13_PRIORITY_TRAJECTORY_STAGES:-}'
+EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX='${EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX:-}'
+EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE='${EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE:-}'
+EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE='${EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE:-}'
 EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS='${EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS:-}'
 EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES='${EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES:-}'
 EXP13_LOW_PRIORITY_COUNT='${EXP13_LOW_PRIORITY_COUNT:-}'
@@ -648,6 +653,7 @@ canonical_suite_run() {
     exp12_trajectory|12_trajectory|spec_prefill_trajectory|speculative_prefill_trajectory) echo "exp12_trajectory" ;;
     exp13_synthetic|13_synthetic|latency_sensitivity_synthetic) echo "exp13_synthetic" ;;
     exp13_swebench|13_swebench|latency_sensitivity_swebench) echo "exp13_swebench" ;;
+    exp13_trajectory|13_trajectory|latency_sensitivity_trajectory|latency_trajectory) echo "exp13_trajectory" ;;
     *) return 1 ;;
   esac
 }
@@ -1431,6 +1437,11 @@ run_experiment_13() {
   local exp13_swebench_split
   local exp13_swebench_start_index
   local exp13_swebench_allow_reuse
+  local exp13_trajectory_prompt_catalog
+  local exp13_trajectory_stages
+  local exp13_trajectory_start_task_index
+  local exp13_trajectory_prompt_prefix_mode
+  local exp13_trajectory_allow_reuse
   local exp13_experiment_reset_mode
   exp13_sweep_axis="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS PRIORITY_SCHEDULING_SWEEP_AXIS)"
   exp13_sweep_values="$(resolve_value EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES PRIORITY_SCHEDULING_SWEEP_VALUES)"
@@ -1444,6 +1455,11 @@ run_experiment_13() {
   exp13_swebench_split="$(resolve_value EXP13_PRIORITY_SWEBENCH_SPLIT PRIORITY_SWEBENCH_SPLIT)"
   exp13_swebench_start_index="$(resolve_value EXP13_PRIORITY_SWEBENCH_START_INDEX PRIORITY_SWEBENCH_START_INDEX)"
   exp13_swebench_allow_reuse="$(resolve_value EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE PRIORITY_SWEBENCH_ALLOW_REUSE)"
+  exp13_trajectory_prompt_catalog="$(resolve_value EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG PRIORITY_TRAJECTORY_PROMPT_CATALOG)"
+  exp13_trajectory_stages="$(resolve_value EXP13_PRIORITY_TRAJECTORY_STAGES PRIORITY_TRAJECTORY_STAGES)"
+  exp13_trajectory_start_task_index="$(resolve_value EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX PRIORITY_TRAJECTORY_START_TASK_INDEX)"
+  exp13_trajectory_prompt_prefix_mode="$(resolve_value EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE)"
+  exp13_trajectory_allow_reuse="$(resolve_value EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE PRIORITY_TRAJECTORY_ALLOW_REUSE)"
   exp13_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
@@ -1470,6 +1486,11 @@ priority_swebench_dataset=${exp13_swebench_dataset}
 priority_swebench_split=${exp13_swebench_split}
 priority_swebench_start_index=${exp13_swebench_start_index}
 priority_swebench_allow_reuse=${exp13_swebench_allow_reuse}
+priority_trajectory_prompt_catalog=${exp13_trajectory_prompt_catalog}
+priority_trajectory_stages=${exp13_trajectory_stages}
+priority_trajectory_start_task_index=${exp13_trajectory_start_task_index}
+priority_trajectory_prompt_prefix_mode=${exp13_trajectory_prompt_prefix_mode}
+priority_trajectory_allow_reuse=${exp13_trajectory_allow_reuse}
 EOF
   local -a env_args=(
     env
@@ -1497,6 +1518,11 @@ EOF
   [[ -n "${exp13_swebench_split}" ]] && env_args+=(PRIORITY_SWEBENCH_SPLIT="${exp13_swebench_split}")
   [[ -n "${exp13_swebench_start_index}" ]] && env_args+=(PRIORITY_SWEBENCH_START_INDEX="${exp13_swebench_start_index}")
   [[ -n "${exp13_swebench_allow_reuse}" ]] && env_args+=(PRIORITY_SWEBENCH_ALLOW_REUSE="${exp13_swebench_allow_reuse}")
+  [[ -n "${exp13_trajectory_prompt_catalog}" ]] && env_args+=(PRIORITY_TRAJECTORY_PROMPT_CATALOG="${exp13_trajectory_prompt_catalog}")
+  [[ -n "${exp13_trajectory_stages}" ]] && env_args+=(PRIORITY_TRAJECTORY_STAGES="${exp13_trajectory_stages}")
+  [[ -n "${exp13_trajectory_start_task_index}" ]] && env_args+=(PRIORITY_TRAJECTORY_START_TASK_INDEX="${exp13_trajectory_start_task_index}")
+  [[ -n "${exp13_trajectory_prompt_prefix_mode}" ]] && env_args+=(PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE="${exp13_trajectory_prompt_prefix_mode}")
+  [[ -n "${exp13_trajectory_allow_reuse}" ]] && env_args+=(PRIORITY_TRAJECTORY_ALLOW_REUSE="${exp13_trajectory_allow_reuse}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 13 wrapper failed"
@@ -1714,6 +1740,11 @@ configure_suite_case() {
       EXP13_PRIORITY_SWEBENCH_SPLIT=""
       EXP13_PRIORITY_SWEBENCH_START_INDEX=""
       EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG=""
+      EXP13_PRIORITY_TRAJECTORY_STAGES=""
+      EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX=""
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE=""
+      EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE=""
       ;;
     exp13_swebench)
       set_case_reset_modes "${EXP13_SWEBENCH_RESET_MODE}"
@@ -1730,6 +1761,32 @@ configure_suite_case() {
       EXP13_PRIORITY_OUTPUT_LEN="${EXP13_SWEBENCH_PRIORITY_OUTPUT_LEN}"
       EXP13_PRIORITY_INTER_REQUEST_GAP_MS="${EXP13_SWEBENCH_PRIORITY_INTER_REQUEST_GAP_MS}"
       EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG=""
+      EXP13_PRIORITY_TRAJECTORY_STAGES=""
+      EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX=""
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE=""
+      EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE=""
+      ;;
+    exp13_trajectory)
+      set_case_reset_modes "${EXP13_TRAJECTORY_RESET_MODE}"
+      EXP13_MODE="${EXP13_TRAJECTORY_MODE}"
+      EXP13_PRIORITY_REQUEST_SOURCE="${EXP13_TRAJECTORY_PRIORITY_REQUEST_SOURCE}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_AXIS="${EXP13_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_AXIS}"
+      EXP13_PRIORITY_SCHEDULING_SWEEP_VALUES="${EXP13_TRAJECTORY_PRIORITY_SCHEDULING_SWEEP_VALUES}"
+      EXP13_LOW_PRIORITY_COUNT="${EXP13_TRAJECTORY_LOW_PRIORITY_COUNT}"
+      EXP13_HIGH_PRIORITY_COUNT="${EXP13_TRAJECTORY_HIGH_PRIORITY_COUNT}"
+      EXP13_PRIORITY_INPUT_LEN=""
+      EXP13_PRIORITY_OUTPUT_LEN="${EXP13_TRAJECTORY_PRIORITY_OUTPUT_LEN}"
+      EXP13_PRIORITY_INTER_REQUEST_GAP_MS="${EXP13_TRAJECTORY_PRIORITY_INTER_REQUEST_GAP_MS}"
+      EXP13_PRIORITY_SWEBENCH_DATASET=""
+      EXP13_PRIORITY_SWEBENCH_SPLIT=""
+      EXP13_PRIORITY_SWEBENCH_START_INDEX=""
+      EXP13_PRIORITY_SWEBENCH_ALLOW_REUSE=""
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG="${EXP13_PRIORITY_TRAJECTORY_PROMPT_CATALOG}"
+      EXP13_PRIORITY_TRAJECTORY_STAGES="${EXP13_PRIORITY_TRAJECTORY_STAGES}"
+      EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX="${EXP13_PRIORITY_TRAJECTORY_START_TASK_INDEX}"
+      EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE="${EXP13_PRIORITY_TRAJECTORY_PROMPT_PREFIX_MODE}"
+      EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE="${EXP13_PRIORITY_TRAJECTORY_ALLOW_REUSE}"
       ;;
     exp10)
       ;;
