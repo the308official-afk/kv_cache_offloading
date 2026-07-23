@@ -390,12 +390,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--trajectory-prompt-prefix-mode",
         choices=("none", "task_stage"),
-        default=os.environ.get("RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE", "task_stage"),
+        default=os.environ.get(
+            "RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE",
+            os.environ.get("RETENTION_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        ),
         help=(
-            "For swebench_trajectory, prepend a deterministic task/stage header before each prompt. "
+            "For swebench_trajectory, prepend a deterministic task/stage prefix before each prompt. "
             "This makes different trajectory tasks diverge in the first tokens while preserving "
             "the captured prompt body. Use 'none' for legacy raw catalog prompts."
         ),
+    )
+    parser.add_argument(
+        "--trajectory-replay-header-mode",
+        choices=("none", "task_stage"),
+        dest="trajectory_prompt_prefix_mode",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--trajectory-distractor-start-task-index",

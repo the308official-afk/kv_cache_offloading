@@ -1020,9 +1020,15 @@ RETENTION_REQUEST_SOURCE=swebench_trajectory \
 RETENTION_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
 RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0 \
 RETENTION_TRAJECTORY_PROTECTED_STAGE=planning \
+<<<<<<< HEAD
 RETENTION_TRAJECTORY_STAGES="planning" \
 RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE=task_stage \
 KV_RETENTION_RESET_MODE=restart \
+=======
+RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review" \
+RETENTION_TRAJECTORY_REPLAY_HEADER_MODE=task_stage \
+KV_RETENTION_RESET_MODE=flush \
+>>>>>>> 2bb4ba6686f656f9fb1bd9ba757a923f787ec5ee
 DISTRACTOR_COUNTS="100 200 300 390" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \

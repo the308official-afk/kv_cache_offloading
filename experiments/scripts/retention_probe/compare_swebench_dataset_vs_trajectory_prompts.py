@@ -634,7 +634,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--trajectory-prompt-prefix-mode",
         choices=("none", "task_stage"),
-        default=os.environ.get("RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE", "task_stage"),
+        default=os.environ.get(
+            "RETENTION_TRAJECTORY_PROMPT_PREFIX_MODE",
+            os.environ.get("RETENTION_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        ),
+    )
+    parser.add_argument(
+        "--trajectory-replay-header-mode",
+        choices=("none", "task_stage"),
+        dest="trajectory_prompt_prefix_mode",
+        help=argparse.SUPPRESS,
     )
     parser.add_argument(
         "--trajectory-distractor-counts",
