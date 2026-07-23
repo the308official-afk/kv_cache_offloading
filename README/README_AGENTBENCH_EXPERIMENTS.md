@@ -1022,7 +1022,7 @@ RETENTION_TRAJECTORY_PROTECTED_TASK_INDEX=0 \
 RETENTION_TRAJECTORY_PROTECTED_STAGE=planning \
 RETENTION_TRAJECTORY_STAGES="planning execution patch_generation review" \
 RETENTION_TRAJECTORY_REPLAY_HEADER_MODE=task_stage \
-KV_RETENTION_RESET_MODE=restart \
+KV_RETENTION_RESET_MODE=flush \
 DISTRACTOR_COUNTS="100 200 300 390" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
