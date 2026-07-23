@@ -1826,18 +1826,21 @@ cat experiments/charts/exp11_decision_proof.md
 Decision-proof columns:
 
 - `step`: chronological proof step
+- `checked_true`: whether the latest run produced the expected evidence
+- `severity`: whether a false row is critical or a warning
+- `component`: harness, frontend, worker, SGLang, or postprocess
 - `when`: when the logging/check happens
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_value`: actual observed value from the latest run
+- `meaning_short`: short plain-English result for the row
+- `failure_meaning`: what to debug if the check is false
 - `where`: exact source file and line
 - `what_it_means`: plain-English meaning
 - `code_snippet`: source snippet being checked
-- `runtime_signal`: log/report signal expected from the run
 - `evidence_source`: file/log/report used for the check
-- `evidence_value`: actual observed value from the latest run
 - `request_role`: low request, high request, or whole-run scope
 - `priority_class`: which priority class the check applies to
 - `order_metric`: arrival, attach, completion, or jump-ahead metric
-- `checked_true`: whether the latest run produced the expected evidence
-- `failure_meaning`: what to debug if the check is false
 
 | Step | When | Where | What It Means | Code Snippet | Runtime Signal |
 |---:|---|---|---|---|---|
@@ -2042,17 +2045,21 @@ cat experiments/charts/exp13_decision_proof.md
 Decision-proof columns:
 
 - `step`: chronological proof step
+- `checked_true`: whether the latest run produced the expected evidence
+- `severity`: whether a false row is critical or a warning
+- `component`: contract, harness, frontend, worker, or postprocess
 - `when`: when the logging/check happens
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_value`: actual observed value from the latest run
+- `meaning_short`: short plain-English result for the row
+- `failure_meaning`: what to debug if the check is false
 - `where`: exact source file and line
 - `what_it_means`: plain-English meaning
 - `code_snippet`: source snippet being checked
-- `runtime_signal`: log/report signal expected from the run
 - `evidence_source`: file/log/report used for the check
-- `evidence_value`: actual observed value from the latest run
 - `request_role`: low request, high request, or whole-run scope
 - `sensitivity_class`: low-sensitivity, high-sensitivity, or whole-run scope
 - `order_metric`: arrival, attach, completion, or jump-ahead metric
-- `checked_true`: whether the latest run produced the expected evidence
 - `failure_meaning`: what to debug if the check is false
 
 | Step | When | Where | What It Means | Code Snippet | Runtime Signal |
@@ -2299,18 +2306,21 @@ cat experiments/charts/exp12_decision_proof.md
 Decision-proof columns:
 
 - `step`: chronological proof step
+- `checked_true`: whether the latest run produced the expected evidence
+- `severity`: whether a false row is critical or a warning
+- `component`: harness, Dynamo schema, Dynamo preprocessor, or postprocess
 - `when`: when the logging/check happens
+- `runtime_signal`: log/report signal expected from the run
+- `evidence_value`: actual observed value from the latest run
+- `meaning_short`: short plain-English result for the row
+- `failure_meaning`: what to debug if the check is false
 - `where`: exact source file and line
 - `what_it_means`: plain-English meaning
 - `code_snippet`: source snippet being checked
-- `runtime_signal`: log/report signal expected from the run
 - `evidence_source`: file/log/report used for the check
-- `evidence_value`: actual observed value from the latest run
 - `request_role`: `turn_a`, `turn_b`, warmup, or whole-run scope
 - `arm`: control or protected arm
 - `prefill_metric`: which prefill proof metric the row checks
-- `checked_true`: whether the latest run produced the expected evidence
-- `failure_meaning`: what to debug if the check is false
 
 | Step | When | Where | What It Means | Code Snippet | Runtime Signal |
 |---:|---|---|---|---|---|

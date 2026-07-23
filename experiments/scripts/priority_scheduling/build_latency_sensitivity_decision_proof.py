@@ -290,6 +290,95 @@ PROOF_STEPS = [
 ]
 
 
+PROOF_STEP_METADATA = {
+    "contract_hint_kind": {
+        "component": "contract",
+        "severity": "critical",
+        "meaning_short": "The run selected latency-sensitivity mode.",
+    },
+    "request_classes": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "The request burst contains both low and high sensitivity work.",
+    },
+    "latency_hint_values": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "Requests carried latency-sensitivity hint metadata.",
+    },
+    "top_level_disabled": {
+        "component": "contract",
+        "severity": "critical",
+        "meaning_short": "Top-level priority was disabled so this isolates latency sensitivity.",
+    },
+    "frontend_preprocessed": {
+        "component": "frontend",
+        "severity": "warning",
+        "meaning_short": "Frontend preprocessing evidence was captured.",
+    },
+    "frontend_dispatched": {
+        "component": "frontend",
+        "severity": "warning",
+        "meaning_short": "Frontend dispatch evidence was captured.",
+    },
+    "worker_received": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Dynamo worker received the latency-sensitivity requests.",
+    },
+    "worker_agent_hints_logged": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Worker runtime logs included the hint payload.",
+    },
+    "runtime_parser_latency": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "Postprocess recovered latency-sensitivity values from runtime logs.",
+    },
+    "row_worker_latency": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "Request rows expose worker-side latency-sensitivity values.",
+    },
+    "attached_ranks": {
+        "component": "worker",
+        "severity": "critical",
+        "meaning_short": "Worker attach order was reconstructed.",
+    },
+    "completed_ranks": {
+        "component": "worker",
+        "severity": "warning",
+        "meaning_short": "Worker completion order was reconstructed.",
+    },
+    "jump_ahead_count": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "At least one high-sensitivity request attached before earlier low-sensitivity work.",
+    },
+    "matrix_hint_seen": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public matrix says the latency-sensitivity hint reached the worker.",
+    },
+    "matrix_hint_kind": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public matrix identifies this as latency sensitivity.",
+    },
+    "jump_ahead_rate": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The compact matrix reports a positive jump-ahead rate.",
+    },
+    "matrix_result": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public matrix reports visible latency-sensitivity reordering.",
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix-csv", default="experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv")
@@ -474,23 +563,26 @@ def build_checks(
 def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: list[Path]) -> None:
     fieldnames = [
         "step",
+        "checked_true",
+        "severity",
+        "component",
         "when",
+        "runtime_signal",
+        "evidence_value",
+        "meaning_short",
+        "failure_meaning",
         "where",
         "what_it_means",
         "code_snippet",
-        "runtime_signal",
         "evidence_source",
-        "evidence_value",
         "request_role",
         "sensitivity_class",
         "order_metric",
-        "checked_true",
-        "failure_meaning",
     ]
     for path in csv_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
 
@@ -501,8 +593,14 @@ def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: l
             "",
             "This table is generated from the latest latency-sensitivity artifacts. The `checked_true` column is runtime/report evidence, not a hand-written claim.",
             "",
-            "| Step | When | Where | What It Means | Code Snippet | Runtime Signal | Evidence Source | Evidence Value | Request Role | Sensitivity Class | Order Metric | Checked True | Failure Meaning |",
-            "|---:|---|---|---|---|---|---|---|---|---|---|---|---|",
+            "## Quick Read",
+            "",
+            f"- rows: `{len(rows)}`",
+            f"- false critical rows: `{sum(1 for row in rows if row.get('checked_true') != 'true' and row.get('severity') == 'critical')}`",
+            f"- false warning rows: `{sum(1 for row in rows if row.get('checked_true') != 'true' and row.get('severity') == 'warning')}`",
+            "",
+            "| Step | Checked True | Severity | Component | When | Runtime Signal | Evidence Value | Meaning Short | Failure Meaning | Where | What It Means | Code Snippet | Evidence Source | Request Role | Sensitivity Class | Order Metric |",
+            "|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
             lines.append(
@@ -539,6 +637,14 @@ def main() -> int:
 
     rows: list[dict[str, str]] = []
     for step in PROOF_STEPS:
+        metadata = PROOF_STEP_METADATA.get(
+            step.check_name,
+            {
+                "component": "unknown",
+                "severity": "warning",
+                "meaning_short": step.what_it_means,
+            },
+        )
         checked, evidence_source, evidence_value = checks.get(
             step.check_name,
             (False, "generator", "missing check implementation"),
@@ -549,18 +655,21 @@ def main() -> int:
         rows.append(
             {
                 "step": str(step.step),
+                "checked_true": "true" if checked and source_ok else "false",
+                "severity": str(metadata["severity"]),
+                "component": str(metadata["component"]),
                 "when": step.when,
+                "runtime_signal": step.runtime_signal,
+                "evidence_value": evidence_value,
+                "meaning_short": str(metadata["meaning_short"]),
+                "failure_meaning": step.failure_meaning,
                 "where": markdown_link(step),
                 "what_it_means": step.what_it_means,
                 "code_snippet": step.code_snippet,
-                "runtime_signal": step.runtime_signal,
                 "evidence_source": evidence_source,
-                "evidence_value": evidence_value,
                 "request_role": step.request_role,
                 "sensitivity_class": step.sensitivity_class,
                 "order_metric": step.order_metric,
-                "checked_true": "true" if checked and source_ok else "false",
-                "failure_meaning": step.failure_meaning,
             }
         )
 

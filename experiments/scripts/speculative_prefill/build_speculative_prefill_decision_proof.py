@@ -244,6 +244,85 @@ PROOF_STEPS = [
 ]
 
 
+PROOF_STEP_METADATA = {
+    "protected_hint_sent": {
+        "component": "harness",
+        "severity": "critical",
+        "meaning_short": "The protected request carried the speculative prefill hint.",
+    },
+    "target_metadata_seen": {
+        "component": "harness/runtime",
+        "severity": "critical",
+        "meaning_short": "The warmup knew which next request it was meant to help.",
+    },
+    "nvext_field_present": {
+        "component": "dynamo schema",
+        "severity": "critical",
+        "meaning_short": "Dynamo has a typed speculative-prefill hint field.",
+    },
+    "wrap_checked": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "The speculative-prefill wrapper ran.",
+    },
+    "wrap_enabled": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "The protected hint enabled the prefill path.",
+    },
+    "prefill_spawned": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "A background prefill task was spawned.",
+    },
+    "prefill_rendered": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "The warmup prompt was rendered and tokenized.",
+    },
+    "prefill_sent": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "The warmup request was sent into the backend.",
+    },
+    "prefill_done": {
+        "component": "dynamo preprocessor",
+        "severity": "critical",
+        "meaning_short": "The warmup request completed.",
+    },
+    "runtime_events_parsed": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "Runtime prefill events were parsed into the report.",
+    },
+    "prefill_columns_present": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The matrix includes direct prefill evidence columns.",
+    },
+    "effect_visible": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The protected arm showed direct/inferred prefill evidence.",
+    },
+    "public_matrix_present": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public Exp12 matrix was produced.",
+    },
+    "public_prefill_columns": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public matrix preserved the prefill proof columns.",
+    },
+    "public_outputs_present": {
+        "component": "postprocess",
+        "severity": "critical",
+        "meaning_short": "The public Exp12 summary outputs were generated.",
+    },
+}
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--matrix-csv", default="experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv")
@@ -554,23 +633,26 @@ def md_escape(value: object) -> str:
 def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: list[Path]) -> None:
     fieldnames = [
         "step",
+        "checked_true",
+        "severity",
+        "component",
         "when",
+        "runtime_signal",
+        "evidence_value",
+        "meaning_short",
+        "failure_meaning",
         "where",
         "what_it_means",
         "code_snippet",
-        "runtime_signal",
         "evidence_source",
-        "evidence_value",
         "request_role",
         "arm",
         "prefill_metric",
-        "checked_true",
-        "failure_meaning",
     ]
     for path in csv_paths:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8", newline="") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore")
+            writer = csv.DictWriter(handle, fieldnames=fieldnames, extrasaction="ignore", lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows)
 
@@ -581,8 +663,14 @@ def write_outputs(rows: list[dict[str, str]], csv_paths: list[Path], md_paths: l
             "",
             "This table is generated from the latest speculative-prefill artifacts. The `checked_true` column is runtime/report evidence, not a hand-written claim.",
             "",
-            "| Step | When | Where | What It Means | Code Snippet | Runtime Signal | Evidence Source | Evidence Value | Request Role | Arm | Prefill Metric | Checked True | Failure Meaning |",
-            "|---:|---|---|---|---|---|---|---|---|---|---|---|---|",
+            "## Quick Read",
+            "",
+            f"- rows: `{len(rows)}`",
+            f"- false critical rows: `{sum(1 for row in rows if row.get('checked_true') != 'true' and row.get('severity') == 'critical')}`",
+            f"- false warning rows: `{sum(1 for row in rows if row.get('checked_true') != 'true' and row.get('severity') == 'warning')}`",
+            "",
+            "| Step | Checked True | Severity | Component | When | Runtime Signal | Evidence Value | Meaning Short | Failure Meaning | Where | What It Means | Code Snippet | Evidence Source | Request Role | Arm | Prefill Metric |",
+            "|---:|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|",
         ]
         for row in rows:
             lines.append("| " + " | ".join(md_escape(row[key]) for key in fieldnames) + " |")
@@ -611,6 +699,14 @@ def main() -> int:
 
     rows: list[dict[str, str]] = []
     for step in PROOF_STEPS:
+        metadata = PROOF_STEP_METADATA.get(
+            step.check_name,
+            {
+                "component": "unknown",
+                "severity": "warning",
+                "meaning_short": step.what_it_means,
+            },
+        )
         checked, evidence_source, evidence_value = checks.get(
             step.check_name,
             (False, "generator", "missing check implementation"),
@@ -621,18 +717,21 @@ def main() -> int:
         rows.append(
             {
                 "step": str(step.step),
+                "checked_true": "true" if checked and source_ok else "false",
+                "severity": str(metadata["severity"]),
+                "component": str(metadata["component"]),
                 "when": step.when,
+                "runtime_signal": step.runtime_signal,
+                "evidence_value": evidence_value,
+                "meaning_short": str(metadata["meaning_short"]),
+                "failure_meaning": step.failure_meaning,
                 "where": markdown_link(step),
                 "what_it_means": step.what_it_means,
                 "code_snippet": step.code_snippet,
-                "runtime_signal": step.runtime_signal,
                 "evidence_source": evidence_source,
-                "evidence_value": evidence_value,
                 "request_role": step.request_role,
                 "arm": step.arm,
                 "prefill_metric": step.prefill_metric,
-                "checked_true": "true" if checked and source_ok else "false",
-                "failure_meaning": step.failure_meaning,
             }
         )
 
