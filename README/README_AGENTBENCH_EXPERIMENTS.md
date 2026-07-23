@@ -955,7 +955,7 @@ RETENTION_REQUEST_SOURCE=swebench_dataset \
 RETENTION_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 RETENTION_SWEBENCH_SPLIT=test \
 RETENTION_SWEBENCH_INDEX=0 \
-KV_RETENTION_RESET_MODE=restart \
+KV_RETENTION_RESET_MODE=flush \
 DISTRACTOR_COUNTS="200 400 730" \
 PROTECTED_HINT_PROFILES="high-priority" \
 ./agentbench/run_kv_retention_microbenchmark_single_host.sh \
