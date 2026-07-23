@@ -102,6 +102,13 @@ SUMMARY_COLUMNS = [
     "swebench_turn_a_index",
     "swebench_turn_b_index",
     "swebench_protected_offset",
+    "trajectory_prompt_catalog",
+    "trajectory_turn_a_task_index",
+    "trajectory_turn_a_stage",
+    "trajectory_turn_b_task_index",
+    "trajectory_turn_b_stage",
+    "trajectory_protected_offset",
+    "trajectory_prompt_prefix_mode",
     "prompt_isolation_mode",
     "turn_a_words",
     "turn_b_words",
@@ -186,7 +193,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--request-source",
         default=os.environ.get("SPEC_PREFILL_REQUEST_SOURCE", "synthetic"),
-        choices=("synthetic", "swebench_dataset"),
+        choices=("synthetic", "swebench_dataset", "swebench_trajectory"),
         help="Prompt source for speculative-prefill turn prompts.",
     )
     parser.add_argument(
@@ -219,6 +226,54 @@ def parse_args() -> argparse.Namespace:
             "Offset added to turn A/B indices for the protected arm so it does not "
             "reuse the control arm's exact SWE-bench prompts."
         ),
+    )
+    parser.add_argument(
+        "--trajectory-prompt-catalog",
+        default=os.environ.get(
+            "SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG",
+            "experiments/reports/latest_swebench_trajectory_prompt_catalog.csv",
+        ),
+        help="Exp6 trajectory prompt catalog CSV for swebench_trajectory mode.",
+    )
+    parser.add_argument(
+        "--trajectory-turn-a-task-index",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX", "0")),
+        help="Catalog task_index used for turn A in swebench_trajectory mode.",
+    )
+    parser.add_argument(
+        "--trajectory-turn-a-stage",
+        default=os.environ.get("SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE", "planning"),
+        help="Catalog stage_name/phase used for turn A in swebench_trajectory mode.",
+    )
+    parser.add_argument(
+        "--trajectory-turn-b-task-index",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX", "-1")),
+        help=(
+            "Catalog task_index used for turn B in swebench_trajectory mode. "
+            "Use -1 to reuse the turn A task."
+        ),
+    )
+    parser.add_argument(
+        "--trajectory-turn-b-stage",
+        default=os.environ.get("SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE", "execution"),
+        help="Catalog stage_name/phase used for turn B in swebench_trajectory mode.",
+    )
+    parser.add_argument(
+        "--trajectory-protected-offset",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET", "0")),
+        help="Task-index offset applied to the protected arm in swebench_trajectory mode.",
+    )
+    parser.add_argument(
+        "--trajectory-prompt-prefix-mode",
+        default=os.environ.get(
+            "SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE",
+            os.environ.get("SPEC_PREFILL_TRAJECTORY_REPLAY_HEADER_MODE", "task_stage"),
+        ),
+        choices=("none", "task_stage"),
+        help="Prefix trajectory prompts with task/stage identity before replay.",
     )
     parser.add_argument(
         "--arm-filter",
@@ -306,6 +361,118 @@ def swebench_prompt_spec(dataset: Any, *, dataset_index: int) -> PromptSpec:
         source_repo=repo,
         source_instance_id=instance_id,
         source_task_index=str(normalized_index),
+    )
+
+
+def catalog_int(row: dict[str, str], key: str, default: int = 0) -> int:
+    try:
+        return int(row.get(key, "") or default)
+    except ValueError:
+        return default
+
+
+def read_trajectory_catalog(path_value: str) -> list[dict[str, str]]:
+    path = Path(path_value).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(
+            f"SWE-bench trajectory prompt catalog not found: {path}\n"
+            "Run Experiment 6 first so latest_swebench_trajectory_prompt_catalog.csv exists."
+        )
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    if not rows:
+        raise SystemExit(f"SWE-bench trajectory prompt catalog is empty: {path}")
+    return rows
+
+
+def trajectory_prompt_text(row: dict[str, str]) -> str:
+    raw_path = row.get("prompt_text_path") or ""
+    if not raw_path:
+        raise SystemExit(f"Trajectory catalog row is missing prompt_text_path: {row}")
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    if not path.exists():
+        raise SystemExit(f"Trajectory prompt file not found: {path}")
+    return path.read_text(encoding="utf-8", errors="replace")
+
+
+def trajectory_prompt_prefix(row: dict[str, str], mode: str) -> str:
+    if mode == "none":
+        return ""
+    if mode != "task_stage":
+        raise SystemExit(f"Unsupported SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE: {mode}")
+    task_index = catalog_int(row, "task_index", -1)
+    stage = str(row.get("stage_name") or row.get("phase") or "unknown")
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{task_index}")
+    repo = str(row.get("repo") or "unknown")
+    prompt_hash = str(row.get("prompt_hash") or "")
+    return (
+        "[SPEC_PREFILL_TRAJECTORY_PROMPT="
+        f"task_{task_index:04d}|stage={stage}|instance={instance_id}|repo={repo}|prompt_hash={prompt_hash}"
+        "]\n\n"
+    )
+
+
+def select_trajectory_row(
+    rows: list[dict[str, str]],
+    *,
+    task_index: int,
+    stage: str,
+    label: str,
+) -> dict[str, str]:
+    task_rows = [row for row in rows if catalog_int(row, "task_index", -1) == task_index]
+    if not task_rows:
+        raise SystemExit(f"{label} trajectory task_index not found in catalog: {task_index}")
+    stage = stage.strip()
+    if stage:
+        stage_rows = [
+            row
+            for row in task_rows
+            if row.get("stage_name") == stage or row.get("phase") == stage
+        ]
+        if not stage_rows:
+            available = ", ".join(
+                sorted({row.get("stage_name") or row.get("phase") or "" for row in task_rows})
+            )
+            raise SystemExit(
+                f"{label} trajectory stage {stage!r} not found for task {task_index}. "
+                f"Available stages: {available}"
+            )
+        task_rows = stage_rows
+    return sorted(
+        task_rows,
+        key=lambda row: (catalog_int(row, "stage_index"), str(row.get("stage_name") or row.get("phase") or "")),
+    )[-1]
+
+
+def trajectory_prompt_spec(
+    rows: list[dict[str, str]],
+    *,
+    task_index: int,
+    stage: str,
+    label: str,
+    prefix_mode: str,
+) -> PromptSpec:
+    row = select_trajectory_row(rows, task_index=task_index, stage=stage, label=label)
+    prompt = trajectory_prompt_prefix(row, prefix_mode) + trajectory_prompt_text(row)
+    actual_stage = str(row.get("stage_name") or row.get("phase") or stage)
+    actual_task_index = catalog_int(row, "task_index", task_index)
+    instance_id = str(row.get("instance_id") or f"trajectory_task_{actual_task_index}")
+    repo = str(row.get("repo") or "")
+    family = (
+        f"swebench_trajectory:{actual_task_index}:{actual_stage}:"
+        f"{short_hash(instance_id + ':' + actual_stage)}"
+    )
+    return PromptSpec(
+        text=prompt,
+        family=family,
+        request_source="swebench_trajectory",
+        source_repo=repo,
+        source_instance_id=instance_id,
+        source_task_index=str(actual_task_index),
     )
 
 
@@ -648,6 +815,9 @@ def request_context(
     if request_source == "swebench_dataset":
         task_instance_id = source_instance_id or "swebench_dataset_speculative_prefill_probe"
         app_variant = "swebench_dataset_speculative_prefill_probe"
+    elif request_source == "swebench_trajectory":
+        task_instance_id = source_instance_id or "swebench_trajectory_speculative_prefill_probe"
+        app_variant = "swebench_trajectory_speculative_prefill_probe"
     else:
         task_instance_id = "synthetic_speculative_prefill_probe"
         app_variant = "synthetic_speculative_prefill_probe"
@@ -838,6 +1008,11 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
     if args.arm_filter != "both":
         arms = [arm for arm in arms if arm.arm == args.arm_filter]
     dataset = load_swebench_dataset_split(args) if args.request_source == "swebench_dataset" else None
+    trajectory_rows = (
+        read_trajectory_catalog(args.trajectory_prompt_catalog)
+        if args.request_source == "swebench_trajectory"
+        else None
+    )
     for idx, arm in enumerate(arms):
         if dataset is not None:
             arm_offset = 0 if arm.arm == "control" else args.swebench_protected_offset
@@ -848,6 +1023,25 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             turn_b_user_prompt = swebench_prompt_spec(
                 dataset,
                 dataset_index=args.swebench_turn_b_index + arm_offset,
+            )
+        elif trajectory_rows is not None:
+            arm_offset = 0 if arm.arm == "control" else args.trajectory_protected_offset
+            turn_b_task_index = args.trajectory_turn_b_task_index
+            if turn_b_task_index < 0:
+                turn_b_task_index = args.trajectory_turn_a_task_index
+            turn_a_prompt = trajectory_prompt_spec(
+                trajectory_rows,
+                task_index=args.trajectory_turn_a_task_index + arm_offset,
+                stage=args.trajectory_turn_a_stage,
+                label=f"{arm.arm} turn A",
+                prefix_mode=args.trajectory_prompt_prefix_mode,
+            )
+            turn_b_user_prompt = trajectory_prompt_spec(
+                trajectory_rows,
+                task_index=turn_b_task_index + arm_offset,
+                stage=args.trajectory_turn_b_stage,
+                label=f"{arm.arm} turn B",
+                prefix_mode=args.trajectory_prompt_prefix_mode,
             )
         else:
             turn_a_prompt = make_turn_a_prompt(
@@ -1316,9 +1510,36 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "swebench_protected_offset": (
             args.swebench_protected_offset if args.request_source == "swebench_dataset" else ""
         ),
+        "trajectory_prompt_catalog": (
+            args.trajectory_prompt_catalog if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_turn_a_task_index": (
+            args.trajectory_turn_a_task_index if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_turn_a_stage": (
+            args.trajectory_turn_a_stage if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_turn_b_task_index": (
+            (
+                args.trajectory_turn_a_task_index
+                if args.trajectory_turn_b_task_index < 0
+                else args.trajectory_turn_b_task_index
+            )
+            if args.request_source == "swebench_trajectory"
+            else ""
+        ),
+        "trajectory_turn_b_stage": (
+            args.trajectory_turn_b_stage if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_protected_offset": (
+            args.trajectory_protected_offset if args.request_source == "swebench_trajectory" else ""
+        ),
+        "trajectory_prompt_prefix_mode": (
+            args.trajectory_prompt_prefix_mode if args.request_source == "swebench_trajectory" else ""
+        ),
         "prompt_isolation_mode": args.prompt_isolation_mode,
-        "turn_a_words": args.turn_a_words if args.request_source == "synthetic" else "dataset",
-        "turn_b_words": args.turn_b_words if args.request_source == "synthetic" else "dataset",
+        "turn_a_words": args.turn_a_words if args.request_source == "synthetic" else args.request_source,
+        "turn_b_words": args.turn_b_words if args.request_source == "synthetic" else args.request_source,
         "output_tokens": args.output_len_tokens,
         "warmup_wait_ms": args.warmup_wait_ms,
         "control_turn_b_ms": control.get("turn_b_ms", ""),
@@ -1347,6 +1568,13 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- SWE-bench turn A index: `{summary['swebench_turn_a_index']}`",
         f"- SWE-bench turn B index: `{summary['swebench_turn_b_index']}`",
         f"- SWE-bench protected offset: `{summary['swebench_protected_offset']}`",
+        f"- Trajectory prompt catalog: `{summary['trajectory_prompt_catalog']}`",
+        f"- Trajectory turn A task index: `{summary['trajectory_turn_a_task_index']}`",
+        f"- Trajectory turn A stage: `{summary['trajectory_turn_a_stage']}`",
+        f"- Trajectory turn B task index: `{summary['trajectory_turn_b_task_index']}`",
+        f"- Trajectory turn B stage: `{summary['trajectory_turn_b_stage']}`",
+        f"- Trajectory protected offset: `{summary['trajectory_protected_offset']}`",
+        f"- Trajectory prompt prefix mode: `{summary['trajectory_prompt_prefix_mode']}`",
         f"- Prompt isolation mode: `{summary['prompt_isolation_mode']}`",
         f"- Turn A words: `{summary['turn_a_words']}`",
         f"- Turn B words: `{summary['turn_b_words']}`",

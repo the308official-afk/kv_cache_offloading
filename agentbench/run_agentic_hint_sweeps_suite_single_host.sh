@@ -248,6 +248,13 @@ SPEC_PREFILL_TURN_A_INDEX='${SPEC_PREFILL_TURN_A_INDEX:-}'
 SPEC_PREFILL_TURN_B_INDEX='${SPEC_PREFILL_TURN_B_INDEX:-}'
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
 SPEC_PREFILL_COMPARISON_MODE='${SPEC_PREFILL_COMPARISON_MODE:-}'
+SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG='${SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG:-}'
+SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX='${SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX:-}'
+SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE='${SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE:-}'
+SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX='${SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX:-}'
+SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE='${SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE:-}'
+SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET='${SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET:-}'
+SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE='${SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE:-}'
 EXP9_MODE='${EXP9_MODE:-}'
 EXP9_SYNTHETIC_RESET_MODE='${EXP9_SYNTHETIC_RESET_MODE:-}'
 EXP9_SWEBENCH_RESET_MODE='${EXP9_SWEBENCH_RESET_MODE:-}'
@@ -305,6 +312,7 @@ EXP11_PRIORITY_INTER_REQUEST_GAP_MS='${EXP11_PRIORITY_INTER_REQUEST_GAP_MS:-}'
 EXP12_MODE='${EXP12_MODE:-}'
 EXP12_SYNTHETIC_RESET_MODE='${EXP12_SYNTHETIC_RESET_MODE:-}'
 EXP12_SWEBENCH_RESET_MODE='${EXP12_SWEBENCH_RESET_MODE:-}'
+EXP12_TRAJECTORY_RESET_MODE='${EXP12_TRAJECTORY_RESET_MODE:-}'
 EXP12_SPEC_PREFILL_REQUEST_SOURCE='${EXP12_SPEC_PREFILL_REQUEST_SOURCE:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_DATASET='${EXP12_SPEC_PREFILL_SWEBENCH_DATASET:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_SPLIT='${EXP12_SPEC_PREFILL_SWEBENCH_SPLIT:-}'
@@ -312,6 +320,13 @@ EXP12_SPEC_PREFILL_TURN_A_INDEX='${EXP12_SPEC_PREFILL_TURN_A_INDEX:-}'
 EXP12_SPEC_PREFILL_TURN_B_INDEX='${EXP12_SPEC_PREFILL_TURN_B_INDEX:-}'
 EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET='${EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET:-}'
 EXP12_SPEC_PREFILL_COMPARISON_MODE='${EXP12_SPEC_PREFILL_COMPARISON_MODE:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG='${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX='${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE='${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX='${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE='${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET='${EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET:-}'
+EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE='${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE:-}'
 EXP12_SPEC_PREFILL_ATTRIBUTION_MODE='${EXP12_SPEC_PREFILL_ATTRIBUTION_MODE:-}'
 EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE='${EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE:-}'
 EXP12_SPEC_PREFILL_SWEEP_AXIS='${EXP12_SPEC_PREFILL_SWEEP_AXIS:-}'
@@ -630,6 +645,7 @@ canonical_suite_run() {
     exp11_trajectory|11_trajectory|priority_trajectory|priority_scheduling_trajectory) echo "exp11_trajectory" ;;
     exp12_synthetic|12_synthetic|spec_prefill_synthetic|speculative_prefill_synthetic) echo "exp12_synthetic" ;;
     exp12_swebench|12_swebench|spec_prefill_swebench|speculative_prefill_swebench) echo "exp12_swebench" ;;
+    exp12_trajectory|12_trajectory|spec_prefill_trajectory|speculative_prefill_trajectory) echo "exp12_trajectory" ;;
     exp13_synthetic|13_synthetic|latency_sensitivity_synthetic) echo "exp13_synthetic" ;;
     exp13_swebench|13_swebench|latency_sensitivity_swebench) echo "exp13_swebench" ;;
     *) return 1 ;;
@@ -1271,6 +1287,13 @@ run_experiment_12() {
   local exp12_turn_b_index
   local exp12_swebench_protected_offset
   local exp12_comparison_mode
+  local exp12_trajectory_prompt_catalog
+  local exp12_trajectory_turn_a_task_index
+  local exp12_trajectory_turn_a_stage
+  local exp12_trajectory_turn_b_task_index
+  local exp12_trajectory_turn_b_stage
+  local exp12_trajectory_protected_offset
+  local exp12_trajectory_prompt_prefix_mode
   local exp12_experiment_reset_mode
   exp12_sweep_axis="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_AXIS SPEC_PREFILL_SWEEP_AXIS)"
   exp12_sweep_values="$(resolve_value EXP12_SPEC_PREFILL_SWEEP_VALUES SPEC_PREFILL_SWEEP_VALUES)"
@@ -1286,6 +1309,13 @@ run_experiment_12() {
   exp12_turn_b_index="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_INDEX SPEC_PREFILL_TURN_B_INDEX)"
   exp12_swebench_protected_offset="$(resolve_value EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET)"
   exp12_comparison_mode="$(resolve_value EXP12_SPEC_PREFILL_COMPARISON_MODE SPEC_PREFILL_COMPARISON_MODE)"
+  exp12_trajectory_prompt_catalog="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG)"
+  exp12_trajectory_turn_a_task_index="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX)"
+  exp12_trajectory_turn_a_stage="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE)"
+  exp12_trajectory_turn_b_task_index="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX)"
+  exp12_trajectory_turn_b_stage="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE)"
+  exp12_trajectory_protected_offset="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET)"
+  exp12_trajectory_prompt_prefix_mode="$(resolve_value EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE)"
   exp12_experiment_reset_mode="$(case_experiment_reset_mode)"
   log
   prepare_fresh_runtime_for_experiment
@@ -1314,6 +1344,13 @@ spec_prefill_turn_a_index=${exp12_turn_a_index}
 spec_prefill_turn_b_index=${exp12_turn_b_index}
 spec_prefill_swebench_protected_offset=${exp12_swebench_protected_offset}
 spec_prefill_comparison_mode=${exp12_comparison_mode}
+spec_prefill_trajectory_prompt_catalog=${exp12_trajectory_prompt_catalog}
+spec_prefill_trajectory_turn_a_task_index=${exp12_trajectory_turn_a_task_index}
+spec_prefill_trajectory_turn_a_stage=${exp12_trajectory_turn_a_stage}
+spec_prefill_trajectory_turn_b_task_index=${exp12_trajectory_turn_b_task_index}
+spec_prefill_trajectory_turn_b_stage=${exp12_trajectory_turn_b_stage}
+spec_prefill_trajectory_protected_offset=${exp12_trajectory_protected_offset}
+spec_prefill_trajectory_prompt_prefix_mode=${exp12_trajectory_prompt_prefix_mode}
 EOF
   local -a env_args=(
     env
@@ -1343,6 +1380,13 @@ EOF
   [[ -n "${exp12_turn_b_index}" ]] && env_args+=(SPEC_PREFILL_TURN_B_INDEX="${exp12_turn_b_index}")
   [[ -n "${exp12_swebench_protected_offset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET="${exp12_swebench_protected_offset}")
   [[ -n "${exp12_comparison_mode}" ]] && env_args+=(SPEC_PREFILL_COMPARISON_MODE="${exp12_comparison_mode}")
+  [[ -n "${exp12_trajectory_prompt_catalog}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG="${exp12_trajectory_prompt_catalog}")
+  [[ -n "${exp12_trajectory_turn_a_task_index}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX="${exp12_trajectory_turn_a_task_index}")
+  [[ -n "${exp12_trajectory_turn_a_stage}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE="${exp12_trajectory_turn_a_stage}")
+  [[ -n "${exp12_trajectory_turn_b_task_index}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX="${exp12_trajectory_turn_b_task_index}")
+  [[ -n "${exp12_trajectory_turn_b_stage}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE="${exp12_trajectory_turn_b_stage}")
+  [[ -n "${exp12_trajectory_protected_offset}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET="${exp12_trajectory_protected_offset}")
+  [[ -n "${exp12_trajectory_prompt_prefix_mode}" ]] && env_args+=(SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE="${exp12_trajectory_prompt_prefix_mode}")
   if ! run_and_log "${env_args[@]}" "${wrapper}" "${MODEL}"; then
     status="failed"
     error_message="Experiment 12 wrapper failed"
@@ -1629,6 +1673,31 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_TURN_B_WORDS=""
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
+      ;;
+    exp12_trajectory)
+      set_case_reset_modes "${EXP12_TRAJECTORY_RESET_MODE}"
+      EXP12_MODE="${EXP12_TRAJECTORY_MODE}"
+      EXP12_SPEC_PREFILL_REQUEST_SOURCE="${EXP12_TRAJECTORY_SPEC_PREFILL_REQUEST_SOURCE}"
+      EXP12_SPEC_PREFILL_COMPARISON_MODE="${EXP12_TRAJECTORY_SPEC_PREFILL_COMPARISON_MODE}"
+      EXP12_SPEC_PREFILL_ATTRIBUTION_MODE=""
+      EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE=""
+      EXP12_SPEC_PREFILL_SWEEP_AXIS="${EXP12_TRAJECTORY_SPEC_PREFILL_SWEEP_AXIS}"
+      EXP12_SPEC_PREFILL_SWEEP_VALUES="${EXP12_TRAJECTORY_SPEC_PREFILL_SWEEP_VALUES}"
+      EXP12_SPEC_PREFILL_TURN_A_WORDS=""
+      EXP12_SPEC_PREFILL_TURN_B_WORDS=""
+      EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
+      EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
+      EXP12_SPEC_PREFILL_TURN_A_INDEX=""
+      EXP12_SPEC_PREFILL_TURN_B_INDEX=""
+      EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
+      EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG="${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX="${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE="${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX="${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE="${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET="${EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET}"
+      EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE="${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE}"
       ;;
     exp13_synthetic)
       set_case_reset_modes "${EXP13_SYNTHETIC_RESET_MODE}"

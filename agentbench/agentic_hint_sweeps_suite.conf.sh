@@ -176,6 +176,25 @@
 : "${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS:=128}"
 
 ###############################################################################
+# Experiment 12 trajectory prompts: Speculative prefill over Exp6 captured prompts
+###############################################################################
+
+: "${EXP12_TRAJECTORY_MODE:=all}"
+: "${EXP12_TRAJECTORY_RESET_MODE:=restart}"
+: "${EXP12_TRAJECTORY_SPEC_PREFILL_REQUEST_SOURCE:=swebench_trajectory}"
+: "${EXP12_TRAJECTORY_SPEC_PREFILL_COMPARISON_MODE:=same_task_isolated}"
+: "${EXP12_TRAJECTORY_SPEC_PREFILL_SWEEP_AXIS:=SPEC_PREFILL_WARMUP_WAIT_MS}"
+: "${EXP12_TRAJECTORY_SPEC_PREFILL_SWEEP_VALUES:=0 100 200 300 400 500 600 700 800 900 1000 1250 1500 1750 2000 2250 2500 2750 3000 3500 4000 4500 5000 6000 7000 8000 9000 10000 12000 15000}"
+: "${EXP12_TRAJECTORY_SPEC_PREFILL_OUTPUT_TOKENS:=128}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG:=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX:=0}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE:=planning}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX:=-1}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE:=execution}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET:=0}"
+: "${EXP12_SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE:=task_stage}"
+
+###############################################################################
 # Experiment 13 synthetic: Latency sensitivity
 ###############################################################################
 

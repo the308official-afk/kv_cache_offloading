@@ -9,7 +9,7 @@ This contract defines the public speculative-prefill microbenchmark.
 Workload
 --------
 
-Two-turn synthetic or direct SWE-bench task-level flow:
+Two-turn synthetic, direct SWE-bench task-level, or Exp6 trajectory-prompt flow:
 
 - turn A runs first
 - protected arm sends `speculative_prefill=true`
@@ -17,6 +17,9 @@ Two-turn synthetic or direct SWE-bench task-level flow:
 - turn B is compared between control and protected arms
 - in `SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset`, turn A and turn B are
   formatted from SWE-bench Pro task rows
+- in `SPEC_PREFILL_REQUEST_SOURCE=swebench_trajectory`, turn A and turn B are
+  read from the Exp6 trajectory prompt catalog, usually as two stages from the
+  same task, such as `planning -> execution`
 
 Public entrypoint
 -----------------
@@ -70,6 +73,13 @@ Public control surface
 - `SPEC_PREFILL_TURN_B_INDEX`
 - `SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET`
 - `SPEC_PREFILL_COMPARISON_MODE`
+- `SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG`
+- `SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX`
+- `SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE`
+- `SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX`
+- `SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE`
+- `SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET`
+- `SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE`
 - `RETENTION_PROMPT_ISOLATION_MODE`
 - `SGLANG_TRANSFER_LOG_PROFILE`
 - `WORKER_BASE_ARGS`
