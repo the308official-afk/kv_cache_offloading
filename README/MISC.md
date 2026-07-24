@@ -1,6 +1,26 @@
 # Misc Debug Notes
 
 ```bash
+Reusable Across AMD
+Internal GitHub repo: one shared home for code, scripts, configs, and reports
+Standard launch scripts: synthetic, dataset, and full trajectory runs from a common interface
+Runtime instrumentation knobs: capture internal metrics beyond standard logs
+Benchmark prep scripts: prepare real workloads for trajectory testing
+Synthetic stress knobs: push workloads to reveal best- and worst-case hint impact
+Common experiment contracts: consistent configs, outputs, and report formats
+Reusable reporting artifacts: CSVs, charts, and slide-ready outputs
+Pluggable testbed: swap models, runtimes, and policies without rebuilding the framework
+
+
+
+Shared internal repo: one source for code, configs, scripts, and reports
+Standard run modes: synthetic, dataset, and trajectory tests from the same launch surface
+Built-in instrumentation: runtime knobs for internal metrics beyond standard logs
+Reusable workload prep: scripts that turn real benchmarks into trajectory-ready inputs
+Portable evaluation framework: compare hints, models, runtimes, and policies with a common reporting format
+```
+
+```bash
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=gh200 \
@@ -13,16 +33,16 @@ SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE=planning \
 SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX=-1 \
 SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE=execution \
 SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE=task_stage \
-SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt \
+SPEC_PREFILL_REAL_TURN_B_MODE=short_followup \
 SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
-EXPERIMENT_RESET_MODE=flush \
+EXPERIMENT_RESET_MODE=restart \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT \
-SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75 100 150 200" \
-SPEC_PREFILL_WARMUP_WAIT_MS=1000 \
+SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75" \
+SPEC_PREFILL_WARMUP_WAIT_MS=5000 \
 SPEC_PREFILL_STREAM_RESPONSES=1 \
 SPEC_PREFILL_OUTPUT_TOKENS=128 \
-SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=512 \
-SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=128 \
+SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048 \
+SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8 \
 SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX=100 \
 SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS=1 \
 ./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
