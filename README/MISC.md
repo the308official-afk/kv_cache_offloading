@@ -10,6 +10,14 @@ Synthetic stress knobs: push workloads to reveal best- and worst-case hint impac
 Common experiment contracts: consistent configs, outputs, and report formats
 Reusable reporting artifacts: CSVs, charts, and slide-ready outputs
 Pluggable testbed: swap models, runtimes, and policies without rebuilding the framework
+
+
+
+Shared internal repo: one source for code, configs, scripts, and reports
+Standard run modes: synthetic, dataset, and trajectory tests from the same launch surface
+Built-in instrumentation: runtime knobs for internal metrics beyond standard logs
+Reusable workload prep: scripts that turn real benchmarks into trajectory-ready inputs
+Portable evaluation framework: compare hints, models, runtimes, and policies with a common reporting format
 ```
 
 ```bash
