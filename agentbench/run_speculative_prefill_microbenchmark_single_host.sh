@@ -32,7 +32,6 @@ PRECISE_START_MODE="${PRECISE_START_MODE:-clean}"
 if [[ "${SPEC_PREFILL_COMPARISON_MODE}" = "same_task_isolated" ]]; then
   SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=0
   SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET=0
-  EXPERIMENT_RESET_MODE=restart
 fi
 
 MICROBENCH_LATEST_PREFIX="experiments/reports/latest_speculative_prefill_microbenchmark"

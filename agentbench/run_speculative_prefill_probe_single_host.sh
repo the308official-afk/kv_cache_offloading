@@ -51,7 +51,6 @@ EXPERIMENT_RESET_STATE_FILE="${EXPERIMENT_RESET_STATE_FILE:-experiments/runtime_
 if [[ "${SPEC_PREFILL_COMPARISON_MODE}" = "same_task_isolated" ]]; then
   SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=0
   SPEC_PREFILL_TRAJECTORY_PROTECTED_OFFSET=0
-  EXPERIMENT_RESET_MODE=restart
 fi
 
 RUN_DIR="experiments/reports/speculative_prefill/${SPEC_PREFILL_ID}"
@@ -355,8 +354,21 @@ warn_if_worker_runtime_missing() {
   fi
 }
 
-restart_runtime_for_isolated_arm() {
+reset_runtime_for_isolated_arm() {
   local arm_label="$1"
+  if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+    echo "Flushing Dynamo for isolated ${arm_label} arm..." | tee -a "${DRIVER_LOG}"
+    runtime_flush "${RUNTIME_SIGNATURE}" | tee -a "${DRIVER_LOG}"
+    echo "KV cache flush complete. Reusing current worker/frontend stack." | tee -a "${DRIVER_LOG}"
+    print_flush_ready_banner | tee -a "${DRIVER_LOG}"
+    return 0
+  fi
+
+  if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]]; then
+    echo "No runtime reset requested before isolated ${arm_label} arm; reusing current worker/frontend stack." | tee -a "${DRIVER_LOG}"
+    return 0
+  fi
+
   echo "Restarting Dynamo for isolated ${arm_label} arm..." | tee -a "${DRIVER_LOG}"
   ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
   runtime_clear_active
@@ -464,6 +476,11 @@ if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${RUNTI
     fi
     runtime_mark_active "${RUNTIME_SIGNATURE}"
   else
+    if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+      echo "Reused runtime failed precise preflight during a flush run; stopping instead of restarting Dynamo." | tee -a "${DRIVER_LOG}"
+      echo "Start a clean runtime before rerunning, or fix the live runtime instrumentation." | tee -a "${DRIVER_LOG}"
+      exit 1
+    fi
     echo "Reused runtime failed precise preflight; falling back to a clean Dynamo restart for this run." | tee -a "${DRIVER_LOG}"
     ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
     RUNTIME_RESTART_REQUIRED=1
@@ -568,15 +585,15 @@ if [[ "${SPEC_PREFILL_COMPARISON_MODE}" = "same_task_isolated" ]]; then
     "${CONTROL_WORKER_RUNTIME_LOG}" \
     "${PROTECTED_WORKER_RUNTIME_LOG}"
 
-  echo "Running speculative-prefill control arm with isolated runtime..." | tee -a "${DRIVER_LOG}"
+  echo "Running speculative-prefill control arm with isolated cache state..." | tee -a "${DRIVER_LOG}"
   "${probe_cmd[@]}" --arm-filter control 2>&1 | tee -a "${DRIVER_LOG}"
   if capture_worker_runtime_log "${CONTROL_WORKER_RUNTIME_LOG}"; then
     echo "Captured control worker runtime log: ${CONTROL_WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"
   fi
 
-  restart_runtime_for_isolated_arm "protected"
+  reset_runtime_for_isolated_arm "protected"
 
-  echo "Running speculative-prefill protected arm with isolated runtime..." | tee -a "${DRIVER_LOG}"
+  echo "Running speculative-prefill protected arm with isolated cache state..." | tee -a "${DRIVER_LOG}"
   "${probe_cmd[@]}" --arm-filter protected --append-requests 2>&1 | tee -a "${DRIVER_LOG}"
   if capture_worker_runtime_log "${PROTECTED_WORKER_RUNTIME_LOG}"; then
     echo "Captured protected worker runtime log: ${PROTECTED_WORKER_RUNTIME_LOG}" | tee -a "${DRIVER_LOG}"

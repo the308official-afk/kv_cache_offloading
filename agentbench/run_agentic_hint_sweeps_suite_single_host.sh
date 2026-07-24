@@ -1861,7 +1861,7 @@ log "Wrapper stop Dynamo when done: ${WRAPPER_STOP_DYNAMO_WHEN_DONE}"
 case "${SUITE_ISOLATION_MODE}" in
   per_case)
     log "Suite runtime policy: restart between experiments, use each selected case's known-good reset mode"
-    log "Case reset policy: synthetic cases use flush; SWE-bench cases use restart"
+    log "Case reset policy: selected Exp 9/11/12/13 cases use flush between sweep values"
     log "Sweep prompt policy: different prompts across sweep values where supported"
     ;;
   clean)

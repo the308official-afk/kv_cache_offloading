@@ -2192,7 +2192,7 @@ SPEC_PREFILL_SWEBENCH_SPLIT=test \
 SPEC_PREFILL_TURN_A_INDEX=0 \
 SPEC_PREFILL_TURN_B_INDEX=1 \
 SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
-EXPERIMENT_RESET_MODE=restart \
+EXPERIMENT_RESET_MODE=flush \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
 SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
@@ -2206,7 +2206,7 @@ In this mode:
 - control turn A uses SWE-bench row `SPEC_PREFILL_TURN_A_INDEX`
 - control turn B uses SWE-bench row `SPEC_PREFILL_TURN_B_INDEX`
 - with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use those exact same rows
-- the helper restarts Dynamo between the control and protected arms, so the protected arm does not inherit the control arm's cache
+- `EXPERIMENT_RESET_MODE=flush` clears cache state between control/protected arms without restarting Dynamo
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
 
 ```bash
@@ -2553,7 +2553,8 @@ SPEC_PREFILL_PROMPT_ISOLATION_MODE
   - use each selected case's known-good reset mode
   - current defaults:
     - synthetic cases: `flush`
-    - SWE-bench Pro cases: `restart`
+    - SWE-bench Pro cases: `flush`
+    - trajectory cases: `flush`
 - `clean`
   - restart between experiments
   - restart between sweep values
@@ -2572,9 +2573,9 @@ Recommended:
 - `flush`: useful when you intentionally want every selected case to use flush
 - `fast`: quickest for iteration
 
-For the default mixed suite, do not force `SUITE_ISOLATION_MODE=flush` unless
-you intentionally want the SWE-bench cases to use flush too. The known-good
-SWE-bench cases currently use `restart`.
+For the default mixed suite, `per_case` now keeps the proven suite behavior:
+restart between experiments, and flush between sweep values for Exp 9, 11, 12,
+and 13 unless you explicitly override a case reset mode.
 
 ### Outputs
 

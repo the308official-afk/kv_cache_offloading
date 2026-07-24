@@ -103,7 +103,7 @@ Default proof settings
   - `test`
 - comparison mode:
   - `offset`
-  - use `same_task_isolated` for fair SWE-bench latency comparisons; this forces protected offset to `0` and restarts the runtime between control and protected arms
+  - use `same_task_isolated` for fair SWE-bench latency comparisons; this forces protected offset to `0`, while runtime reset still follows `EXPERIMENT_RESET_MODE`
 - worker args:
   - `--enable-cache-report --enable-priority-scheduling --radix-eviction-policy priority`
 

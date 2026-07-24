@@ -444,6 +444,11 @@ if [[ "${EXPERIMENT_RESET_MODE}" != "restart" ]] && runtime_reuse_ready "${RUNTI
     fi
     runtime_mark_active "${RUNTIME_SIGNATURE}"
   else
+    if [[ "${EXPERIMENT_RESET_MODE}" = "flush" ]]; then
+      echo "Reused runtime failed precise preflight during a flush run; stopping instead of restarting Dynamo." | tee -a "${DRIVER_LOG}"
+      echo "Start a clean runtime before rerunning, or fix the live runtime instrumentation." | tee -a "${DRIVER_LOG}"
+      exit 1
+    fi
     echo "Reused runtime failed precise preflight; falling back to a clean Dynamo restart for this run." | tee -a "${DRIVER_LOG}"
     ./run_dynamo_single_host.sh stop >> "${DRIVER_LOG}" 2>&1 || true
     RUNTIME_RESTART_REQUIRED=1
