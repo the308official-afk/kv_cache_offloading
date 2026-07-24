@@ -2182,29 +2182,31 @@ SPEC_PREFILL_OUTPUT_TOKENS=128 \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
 
-=== This works on GH200 with real SWE-bench Pro tasks? ===
+=== This works on GH200 with Exp6 trajectory prompts ===
 ```bash
 cd ~/kv_cache_offloading
 
 DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 SPEC_PREFILL_MODE=all \
-SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset \
-SPEC_PREFILL_REAL_TURN_B_MODE=long_followup \
-SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
-SPEC_PREFILL_SWEBENCH_SPLIT=test \
-SPEC_PREFILL_TURN_A_INDEX=0 \
-SPEC_PREFILL_TURN_B_INDEX=1 \
+SPEC_PREFILL_REQUEST_SOURCE=swebench_trajectory \
+SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
+SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX=0 \
+SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE=planning \
+SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX=-1 \
+SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE=execution \
+SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE=task_stage \
+SPEC_PREFILL_REAL_TURN_B_MODE=short_followup \
 SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
-EXPERIMENT_RESET_MODE=flush \
+EXPERIMENT_RESET_MODE=restart \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT \
-SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75 100 150 200" \
-SPEC_PREFILL_WARMUP_WAIT_MS=1000 \
+SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75" \
+SPEC_PREFILL_WARMUP_WAIT_MS=5000 \
 SPEC_PREFILL_STREAM_RESPONSES=1 \
 SPEC_PREFILL_OUTPUT_TOKENS=128 \
-SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=512 \
-SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=128 \
+SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048 \
+SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8 \
 SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX=100 \
 SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS=1 \
 ./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
@@ -2213,17 +2215,18 @@ SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS=1 \
 
 In this mode:
 
-- control turn A uses SWE-bench row `SPEC_PREFILL_TURN_A_INDEX`
-- `SPEC_PREFILL_REAL_TURN_B_MODE=long_followup` makes turn B a deterministic detailed follow-up after the same real task
-- `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup` is the smaller version of the same idea
-- the older `SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt` mode uses `SPEC_PREFILL_TURN_B_INDEX` as a full second SWE-bench prompt
-- `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=512` gives speculative prefill more prior assistant text to warm
-- `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=128` keeps the measured Turn B from becoming mostly decode time
+- turn A uses the Exp6 captured `planning` prompt for task `0`
+- turn B is a short follow-up for the same task, not a separate unrelated task
+- `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup` keeps Turn B cheap enough that prefill/TTFT gains are visible
+- `SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt` uses the full configured Turn B prompt, such as the captured `execution` trajectory prompt
+- `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048` gives speculative prefill more prior assistant text to warm
+- `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8` keeps the measured Turn B focused on prefill/TTFT instead of decode time
+- `SPEC_PREFILL_WARMUP_WAIT_MS=5000` gives the background prefill enough time to finish
 - `SPEC_PREFILL_STREAM_RESPONSES=1` lets the report measure Turn B time-to-first-token
 - `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT` sends unrelated requests between turn A and turn B
 - with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use the same real task setup as control
-- `EXPERIMENT_RESET_MODE=flush` clears cache state between control/protected arms without restarting Dynamo
-- `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
+- `EXPERIMENT_RESET_MODE=restart` gives clean isolation between control and protected arms
+- `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the trajectory catalog
 
 ```bash
 cd ~/kv_cache_offloading
@@ -2478,7 +2481,7 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 11 trajectory: priority scheduling over Exp6 captured trajectory prompts
 - Experiment 12 synthetic: speculative prefill
 - Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts with a long follow-up Turn B and inter-turn pressure
-- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a long follow-up Turn B and inter-turn pressure
+- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a short follow-up Turn B and inter-turn pressure
 - Experiment 13 synthetic: latency sensitivity
 - Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
 - Experiment 13 trajectory: latency sensitivity over Exp6 captured trajectory prompts
@@ -2498,6 +2501,7 @@ Experiment 12 suite defaults:
 
 - synthetic runs sweep `SPEC_PREFILL_WARMUP_WAIT_MS`
 - SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
+- the known-good trajectory setup uses `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup`, `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048`, `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8`, and `SPEC_PREFILL_WARMUP_WAIT_MS=5000`
 - the main real-data Exp12 chart is `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
 
 ### Run
