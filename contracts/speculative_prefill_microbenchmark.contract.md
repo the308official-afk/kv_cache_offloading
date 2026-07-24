@@ -72,6 +72,10 @@ Public control surface
 - `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS`
 - `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS`
 - `SPEC_PREFILL_WARMUP_WAIT_MS`
+- `SPEC_PREFILL_STREAM_RESPONSES`
+- `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
+- `SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX`
+- `SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS`
 - `SPEC_PREFILL_SWEEP_AXIS`
 - `SPEC_PREFILL_SWEEP_VALUES`
 - `SPEC_PREFILL_SWEEP_SEED_MODE`
@@ -134,6 +138,8 @@ Consolidated public outputs
 - `experiments/reports/latest_speculative_prefill_microbenchmark_summary.md`
 - `experiments/reports/latest_speculative_prefill_microbenchmark_run_contract.json`
 - `experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg`
+- `experiments/reports/latest_speculative_prefill_microbenchmark_turnb_ttft.svg`
+- `experiments/reports/latest_speculative_prefill_microbenchmark_turnb_ttft_gain.svg`
 
 Recommended matrix columns
 --------------------------
@@ -146,10 +152,17 @@ Recommended matrix columns
 - `request_source`
 - `comparison_mode`
 - `turn_a_ms`
+- `turn_a_ttft_ms`
 - `turn_b_ms`
+- `turn_b_ttft_ms`
 - `turn_b_gain_ms`
+- `turn_b_ttft_gain_ms`
 - `turn_b_cached`
 - `turn_b_reuse`
+- `interturn_distractor_count`
+- `interturn_distractor_success_count`
+- `interturn_distractor_ms_total`
+- `interturn_distractor_cached_total`
 - `prompt_isolation_mode`
 - `turn_a_prompt_family`
 - `turn_b_prompt_family`
@@ -185,7 +198,14 @@ Strong direct evidence means:
 
 - `prefill_sent=true`
 - `prefill_done=true`
-- and protected turn B is warmer or faster than control
+- and protected turn B has lower TTFT or lower total latency than control
+
+For real SWE-bench task prompts, the cleanest chart is usually:
+
+- `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
+
+That chart focuses on time-to-first-token, which is the part speculative
+prefill is most directly meant to reduce.
 
 Known failure signatures
 ------------------------

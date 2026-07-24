@@ -52,9 +52,13 @@ LATEST_REPORT_OUTPUTS=(
   "${MICROBENCH_LATEST_PREFIX}_run_contract.json"
   "${MICROBENCH_LATEST_PREFIX}_turnb_latency.svg"
   "${MICROBENCH_LATEST_PREFIX}_turnb_latency.png"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_ttft.svg"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_ttft.png"
   "${MICROBENCH_LATEST_PREFIX}_turnb_cached.svg"
   "${MICROBENCH_LATEST_PREFIX}_turnb_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_turnb_gain.png"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_ttft_gain.svg"
+  "${MICROBENCH_LATEST_PREFIX}_turnb_ttft_gain.png"
   "${MICROBENCH_LATEST_PREFIX}_latency_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_cache_gain.svg"
   "${MICROBENCH_LATEST_PREFIX}_chart_manifest.json"
@@ -87,19 +91,27 @@ prepare_shared_chart_dir() {
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_matrix.csv" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.svg" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_latency.png" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_ttft.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_ttft.png" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_cached.svg" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_gain.svg" \
     "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_gain.png" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_ttft_gain.svg" \
+    "${SHARED_CHART_DIR}/latest_speculative_prefill_microbenchmark_turnb_ttft_gain.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_matrix.csv" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.png" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.png" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg" \
+    "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.png" \
     "${SHARED_CHART_DIR}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_specprefill_turna_latency_vs_warmup_wait.svg" \
     "${SHARED_CHART_DIR}/exp12_decision_proof.csv" \
@@ -209,6 +221,10 @@ Workload defaults:
   turn_a_output_tokens=${SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}
   turn_b_output_tokens=${SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}
   warmup_wait_ms=${SPEC_PREFILL_WARMUP_WAIT_MS}
+  stream_responses=${SPEC_PREFILL_STREAM_RESPONSES}
+  interturn_distractor_count=${SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT}
+  interturn_distractor_start_index=${SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX}
+  interturn_distractor_output_tokens=${SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS}
   sweep_axis=${SPEC_PREFILL_SWEEP_AXIS}
   sweep_values=${SPEC_PREFILL_SWEEP_VALUES}
   request_source=${SPEC_PREFILL_REQUEST_SOURCE}
@@ -296,6 +312,10 @@ keys = [
     "SPEC_PREFILL_TURN_A_OUTPUT_TOKENS",
     "SPEC_PREFILL_TURN_B_OUTPUT_TOKENS",
     "SPEC_PREFILL_WARMUP_WAIT_MS",
+    "SPEC_PREFILL_STREAM_RESPONSES",
+    "SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT",
+    "SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX",
+    "SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS",
     "SPEC_PREFILL_SWEEP_AXIS",
     "SPEC_PREFILL_SWEEP_VALUES",
     "SPEC_PREFILL_REQUEST_SOURCE",
@@ -397,20 +417,36 @@ build_microbenchmark_charts() {
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${MICROBENCH_LATEST_PREFIX}_turnb_latency.png"
   fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_ttft.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.png" "${MICROBENCH_LATEST_PREFIX}_turnb_ttft.png"
+  fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_gain.svg"
   fi
   if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]]; then
     cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${MICROBENCH_LATEST_PREFIX}_turnb_gain.png"
   fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.svg" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.svg" "${MICROBENCH_LATEST_PREFIX}_turnb_ttft_gain.svg"
+  fi
+  if [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.png" ]]; then
+    cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.png" "${MICROBENCH_LATEST_PREFIX}_turnb_ttft_gain.png"
+  fi
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.png"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_latency.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_latency_vs_warmup_wait.png"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.png"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${SHARED_CHART_DIR}/exp12_specprefill_latency_gain_vs_warmup_wait.png"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg"
   [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_gain.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_gain_vs_warmup_wait.png"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.svg" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.svg" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg"
+  [[ -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.png" ]] && cp -f "${MICROBENCH_OUT_DIR}/charts/turnb_ttft_gain.png" "${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.png"
   return 0
 }
 
@@ -452,6 +488,10 @@ run_probe_mode() {
     SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}" \
     SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}" \
     SPEC_PREFILL_WARMUP_WAIT_MS="${SPEC_PREFILL_WARMUP_WAIT_MS}" \
+    SPEC_PREFILL_STREAM_RESPONSES="${SPEC_PREFILL_STREAM_RESPONSES}" \
+    SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT}" \
+    SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX}" \
+    SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS}" \
     SPEC_PREFILL_REQUEST_SOURCE="${SPEC_PREFILL_REQUEST_SOURCE}" \
     SPEC_PREFILL_REAL_TURN_B_MODE="${SPEC_PREFILL_REAL_TURN_B_MODE}" \
     SPEC_PREFILL_SWEBENCH_DATASET="${SPEC_PREFILL_SWEBENCH_DATASET}" \
@@ -515,6 +555,10 @@ run_sweep_mode() {
       SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}" \
       SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}" \
       SPEC_PREFILL_WARMUP_WAIT_MS="${SPEC_PREFILL_WARMUP_WAIT_MS}" \
+      SPEC_PREFILL_STREAM_RESPONSES="${SPEC_PREFILL_STREAM_RESPONSES}" \
+      SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT}" \
+      SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX}" \
+      SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS}" \
       SPEC_PREFILL_REQUEST_SOURCE="${SPEC_PREFILL_REQUEST_SOURCE}" \
       SPEC_PREFILL_REAL_TURN_B_MODE="${SPEC_PREFILL_REAL_TURN_B_MODE}" \
       SPEC_PREFILL_SWEBENCH_DATASET="${SPEC_PREFILL_SWEBENCH_DATASET}" \
@@ -571,7 +615,9 @@ Run directory: ${MICROBENCH_OUT_DIR}
 Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Chart source matrix: ${SPEC_PREFILL_PLOT_MATRIX_CSV:-${MICROBENCH_LATEST_PREFIX}_matrix.csv}
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
+Turn B TTFT chart: ${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg
 Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
+Shared TTFT chart: ${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.svg
 Decision proof: experiments/reports/latest_exp12_decision_proof.md
 Shared proof: ${SHARED_CHART_DIR}/exp12_decision_proof.md
 EOF
@@ -583,7 +629,9 @@ Run contract: ${MICROBENCH_OUT_DIR}/run_contract.json
 Microbenchmark matrix: ${MICROBENCH_OUT_DIR}/microbenchmark_matrix.csv
 Microbenchmark summary md: ${MICROBENCH_OUT_DIR}/microbenchmark_summary.md
 Turn B latency chart: ${MICROBENCH_OUT_DIR}/charts/turnb_latency.svg
+Turn B TTFT chart: ${MICROBENCH_OUT_DIR}/charts/turnb_ttft.svg
 Shared chart: ${SHARED_CHART_DIR}/exp12_specprefill_latency_vs_warmup_wait.svg
+Shared TTFT chart: ${SHARED_CHART_DIR}/exp12_specprefill_turn_b_ttft_vs_sweep.svg
 Decision proof: experiments/reports/latest_exp12_decision_proof.md
 Shared proof: ${SHARED_CHART_DIR}/exp12_decision_proof.md
 Last probe run id: ${LAST_PROBE_RUN_ID:-<none>}

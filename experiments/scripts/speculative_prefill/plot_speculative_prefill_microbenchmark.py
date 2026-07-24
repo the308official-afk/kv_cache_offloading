@@ -212,10 +212,12 @@ def main() -> None:
         control_latency = [parse_int(row.get("turn_b_ms")) or 0 for row in by_arm["control"]]
         protected_latency = [parse_int(row.get("turn_b_ms")) or 0 for row in by_arm["protected"]]
 
+        sweep_axis = sweep_rows[0].get("sweep_axis", "sweep") if sweep_rows else "sweep"
+
         write_svg(
             out_dir / "turnb_latency.svg",
             build_line_chart_svg(
-                title="Experiment 12: Turn B Latency vs Warmup Wait",
+                title="Experiment 12: Turn B Latency vs Sweep",
                 subtitle="If background prefill helps, the speculative-prefill curve should sit below control.",
                 labels=labels,
                 series=[
@@ -223,6 +225,21 @@ def main() -> None:
                     ("Speculative prefill", "#16a34a", protected_latency),
                 ],
                 y_label="Turn B Latency (ms)",
+            ),
+        )
+        control_ttft = [parse_int(row.get("turn_b_ttft_ms")) or 0 for row in by_arm["control"]]
+        protected_ttft = [parse_int(row.get("turn_b_ttft_ms")) or 0 for row in by_arm["protected"]]
+        write_svg(
+            out_dir / "turnb_ttft.svg",
+            build_line_chart_svg(
+                title="Experiment 12: Turn B TTFT vs Sweep",
+                subtitle=f"Sweep axis: {sweep_axis}. This is the primary Dynamo speculative-prefill signal.",
+                labels=labels,
+                series=[
+                    ("Control", "#94a3b8", control_ttft),
+                    ("Speculative prefill", "#16a34a", protected_ttft),
+                ],
+                y_label="Turn B TTFT (ms)",
             ),
         )
         gains: list[int] = []
@@ -238,12 +255,26 @@ def main() -> None:
                 y_label="Turn B Latency Gain (ms)",
             ),
         )
+        ttft_gains: list[int] = []
+        for control, protected in zip(control_ttft, protected_ttft):
+            ttft_gains.append(control - protected)
+        write_svg(
+            out_dir / "turnb_ttft_gain.svg",
+            build_line_chart_svg(
+                title="Experiment 12: Turn B TTFT Gain vs Sweep",
+                subtitle="Positive values mean speculative prefill lowered time to first token.",
+                labels=labels,
+                series=[("Speculative prefill TTFT gain", "#16a34a", ttft_gains)],
+                y_label="Turn B TTFT Gain (ms)",
+            ),
+        )
 
         return
 
     labels = [row.get("arm", "") for row in rows]
     colors = [color_for_arm(row.get("arm", "")) for row in rows]
     latency_values = [parse_int(row.get("turn_b_ms")) or 0 for row in rows]
+    ttft_values = [parse_int(row.get("turn_b_ttft_ms")) or 0 for row in rows]
 
     write_svg(
         out_dir / "turnb_latency.svg",
@@ -254,6 +285,17 @@ def main() -> None:
             values=latency_values,
             colors=colors,
             y_label="Turn B Latency (ms)",
+        ),
+    )
+    write_svg(
+        out_dir / "turnb_ttft.svg",
+        build_bar_chart_svg(
+            title="Speculative Prefill: Turn B TTFT",
+            subtitle="Protected turn B should drop if speculative prefill warmed the next-turn prefix.",
+            labels=labels,
+            values=ttft_values,
+            colors=colors,
+            y_label="Turn B TTFT (ms)",
         ),
     )
 

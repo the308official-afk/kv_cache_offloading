@@ -2133,6 +2133,8 @@ Across the sweep:
 
 - one public knob changes between runs
 - most commonly that knob is `SPEC_PREFILL_WARMUP_WAIT_MS`
+- for real SWE-bench runs, the recommended knob is now
+  `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
 - the turn structure stays the same unless you override it
 - the important question is whether protected turn B gets faster once the
   speculative warmup has more time to help
@@ -2149,7 +2151,8 @@ Columns to check first:
 - hint identity: `spec_prefill`
 - runtime proof: `prefill_spawned`, `prefill_sent`, `prefill_done`, `prefill_target_seen`
 - isolation proof: `prompt_isolation_mode`
-- performance effect: `turn_b_ms`, `turn_b_gain_ms`, `effect`
+- pressure proof: `interturn_distractor_count`, `interturn_distractor_success_count`
+- performance effect: `turn_b_ttft_ms`, `turn_b_ttft_gain_ms`, `turn_b_ms`, `turn_b_gain_ms`, `effect`
 
 ### Worked Success Example
 
@@ -2195,11 +2198,15 @@ SPEC_PREFILL_TURN_B_INDEX=1 \
 SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
 EXPERIMENT_RESET_MODE=flush \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT \
+SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75 100 150 200" \
+SPEC_PREFILL_WARMUP_WAIT_MS=1000 \
+SPEC_PREFILL_STREAM_RESPONSES=1 \
 SPEC_PREFILL_OUTPUT_TOKENS=128 \
 SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=512 \
 SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=128 \
+SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX=100 \
+SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS=1 \
 ./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
   Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
 ```
@@ -2212,6 +2219,8 @@ In this mode:
 - the older `SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt` mode uses `SPEC_PREFILL_TURN_B_INDEX` as a full second SWE-bench prompt
 - `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=512` gives speculative prefill more prior assistant text to warm
 - `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=128` keeps the measured Turn B from becoming mostly decode time
+- `SPEC_PREFILL_STREAM_RESPONSES=1` lets the report measure Turn B time-to-first-token
+- `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT` sends unrelated requests between turn A and turn B
 - with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use the same real task setup as control
 - `EXPERIMENT_RESET_MODE=flush` clears cache state between control/protected arms without restarting Dynamo
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
@@ -2242,6 +2251,10 @@ SPEC_PREFILL_TURN_A_WORDS
 SPEC_PREFILL_TURN_B_WORDS
 SPEC_PREFILL_OUTPUT_TOKENS
 SPEC_PREFILL_WARMUP_WAIT_MS
+SPEC_PREFILL_STREAM_RESPONSES
+SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT
+SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX
+SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS
 SPEC_PREFILL_SWEEP_AXIS
 SPEC_PREFILL_SWEEP_VALUES
 SPEC_PREFILL_SWEEP_SEED_MODE
@@ -2284,6 +2297,8 @@ Main outputs:
 - `experiments/charts/exp12_specprefill_latency_vs_warmup_wait.svg`
 - `experiments/charts/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg`: clearer alias for the main Turn B latency chart
 - `experiments/charts/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg`: optional gain chart; positive values mean speculative prefill helped
+- `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`: main real-data chart; protected should be lower
+- `experiments/charts/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg`: positive values mean speculative prefill improved time-to-first-token
 
 ### Debug
 
@@ -2333,8 +2348,8 @@ Decision-proof columns:
 
 | Step | When | Where | What It Means | Code Snippet | Runtime Signal |
 |---:|---|---|---|---|---|
-| 1 | Harness attaches speculative-prefill hint | [`run_speculative_prefill_probe.py:716`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:716) | The protected arm sends `nvext.agent_hints.speculative_prefill=true`. | `"speculative_prefill": spec_prefill` | `hint_status=on` / `spec_prefill=True` |
-| 2 | Harness names the target turn B request | [`run_speculative_prefill_probe.py:718`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:718) | The hint carries the exact turn-B request id that the warmup should target. | `"spec_prefill_target_request_id": target_request_id` | `spec_prefill_target_request_id` / `prefill_target_seen` |
+| 1 | Harness attaches speculative-prefill hint | [`run_speculative_prefill_probe.py:1182`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1182) | The protected arm sends `nvext.agent_hints.speculative_prefill=true`. | `"speculative_prefill": spec_prefill` | `hint_status=on` / `spec_prefill=True` |
+| 2 | Harness names the target turn B request | [`run_speculative_prefill_probe.py:1184`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1184) | The hint carries the exact turn-B request id that the warmup should target. | `"spec_prefill_target_request_id": target_request_id` | `spec_prefill_target_request_id` / `prefill_target_seen` |
 | 3 | Dynamo declares the typed hint field | [`nvext.rs:426`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/protocols/openai/nvext.rs:426) | Dynamo's OpenAI `nvext` schema has a real `speculative_prefill` field. | `pub speculative_prefill: Option<bool>` | source schema + protected hint row |
 | 4 | Dynamo calls the speculative-prefill wrapper | [`preprocessor.rs:1819`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor.rs:1819) | The normal response stream passes through the speculative-prefill decision path. | `let final_stream = speculative_prefill::maybe_wrap_stream(` | `worker.spec_prefill.wrap_checked` |
 | 5 | Prefill gate reads the hint | [`speculative_prefill.rs:198`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:198) | The decision gate reads `hints.speculative_prefill` and decides whether to continue. | `.and_then(\|hints\| hints.speculative_prefill)` | `worker.spec_prefill.wrap_checked enabled=true` |
@@ -2342,12 +2357,12 @@ Decision-proof columns:
 | 7 | Warmup prompt is rendered | [`speculative_prefill.rs:327`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:327) | Dynamo rendered the predicted next-turn prefix and counted its tokens. | `"worker.spec_prefill.prefill_rendered"` | `worker.spec_prefill.prefill_rendered` / `prefill_tokens` |
 | 8 | Warmup request is sent | [`speculative_prefill.rs:356`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:356) | Dynamo sends the synthetic `max_tokens=1` warmup request into the backend path. | `"worker.spec_prefill.prefill_sent"` | `worker.spec_prefill.prefill_sent` / `prefill_sent` |
 | 9 | Warmup request completes | [`speculative_prefill.rs:374`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/upstream/dynamo/lib/llm/src/preprocessor/speculative_prefill.rs:374) | Dynamo drains the warmup stream so the prefill lifecycle completes. | `"worker.spec_prefill.prefill_completed"` | `worker.spec_prefill.prefill_completed` / `prefill_done` |
-| 10 | Probe parses worker speculative-prefill events | [`run_speculative_prefill_probe.py:1000`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1000) | Postprocess collects `worker.spec_prefill.*` events from the worker runtime log. | `elif event_type.startswith("worker.spec_prefill."):` | `spec_events` |
-| 11 | Probe maps events into proof columns | [`run_speculative_prefill_probe.py:1166`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1166) | The raw runtime events become `prefill_wrap`, `prefill_spawned`, `prefill_sent`, `prefill_done`, and `prefill_target_seen`. | `"prefill_wrap": wrap_status`<br>`"prefill_spawned": "worker.spec_prefill.task_spawned" in event_types` | `prefill_*` columns |
-| 12 | Probe classifies the effect | [`run_speculative_prefill_probe.py:1221`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1221) | The probe marks whether the protected arm had direct/inferred prefill evidence and whether turn B was faster. | `effect_status = "faster_direct"` | `effect_status` / `effect` |
-| 13 | Microbenchmark report normalizes matrix rows | [`build_speculative_prefill_microbenchmark_report.py:176`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:176) | The public report carries the probe proof fields into one compact matrix. | `def normalize_matrix_rows(` | `latest_speculative_prefill_microbenchmark_matrix.csv` |
-| 14 | Microbenchmark report carries prefill columns | [`build_speculative_prefill_microbenchmark_report.py:205`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:205) | The compact matrix keeps the direct proof columns used by slides and debugging. | `"prefill_wrap": pick(row, "prefill_wrap")` | `prefill_wrap` / `prefill_sent` / `prefill_done` |
-| 15 | Microbenchmark report writes public outputs | [`build_speculative_prefill_microbenchmark_report.py:352`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:352) | The final public matrix and summary are written from the normalized rows. | `write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)` | `microbenchmark_matrix.csv` / `microbenchmark_summary.csv` |
+| 10 | Probe parses worker speculative-prefill events | [`run_speculative_prefill_probe.py:1543`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1543) | Postprocess collects `worker.spec_prefill.*` events from the worker runtime log. | `elif event_type.startswith("worker.spec_prefill."):` | `spec_events` |
+| 11 | Probe maps events into proof columns | [`run_speculative_prefill_probe.py:1717`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1717) | The raw runtime events become `prefill_wrap`, `prefill_spawned`, `prefill_sent`, `prefill_done`, and `prefill_target_seen`. | `"prefill_wrap": wrap_status`<br>`"prefill_spawned": "worker.spec_prefill.task_spawned" in event_types` | `prefill_*` columns |
+| 12 | Probe classifies the effect | [`run_speculative_prefill_probe.py:1789`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py:1789) | The probe marks whether the protected arm had direct/inferred prefill evidence and whether turn B TTFT or full latency improved. | `effect_status = "faster_direct_ttft"` | `effect_status` / `effect` |
+| 13 | Microbenchmark report normalizes matrix rows | [`build_speculative_prefill_microbenchmark_report.py:194`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:194) | The public report carries the probe proof fields into one compact matrix. | `def normalize_matrix_rows(` | `latest_speculative_prefill_microbenchmark_matrix.csv` |
+| 14 | Microbenchmark report carries prefill columns | [`build_speculative_prefill_microbenchmark_report.py:231`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:231) | The compact matrix keeps the direct proof columns used by slides and debugging. | `"prefill_wrap": pick(row, "prefill_wrap")` | `prefill_wrap` / `prefill_sent` / `prefill_done` |
+| 15 | Microbenchmark report writes public outputs | [`build_speculative_prefill_microbenchmark_report.py:398`](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py:398) | The final public matrix and summary are written from the normalized rows. | `write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)` | `microbenchmark_matrix.csv` / `microbenchmark_summary.csv` |
 
 Simple reading: the first rows prove the harness sent the hint and target, the
 middle rows prove Dynamo executed the speculative-prefill path, and the final
@@ -2390,6 +2405,12 @@ SPEC_PREFILL_TURN_A_WORDS
 SPEC_PREFILL_TURN_B_WORDS
 SPEC_PREFILL_OUTPUT_TOKENS
 SPEC_PREFILL_WARMUP_WAIT_MS
+SPEC_PREFILL_STREAM_RESPONSES
+SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT
+SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX
+SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS
+SPEC_PREFILL_SWEEP_AXIS
+SPEC_PREFILL_SWEEP_VALUES
 SPEC_PREFILL_REQUEST_CONTEXT_MODE
 ```
 
@@ -2456,8 +2477,8 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
 - Experiment 11 trajectory: priority scheduling over Exp6 captured trajectory prompts
 - Experiment 12 synthetic: speculative prefill
-- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts with a long follow-up Turn B
-- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a long follow-up Turn B
+- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts with a long follow-up Turn B and inter-turn pressure
+- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a long follow-up Turn B and inter-turn pressure
 - Experiment 13 synthetic: latency sensitivity
 - Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
 - Experiment 13 trajectory: latency sensitivity over Exp6 captured trajectory prompts
@@ -2472,6 +2493,12 @@ Default prompt-isolation policy:
 
 - `RETENTION_PROMPT_ISOLATION_MODE=disjoint` for retention-style prompts
 - `SPEC_PREFILL_PROMPT_ISOLATION_MODE=disjoint` for Experiment 12
+
+Experiment 12 suite defaults:
+
+- synthetic runs sweep `SPEC_PREFILL_WARMUP_WAIT_MS`
+- SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
+- the main real-data Exp12 chart is `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
 
 ### Run
 

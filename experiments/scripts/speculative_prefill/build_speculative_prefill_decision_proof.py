@@ -35,7 +35,7 @@ PROOF_STEPS = [
         1,
         "Harness attaches speculative-prefill hint",
         "experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py",
-        716,
+        1182,
         "The protected arm sends `nvext.agent_hints.speculative_prefill=true`.",
         '"speculative_prefill": spec_prefill',
         "hint_status=on / spec_prefill=True",
@@ -49,7 +49,7 @@ PROOF_STEPS = [
         2,
         "Harness names the target turn B request",
         "experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py",
-        718,
+        1184,
         "The hint carries the exact turn-B request id that the warmup should target.",
         '"spec_prefill_target_request_id": target_request_id',
         "spec_prefill_target_request_id / prefill_target_seen",
@@ -161,7 +161,7 @@ PROOF_STEPS = [
         10,
         "Probe parses worker speculative-prefill events",
         "experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py",
-        1000,
+        1543,
         "Postprocess collects `worker.spec_prefill.*` events from the worker runtime log.",
         'elif event_type.startswith("worker.spec_prefill."):',
         "spec_events",
@@ -175,7 +175,7 @@ PROOF_STEPS = [
         11,
         "Probe maps events into proof columns",
         "experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py",
-        1166,
+        1717,
         "The raw runtime events become `prefill_wrap`, `prefill_spawned`, `prefill_sent`, `prefill_done`, and `prefill_target_seen`.",
         '"prefill_wrap": wrap_status\n"prefill_spawned": "worker.spec_prefill.task_spawned" in event_types',
         "prefill_* columns",
@@ -189,9 +189,9 @@ PROOF_STEPS = [
         12,
         "Probe classifies the effect",
         "experiments/scripts/speculative_prefill/run_speculative_prefill_probe.py",
-        1221,
-        "The probe marks whether the protected arm had direct/inferred prefill evidence and whether turn B was faster.",
-        'effect_status = "faster_direct"',
+        1789,
+        "The probe marks whether the protected arm had direct/inferred prefill evidence and whether turn B TTFT or full latency improved.",
+        'effect_status = "faster_direct_ttft"',
         "effect_status / effect",
         "turn_b",
         "protected",
@@ -203,7 +203,7 @@ PROOF_STEPS = [
         13,
         "Microbenchmark report normalizes matrix rows",
         "experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py",
-        176,
+        194,
         "The public report carries the probe proof fields into one compact matrix.",
         "def normalize_matrix_rows(",
         "latest_speculative_prefill_microbenchmark_matrix.csv",
@@ -217,7 +217,7 @@ PROOF_STEPS = [
         14,
         "Microbenchmark report carries prefill columns",
         "experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py",
-        205,
+        231,
         "The compact matrix keeps the direct proof columns used by slides and debugging.",
         '"prefill_wrap": pick(row, "prefill_wrap")',
         "prefill_wrap/prefill_sent/prefill_done",
@@ -231,7 +231,7 @@ PROOF_STEPS = [
         15,
         "Microbenchmark report writes public outputs",
         "experiments/scripts/speculative_prefill/build_speculative_prefill_microbenchmark_report.py",
-        352,
+        398,
         "The final public matrix and summary are written from the normalized rows.",
         'write_csv(out_dir / "microbenchmark_matrix.csv", matrix_rows, MATRIX_COLUMNS)',
         "microbenchmark_matrix.csv / microbenchmark_summary.csv",
@@ -416,7 +416,9 @@ def direct_or_inferred_prefill_seen(row: dict[str, str]) -> bool:
         return True
     if effect in {
         "faster_direct",
+        "faster_direct_ttft",
         "faster_inferred",
+        "faster_inferred_ttft",
         "direct_no_visible_gain",
         "inferred_no_visible_gain",
         "sent_no_visible_gain",
@@ -536,6 +538,7 @@ def build_checks(
     done_seen = any(truthy(row.get("prefill_done")) for row in protected) or done_count > 0
     usable_effect = any(direct_or_inferred_prefill_seen(row) for row in protected)
     positive_latency_gain = any(to_int(row.get("turn_b_gain_ms")) > 0 for row in protected)
+    positive_ttft_gain = any(to_int(row.get("turn_b_ttft_gain_ms")) > 0 for row in protected)
     prefill_columns = bool(protected) and all(
         key in protected[0]
         for key in ("prefill_wrap", "prefill_spawned", "prefill_sent", "prefill_done", "prefill_target_seen")
@@ -599,9 +602,9 @@ def build_checks(
             f"protected_rows={len(protected)}; prefill_columns_present={prefill_columns}",
         ),
         "effect_visible": (
-            usable_effect or positive_latency_gain,
+            usable_effect or positive_latency_gain or positive_ttft_gain,
             "matrix CSV",
-            f"effects={sorted({row.get('effect') or row.get('effect_status') or '' for row in protected})}; positive_latency_gain={positive_latency_gain}",
+            f"effects={sorted({row.get('effect') or row.get('effect_status') or '' for row in protected})}; positive_latency_gain={positive_latency_gain}; positive_ttft_gain={positive_ttft_gain}",
         ),
         "public_matrix_present": (
             bool(protected),

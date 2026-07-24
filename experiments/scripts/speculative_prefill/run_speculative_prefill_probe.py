@@ -44,6 +44,7 @@ REQUEST_COLUMNS = [
     "request_id",
     "hint_probe_id",
     "latency_ms",
+    "ttft_ms",
     "status",
     "error",
     "prompt_tokens",
@@ -67,10 +68,17 @@ MATRIX_COLUMNS = [
     "request_source",
     "real_turn_b_mode",
     "turn_a_ms",
+    "turn_a_ttft_ms",
     "turn_b_ms",
+    "turn_b_ttft_ms",
     "turn_b_latency_gain_ms",
+    "turn_b_ttft_gain_ms",
     "turn_b_cached",
     "turn_b_reuse",
+    "interturn_distractor_count",
+    "interturn_distractor_success_count",
+    "interturn_distractor_ms_total",
+    "interturn_distractor_cached_total",
     "turn_a_prompt_family",
     "turn_b_prompt_family",
     "turn_a_prompt_hash",
@@ -119,9 +127,16 @@ SUMMARY_COLUMNS = [
     "turn_a_output_tokens",
     "turn_b_output_tokens",
     "warmup_wait_ms",
+    "stream_responses",
+    "interturn_distractor_count",
+    "interturn_distractor_start_index",
+    "interturn_distractor_output_tokens",
     "control_turn_b_ms",
+    "control_turn_b_ttft_ms",
     "protected_turn_b_ms",
+    "protected_turn_b_ttft_ms",
     "turn_b_latency_delta_ms",
+    "turn_b_ttft_delta_ms",
     "control_turn_b_cached",
     "protected_turn_b_cached",
     "turn_b_cached_delta",
@@ -151,6 +166,10 @@ class PromptSpec:
 
 def now_run_id() -> str:
     return f"speculative_prefill_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+
+def env_truthy(name: str, default: str = "0") -> bool:
+    return os.environ.get(name, default).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -213,6 +232,30 @@ def parse_args() -> argparse.Namespace:
         "--warmup-wait-ms",
         type=int,
         default=int(os.environ.get("SPEC_PREFILL_WARMUP_WAIT_MS", "500")),
+    )
+    parser.add_argument(
+        "--stream-responses",
+        action=argparse.BooleanOptionalAction,
+        default=env_truthy("SPEC_PREFILL_STREAM_RESPONSES", "1"),
+        help="Use streaming chat completions so the probe can measure TTFT.",
+    )
+    parser.add_argument(
+        "--interturn-distractor-count",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT", "0")),
+        help="Number of unrelated pressure requests to send between Turn A and Turn B.",
+    )
+    parser.add_argument(
+        "--interturn-distractor-start-index",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX", "100")),
+        help="Starting dataset/catalog/synthetic index for inter-turn pressure requests.",
+    )
+    parser.add_argument(
+        "--interturn-distractor-output-len-tokens",
+        type=int,
+        default=int(os.environ.get("SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS", "1")),
+        help="Max output tokens for each inter-turn pressure request.",
     )
     parser.add_argument("--seed", type=int, default=int(os.environ.get("SPEC_PREFILL_SEED", "42")))
     parser.add_argument(
@@ -552,6 +595,83 @@ def real_followup_prompt_spec(turn_a: PromptSpec, *, stage: str = "", mode: str)
     )
 
 
+def trajectory_task_indexes(rows: list[dict[str, str]]) -> list[int]:
+    indexes = sorted({catalog_int(row, "task_index", -1) for row in rows})
+    return [idx for idx in indexes if idx >= 0]
+
+
+def build_interturn_distractor_specs(
+    args: argparse.Namespace,
+    *,
+    dataset: Any | None,
+    trajectory_rows: list[dict[str, str]] | None,
+    arm: str,
+    turn_a_prompt: PromptSpec,
+) -> list[PromptSpec]:
+    count = max(0, args.interturn_distractor_count)
+    if count == 0:
+        return []
+
+    specs: list[PromptSpec] = []
+    if dataset is not None:
+        avoid = {maybe_int(turn_a_prompt.source_task_index)}
+        cursor = args.interturn_distractor_start_index
+        attempts = 0
+        while len(specs) < count and attempts < max(count * 3, len(dataset) * 2):
+            normalized = cursor % len(dataset)
+            cursor += 1
+            attempts += 1
+            if normalized in avoid and len(dataset) > 1:
+                continue
+            specs.append(swebench_prompt_spec(dataset, dataset_index=normalized))
+        if len(specs) < count:
+            raise SystemExit(
+                f"Could not build {count} SWE-bench inter-turn distractors from {len(dataset)} rows."
+            )
+        return specs
+
+    if trajectory_rows is not None:
+        indexes = trajectory_task_indexes(trajectory_rows)
+        if not indexes:
+            raise SystemExit("Trajectory catalog has no task indexes for inter-turn distractors.")
+        avoid = {maybe_int(turn_a_prompt.source_task_index)}
+        cursor = args.interturn_distractor_start_index
+        attempts = 0
+        while len(specs) < count and attempts < max(count * 3, len(indexes) * 2):
+            task_index = indexes[cursor % len(indexes)]
+            cursor += 1
+            attempts += 1
+            if task_index in avoid and len(indexes) > 1:
+                continue
+            specs.append(
+                trajectory_prompt_spec(
+                    trajectory_rows,
+                    task_index=task_index,
+                    stage=args.trajectory_turn_a_stage,
+                    label=f"{arm} inter-turn distractor {len(specs)}",
+                    prefix_mode=args.trajectory_prompt_prefix_mode,
+                )
+            )
+        if len(specs) < count:
+            raise SystemExit(
+                f"Could not build {count} trajectory inter-turn distractors from {len(indexes)} tasks."
+            )
+        return specs
+
+    for idx in range(count):
+        specs.append(
+            make_turn_b_user_prompt(
+                arm=f"{arm}_pressure_{idx:04d}",
+                target_len=args.turn_b_words,
+                seed=args.seed + 10_000 + idx,
+                isolation_mode=args.prompt_isolation_mode,
+                sweep_axis=args.sweep_axis_context or "SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT",
+                sweep_value=args.sweep_value_context or str(count),
+            )
+        )
+    return specs
+
+
 def round_ms(value: float | None) -> int | str:
     if value is None:
         return ""
@@ -693,7 +813,7 @@ def usage_prompt_tokens(usage: dict[str, Any]) -> tuple[int | None, int | None]:
     return prompt_tokens, cached_tokens
 
 
-def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str]:
+def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int, dict[str, Any] | None, str, int | str]:
     encoded = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         url,
@@ -704,12 +824,112 @@ def post_json(url: str, payload: dict[str, Any], *, timeout: float) -> tuple[int
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             raw = response.read().decode("utf-8", errors="replace")
-            return response.status, json.loads(raw), ""
+            return response.status, json.loads(raw), "", ""
     except urllib.error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
-        return exc.code, None, body[:1000]
+        return exc.code, None, body[:1000], ""
     except Exception as exc:  # noqa: BLE001
-        return 0, None, str(exc)
+        return 0, None, str(exc), ""
+
+
+def stream_delta_text(chunk: dict[str, Any]) -> str:
+    choices = chunk.get("choices")
+    if not isinstance(choices, list):
+        return ""
+    parts: list[str] = []
+    for choice in choices:
+        if not isinstance(choice, dict):
+            continue
+        delta = choice.get("delta")
+        if isinstance(delta, dict):
+            for key in ("content", "reasoning_content"):
+                value = delta.get(key)
+                if isinstance(value, str):
+                    parts.append(value)
+                elif isinstance(value, list):
+                    for item in value:
+                        if isinstance(item, dict) and item.get("type") == "text" and isinstance(item.get("text"), str):
+                            parts.append(item["text"])
+        text = choice.get("text")
+        if isinstance(text, str):
+            parts.append(text)
+    return "".join(parts)
+
+
+def post_json_stream(
+    url: str,
+    payload: dict[str, Any],
+    *,
+    timeout: float,
+    include_usage: bool = True,
+) -> tuple[int, dict[str, Any] | None, str, int | str]:
+    stream_payload = dict(payload)
+    stream_payload["stream"] = True
+    if include_usage:
+        stream_payload.setdefault("stream_options", {"include_usage": True})
+    encoded = json.dumps(stream_payload).encode("utf-8")
+    request = urllib.request.Request(
+        url,
+        data=encoded,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    start = time.perf_counter()
+    content_parts: list[str] = []
+    usage: dict[str, Any] = {}
+    finish_reason = None
+    ttft_ms: int | str = ""
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            for raw_line in response:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line or line.startswith(":"):
+                    continue
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(data)
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(chunk.get("usage"), dict):
+                    usage = chunk["usage"]
+                delta_text = stream_delta_text(chunk)
+                if delta_text:
+                    if ttft_ms == "":
+                        ttft_ms = int(round((time.perf_counter() - start) * 1000))
+                    content_parts.append(delta_text)
+                choices = chunk.get("choices")
+                if isinstance(choices, list):
+                    for choice in choices:
+                        if isinstance(choice, dict) and choice.get("finish_reason"):
+                            finish_reason = choice.get("finish_reason")
+            response_json = {
+                "choices": [
+                    {
+                        "message": {"content": "".join(content_parts)},
+                        "finish_reason": finish_reason,
+                    }
+                ],
+                "usage": usage,
+            }
+            return response.status, response_json, "", ttft_ms
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        return exc.code, None, body[:1000], ""
+    except Exception as exc:  # noqa: BLE001
+        return 0, None, str(exc), ""
+
+
+def post_chat(url: str, payload: dict[str, Any], *, timeout: float, stream: bool) -> tuple[int, dict[str, Any] | None, str, int | str]:
+    if not stream:
+        return post_json(url, payload, timeout=timeout)
+    status, response_json, error, ttft_ms = post_json_stream(url, payload, timeout=timeout)
+    if status == 400 and "stream_options" in error:
+        return post_json_stream(url, payload, timeout=timeout, include_usage=False)
+    return status, response_json, error, ttft_ms
 
 
 def response_text_from_chat_completion(response_json: dict[str, Any] | None) -> str:
@@ -1019,7 +1239,12 @@ def send_request(
 
     start_dt = utc_now()
     start = time.perf_counter()
-    status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+    status, response_json, error, ttft_ms = post_chat(
+        args.frontend_url,
+        payload,
+        timeout=args.request_timeout,
+        stream=args.stream_responses,
+    )
     latency_ms = (time.perf_counter() - start) * 1000
     end_dt = utc_now()
     request_context_fallback_used = False
@@ -1033,7 +1258,12 @@ def send_request(
         request_context_fallback_used = True
         start_dt = utc_now()
         start = time.perf_counter()
-        status, response_json, error = post_json(args.frontend_url, payload, timeout=args.request_timeout)
+        status, response_json, error, ttft_ms = post_chat(
+            args.frontend_url,
+            payload,
+            timeout=args.request_timeout,
+            stream=args.stream_responses,
+        )
         latency_ms = (time.perf_counter() - start) * 1000
         end_dt = utc_now()
 
@@ -1059,6 +1289,7 @@ def send_request(
         "request_id": context["request_id"],
         "hint_probe_id": hint_probe_id,
         "latency_ms": round_ms(latency_ms),
+        "ttft_ms": ttft_ms,
         "status": status,
         "error": error,
         "prompt_tokens": prompt_tokens if prompt_tokens is not None else "",
@@ -1185,6 +1416,7 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                     "request_id": target_request_id,
                     "hint_probe_id": target_hint_probe_id,
                     "latency_ms": "",
+                    "ttft_ms": "",
                     "status": 0,
                     "error": "skipped_because_turn_a_failed",
                     "prompt_tokens": "",
@@ -1209,6 +1441,29 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
 
         if args.warmup_wait_ms > 0:
             time.sleep(args.warmup_wait_ms / 1000.0)
+
+        pressure_specs = build_interturn_distractor_specs(
+            args,
+            dataset=dataset,
+            trajectory_rows=trajectory_rows,
+            arm=arm.arm,
+            turn_a_prompt=turn_a_prompt,
+        )
+        for pressure_idx, pressure_prompt in enumerate(pressure_specs):
+            pressure = send_request(
+                args=args,
+                run_id=run_id,
+                arm=arm.arm,
+                request_name=f"interturn_distractor_{pressure_idx:04d}",
+                prompt_spec=pressure_prompt,
+                messages=[{"role": "user", "content": pressure_prompt.text}],
+                step_index=10 + pressure_idx,
+                spec_prefill=False,
+                target_request_id=target_request_id,
+                target_hint_probe_id=target_hint_probe_id,
+                output_len_tokens=args.interturn_distractor_output_len_tokens,
+            )
+            rows.append(pressure)
 
         turn_b = send_request(
             args=args,
@@ -1308,6 +1563,14 @@ def attach_worker_runtime(rows: list[dict[str, Any]], request_records: dict[str,
         row["worker_queue_ms"] = ms_between(received_dt, attached_dt)
         row["worker_service_ms"] = ms_between(attached_dt, completed_dt)
         row["worker_total_ms"] = ms_between(received_dt, completed_dt)
+        if str(row.get("prompt_tokens", "")) == "" and info.get("prompt_tokens") is not None:
+            row["prompt_tokens"] = info["prompt_tokens"]
+        if str(row.get("cached_tokens", "")) == "" and info.get("cached_tokens") is not None:
+            row["cached_tokens"] = info["cached_tokens"]
+        prompt_tokens = maybe_int(row.get("prompt_tokens"))
+        cached_tokens = maybe_int(row.get("cached_tokens"))
+        if prompt_tokens and cached_tokens is not None:
+            row["reuse_ratio"] = round_ratio(cached_tokens / prompt_tokens)
 
 
 def infer_anonymous_warmup(
@@ -1475,10 +1738,21 @@ def build_matrix_rows(
         {},
     )
     control_turn_b_ms = maybe_int(control_turn_b.get("latency_ms"))
+    control_turn_b_ttft_ms = maybe_int(control_turn_b.get("ttft_ms"))
     for arm in ("control", "protected"):
         arm_rows = [row for row in rows if row.get("arm") == arm]
         turn_a = next((row for row in arm_rows if row.get("request") == "turn_a"), {})
         turn_b = next((row for row in arm_rows if row.get("request") == "turn_b"), {})
+        pressure_rows = [
+            row for row in arm_rows if str(row.get("request", "")).startswith("interturn_distractor_")
+        ]
+        pressure_success_count = sum(
+            1
+            for row in pressure_rows
+            if 200 <= (maybe_int(row.get("status")) or 0) < 300
+        )
+        pressure_ms_total = sum(maybe_int(row.get("latency_ms")) or 0 for row in pressure_rows)
+        pressure_cached_total = sum(maybe_int(row.get("cached_tokens")) or 0 for row in pressure_rows)
         prefill = arm_prefill_status(
             spec_events,
             request_records,
@@ -1496,9 +1770,15 @@ def build_matrix_rows(
             hint_status = "no_runtime"
         turn_b_cached = maybe_int(turn_b.get("cached_tokens"))
         turn_b_ms = maybe_int(turn_b.get("latency_ms"))
+        turn_b_ttft_ms = maybe_int(turn_b.get("ttft_ms"))
         latency_gain_ms = (
             control_turn_b_ms - turn_b_ms
             if control_turn_b_ms is not None and turn_b_ms is not None
+            else None
+        )
+        ttft_gain_ms = (
+            control_turn_b_ttft_ms - turn_b_ttft_ms
+            if control_turn_b_ttft_ms is not None and turn_b_ttft_ms is not None
             else None
         )
         effect_status = "baseline_off"
@@ -1506,6 +1786,10 @@ def build_matrix_rows(
         if arm == "protected":
             if prefill["prefill_evidence_status"] == "prefill_failed":
                 effect_status = "prefill_failed"
+            elif prefill["prefill_evidence_status"] == "direct_prefill_seen" and (ttft_gain_ms or 0) > 0:
+                effect_status = "faster_direct_ttft"
+            elif prefill["prefill_evidence_status"] == "inferred_prefill_seen" and (ttft_gain_ms or 0) > 0:
+                effect_status = "faster_inferred_ttft"
             elif prefill["prefill_evidence_status"] == "direct_prefill_seen" and (latency_gain_ms or 0) > 0:
                 effect_status = "faster_direct"
             elif prefill["prefill_evidence_status"] == "inferred_prefill_seen" and (latency_gain_ms or 0) > 0:
@@ -1540,10 +1824,17 @@ def build_matrix_rows(
                 "request_source": turn_a.get("request_source", turn_b.get("request_source", "")),
                 "real_turn_b_mode": turn_a.get("real_turn_b_mode", turn_b.get("real_turn_b_mode", "")),
                 "turn_a_ms": turn_a.get("latency_ms", ""),
+                "turn_a_ttft_ms": turn_a.get("ttft_ms", ""),
                 "turn_b_ms": turn_b.get("latency_ms", ""),
+                "turn_b_ttft_ms": turn_b.get("ttft_ms", ""),
                 "turn_b_latency_gain_ms": latency_gain_ms if latency_gain_ms is not None else "",
+                "turn_b_ttft_gain_ms": ttft_gain_ms if ttft_gain_ms is not None else "",
                 "turn_b_cached": turn_b.get("cached_tokens", ""),
                 "turn_b_reuse": turn_b.get("reuse_ratio", ""),
+                "interturn_distractor_count": len(pressure_rows),
+                "interturn_distractor_success_count": pressure_success_count,
+                "interturn_distractor_ms_total": pressure_ms_total,
+                "interturn_distractor_cached_total": pressure_cached_total,
                 "turn_a_prompt_family": turn_a.get("prompt_family", ""),
                 "turn_b_prompt_family": turn_b.get("prompt_family", ""),
                 "turn_a_prompt_hash": turn_a.get("prompt_hash", ""),
@@ -1576,11 +1867,18 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
     protected = by_arm.get("protected", {})
     control_turn_b_ms = maybe_int(control.get("turn_b_ms"))
     protected_turn_b_ms = maybe_int(protected.get("turn_b_ms"))
+    control_turn_b_ttft_ms = maybe_int(control.get("turn_b_ttft_ms"))
+    protected_turn_b_ttft_ms = maybe_int(protected.get("turn_b_ttft_ms"))
     control_turn_b_cached = maybe_int(control.get("turn_b_cached"))
     protected_turn_b_cached = maybe_int(protected.get("turn_b_cached"))
     latency_delta = (
         control_turn_b_ms - protected_turn_b_ms
         if control_turn_b_ms is not None and protected_turn_b_ms is not None
+        else None
+    )
+    ttft_delta = (
+        control_turn_b_ttft_ms - protected_turn_b_ttft_ms
+        if control_turn_b_ttft_ms is not None and protected_turn_b_ttft_ms is not None
         else None
     )
     cached_delta = (
@@ -1640,9 +1938,16 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "turn_a_output_tokens": args.turn_a_output_len_tokens,
         "turn_b_output_tokens": args.turn_b_output_len_tokens,
         "warmup_wait_ms": args.warmup_wait_ms,
+        "stream_responses": args.stream_responses,
+        "interturn_distractor_count": args.interturn_distractor_count,
+        "interturn_distractor_start_index": args.interturn_distractor_start_index,
+        "interturn_distractor_output_tokens": args.interturn_distractor_output_len_tokens,
         "control_turn_b_ms": control.get("turn_b_ms", ""),
+        "control_turn_b_ttft_ms": control.get("turn_b_ttft_ms", ""),
         "protected_turn_b_ms": protected.get("turn_b_ms", ""),
+        "protected_turn_b_ttft_ms": protected.get("turn_b_ttft_ms", ""),
         "turn_b_latency_delta_ms": latency_delta if latency_delta is not None else "",
+        "turn_b_ttft_delta_ms": ttft_delta if ttft_delta is not None else "",
         "control_turn_b_cached": control.get("turn_b_cached", ""),
         "protected_turn_b_cached": protected.get("turn_b_cached", ""),
         "turn_b_cached_delta": cached_delta if cached_delta is not None else "",
@@ -1681,12 +1986,19 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Turn A output tokens: `{summary['turn_a_output_tokens']}`",
         f"- Turn B output tokens: `{summary['turn_b_output_tokens']}`",
         f"- Warmup wait ms: `{summary['warmup_wait_ms']}`",
+        f"- Stream responses: `{summary['stream_responses']}`",
+        f"- Inter-turn distractor count: `{summary['interturn_distractor_count']}`",
+        f"- Inter-turn distractor start index: `{summary['interturn_distractor_start_index']}`",
+        f"- Inter-turn distractor output tokens: `{summary['interturn_distractor_output_tokens']}`",
         "",
         "## Result",
         "",
         f"- Control turn B latency ms: `{summary['control_turn_b_ms']}`",
         f"- Protected turn B latency ms: `{summary['protected_turn_b_ms']}`",
         f"- Turn B latency delta ms (control - protected): `{summary['turn_b_latency_delta_ms']}`",
+        f"- Control turn B TTFT ms: `{summary['control_turn_b_ttft_ms']}`",
+        f"- Protected turn B TTFT ms: `{summary['protected_turn_b_ttft_ms']}`",
+        f"- Turn B TTFT delta ms (control - protected): `{summary['turn_b_ttft_delta_ms']}`",
         f"- Control turn B cached tokens: `{summary['control_turn_b_cached']}`",
         f"- Protected turn B cached tokens: `{summary['protected_turn_b_cached']}`",
         f"- Turn B cached-token delta (protected - control): `{summary['turn_b_cached_delta']}`",

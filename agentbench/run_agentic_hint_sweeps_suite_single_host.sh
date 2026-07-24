@@ -243,6 +243,11 @@ SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
 SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
 SPEC_PREFILL_TURN_A_OUTPUT_TOKENS='${SPEC_PREFILL_TURN_A_OUTPUT_TOKENS:-}'
 SPEC_PREFILL_TURN_B_OUTPUT_TOKENS='${SPEC_PREFILL_TURN_B_OUTPUT_TOKENS:-}'
+SPEC_PREFILL_WARMUP_WAIT_MS='${SPEC_PREFILL_WARMUP_WAIT_MS:-}'
+SPEC_PREFILL_STREAM_RESPONSES='${SPEC_PREFILL_STREAM_RESPONSES:-}'
+SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT='${SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT:-}'
+SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX='${SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX:-}'
+SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS='${SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:-}'
 SPEC_PREFILL_REQUEST_SOURCE='${SPEC_PREFILL_REQUEST_SOURCE:-}'
 SPEC_PREFILL_REAL_TURN_B_MODE='${SPEC_PREFILL_REAL_TURN_B_MODE:-}'
 SPEC_PREFILL_SWEBENCH_DATASET='${SPEC_PREFILL_SWEBENCH_DATASET:-}'
@@ -340,6 +345,11 @@ EXP12_SPEC_PREFILL_TURN_B_WORDS='${EXP12_SPEC_PREFILL_TURN_B_WORDS:-}'
 EXP12_SPEC_PREFILL_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_OUTPUT_TOKENS:-}'
 EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS:-}'
 EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS:-}'
+EXP12_SPEC_PREFILL_WARMUP_WAIT_MS='${EXP12_SPEC_PREFILL_WARMUP_WAIT_MS:-}'
+EXP12_SPEC_PREFILL_STREAM_RESPONSES='${EXP12_SPEC_PREFILL_STREAM_RESPONSES:-}'
+EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT='${EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT:-}'
+EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX='${EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX:-}'
+EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:-}'
 EXP13_MODE='${EXP13_MODE:-}'
 EXP13_SYNTHETIC_RESET_MODE='${EXP13_SYNTHETIC_RESET_MODE:-}'
 EXP13_SWEBENCH_RESET_MODE='${EXP13_SWEBENCH_RESET_MODE:-}'
@@ -562,6 +572,8 @@ prune_shared_chart_dir_for_suite_selection() {
     "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg" \
+    "${charts_dir}/exp12_specprefill_turn_b_ttft_vs_sweep.svg" \
+    "${charts_dir}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg" \
     "${charts_dir}/exp12_specprefill_cache_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_latency_gain_vs_warmup_wait.svg" \
     "${charts_dir}/exp12_specprefill_cache_gain_vs_warmup_wait.svg" \
@@ -618,6 +630,8 @@ sync_shared_assets_for_experiment() {
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_latency_vs_warmup_wait.svg"
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_latency.svg" "${charts_dir}/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg"
       sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_gain.svg" "${charts_dir}/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_ttft.svg" "${charts_dir}/exp12_specprefill_turn_b_ttft_vs_sweep.svg"
+      sync_one "experiments/reports/latest_speculative_prefill_microbenchmark_turnb_ttft_gain.svg" "${charts_dir}/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg"
       ;;
     13)
       sync_one "experiments/reports/latest_latency_sensitivity_microbenchmark_matrix.csv" "${charts_dir}/exp13_latencysens_matrix.csv"
@@ -1306,6 +1320,11 @@ run_experiment_12() {
   local exp12_output_tokens
   local exp12_turn_a_output_tokens
   local exp12_turn_b_output_tokens
+  local exp12_warmup_wait_ms
+  local exp12_stream_responses
+  local exp12_interturn_distractor_count
+  local exp12_interturn_distractor_start_index
+  local exp12_interturn_distractor_output_tokens
   local exp12_attribution_mode
   local exp12_request_context_mode
   local exp12_request_source
@@ -1331,6 +1350,11 @@ run_experiment_12() {
   exp12_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_OUTPUT_TOKENS SPEC_PREFILL_OUTPUT_TOKENS)"
   exp12_turn_a_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS SPEC_PREFILL_TURN_A_OUTPUT_TOKENS)"
   exp12_turn_b_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS SPEC_PREFILL_TURN_B_OUTPUT_TOKENS)"
+  exp12_warmup_wait_ms="$(resolve_value EXP12_SPEC_PREFILL_WARMUP_WAIT_MS SPEC_PREFILL_WARMUP_WAIT_MS)"
+  exp12_stream_responses="$(resolve_value EXP12_SPEC_PREFILL_STREAM_RESPONSES SPEC_PREFILL_STREAM_RESPONSES)"
+  exp12_interturn_distractor_count="$(resolve_value EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT)"
+  exp12_interturn_distractor_start_index="$(resolve_value EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX)"
+  exp12_interturn_distractor_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS)"
   exp12_attribution_mode="$(resolve_value EXP12_SPEC_PREFILL_ATTRIBUTION_MODE SPEC_PREFILL_ATTRIBUTION_MODE)"
   exp12_request_context_mode="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE SPEC_PREFILL_REQUEST_CONTEXT_MODE)"
   exp12_request_source="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_SOURCE SPEC_PREFILL_REQUEST_SOURCE)"
@@ -1371,6 +1395,11 @@ spec_prefill_turn_b_words=${exp12_turn_b_words}
 spec_prefill_output_tokens=${exp12_output_tokens}
 spec_prefill_turn_a_output_tokens=${exp12_turn_a_output_tokens}
 spec_prefill_turn_b_output_tokens=${exp12_turn_b_output_tokens}
+spec_prefill_warmup_wait_ms=${exp12_warmup_wait_ms}
+spec_prefill_stream_responses=${exp12_stream_responses}
+spec_prefill_interturn_distractor_count=${exp12_interturn_distractor_count}
+spec_prefill_interturn_distractor_start_index=${exp12_interturn_distractor_start_index}
+spec_prefill_interturn_distractor_output_tokens=${exp12_interturn_distractor_output_tokens}
 spec_prefill_request_source=${exp12_request_source}
 spec_prefill_real_turn_b_mode=${exp12_real_turn_b_mode}
 spec_prefill_swebench_dataset=${exp12_swebench_dataset}
@@ -1410,6 +1439,11 @@ EOF
   [[ -n "${exp12_output_tokens}" ]] && env_args+=(SPEC_PREFILL_OUTPUT_TOKENS="${exp12_output_tokens}")
   [[ -n "${exp12_turn_a_output_tokens}" ]] && env_args+=(SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${exp12_turn_a_output_tokens}")
   [[ -n "${exp12_turn_b_output_tokens}" ]] && env_args+=(SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${exp12_turn_b_output_tokens}")
+  [[ -n "${exp12_warmup_wait_ms}" ]] && env_args+=(SPEC_PREFILL_WARMUP_WAIT_MS="${exp12_warmup_wait_ms}")
+  [[ -n "${exp12_stream_responses}" ]] && env_args+=(SPEC_PREFILL_STREAM_RESPONSES="${exp12_stream_responses}")
+  [[ -n "${exp12_interturn_distractor_count}" ]] && env_args+=(SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${exp12_interturn_distractor_count}")
+  [[ -n "${exp12_interturn_distractor_start_index}" ]] && env_args+=(SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${exp12_interturn_distractor_start_index}")
+  [[ -n "${exp12_interturn_distractor_output_tokens}" ]] && env_args+=(SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${exp12_interturn_distractor_output_tokens}")
   [[ -n "${exp12_request_source}" ]] && env_args+=(SPEC_PREFILL_REQUEST_SOURCE="${exp12_request_source}")
   [[ -n "${exp12_real_turn_b_mode}" ]] && env_args+=(SPEC_PREFILL_REAL_TURN_B_MODE="${exp12_real_turn_b_mode}")
   [[ -n "${exp12_swebench_dataset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_DATASET="${exp12_swebench_dataset}")
@@ -1710,6 +1744,11 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=""
       EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=""
+      EXP12_SPEC_PREFILL_WARMUP_WAIT_MS="${EXP12_SYNTHETIC_SPEC_PREFILL_WARMUP_WAIT_MS:-}"
+      EXP12_SPEC_PREFILL_STREAM_RESPONSES="${EXP12_SYNTHETIC_SPEC_PREFILL_STREAM_RESPONSES:-}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT:-}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX:-}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:-}"
       EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
       EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
       EXP12_SPEC_PREFILL_TURN_A_INDEX=""
@@ -1736,6 +1775,11 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_WARMUP_WAIT_MS="${EXP12_SWEBENCH_SPEC_PREFILL_WARMUP_WAIT_MS}"
+      EXP12_SPEC_PREFILL_STREAM_RESPONSES="${EXP12_SWEBENCH_SPEC_PREFILL_STREAM_RESPONSES}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${EXP12_SWEBENCH_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${EXP12_SWEBENCH_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
       ;;
     exp12_trajectory)
@@ -1753,6 +1797,11 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_WARMUP_WAIT_MS="${EXP12_TRAJECTORY_SPEC_PREFILL_WARMUP_WAIT_MS}"
+      EXP12_SPEC_PREFILL_STREAM_RESPONSES="${EXP12_TRAJECTORY_SPEC_PREFILL_STREAM_RESPONSES}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT="${EXP12_TRAJECTORY_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX="${EXP12_TRAJECTORY_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX}"
+      EXP12_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
       EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
       EXP12_SPEC_PREFILL_TURN_A_INDEX=""
