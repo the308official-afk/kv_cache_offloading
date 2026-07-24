@@ -241,6 +241,8 @@ SPEC_PREFILL_SWEEP_VALUES='${SPEC_PREFILL_SWEEP_VALUES:-}'
 SPEC_PREFILL_TURN_A_WORDS='${SPEC_PREFILL_TURN_A_WORDS:-}'
 SPEC_PREFILL_TURN_B_WORDS='${SPEC_PREFILL_TURN_B_WORDS:-}'
 SPEC_PREFILL_OUTPUT_TOKENS='${SPEC_PREFILL_OUTPUT_TOKENS:-}'
+SPEC_PREFILL_TURN_A_OUTPUT_TOKENS='${SPEC_PREFILL_TURN_A_OUTPUT_TOKENS:-}'
+SPEC_PREFILL_TURN_B_OUTPUT_TOKENS='${SPEC_PREFILL_TURN_B_OUTPUT_TOKENS:-}'
 SPEC_PREFILL_REQUEST_SOURCE='${SPEC_PREFILL_REQUEST_SOURCE:-}'
 SPEC_PREFILL_REAL_TURN_B_MODE='${SPEC_PREFILL_REAL_TURN_B_MODE:-}'
 SPEC_PREFILL_SWEBENCH_DATASET='${SPEC_PREFILL_SWEBENCH_DATASET:-}'
@@ -336,6 +338,8 @@ EXP12_SPEC_PREFILL_SWEEP_VALUES='${EXP12_SPEC_PREFILL_SWEEP_VALUES:-}'
 EXP12_SPEC_PREFILL_TURN_A_WORDS='${EXP12_SPEC_PREFILL_TURN_A_WORDS:-}'
 EXP12_SPEC_PREFILL_TURN_B_WORDS='${EXP12_SPEC_PREFILL_TURN_B_WORDS:-}'
 EXP12_SPEC_PREFILL_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_OUTPUT_TOKENS:-}'
+EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS:-}'
+EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS='${EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS:-}'
 EXP13_MODE='${EXP13_MODE:-}'
 EXP13_SYNTHETIC_RESET_MODE='${EXP13_SYNTHETIC_RESET_MODE:-}'
 EXP13_SWEBENCH_RESET_MODE='${EXP13_SWEBENCH_RESET_MODE:-}'
@@ -1300,6 +1304,8 @@ run_experiment_12() {
   local exp12_turn_a_words
   local exp12_turn_b_words
   local exp12_output_tokens
+  local exp12_turn_a_output_tokens
+  local exp12_turn_b_output_tokens
   local exp12_attribution_mode
   local exp12_request_context_mode
   local exp12_request_source
@@ -1323,6 +1329,8 @@ run_experiment_12() {
   exp12_turn_a_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_WORDS SPEC_PREFILL_TURN_A_WORDS)"
   exp12_turn_b_words="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_WORDS SPEC_PREFILL_TURN_B_WORDS)"
   exp12_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_OUTPUT_TOKENS SPEC_PREFILL_OUTPUT_TOKENS)"
+  exp12_turn_a_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS SPEC_PREFILL_TURN_A_OUTPUT_TOKENS)"
+  exp12_turn_b_output_tokens="$(resolve_value EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS SPEC_PREFILL_TURN_B_OUTPUT_TOKENS)"
   exp12_attribution_mode="$(resolve_value EXP12_SPEC_PREFILL_ATTRIBUTION_MODE SPEC_PREFILL_ATTRIBUTION_MODE)"
   exp12_request_context_mode="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_CONTEXT_MODE SPEC_PREFILL_REQUEST_CONTEXT_MODE)"
   exp12_request_source="$(resolve_value EXP12_SPEC_PREFILL_REQUEST_SOURCE SPEC_PREFILL_REQUEST_SOURCE)"
@@ -1361,6 +1369,8 @@ spec_prefill_sweep_values=${exp12_sweep_values}
 spec_prefill_turn_a_words=${exp12_turn_a_words}
 spec_prefill_turn_b_words=${exp12_turn_b_words}
 spec_prefill_output_tokens=${exp12_output_tokens}
+spec_prefill_turn_a_output_tokens=${exp12_turn_a_output_tokens}
+spec_prefill_turn_b_output_tokens=${exp12_turn_b_output_tokens}
 spec_prefill_request_source=${exp12_request_source}
 spec_prefill_real_turn_b_mode=${exp12_real_turn_b_mode}
 spec_prefill_swebench_dataset=${exp12_swebench_dataset}
@@ -1398,6 +1408,8 @@ EOF
   [[ -n "${exp12_turn_a_words}" ]] && env_args+=(SPEC_PREFILL_TURN_A_WORDS="${exp12_turn_a_words}")
   [[ -n "${exp12_turn_b_words}" ]] && env_args+=(SPEC_PREFILL_TURN_B_WORDS="${exp12_turn_b_words}")
   [[ -n "${exp12_output_tokens}" ]] && env_args+=(SPEC_PREFILL_OUTPUT_TOKENS="${exp12_output_tokens}")
+  [[ -n "${exp12_turn_a_output_tokens}" ]] && env_args+=(SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${exp12_turn_a_output_tokens}")
+  [[ -n "${exp12_turn_b_output_tokens}" ]] && env_args+=(SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${exp12_turn_b_output_tokens}")
   [[ -n "${exp12_request_source}" ]] && env_args+=(SPEC_PREFILL_REQUEST_SOURCE="${exp12_request_source}")
   [[ -n "${exp12_real_turn_b_mode}" ]] && env_args+=(SPEC_PREFILL_REAL_TURN_B_MODE="${exp12_real_turn_b_mode}")
   [[ -n "${exp12_swebench_dataset}" ]] && env_args+=(SPEC_PREFILL_SWEBENCH_DATASET="${exp12_swebench_dataset}")
@@ -1696,6 +1708,8 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_TURN_A_WORDS="${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_A_WORDS}"
       EXP12_SPEC_PREFILL_TURN_B_WORDS="${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_B_WORDS}"
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=""
+      EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=""
       EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
       EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
       EXP12_SPEC_PREFILL_TURN_A_INDEX=""
@@ -1720,6 +1734,8 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_TURN_A_WORDS=""
       EXP12_SPEC_PREFILL_TURN_B_WORDS=""
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${EXP12_SWEBENCH_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET=""
       ;;
     exp12_trajectory)
@@ -1735,6 +1751,8 @@ configure_suite_case() {
       EXP12_SPEC_PREFILL_TURN_A_WORDS=""
       EXP12_SPEC_PREFILL_TURN_B_WORDS=""
       EXP12_SPEC_PREFILL_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_TURN_A_OUTPUT_TOKENS}"
+      EXP12_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS="${EXP12_TRAJECTORY_SPEC_PREFILL_TURN_B_OUTPUT_TOKENS}"
       EXP12_SPEC_PREFILL_SWEBENCH_DATASET=""
       EXP12_SPEC_PREFILL_SWEBENCH_SPLIT=""
       EXP12_SPEC_PREFILL_TURN_A_INDEX=""

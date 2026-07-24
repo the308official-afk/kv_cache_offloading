@@ -20,10 +20,13 @@ Two-turn synthetic, direct SWE-bench task-level, or Exp6 trajectory-prompt flow:
 - in `SPEC_PREFILL_REQUEST_SOURCE=swebench_trajectory`, turn A and turn B are
   read from the Exp6 trajectory prompt catalog, usually as two stages from the
   same task, such as `planning -> execution`
-- for real request sources, `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup`
-  keeps turn A real but makes turn B a short next-turn follow-up; this is the
+- for real request sources, `SPEC_PREFILL_REAL_TURN_B_MODE=long_followup`
+  keeps turn A real but makes turn B a deterministic detailed next-turn follow-up; this is the
   clearest real-data test because speculative prefill warms the next-turn
   conversation prefix, not an arbitrary future user prompt
+- `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS` and
+  `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS` can be used to let turn A produce a
+  longer answer while keeping turn B's measured decode cost bounded
 
 Public entrypoint
 -----------------
@@ -66,6 +69,8 @@ Public control surface
 - `SPEC_PREFILL_TURN_A_WORDS`
 - `SPEC_PREFILL_TURN_B_WORDS`
 - `SPEC_PREFILL_OUTPUT_TOKENS`
+- `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS`
+- `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS`
 - `SPEC_PREFILL_WARMUP_WAIT_MS`
 - `SPEC_PREFILL_SWEEP_AXIS`
 - `SPEC_PREFILL_SWEEP_VALUES`

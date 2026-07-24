@@ -116,6 +116,8 @@ SUMMARY_COLUMNS = [
     "turn_a_words",
     "turn_b_words",
     "output_tokens",
+    "turn_a_output_tokens",
+    "turn_b_output_tokens",
     "warmup_wait_ms",
     "control_turn_b_ms",
     "protected_turn_b_ms",
@@ -188,6 +190,26 @@ def parse_args() -> argparse.Namespace:
         default=int(os.environ.get("SPEC_PREFILL_OUTPUT_TOKENS", "64")),
     )
     parser.add_argument(
+        "--turn-a-output-len-tokens",
+        type=int,
+        default=int(
+            os.environ.get(
+                "SPEC_PREFILL_TURN_A_OUTPUT_TOKENS",
+                os.environ.get("SPEC_PREFILL_OUTPUT_TOKENS", "64"),
+            )
+        ),
+    )
+    parser.add_argument(
+        "--turn-b-output-len-tokens",
+        type=int,
+        default=int(
+            os.environ.get(
+                "SPEC_PREFILL_TURN_B_OUTPUT_TOKENS",
+                os.environ.get("SPEC_PREFILL_OUTPUT_TOKENS", "64"),
+            )
+        ),
+    )
+    parser.add_argument(
         "--warmup-wait-ms",
         type=int,
         default=int(os.environ.get("SPEC_PREFILL_WARMUP_WAIT_MS", "500")),
@@ -202,12 +224,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--real-turn-b-mode",
         default=os.environ.get("SPEC_PREFILL_REAL_TURN_B_MODE", "source_prompt"),
-        choices=("source_prompt", "short_followup"),
+        choices=("source_prompt", "short_followup", "long_followup"),
         help=(
             "For SWE-bench request sources, use the selected source prompt as Turn B, "
-            "or use a short follow-up after the real Turn A prompt. "
+            "or use a short/long follow-up after the real Turn A prompt. "
             "Speculative prefill can only warm the next-turn conversation prefix, "
-            "so short_followup is the clearest real-data latency test."
+            "so follow-up modes are the clearest real-data latency tests."
         ),
     )
     parser.add_argument(
@@ -490,16 +512,39 @@ def trajectory_prompt_spec(
     )
 
 
-def real_followup_prompt_spec(turn_a: PromptSpec, *, stage: str = "") -> PromptSpec:
+def real_followup_prompt_spec(turn_a: PromptSpec, *, stage: str = "", mode: str) -> PromptSpec:
     stage_text = f" Continue with the {stage} step." if stage else ""
-    prompt = (
-        "Continue this same SWE-bench task from the previous turn."
-        f"{stage_text} "
-        "Give the next concise action or patch direction."
-    )
+    if mode == "short_followup":
+        prompt = (
+            "Continue this same SWE-bench task from the previous turn."
+            f"{stage_text} "
+            "Give the next concise action or patch direction."
+        )
+    elif mode == "long_followup":
+        repo_text = f" in repository {turn_a.source_repo}" if turn_a.source_repo else ""
+        instance_text = (
+            f" for instance {turn_a.source_instance_id}"
+            if turn_a.source_instance_id
+            else ""
+        )
+        prompt = (
+            "Continue this same SWE-bench task"
+            f"{repo_text}{instance_text} from the previous turn."
+            f"{stage_text} "
+            "Use the issue description and the prior assistant analysis already in this conversation. "
+            "Do not switch to another task. "
+            "Give a detailed next-step engineering plan that includes: "
+            "the likely files or functions to inspect, the concrete code change you would make, "
+            "edge cases that could break, tests or commands you would run, expected failure modes, "
+            "and a short validation checklist. "
+            "Keep the answer focused on this same task and make the patch direction specific enough "
+            "for another engineer to act on immediately."
+        )
+    else:
+        raise SystemExit(f"Unsupported SPEC_PREFILL_REAL_TURN_B_MODE for follow-up prompt: {mode}")
     return PromptSpec(
         text=prompt,
-        family=f"{turn_a.family}:short_followup",
+        family=f"{turn_a.family}:{mode}",
         request_source=turn_a.request_source,
         source_repo=turn_a.source_repo,
         source_instance_id=turn_a.source_instance_id,
@@ -933,6 +978,7 @@ def send_request(
     spec_prefill: bool,
     target_request_id: str,
     target_hint_probe_id: str,
+    output_len_tokens: int,
 ) -> dict[str, Any]:
     prompt_hash = short_hash(json.dumps(messages, sort_keys=True))
     context = request_context(
@@ -958,7 +1004,7 @@ def send_request(
     payload: dict[str, Any] = {
         "model": args.model,
         "messages": messages,
-        "max_tokens": args.output_len_tokens,
+        "max_tokens": output_len_tokens,
         "temperature": 0,
         "nvext": {
             "agent_context": build_agent_context(context),
@@ -1056,8 +1102,11 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                 dataset,
                 dataset_index=args.swebench_turn_b_index + arm_offset,
             )
-            if args.real_turn_b_mode == "short_followup":
-                turn_b_user_prompt = real_followup_prompt_spec(turn_a_prompt)
+            if args.real_turn_b_mode in {"short_followup", "long_followup"}:
+                turn_b_user_prompt = real_followup_prompt_spec(
+                    turn_a_prompt,
+                    mode=args.real_turn_b_mode,
+                )
         elif trajectory_rows is not None:
             arm_offset = 0 if arm.arm == "control" else args.trajectory_protected_offset
             turn_b_task_index = args.trajectory_turn_b_task_index
@@ -1077,10 +1126,11 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                 label=f"{arm.arm} turn B",
                 prefix_mode=args.trajectory_prompt_prefix_mode,
             )
-            if args.real_turn_b_mode == "short_followup":
+            if args.real_turn_b_mode in {"short_followup", "long_followup"}:
                 turn_b_user_prompt = real_followup_prompt_spec(
                     turn_a_prompt,
                     stage=args.trajectory_turn_b_stage,
+                    mode=args.real_turn_b_mode,
                 )
         else:
             turn_a_prompt = make_turn_a_prompt(
@@ -1112,6 +1162,7 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             spec_prefill=arm.spec_prefill,
             target_request_id=target_request_id,
             target_hint_probe_id=target_hint_probe_id,
+            output_len_tokens=args.turn_a_output_len_tokens,
         )
         rows.append(turn_a)
         if int(turn_a.get("status") or 0) < 200 or int(turn_a.get("status") or 0) >= 300:
@@ -1174,6 +1225,7 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
             spec_prefill=arm.spec_prefill,
             target_request_id=target_request_id,
             target_hint_probe_id=target_hint_probe_id,
+            output_len_tokens=args.turn_b_output_len_tokens,
         )
         rows.append(turn_b)
     return rows
@@ -1585,6 +1637,8 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "turn_a_words": args.turn_a_words if args.request_source == "synthetic" else args.request_source,
         "turn_b_words": args.turn_b_words if args.request_source == "synthetic" else args.request_source,
         "output_tokens": args.output_len_tokens,
+        "turn_a_output_tokens": args.turn_a_output_len_tokens,
+        "turn_b_output_tokens": args.turn_b_output_len_tokens,
         "warmup_wait_ms": args.warmup_wait_ms,
         "control_turn_b_ms": control.get("turn_b_ms", ""),
         "protected_turn_b_ms": protected.get("turn_b_ms", ""),
@@ -1624,6 +1678,8 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Turn A words: `{summary['turn_a_words']}`",
         f"- Turn B words: `{summary['turn_b_words']}`",
         f"- Output tokens: `{summary['output_tokens']}`",
+        f"- Turn A output tokens: `{summary['turn_a_output_tokens']}`",
+        f"- Turn B output tokens: `{summary['turn_b_output_tokens']}`",
         f"- Warmup wait ms: `{summary['warmup_wait_ms']}`",
         "",
         "## Result",
