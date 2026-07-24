@@ -1,5 +1,6 @@
 # Misc Debug Notes
 
+```bash
 Reusable Across AMD
 Internal GitHub repo: one shared home for code, scripts, configs, and reports
 Standard launch scripts: synthetic, dataset, and full trajectory runs from a common interface
@@ -9,6 +10,7 @@ Synthetic stress knobs: push workloads to reveal best- and worst-case hint impac
 Common experiment contracts: consistent configs, outputs, and report formats
 Reusable reporting artifacts: CSVs, charts, and slide-ready outputs
 Pluggable testbed: swap models, runtimes, and policies without rebuilding the framework
+```
 
 ```bash
 cd ~/kv_cache_offloading
