@@ -35,6 +35,7 @@ REQUEST_COLUMNS = [
     "spec_prefill",
     "prompt_isolation_mode",
     "request_source",
+    "real_turn_b_mode",
     "source_repo",
     "source_instance_id",
     "source_task_index",
@@ -64,6 +65,7 @@ MATRIX_COLUMNS = [
     "spec_prefill",
     "prompt_isolation_mode",
     "request_source",
+    "real_turn_b_mode",
     "turn_a_ms",
     "turn_b_ms",
     "turn_b_latency_gain_ms",
@@ -109,6 +111,7 @@ SUMMARY_COLUMNS = [
     "trajectory_turn_b_stage",
     "trajectory_protected_offset",
     "trajectory_prompt_prefix_mode",
+    "real_turn_b_mode",
     "prompt_isolation_mode",
     "turn_a_words",
     "turn_b_words",
@@ -195,6 +198,17 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("SPEC_PREFILL_REQUEST_SOURCE", "synthetic"),
         choices=("synthetic", "swebench_dataset", "swebench_trajectory"),
         help="Prompt source for speculative-prefill turn prompts.",
+    )
+    parser.add_argument(
+        "--real-turn-b-mode",
+        default=os.environ.get("SPEC_PREFILL_REAL_TURN_B_MODE", "source_prompt"),
+        choices=("source_prompt", "short_followup"),
+        help=(
+            "For SWE-bench request sources, use the selected source prompt as Turn B, "
+            "or use a short follow-up after the real Turn A prompt. "
+            "Speculative prefill can only warm the next-turn conversation prefix, "
+            "so short_followup is the clearest real-data latency test."
+        ),
     )
     parser.add_argument(
         "--swebench-dataset",
@@ -473,6 +487,23 @@ def trajectory_prompt_spec(
         source_repo=repo,
         source_instance_id=instance_id,
         source_task_index=str(actual_task_index),
+    )
+
+
+def real_followup_prompt_spec(turn_a: PromptSpec, *, stage: str = "") -> PromptSpec:
+    stage_text = f" Continue with the {stage} step." if stage else ""
+    prompt = (
+        "Continue this same SWE-bench task from the previous turn."
+        f"{stage_text} "
+        "Give the next concise action or patch direction."
+    )
+    return PromptSpec(
+        text=prompt,
+        family=f"{turn_a.family}:short_followup",
+        request_source=turn_a.request_source,
+        source_repo=turn_a.source_repo,
+        source_instance_id=turn_a.source_instance_id,
+        source_task_index=turn_a.source_task_index,
     )
 
 
@@ -973,6 +1004,7 @@ def send_request(
         "spec_prefill": spec_prefill,
         "prompt_isolation_mode": args.prompt_isolation_mode,
         "request_source": prompt_spec.request_source,
+        "real_turn_b_mode": args.real_turn_b_mode if prompt_spec.request_source != "synthetic" else "",
         "source_repo": prompt_spec.source_repo,
         "source_instance_id": prompt_spec.source_instance_id,
         "source_task_index": prompt_spec.source_task_index,
@@ -1024,6 +1056,8 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                 dataset,
                 dataset_index=args.swebench_turn_b_index + arm_offset,
             )
+            if args.real_turn_b_mode == "short_followup":
+                turn_b_user_prompt = real_followup_prompt_spec(turn_a_prompt)
         elif trajectory_rows is not None:
             arm_offset = 0 if arm.arm == "control" else args.trajectory_protected_offset
             turn_b_task_index = args.trajectory_turn_b_task_index
@@ -1043,6 +1077,11 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                 label=f"{arm.arm} turn B",
                 prefix_mode=args.trajectory_prompt_prefix_mode,
             )
+            if args.real_turn_b_mode == "short_followup":
+                turn_b_user_prompt = real_followup_prompt_spec(
+                    turn_a_prompt,
+                    stage=args.trajectory_turn_b_stage,
+                )
         else:
             turn_a_prompt = make_turn_a_prompt(
                 arm=arm.arm,
@@ -1084,6 +1123,9 @@ def run_probe(args: argparse.Namespace, run_id: str) -> list[dict[str, Any]]:
                     "spec_prefill": arm.spec_prefill,
                     "prompt_isolation_mode": args.prompt_isolation_mode,
                     "request_source": turn_b_user_prompt.request_source,
+                    "real_turn_b_mode": args.real_turn_b_mode
+                    if turn_b_user_prompt.request_source != "synthetic"
+                    else "",
                     "source_repo": turn_b_user_prompt.source_repo,
                     "source_instance_id": turn_b_user_prompt.source_instance_id,
                     "source_task_index": turn_b_user_prompt.source_task_index,
@@ -1444,6 +1486,7 @@ def build_matrix_rows(
                     turn_b.get("prompt_isolation_mode", ""),
                 ),
                 "request_source": turn_a.get("request_source", turn_b.get("request_source", "")),
+                "real_turn_b_mode": turn_a.get("real_turn_b_mode", turn_b.get("real_turn_b_mode", "")),
                 "turn_a_ms": turn_a.get("latency_ms", ""),
                 "turn_b_ms": turn_b.get("latency_ms", ""),
                 "turn_b_latency_gain_ms": latency_gain_ms if latency_gain_ms is not None else "",
@@ -1537,6 +1580,7 @@ def build_summary(args: argparse.Namespace, run_id: str, matrix_rows: list[dict[
         "trajectory_prompt_prefix_mode": (
             args.trajectory_prompt_prefix_mode if args.request_source == "swebench_trajectory" else ""
         ),
+        "real_turn_b_mode": args.real_turn_b_mode if args.request_source != "synthetic" else "",
         "prompt_isolation_mode": args.prompt_isolation_mode,
         "turn_a_words": args.turn_a_words if args.request_source == "synthetic" else args.request_source,
         "turn_b_words": args.turn_b_words if args.request_source == "synthetic" else args.request_source,
@@ -1575,6 +1619,7 @@ def build_summary_md(summary: dict[str, Any]) -> str:
         f"- Trajectory turn B stage: `{summary['trajectory_turn_b_stage']}`",
         f"- Trajectory protected offset: `{summary['trajectory_protected_offset']}`",
         f"- Trajectory prompt prefix mode: `{summary['trajectory_prompt_prefix_mode']}`",
+        f"- Real Turn B mode: `{summary['real_turn_b_mode']}`",
         f"- Prompt isolation mode: `{summary['prompt_isolation_mode']}`",
         f"- Turn A words: `{summary['turn_a_words']}`",
         f"- Turn B words: `{summary['turn_b_words']}`",

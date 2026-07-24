@@ -2187,6 +2187,7 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 SPEC_PREFILL_MODE=all \
 SPEC_PREFILL_REQUEST_SOURCE=swebench_dataset \
+SPEC_PREFILL_REAL_TURN_B_MODE=short_followup \
 SPEC_PREFILL_SWEBENCH_DATASET=ScaleAI/SWE-bench_Pro \
 SPEC_PREFILL_SWEBENCH_SPLIT=test \
 SPEC_PREFILL_TURN_A_INDEX=0 \
@@ -2204,8 +2205,9 @@ SPEC_PREFILL_OUTPUT_TOKENS=128 \
 In this mode:
 
 - control turn A uses SWE-bench row `SPEC_PREFILL_TURN_A_INDEX`
-- control turn B uses SWE-bench row `SPEC_PREFILL_TURN_B_INDEX`
-- with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use those exact same rows
+- `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup` makes turn B a short next-turn follow-up after the same real task
+- the older `SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt` mode uses `SPEC_PREFILL_TURN_B_INDEX` as a full second SWE-bench prompt
+- with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use the same real task setup as control
 - `EXPERIMENT_RESET_MODE=flush` clears cache state between control/protected arms without restarting Dynamo
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the dataset
 
@@ -2449,8 +2451,8 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
 - Experiment 11 trajectory: priority scheduling over Exp6 captured trajectory prompts
 - Experiment 12 synthetic: speculative prefill
-- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts
-- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts
+- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts with a short follow-up Turn B
+- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a short follow-up Turn B
 - Experiment 13 synthetic: latency sensitivity
 - Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
 - Experiment 13 trajectory: latency sensitivity over Exp6 captured trajectory prompts
