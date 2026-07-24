@@ -248,8 +248,8 @@ def main() -> None:
         write_svg(
             out_dir / "turnb_gain.svg",
             build_line_chart_svg(
-                title="Experiment 12: Turn B Latency Gain vs Warmup Wait",
-                subtitle="Positive values mean speculative prefill made Turn B faster than control.",
+                title="Experiment 12: Turn B Latency Gain vs Sweep",
+                subtitle=f"Sweep axis: {sweep_axis}. Positive values mean speculative prefill made Turn B faster than control.",
                 labels=labels,
                 series=[("Speculative prefill gain", "#16a34a", gains)],
                 y_label="Turn B Latency Gain (ms)",
@@ -262,7 +262,7 @@ def main() -> None:
             out_dir / "turnb_ttft_gain.svg",
             build_line_chart_svg(
                 title="Experiment 12: Turn B TTFT Gain vs Sweep",
-                subtitle="Positive values mean speculative prefill lowered time to first token.",
+                subtitle=f"Sweep axis: {sweep_axis}. Positive values mean speculative prefill lowered time to first token.",
                 labels=labels,
                 series=[("Speculative prefill TTFT gain", "#16a34a", ttft_gains)],
                 y_label="Turn B TTFT Gain (ms)",

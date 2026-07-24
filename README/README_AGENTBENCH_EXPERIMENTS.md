@@ -2102,9 +2102,10 @@ Supported modes:
 - `all`: sweep, then plot
 - `plot`: rebuild charts from one existing matrix CSV
 
-This can use either synthetic two-turn prompts or direct SWE-bench Pro task
-prompts. The direct SWE-bench mode is task-level only; it does not execute full
-multi-step agents.
+This can use synthetic two-turn prompts, direct SWE-bench Pro task prompts, or
+Exp6 captured trajectory prompts. The current known-good real-data path is the
+Exp6 trajectory mode; the direct SWE-bench task-level mode is still available
+for exploratory checks.
 
 ### What This Test Really Does
 
@@ -2218,7 +2219,6 @@ In this mode:
 - turn A uses the Exp6 captured `planning` prompt for task `0`
 - turn B is a short follow-up for the same task, not a separate unrelated task
 - `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup` keeps Turn B cheap enough that prefill/TTFT gains are visible
-- `SPEC_PREFILL_REAL_TURN_B_MODE=source_prompt` uses the full configured Turn B prompt, such as the captured `execution` trajectory prompt
 - `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048` gives speculative prefill more prior assistant text to warm
 - `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8` keeps the measured Turn B focused on prefill/TTFT instead of decode time
 - `SPEC_PREFILL_WARMUP_WAIT_MS=5000` gives the background prefill enough time to finish
@@ -2227,25 +2227,6 @@ In this mode:
 - with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use the same real task setup as control
 - `EXPERIMENT_RESET_MODE=restart` gives clean isolation between control and protected arms
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the trajectory catalog
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SPEC_PREFILL_MODE=probe \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
-
-```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=ec2 \
-SPEC_PREFILL_MODE=plot \
-SPEC_PREFILL_PLOT_MATRIX_CSV=experiments/reports/latest_speculative_prefill_microbenchmark_matrix.csv \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
-```
 
 ### Core Contract Knobs
 
@@ -2262,12 +2243,19 @@ SPEC_PREFILL_SWEEP_AXIS
 SPEC_PREFILL_SWEEP_VALUES
 SPEC_PREFILL_SWEEP_SEED_MODE
 SPEC_PREFILL_REQUEST_SOURCE
+SPEC_PREFILL_REAL_TURN_B_MODE
 SPEC_PREFILL_SWEBENCH_DATASET
 SPEC_PREFILL_SWEBENCH_SPLIT
 SPEC_PREFILL_TURN_A_INDEX
 SPEC_PREFILL_TURN_B_INDEX
 SPEC_PREFILL_SWEBENCH_PROTECTED_OFFSET
 SPEC_PREFILL_COMPARISON_MODE
+SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG
+SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX
+SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE
+SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX
+SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE
+SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE
 RETENTION_PROMPT_ISOLATION_MODE
 SPEC_PREFILL_REQUEST_CONTEXT_MODE
 SGLANG_TRANSFER_LOG_PROFILE
@@ -2297,11 +2285,10 @@ Main outputs:
 - `latest_speculative_prefill_microbenchmark_matrix.csv`: one row per arm or per sweep-arm point
 - `latest_speculative_prefill_microbenchmark_summary.md`: readable summary
 - `latest_speculative_prefill_microbenchmark_run_contract.json`: exact resolved settings
-- `experiments/charts/exp12_specprefill_latency_vs_warmup_wait.svg`
-- `experiments/charts/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg`: clearer alias for the main Turn B latency chart
-- `experiments/charts/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg`: optional gain chart; positive values mean speculative prefill helped
 - `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`: main real-data chart; protected should be lower
 - `experiments/charts/exp12_specprefill_turn_b_ttft_gain_vs_sweep.svg`: positive values mean speculative prefill improved time-to-first-token
+- `experiments/charts/exp12_specprefill_turn_b_latency_vs_warmup_wait.svg`: total Turn B latency chart
+- `experiments/charts/exp12_specprefill_turn_b_gain_vs_warmup_wait.svg`: total latency gain chart; positive values mean speculative prefill helped
 
 ### Debug
 
@@ -2461,7 +2448,7 @@ exp13_trajectory
 Default selection in the config:
 
 ```text
-SUITE_DEFAULT_RUNS="exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_swebench exp13_synthetic exp13_swebench"
+SUITE_DEFAULT_RUNS="exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_trajectory exp13_synthetic exp13_swebench"
 ```
 
 Use `SUITE_RUNS` only when you want to override that default. Legacy
@@ -2480,8 +2467,8 @@ Edit the suite config file directly. It is already split into sections:
 - Experiment 11 SWE-bench: priority scheduling over real SWE-bench Pro task prompts
 - Experiment 11 trajectory: priority scheduling over Exp6 captured trajectory prompts
 - Experiment 12 synthetic: speculative prefill
-- Experiment 12 SWE-bench: speculative prefill over real SWE-bench Pro task prompts with a long follow-up Turn B and inter-turn pressure
-- Experiment 12 trajectory: speculative prefill over Exp6 captured trajectory prompts with a short follow-up Turn B and inter-turn pressure
+- Experiment 12 SWE-bench exploratory: speculative prefill over real SWE-bench Pro task prompts with a long follow-up Turn B and inter-turn pressure
+- Experiment 12 trajectory: known-good real-data speculative prefill over Exp6 captured prompts with a short follow-up Turn B and inter-turn pressure
 - Experiment 13 synthetic: latency sensitivity
 - Experiment 13 SWE-bench: latency sensitivity over real SWE-bench Pro task prompts
 - Experiment 13 trajectory: latency sensitivity over Exp6 captured trajectory prompts
@@ -2500,13 +2487,13 @@ Default prompt-isolation policy:
 Experiment 12 suite defaults:
 
 - synthetic runs sweep `SPEC_PREFILL_WARMUP_WAIT_MS`
-- SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
+- direct SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
 - the known-good trajectory setup uses `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup`, `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048`, `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8`, and `SPEC_PREFILL_WARMUP_WAIT_MS=5000`
 - the main real-data Exp12 chart is `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
 
 ### Run
 
-Use this when you want the selected SWE-bench suite to keep running if your
+Use this when you want the selected real-data suite to keep running if your
 terminal disconnects:
 
 ```bash
@@ -2518,7 +2505,7 @@ mkdir -p "${LOG_DIR}"
 
 nohup env \
   AGENTIC_HINT_SUITE_ID="${RUN_ID}" \
-  SUITE_RUNS="exp9_swebench exp11_swebench exp12_swebench exp13_swebench" \
+  SUITE_RUNS="exp9_swebench exp11_swebench exp12_trajectory exp13_swebench" \
   DYNAMO_MACHINE_PROFILE=gh200 \
   ./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
     Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8 \
@@ -2527,6 +2514,13 @@ nohup env \
 echo "RUN_ID=${RUN_ID}"
 echo "LOG=${LOG_DIR}/run.log"
 echo "PID=$!"
+```
+
+Because this selected real-data suite uses `exp12_trajectory`, make sure Exp6
+has already produced:
+
+```text
+experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
 ```
 
 Nohup version for the trajectory suite cases currently wired:

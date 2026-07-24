@@ -17,7 +17,7 @@
 # Shared suite settings
 ###############################################################################
 
-: "${SUITE_DEFAULT_RUNS:=exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_swebench exp13_synthetic exp13_swebench}"
+: "${SUITE_DEFAULT_RUNS:=exp9_synthetic exp9_swebench exp11_synthetic exp11_swebench exp12_synthetic exp12_trajectory exp13_synthetic exp13_swebench}"
 : "${SUITE_RUNS:=}"
 : "${SUITE_EXPERIMENTS:=}"
 : "${SUITE_ISOLATION_MODE:=per_case}"
@@ -149,7 +149,7 @@
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_ATTRIBUTION_MODE:=precise}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_CONTEXT_MODE:=auto}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_AXIS:=SPEC_PREFILL_WARMUP_WAIT_MS}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_VALUES:=0 500 1000 2000}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_VALUES:=0 100 200 300 400 500 600 700}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_A_WORDS:=4000}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_B_WORDS:=2048}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS:=128}"
@@ -160,7 +160,7 @@
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:=1}"
 
 ###############################################################################
-# Experiment 12 SWE-bench: Speculative prefill over task prompts
+# Experiment 12 SWE-bench exploratory: task-level prompts
 ###############################################################################
 
 : "${EXP12_SWEBENCH_MODE:=all}"
@@ -188,7 +188,7 @@
 : "${EXP12_SWEBENCH_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:=1}"
 
 ###############################################################################
-# Experiment 12 trajectory prompts: Speculative prefill over Exp6 captured prompts
+# Experiment 12 trajectory prompts: known-good real-data speculative prefill
 ###############################################################################
 
 : "${EXP12_TRAJECTORY_MODE:=all}"
