@@ -2172,7 +2172,7 @@ DYNAMO_MACHINE_PROFILE=gh200 \
 PRECISE_START_MODE=clean \
 SPEC_PREFILL_MODE=all \
 EXPERIMENT_RESET_MODE=flush \
-RETENTION_PROMPT_ISOLATION_MODE=disjoint \
+RETENTION_PROMPT_ISOLATION_MODE=standard \
 SPEC_PREFILL_ATTRIBUTION_MODE=precise \
 SPEC_PREFILL_REQUEST_CONTEXT_MODE=auto \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
@@ -2198,6 +2198,11 @@ Those runs were synthetic Qwen2.5-Coder-7B runs. In the clearest one,
 control Turn B was about `2.8s`, while protected Turn B was about `0.8s`.
 The big difference was worker service time: control Turn B spent about `2.1s`
 in service, protected Turn B spent about `40ms`.
+
+Use `RETENTION_PROMPT_ISOLATION_MODE=standard` for this legacy synthetic
+recipe. The newer `disjoint` synthetic prompt mode is useful for retention
+pressure tests, but it can create very high-token random prompts and make this
+legacy 7B speculative-prefill recipe fail before Turn B is sent.
 
 === This works on GH200 with Exp6 trajectory prompts ===
 ```bash
@@ -2508,6 +2513,9 @@ Experiment 12 suite defaults:
   `SPEC_PREFILL_TURN_B_WORDS=512`,
   `SPEC_PREFILL_OUTPUT_TOKENS=64`, and
   `SPEC_PREFILL_STREAM_RESPONSES=0`
+- synthetic Exp12 suite runs use `RETENTION_PROMPT_ISOLATION_MODE=standard` so
+  the prompt token count stays close to the old successful Qwen2.5-Coder-7B
+  reports
 - direct SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
 - the known-good trajectory setup uses `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup`, `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048`, `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8`, and `SPEC_PREFILL_WARMUP_WAIT_MS=5000`
 - the main real-data Exp12 chart is `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
