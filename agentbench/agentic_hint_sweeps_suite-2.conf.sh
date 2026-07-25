@@ -140,7 +140,14 @@
 : "${EXP11_PRIORITY_TRAJECTORY_ALLOW_REUSE:=0}"
 
 ###############################################################################
-# Experiment 12 synthetic: Speculative prefill
+# Experiment 12 synthetic: Speculative prefill.
+#
+# This intentionally matches the older Qwen2.5-Coder-7B synthetic runs that
+# repeatedly showed the clearest Exp12 effect:
+#   speculative_prefill_microbenchmark_20260702_174549
+#   speculative_prefill_microbenchmark_20260702_195517
+#   speculative_prefill_microbenchmark_20260702_205821
+#   speculative_prefill_microbenchmark_20260703_000316
 ###############################################################################
 
 : "${EXP12_SYNTHETIC_MODE:=all}"
@@ -149,12 +156,12 @@
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_ATTRIBUTION_MODE:=precise}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_REQUEST_CONTEXT_MODE:=auto}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_AXIS:=SPEC_PREFILL_WARMUP_WAIT_MS}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_VALUES:=0 100 200 300 400 500 600 700}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_SWEEP_VALUES:=0 100 250 500 1000}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_A_WORDS:=4000}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_B_WORDS:=2048}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS:=128}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_WARMUP_WAIT_MS:=}"
-: "${EXP12_SYNTHETIC_SPEC_PREFILL_STREAM_RESPONSES:=1}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_TURN_B_WORDS:=512}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_OUTPUT_TOKENS:=64}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_WARMUP_WAIT_MS:=500}"
+: "${EXP12_SYNTHETIC_SPEC_PREFILL_STREAM_RESPONSES:=0}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT:=0}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX:=100}"
 : "${EXP12_SYNTHETIC_SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS:=1}"
@@ -192,7 +199,7 @@
 ###############################################################################
 
 : "${EXP12_TRAJECTORY_MODE:=all}"
-: "${EXP12_TRAJECTORY_RESET_MODE:=restart}"
+: "${EXP12_TRAJECTORY_RESET_MODE:=flush}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_REQUEST_SOURCE:=swebench_trajectory}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_COMPARISON_MODE:=same_task_isolated}"
 : "${EXP12_TRAJECTORY_SPEC_PREFILL_REAL_TURN_B_MODE:=short_followup}"

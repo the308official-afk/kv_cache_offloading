@@ -2164,7 +2164,7 @@ change:
 
 ### Run
 
-=== This works on GH200 ===
+=== Legacy synthetic success recipe from the old Qwen 7B runs ===
 ```bash
 cd ~/kv_cache_offloading
 
@@ -2173,15 +2173,31 @@ PRECISE_START_MODE=clean \
 SPEC_PREFILL_MODE=all \
 EXPERIMENT_RESET_MODE=flush \
 RETENTION_PROMPT_ISOLATION_MODE=disjoint \
+SPEC_PREFILL_ATTRIBUTION_MODE=precise \
+SPEC_PREFILL_REQUEST_CONTEXT_MODE=auto \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_WARMUP_WAIT_MS \
-SPEC_PREFILL_SWEEP_VALUES="0 500 1000 2000" \
+SPEC_PREFILL_SWEEP_VALUES="0 100 250 500 1000" \
 SPEC_PREFILL_TURN_A_WORDS=4000 \
-SPEC_PREFILL_TURN_B_WORDS=2048 \
-SPEC_PREFILL_OUTPUT_TOKENS=128 \
+SPEC_PREFILL_TURN_B_WORDS=512 \
+SPEC_PREFILL_OUTPUT_TOKENS=64 \
+SPEC_PREFILL_WARMUP_WAIT_MS=500 \
+SPEC_PREFILL_STREAM_RESPONSES=0 \
 ./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+  Qwen/Qwen2.5-Coder-7B-Instruct
 ```
+
+This is the closest current command to the older successful reports:
+
+- `speculative_prefill_microbenchmark_20260702_174549`
+- `speculative_prefill_microbenchmark_20260702_195517`
+- `speculative_prefill_microbenchmark_20260702_205821`
+- `speculative_prefill_microbenchmark_20260703_000316`
+
+Those runs were synthetic Qwen2.5-Coder-7B runs. In the clearest one,
+control Turn B was about `2.8s`, while protected Turn B was about `0.8s`.
+The big difference was worker service time: control Turn B spent about `2.1s`
+in service, protected Turn B spent about `40ms`.
 
 === This works on GH200 with Exp6 trajectory prompts ===
 ```bash
@@ -2199,7 +2215,7 @@ SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE=execution \
 SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE=task_stage \
 SPEC_PREFILL_REAL_TURN_B_MODE=short_followup \
 SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
-EXPERIMENT_RESET_MODE=restart \
+EXPERIMENT_RESET_MODE=flush \
 SPEC_PREFILL_SWEEP_SEED_MODE=per_value \
 SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT \
 SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75" \
@@ -2225,7 +2241,7 @@ In this mode:
 - `SPEC_PREFILL_STREAM_RESPONSES=1` lets the report measure Turn B time-to-first-token
 - `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT` sends unrelated requests between turn A and turn B
 - with `SPEC_PREFILL_COMPARISON_MODE=same_task_isolated`, protected turn A/B use the same real task setup as control
-- `EXPERIMENT_RESET_MODE=restart` gives clean isolation between control and protected arms
+- `EXPERIMENT_RESET_MODE=flush` clears runtime cache state between sweep cells without a full Dynamo restart
 - `SPEC_PREFILL_TURN_A_WORDS` and `SPEC_PREFILL_TURN_B_WORDS` are ignored because real task prompts come from the trajectory catalog
 
 ### Core Contract Knobs
@@ -2486,7 +2502,12 @@ Default prompt-isolation policy:
 
 Experiment 12 suite defaults:
 
-- synthetic runs sweep `SPEC_PREFILL_WARMUP_WAIT_MS`
+- synthetic runs now use the old Qwen2.5-Coder-7B success recipe:
+  `SPEC_PREFILL_SWEEP_VALUES=0 100 250 500 1000`,
+  `SPEC_PREFILL_TURN_A_WORDS=4000`,
+  `SPEC_PREFILL_TURN_B_WORDS=512`,
+  `SPEC_PREFILL_OUTPUT_TOKENS=64`, and
+  `SPEC_PREFILL_STREAM_RESPONSES=0`
 - direct SWE-bench and trajectory runs sweep `SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT`
 - the known-good trajectory setup uses `SPEC_PREFILL_REAL_TURN_B_MODE=short_followup`, `SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048`, `SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8`, and `SPEC_PREFILL_WARMUP_WAIT_MS=5000`
 - the main real-data Exp12 chart is `experiments/charts/exp12_specprefill_turn_b_ttft_vs_sweep.svg`
