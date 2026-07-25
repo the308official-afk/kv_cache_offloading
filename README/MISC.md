@@ -1,23 +1,28 @@
 # Misc Debug Notes
 
 ```bash
-Reusable Across AMD
-Internal GitHub repo: one shared home for code, scripts, configs, and reports
-Standard launch scripts: synthetic, dataset, and full trajectory runs from a common interface
-Runtime instrumentation knobs: capture internal metrics beyond standard logs
-Benchmark prep scripts: prepare real workloads for trajectory testing
-Synthetic stress knobs: push workloads to reveal best- and worst-case hint impact
-Common experiment contracts: consistent configs, outputs, and report formats
-Reusable reporting artifacts: CSVs, charts, and slide-ready outputs
-Pluggable testbed: swap models, runtimes, and policies without rebuilding the framework
+benchmark_id	part	sweep_axis	sweep_value	run_id	model	arm	spec_prefill	prompt_isolation_mode	request_source	real_turn_b_mode	comparison_mode	turn_a_ms	turn_a_ttft_ms	turn_b_ms	turn_b_ttft_ms	turn_b_gain_ms	turn_b_ttft_gain_ms	turn_b_cached	turn_b_reuse	interturn_distractor_count	interturn_distractor_success_count	interturn_distractor_ms_total	interturn_distractor_cached_total	turn_a_prompt_family	turn_b_prompt_family	turn_a_prompt_hash	turn_b_prompt_hash	turn_a_source_instance_id	turn_a_source_task_index	turn_b_source_instance_id	turn_b_source_task_index	hint_status	prefill_wrap	prefill_spawned	prefill_sent	prefill_done	prefill_target_seen	prefill_tokens	effect
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260725_062547__sweep_1	Qwen/Qwen2.5-Coder-7B-Instruct	control	FALSE	disjoint	synthetic		offset	152								0	0	0	0	disjoint:e62170cc43913775	disjoint:41b968bd37686672	4fe4e0b5390cacdd						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	0	speculative_prefill_microbenchmark_20260725_062547__sweep_1	Qwen/Qwen2.5-Coder-7B-Instruct	protected	TRUE	disjoint	synthetic		offset	152								0	0	0	0	disjoint:2c4b487db4718e2a	disjoint:3d19c2d85bf4aff7	c5140fecc0256429						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		no_runtime
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	100	speculative_prefill_microbenchmark_20260725_062547__sweep_2	Qwen/Qwen2.5-Coder-7B-Instruct	control	FALSE	disjoint	synthetic		offset	151								0	0	0	0	disjoint:d619d9138338ec2e	disjoint:d62cc5260e6925c7	f955248610096c32						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	100	speculative_prefill_microbenchmark_20260725_062547__sweep_2	Qwen/Qwen2.5-Coder-7B-Instruct	protected	TRUE	disjoint	synthetic		offset	149								0	0	0	0	disjoint:bab6902f48249263	disjoint:165795aaca26a068	170c76e56da0ee21						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		no_runtime
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	250	speculative_prefill_microbenchmark_20260725_062547__sweep_3	Qwen/Qwen2.5-Coder-7B-Instruct	control	FALSE	disjoint	synthetic		offset	155								0	0	0	0	disjoint:e97d13e8711f9614	disjoint:946b32bf9ee4a6a6	5fbd6e75b25c0c27						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	250	speculative_prefill_microbenchmark_20260725_062547__sweep_3	Qwen/Qwen2.5-Coder-7B-Instruct	protected	TRUE	disjoint	synthetic		offset	152								0	0	0	0	disjoint:a324b058fb9b98a3	disjoint:a01ff48b613e40d0	49ba317ee9754af2						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		no_runtime
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260725_062547__sweep_4	Qwen/Qwen2.5-Coder-7B-Instruct	control	FALSE	disjoint	synthetic		offset	153								0	0	0	0	disjoint:28cc9a3e7b7f65ab	disjoint:2de3aa585192ee91	728855a1ca746f7b						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	500	speculative_prefill_microbenchmark_20260725_062547__sweep_4	Qwen/Qwen2.5-Coder-7B-Instruct	protected	TRUE	disjoint	synthetic		offset	154								0	0	0	0	disjoint:0e24cf91b941143b	disjoint:3ba90f46c020efdf	a8851208f9db36b7						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		no_runtime
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	1000	speculative_prefill_microbenchmark_20260725_062547__sweep_5	Qwen/Qwen2.5-Coder-7B-Instruct	control	FALSE	disjoint	synthetic		offset	150								0	0	0	0	disjoint:22f4910bc5eaf10c	disjoint:9fe90c00224265b1	2e6615207b21976d						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		baseline_off
+speculative_prefill_microbenchmark_20260725_062547	sweep	SPEC_PREFILL_WARMUP_WAIT_MS	1000	speculative_prefill_microbenchmark_20260725_062547__sweep_5	Qwen/Qwen2.5-Coder-7B-Instruct	protected	TRUE	disjoint	synthetic		offset	146								0	0	0	0	disjoint:f76b4901cd040fa2	disjoint:06cf604242ae781c	2902ae11820006df						no_runtime	missing	FALSE	FALSE	FALSE	FALSE		no_runtime
 
 
+```
 
-Shared internal repo: one source for code, configs, scripts, and reports
-Standard run modes: synthetic, dataset, and trajectory tests from the same launch surface
-Built-in instrumentation: runtime knobs for internal metrics beyond standard logs
-Reusable workload prep: scripts that turn real benchmarks into trajectory-ready inputs
-Portable evaluation framework: compare hints, models, runtimes, and policies with a common reporting format
+```bash
+cd ~/kv_cache_offloading
+
+SUITE_RUNS="exp12_synthetic" \
+DYNAMO_MACHINE_PROFILE=gh200 \
+./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
+  Qwen/Qwen2.5-Coder-7B-Instruct
 ```
 
 ```bash
