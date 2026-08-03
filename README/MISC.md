@@ -1,6 +1,10 @@
 # Misc Debug Notes
 
 ```bash
+ssh -J ojaiyeob@falcon.7elements.com:1337 ojaiyeob@gracehopper
+```
+
+```bash
 Slide takeaway: Both harnesses send useful cache, reasoning, capacity, and session signals—but neither is documented as automatically sending Dynamo’s richer nvext.agent_hints.
 
 Signal	Claude Code / Anthropic	Codex / OpenAI	What it does	Expected status
