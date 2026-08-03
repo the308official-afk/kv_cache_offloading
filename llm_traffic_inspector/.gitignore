@@ -1,0 +1,9 @@
+.venv/
+logs/
+*.jsonl
+*.log
+hint_report*.csv
+__pycache__/
+.pytest_cache/
+.env
+

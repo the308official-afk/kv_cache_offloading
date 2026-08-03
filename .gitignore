@@ -6,3 +6,7 @@ experiments/raw/
 experiments/parsed/
 experiments/reports/
 agentbench/results/
+llm_traffic_inspector/.venv/
+llm_traffic_inspector/logs/
+llm_traffic_inspector/*.jsonl
+llm_traffic_inspector/.env

@@ -1,0 +1,16 @@
+# Example only. Do not overwrite your existing Codex config.
+# Temporarily add a provider like this to your Codex config when you want to inspect traffic.
+
+model_provider = "traffic_inspector"
+
+[model_providers.traffic_inspector]
+name = "Local Traffic Inspector"
+base_url = "http://127.0.0.1:8787/v1"
+env_key = "LOCAL_LLM_PROXY_TOKEN"
+wire_api = "responses"
+supports_websockets = false
+
+# Pick a model that exists in your upstream OpenAI account.
+# Example:
+# model = "gpt-5"
+

@@ -9,6 +9,13 @@ The runtime path is:
 SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -> reports
 ```
 
+The experimental NeMo path is also available, but it does not replace the Deep
+Agents path:
+
+```text
+NeMo Agent Toolkit Dynamo client -> native nvext.agent_hints -> Dynamo frontend -> SGLang worker
+```
+
 ## Experiment Snapshot
 
 - **Experiment 9: KV retention** evaluates whether important prompts stay in KV
@@ -31,6 +38,7 @@ SWE-bench Pro -> AgentBench -> Deep Agents -> Dynamo frontend -> SGLang worker -
 - **Latency sensitivity**: use [Experiment 13](#experiment-13-latency-sensitivity-probe).
 - **Speculative prefill**: use [Experiment 12](#experiment-12-speculative-prefill-probe).
 - **Run the GH200 suite sequentially**: use [Experiment Suite: Agentic Hint Sweeps](#experiment-suite-agentic-hint-sweeps).
+- **Smoke-test NeMo native `nvext` support**: use [NeMo Agent Toolkit Dynamo Path](#nemo-agent-toolkit-dynamo-path-experimental).
 
 For transfer-logging internals, see
 [runtime_instrumentation/sglang_transfer_logging/README.md](../runtime_instrumentation/sglang_transfer_logging/README.md).
@@ -64,6 +72,96 @@ pinned setup unless we wire them in ourselves:
 - `program_id`
 - `context_type`
 - `cache_control` as a true TTL pinning control
+
+## NeMo Agent Toolkit Dynamo Path Experimental
+
+This is a parallel smoke path for testing NeMo Agent Toolkit's native Dynamo
+client. Keep using the current Deep Agents setup for Experiment 6 and the
+existing sweeps unless you are explicitly testing NeMo.
+
+Why this exists:
+
+- Deep Agents does not natively know about Dynamo `nvext`.
+- Our current AgentBench adapter adds `nvext` before requests reach Dynamo.
+- NeMo Agent Toolkit has a Dynamo LLM client that can inject
+  `nvext.agent_hints` itself.
+
+Reference docs:
+
+- [NeMo Agent Toolkit Dynamo integration](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/develop/examples/dynamo_integration)
+- [NeMo Agent Toolkit latency-sensitivity Dynamo demo](https://github.com/NVIDIA/NeMo-Agent-Toolkit/tree/develop/examples/dynamo_integration/latency_sensitivity_demo)
+- [NeMo Agent Toolkit installation](https://github.com/NVIDIA/NeMo-Agent-Toolkit/blob/develop/docs/source/get-started/installation.md)
+
+### Start Dynamo And Run The NeMo Smoke Test
+
+Use this when Dynamo is not already running:
+
+```bash
+cd ~/kv_cache_offloading
+
+DYNAMO_MACHINE_PROFILE=gh200 \
+NEMO_DYNAMO_START_MODE=clean \
+./agentbench/run_nemo_dynamo_smoke_single_host.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+Expected success signal:
+
+```text
+result=nemo_native_nvext_ready
+captured_agent_hints_present=True
+required_hint_keys_present=True
+live_ok=True
+```
+
+The report is written under:
+
+```text
+experiments/reports/nemo_dynamo_smoke/
+experiments/reports/nemo_dynamo_debug/
+```
+
+### Test NeMo Against A Running Dynamo
+
+Use this when Dynamo is already up:
+
+```bash
+cd ~/kv_cache_offloading
+
+./agentbench/debug_nemo_dynamo_nvext.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+```
+
+This checks two things:
+
+- NeMo's own transport injects `nvext.agent_hints` into the HTTP request.
+- A live Dynamo frontend accepts that request.
+
+The diagnostic also saves recent frontend and worker log snippets so you can
+compare request-side proof with runtime-side logging.
+
+### Install Behavior
+
+The helper installs NeMo Agent Toolkit once and writes:
+
+```text
+experiments/runtime_state/nemo_agent_toolkit_ready.marker
+```
+
+If the marker and import check are still valid, later runs skip reinstalling.
+
+Useful knobs:
+
+```bash
+export AGENTBENCH_NEMO_INSTALL_MODE=source    # source or package
+export AGENTBENCH_NEMO_REF=develop
+export AGENTBENCH_NEMO_FORCE_REFRESH=1        # fetch/checkout again
+export AGENTBENCH_NEMO_FORCE_REINSTALL=1      # reinstall even if import works
+```
+
+This first NeMo path is a smoke test only. The next migration step would be a
+separate AgentBench backend mode that runs SWE-bench through NeMo while leaving
+the current Deep Agents backend untouched.
 
 ## Common Setup
 
