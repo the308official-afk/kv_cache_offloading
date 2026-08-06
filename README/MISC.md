@@ -14,6 +14,67 @@ Where things left off — NeMo hint injection debug (paused):
 ```
 
 ```bash
+The likely bug is sync vs async LangChain.
+NeMo’s Dynamo path injects nvext.agent_hints through an async HTTPX transport. The official NeMo LangChain registration passes that transport into ChatOpenAI as http_async_client, not http_client. LangChain’s docs say http_async_client is only used for async calls, while http_client is only used for sync calls. So if your agent code calls:
+llm.invoke(...)
+agent.invoke(...)
+then the NeMo async transport is bypassed, and Dynamo receives no nvext. That matches your worker log: agent_hints: null.
+Fix
+Use the async path all the way through:
+response = await llm.ainvoke(messages)
+or:
+response = await agent.ainvoke(input_payload, config=config)
+Do not expect this to work:
+ChatOpenAI(http_async_client=nemo_client).invoke(...)
+That sync .invoke() will not use http_async_client.
+Minimal Good Setup
+from langchain_openai import ChatOpenAI
+from nat.llm.dynamo_llm import DynamoModelConfig, _create_httpx_client_with_dynamo_hooks
+
+config = DynamoModelConfig(
+    model_name="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8",
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="EMPTY",
+    enable_nvext_hints=True,
+    nvext_prefix_total_requests=10,
+    nvext_prefix_osl=512,
+    nvext_prefix_iat=250,
+    nvext_cache_pin_type=None,
+)
+
+async with _create_httpx_client_with_dynamo_hooks(config) as http_async_client:
+    llm = ChatOpenAI(
+        model="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8",
+        base_url="http://127.0.0.1:8000/v1",
+        api_key="EMPTY",
+        http_async_client=http_async_client,
+    )
+
+    response = await llm.ainvoke([
+        ("user", "Reply with exactly: OK")
+    ])
+What I changed locally
+I updated [diagnose_nemo_dynamo_nvext.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/diagnose_nemo_dynamo_nvext.py) so it now checks:
+direct httpx + NeMo transport
+ChatOpenAI.ainvoke + NeMo transport
+ChatOpenAI.invoke sync bypass case
+live Dynamo request
+On GH200, run:
+cd ~/kv_cache_offloading
+
+./agentbench/debug_nemo_dynamo_nvext.sh \
+  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+You want:
+captured_agent_hints_present=True
+chatopenai_async_agent_hints_present=True
+chatopenai_sync_agent_hints_present=False
+live_ok=True
+That sync=False is expected. It proves the sync path bypasses the async NeMo transport.
+Keep the temporary extra_body workaround only until your NeMo agent path is fully async. Once ChatOpenAI.ainvoke() shows hints and worker logs show non-null agent_hints, remove the workaround.
+Sources: NeMo Dynamo demo, NeMo LangChain Dynamo registration, LangChain http_client, LangChain http_async_client.
+```
+
+```bash
 cd ~/kv_cache_offloading
 
 SUITE_RUNS="exp12_synthetic" \
