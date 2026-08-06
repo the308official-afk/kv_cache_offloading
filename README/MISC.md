@@ -5,19 +5,12 @@ ssh -J ojaiyeob@falcon.7elements.com:1337 ojaiyeob@gracehopper
 ```
 
 ```bash
-Slide takeaway: Both harnesses send useful cache, reasoning, capacity, and session signals—but neither is documented as automatically sending Dynamo’s richer nvext.agent_hints.
-
-Signal	Claude Code / Anthropic	Codex / OpenAI	What it does	Expected status
-Prompt caching	Body: cache_control	Body: prompt_cache_key; newer APIs may include prompt_cache_breakpoint and prompt_cache_options	Improves reuse of repeated prompt prefixes	Usually present or model-dependent
-Reasoning effort	output_config.effort: low, medium, high, xhigh, max where supported	reasoning.effort, configured through model_reasoning_effort	Controls how much reasoning and token effort the model uses	Config/model-dependent
-Thinking control	Body: thinking, such as adaptive, enabled, or disabled	No identical switch; controlled mainly through reasoning effort and reasoning-summary settings	Controls whether and how the model reasons	Model-dependent
-Fast processing	Body: speed: "fast" on supported Anthropic models	Body: service_tier; Codex fast maps to API value priority	Requests faster provider capacity	Optional/config-dependent
-Service tier	Body: service_tier, such as auto or standard_only	Body: service_tier	Chooses provider capacity tier	Optional; provider-specific
-Task-wide budget	output_config.task_budget in the Claude API	No equivalent publicly documented for stock Codex	Advises the model how many tokens to spend across an agentic task	Not supported by Claude Code; API-only
-Root session identity	Header: x-claude-code-session-id	Header: session-id	Identifies all LLM calls belonging to one agent session	Expected in stock harness
-Subagent identity	Headers: x-claude-code-agent-id and x-claude-code-parent-agent-id	No native parent-session header documented	Reconstructs the root-agent/subagent tree	Claude Code only
-Client metadata	Headers such as anthropic-version and anthropic-beta	Body may include client_metadata	Identifies client capabilities and feature versions	Diagnostic, not scheduling
-Dynamo agent hints	No automatic stock emission documented	No automatic stock emission documented	Controls routing, scheduling, and cache behavior in Dynamo	Must generally be added by a proxy or custom harness
+Where things left off — NeMo hint injection debug (paused):
+  - Goal: prove _DynamoTransport can inject nvext.agent_hints natively, replacing manual extra_body glue in our custom DeepAgents backend
+  - What's confirmed working: transport injects hints correctly via direct httpx; GH200 Docker images + Dynamo patch all work
+  - What's broken: when _DynamoTransport is wired through LangChain ChatOpenAI + http_async_client, hints are dropped (worker logs show agent_hints: null)
+  - Current code state: agentbench/nemo_app/src/agent.py has a temporary extra_body workaround that must be reverted once the real fix is found
+  - Next step: run agentbench/diagnose_nemo_dynamo_nvext.py on GraceHopper (Dynamo running) to determine whether the transport intercepts requests through LangChain or not
 ```
 
 ```bash
