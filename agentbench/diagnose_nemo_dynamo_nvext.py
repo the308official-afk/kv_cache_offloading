@@ -78,6 +78,13 @@ def request_body(model: str, max_tokens: int) -> dict[str, Any]:
     }
 
 
+def langchain_messages() -> list[tuple[str, str]]:
+    return [
+        ("system", "You are a concise diagnostic assistant."),
+        ("human", "Reply with exactly: NEMO_NVEXT_OK"),
+    ]
+
+
 class CaptureTransport:
     def __init__(self, httpx_module: Any) -> None:
         self._httpx = httpx_module
@@ -97,6 +104,31 @@ class CaptureTransport:
         }
         response_body = {
             "id": "nemo-nvext-capture",
+            "object": "chat.completion",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "captured"}, "finish_reason": "stop"}],
+        }
+        return self._httpx.Response(200, json=response_body, request=request)
+
+
+class SyncCaptureTransport:
+    def __init__(self, httpx_module: Any) -> None:
+        self._httpx = httpx_module
+        self.captured: dict[str, Any] | None = None
+
+    def handle_request(self, request: Any) -> Any:
+        content = request.content
+        try:
+            body = json.loads(content.decode("utf-8"))
+        except Exception:
+            body = {"_raw": content.decode("utf-8", errors="replace")}
+        self.captured = {
+            "method": request.method,
+            "url": str(request.url),
+            "headers": dict(request.headers),
+            "json": body,
+        }
+        response_body = {
+            "id": "nemo-nvext-sync-capture",
             "object": "chat.completion",
             "choices": [{"index": 0, "message": {"role": "assistant", "content": "captured"}, "finish_reason": "stop"}],
         }
@@ -176,6 +208,82 @@ async def capture_request(args: argparse.Namespace, output_dir: Path, dynamo_llm
     return capture.captured
 
 
+async def capture_langchain_async_request(
+    args: argparse.Namespace,
+    output_dir: Path,
+    dynamo_llm: Any,
+    httpx: Any,
+) -> dict[str, Any]:
+    try:
+        from langchain_openai import ChatOpenAI
+    except Exception as exc:  # noqa: BLE001 - diagnostic records missing optional dependency.
+        return {"skipped": True, "error": f"langchain_openai import failed: {exc!r}"}
+
+    capture = CaptureTransport(httpx)
+    transport = build_transport(base_transport=capture, dynamo_llm=dynamo_llm, args=args)
+    async with httpx.AsyncClient(transport=transport, base_url="http://nemo-langchain-capture.invalid/v1") as client:
+        llm = ChatOpenAI(
+            model=args.model,
+            api_key="EMPTY",
+            base_url="http://nemo-langchain-capture.invalid/v1",
+            temperature=0,
+            max_tokens=args.max_tokens,
+            http_async_client=client,
+        )
+        with patched_latency_context(dynamo_llm, args.latency_sensitivity, args.prefix_id), maybe_prefix_scope(dynamo_llm, args.prefix_id):
+            await llm.ainvoke(langchain_messages())
+
+    if capture.captured is None:
+        raise RuntimeError("LangChain async capture transport did not receive a request.")
+
+    path = output_dir / "captured_chatopenai_async_request_after_nemo_transport.json"
+    path.write_text(json.dumps(capture.captured, indent=2, sort_keys=True), encoding="utf-8")
+    return capture.captured
+
+
+async def capture_langchain_sync_bypass_request(
+    args: argparse.Namespace,
+    output_dir: Path,
+    dynamo_llm: Any,
+    httpx: Any,
+) -> dict[str, Any]:
+    try:
+        from langchain_openai import ChatOpenAI
+    except Exception as exc:  # noqa: BLE001 - diagnostic records missing optional dependency.
+        return {"skipped": True, "error": f"langchain_openai import failed: {exc!r}"}
+
+    async_capture = CaptureTransport(httpx)
+    async_transport = build_transport(base_transport=async_capture, dynamo_llm=dynamo_llm, args=args)
+    sync_capture = SyncCaptureTransport(httpx)
+
+    async with httpx.AsyncClient(
+        transport=async_transport,
+        base_url="http://nemo-langchain-capture.invalid/v1",
+    ) as async_client:
+        with httpx.Client(
+            transport=sync_capture,
+            base_url="http://nemo-langchain-capture.invalid/v1",
+        ) as sync_client:
+            llm = ChatOpenAI(
+                model=args.model,
+                api_key="EMPTY",
+                base_url="http://nemo-langchain-capture.invalid/v1",
+                temperature=0,
+                max_tokens=args.max_tokens,
+                http_client=sync_client,
+                http_async_client=async_client,
+            )
+            with patched_latency_context(dynamo_llm, args.latency_sensitivity, args.prefix_id), maybe_prefix_scope(dynamo_llm, args.prefix_id):
+                llm.invoke(langchain_messages())
+
+    if sync_capture.captured is None:
+        raise RuntimeError("LangChain sync capture transport did not receive a request.")
+
+    path = output_dir / "captured_chatopenai_sync_request_bypassing_async_nemo_transport.json"
+    path.write_text(json.dumps(sync_capture.captured, indent=2, sort_keys=True), encoding="utf-8")
+    return sync_capture.captured
+
+
 async def live_request(args: argparse.Namespace, output_dir: Path, dynamo_llm: Any, httpx: Any) -> dict[str, Any]:
     transport = build_transport(
         base_transport=httpx.AsyncHTTPTransport(retries=0),
@@ -227,12 +335,28 @@ def write_reports(output_dir: Path, summary: dict[str, Any]) -> None:
         f"- frontend_url: `{summary.get('frontend_url')}`",
         f"- captured_agent_hints_present: `{summary.get('captured_agent_hints_present')}`",
         f"- required_hint_keys_present: `{summary.get('required_hint_keys_present')}`",
+        f"- chatopenai_async_agent_hints_present: `{summary.get('chatopenai_async_agent_hints_present')}`",
+        f"- chatopenai_async_required_hint_keys_present: `{summary.get('chatopenai_async_required_hint_keys_present')}`",
+        f"- chatopenai_sync_agent_hints_present: `{summary.get('chatopenai_sync_agent_hints_present')}`",
+        f"- chatopenai_sync_expected_to_bypass_async_transport: `{summary.get('chatopenai_sync_expected_to_bypass_async_transport')}`",
         f"- live_ok: `{summary.get('live_ok')}`",
         "",
         "## Captured Agent Hints",
         "",
         "```json",
         json.dumps(summary.get("captured_agent_hints") or {}, indent=2, sort_keys=True),
+        "```",
+        "",
+        "## ChatOpenAI Async Agent Hints",
+        "",
+        "```json",
+        json.dumps(summary.get("chatopenai_async_agent_hints") or {}, indent=2, sort_keys=True),
+        "```",
+        "",
+        "## ChatOpenAI Sync Agent Hints",
+        "",
+        "```json",
+        json.dumps(summary.get("chatopenai_sync_agent_hints") or {}, indent=2, sort_keys=True),
         "```",
     ]
     if summary.get("error"):
@@ -265,13 +389,20 @@ async def async_main() -> int:
     try:
         captured = await capture_request(args, output_dir, dynamo_llm, httpx)
         hints = extract_hints(captured)
+        langchain_async_capture = await capture_langchain_async_request(args, output_dir, dynamo_llm, httpx)
+        langchain_async_hints = extract_hints(langchain_async_capture)
+        langchain_sync_capture = await capture_langchain_sync_bypass_request(args, output_dir, dynamo_llm, httpx)
+        langchain_sync_hints = extract_hints(langchain_sync_capture)
         present_keys = sorted(required_keys.intersection(hints))
         live = {"skipped": True, "ok": True} if args.skip_live else await live_request(args, output_dir, dynamo_llm, httpx)
 
         required_hint_keys_present = required_keys.issubset(set(hints))
+        langchain_async_required_hint_keys_present = required_keys.issubset(set(langchain_async_hints))
+        langchain_sync_required_hint_keys_present = required_keys.issubset(set(langchain_sync_hints))
         captured_ok = bool(hints) and required_hint_keys_present
+        langchain_async_ok = bool(langchain_async_hints) and langchain_async_required_hint_keys_present
         live_ok = bool(live.get("ok"))
-        result = "nemo_native_nvext_ready" if captured_ok and live_ok else "nemo_native_nvext_incomplete"
+        result = "nemo_native_nvext_ready" if captured_ok and langchain_async_ok and live_ok else "nemo_native_nvext_incomplete"
         summary = {
             "result": result,
             "model": args.model,
@@ -283,6 +414,17 @@ async def async_main() -> int:
             "captured_hint_keys_present": present_keys,
             "required_hint_keys": sorted(required_keys),
             "required_hint_keys_present": required_hint_keys_present,
+            "chatopenai_async_agent_hints_present": bool(langchain_async_hints),
+            "chatopenai_async_agent_hints": langchain_async_hints,
+            "chatopenai_async_required_hint_keys_present": langchain_async_required_hint_keys_present,
+            "chatopenai_async_skipped": bool(langchain_async_capture.get("skipped")),
+            "chatopenai_async_error": langchain_async_capture.get("error"),
+            "chatopenai_sync_agent_hints_present": bool(langchain_sync_hints),
+            "chatopenai_sync_agent_hints": langchain_sync_hints,
+            "chatopenai_sync_required_hint_keys_present": langchain_sync_required_hint_keys_present,
+            "chatopenai_sync_skipped": bool(langchain_sync_capture.get("skipped")),
+            "chatopenai_sync_error": langchain_sync_capture.get("error"),
+            "chatopenai_sync_expected_to_bypass_async_transport": True,
             "live_skipped": bool(live.get("skipped")),
             "live_ok": live_ok,
             "live_status_code": live.get("status_code"),
@@ -302,6 +444,10 @@ async def async_main() -> int:
     print(f"result={summary.get('result')}")
     print(f"captured_agent_hints_present={summary.get('captured_agent_hints_present')}")
     print(f"required_hint_keys_present={summary.get('required_hint_keys_present')}")
+    print(f"chatopenai_async_agent_hints_present={summary.get('chatopenai_async_agent_hints_present')}")
+    print(f"chatopenai_async_required_hint_keys_present={summary.get('chatopenai_async_required_hint_keys_present')}")
+    print(f"chatopenai_sync_agent_hints_present={summary.get('chatopenai_sync_agent_hints_present')}")
+    print("chatopenai_sync_expected_to_bypass_async_transport=True")
     print(f"live_ok={summary.get('live_ok')}")
     if summary.get("captured_agent_hints"):
         print("captured_agent_hints=" + json.dumps(summary["captured_agent_hints"], sort_keys=True))
