@@ -1,5 +1,9 @@
 # Misc Debug Notes
 
+
+I’m exploring a hardware/runtime co-design idea for agentic LLM serving: **hint-guided KV cache prefetching**. Agentic workloads, like coding agents, naturally pause during tool calls such as repo search, test execution, or build steps. During those pauses, the runtime often knows that a session is likely to resume soon, but today’s GPU memory system mostly sees anonymous memory blocks, not “this is high-priority KV cache for Agent 42.” The opportunity is to use runtime hints to prefetch, prioritize, and briefly protect the right KV cache before the next model turn arrives, reducing post-tool resume stalls and tail latency. I’m proposing to first build an EC2-based SGLang emulation testbed that compares no prefetch, generic software prefetch, and hint-aware hardware-emulated prefetch, so we can estimate whether this kind of hardware support could deliver meaningful performance gains before pursuing deeper hardware changes.
+
+
 ```bash
 ssh -J ojaiyeob@falcon.7elements.com:1337 ojaiyeob@gracehopper
 ```
