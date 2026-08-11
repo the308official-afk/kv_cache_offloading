@@ -1,5 +1,6 @@
 # Misc Debug Notes
 
+Current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state.
 
 I’m exploring a hardware/runtime co-design idea for **hint-guided KV cache prefetching** on Grace Hopper-style systems. Existing serving frameworks already do KV reuse and prefix caching, but they mainly answer: “Can we reuse this KV instead of recomputing it?” This proposal targets a different bottleneck: “Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?”
 
