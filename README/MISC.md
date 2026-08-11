@@ -1,5 +1,16 @@
 # Misc Debug Notes
 
+```bash
+Hi Sergey, I had some discussions with Nuwan awhile ago and he asked my plan for the hint-based agentic research, so I’m thinking of exploring this direction alongside our studies.
+
+I’m thinking of exploring a hardware/runtime co-design idea for hint-guided KV cache prefetching. I realize that while existing serving frameworks like SGLang already do KV reuse and prefix caching and answer questions like: “Can we reuse this KV instead of recomputing it?” But I realize that the current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state. So my proposal targets a different bottleneck: “Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?”
+
+Agentic workloads, like coding agents, naturally pause during repo search, test runs, builds, and other tools. During those gaps, the runtime often knows a session is likely to resume soon, but today’s memory system mostly sees generic memory, not “high-priority KV for Agent 42 due back in 500 ms.” I want to prototype a hint-aware emulation testbed that compares no prefetch, generic software prefetch, and hint-guided prefetch/residency control. The goal is to estimate whether hardware/runtime support for KV metadata, priority-aware migration, temporary protection, and telemetry can reduce post-tool resume stalls and tail latency for tool-heavy agentic workflows.
+
+Do you have any pointers, recommendations or advice?
+
+```
+
 Current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state.
 
 I’m exploring a hardware/runtime co-design idea for **hint-guided KV cache prefetching** on Grace Hopper-style systems. Existing serving frameworks already do KV reuse and prefix caching, but they mainly answer: “Can we reuse this KV instead of recomputing it?” This proposal targets a different bottleneck: “Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?”
