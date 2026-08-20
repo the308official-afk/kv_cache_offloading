@@ -3,6 +3,20 @@
 ```bash
 Hi Sergey,
 
+Quick status update on the hint-aware agentic KV movement idea.
+
+I’ve built a proof-of-concept SGLang-based testbed to study whether agent/tool-call pauses can be used to prepare KV cache before an agent resumes. The goal is to evaluate the motivation for hardware/runtime support for agent-aware KV movement, where software provides hints but the memory movement path can enforce priority, deadlines, residency, and telemetry more predictably.
+
+So far, I have tested controlled replay workloads and real AgentBench/SWE-style traces with tool gaps. The testbed can now trace KV lifecycle events such as host writes, GPU eviction, host-to-device reloads, recompute paths, replay timing, and first-token latency. One early observation is that replay-side KV movement often happens much later than the replay deadline. In several cases, the actual H2D copy is relatively short, but the request reaches the KV/load path late or competes with normal serving work. In other cases, useful KV is no longer available and SGLang recomputes instead.
+
+This supports the core hypothesis: the opportunity is not just “can software prefetch?” Software can issue hints. The stronger question is whether the hardware/runtime memory path can make the right KV movement timely, prioritized, protected, and observable under realistic agent traffic.
+
+Next, I’m tightening the attribution further and running calibrated pressure experiments to quantify when KV is reloaded, recomputed, or already resident, and how much latency could be avoided with a deadline-aware KV movement engine.
+```
+
+```bash
+Hi Sergey,
+
 I had some discussions with Nuwan a while ago, and he asked about my plan for the hint-based agentic research. I’m thinking of exploring the following direction alongside our current studies.
 
 The idea is a hardware/runtime co-design for **hint-guided KV cache prefetching**. Existing serving frameworks like SGLang already support KV reuse and prefix caching, answering questions like: “Can we reuse this KV instead of recomputing it?” However, current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state.
