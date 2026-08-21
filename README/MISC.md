@@ -1,11 +1,15 @@
 # Misc Debug Notes
 
 ```bash
-Also, I’ve been working out a proof of concept to kickstart the agent-aware KV movement work with another colleague. My goal here is to study whether agent/tool-call pauses can be used to prepare KV cache before an agent resumes. If prefetches are late to meet resume deadlines, then it raises suspicion that the underlying DMA engines and memory movement paths are not getting enough semantic context to prioritize the right KV at the right time. Today, the runtime may know that a specific agent session is likely to resume soon, but the lower-level memory system mostly sees generic memory movement, not “urgent KV for this agent session before this deadline.”
+My honest recommendation
 
-The proof of concept is meant to test this gap concretely. I’m using SGLang-based experiments to observe when KV is written to host memory, evicted, reloaded to GPU, reused, or recomputed during agent-style tool gaps. Early results suggest that in some cases the actual host-to-device copy is not the only bottleneck; the larger issue is that the KV movement request reaches the useful copy/reuse path too late, or the KV is no longer protected/resident when the agent resumes.
+For your experiment, keep all four—but for different reasons:
 
-This is why I think the opportunity is hardware/runtime co-design rather than software-only prefetch. Software can decide what should be prefetched, but hardware support could make the movement more predictable by adding KV-aware priority, deadline handling, residency protection, and telemetry. The goal of the current proof of concept is to quantify how often these late or wasted KV movements happen and estimate the possible latency benefit of a smarter, hint-aware movement path.
+Candidate	Why include it
+Deep Agents	Popular general-purpose Western harness
+Qwen Code	Popular Chinese coding harness
+DeepSeek Harness	Official DeepSeek harness; important emerging workload
+NeMo Agent Toolkit	NVIDIA hint-aware experimental baseline
 ```
 
 ```bash
