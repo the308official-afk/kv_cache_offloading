@@ -1,572 +1,736 @@
-# Misc Debug Notes
+# GH200 Setup and Test Run Guide
+
+This document is a self-contained, step-by-step guide for setting up and running
+the replay-deadline pressure experiments on a GH200 machine from scratch. It
+covers every dependency, version, path, and workaround needed to reproduce the
+experiments.
+
+---
+
+## Table of Contents
+
+1. [Machine Requirements](#1-machine-requirements)
+2. [Architecture Warning — Do Not Copy venvs from EC2](#2-architecture-warning)
+3. [Network Layout — Jump Host](#3-network-layout--jump-host)
+4. [Step 1 — Sync the Repo to GH200](#step-1--sync-the-repo-to-gh200)
+5. [Step 2 — SSH Into GH200](#step-2--ssh-into-gh200)
+6. [Step 3 — Build Python Venvs on GH200](#step-3--build-python-venvs-on-gh200)
+7. [Step 4 — Install Node.js ARM64](#step-4--install-nodejs-arm64)
+8. [Step 5 — Pre-Create Required Directories](#step-5--pre-create-required-directories)
+9. [Step 6 — Smoke Test the Harnesses (no GPU needed)](#step-6--smoke-test-the-harnesses-no-gpu-needed)
+10. [Step 7 — Docker Setup (required for GPU runs)](#step-7--docker-setup-required-for-gpu-runs)
+11. [Step 8 — Per-Session Setup (run every new shell)](#step-8--per-session-setup-run-every-new-shell)
+12. [Step 9 — Hatcher Sentinel Run (first GPU run)](#step-9--hatcher-sentinel-run-first-gpu-run)
+13. [Step 10 — Full 7-Harness Apples-to-Apples Run](#step-10--full-7-harness-apples-to-apples-run)
+14. [Step 11 — GH200-Scaled Pressure Run](#step-11--gh200-scaled-pressure-run)
+15. [Step 12 — Download Results](#step-12--download-results)
+16. [Updating Code from Another Machine](#updating-code-from-another-machine)
+17. [Hardware Profiles Reference](#hardware-profiles-reference)
+18. [Pressure Levels Reference](#pressure-levels-reference)
+19. [Known Issues and Workarounds](#known-issues-and-workarounds)
+20. [Path Reference](#path-reference)
+
+---
+
+## 1. Machine Requirements
+
+| Item | Requirement |
+| --- | --- |
+| GPU | NVIDIA Grace Hopper 200 (GH200) |
+| CPU architecture | `aarch64` / `arm64` |
+| GPU driver | 570.x series (CUDA 12.8 max on bare metal) |
+| Docker | Must be installed and able to run `--gpus all` |
+| Docker image | `lmsysorg/sglang:latest` (ships Python 3.12 + its own CUDA runtime) |
+| Python on host | Python 3.11 (needed for NAT and Hermes venvs) |
+| Node.js on host | Current LTS via nvm — the GH200 system Node v12 OOM-crashes |
+| Model cache | `/home/central/ojaiyeob/dynamo_model_cache` (NFS-mounted on this GH200) |
+| Home directory | `/home/central/ojaiyeob` (NFS-mounted; use `/tmp` paths for Docker cache) |
+| Project directory on GH200 | `~/agentic_hardware` → resolves to `/home/central/ojaiyeob/agentic_hardware` |
+
+---
+
+## 2. Architecture Warning
+
+The GH200 is `aarch64`. The EC2 machine is `x86_64`. Python wheels and
+compiled C extensions are architecture-specific and are **not portable**.
+
+**Never copy `.venv/`, `node_modules/`, or any installed venv from EC2 to
+GH200.** The sync script already excludes these directories. Always rebuild them
+directly on GH200 after syncing the source code.
+
+---
+
+## 3. Network Layout — Jump Host
+
+The GH200 machine (`gracehopper`) is not directly reachable from the public
+internet. All connections go through a jump/bastion host.
+
+| Variable | Default value |
+| --- | --- |
+| `AGENTIC_GH200_USER` | `ojaiyeob` |
+| `AGENTIC_GH200_HOST` | `gracehopper` |
+| `AGENTIC_GH200_JUMP_HOST` | `falcon.7elements.com` |
+| `AGENTIC_GH200_JUMP_PORT` | `1337` |
+| `AGENTIC_GH200_REMOTE_DIR` | `/home/central/ojaiyeob/agentic_hardware` |
+
+Override any of these by exporting the variable before running the helper
+scripts, for example:
 
 ```bash
-My honest recommendation
-
-For your experiment, keep all four—but for different reasons:
-
-Candidate	Why include it
-Deep Agents	Popular general-purpose Western harness
-Qwen Code	Popular Chinese coding harness
-DeepSeek Harness	Official DeepSeek harness; important emerging workload
-NeMo Agent Toolkit	NVIDIA hint-aware experimental baseline
+export AGENTIC_GH200_USER="ojaiyeob"
+export AGENTIC_GH200_HOST="gracehopper"
+export AGENTIC_GH200_JUMP_HOST="falcon.7elements.com"
+export AGENTIC_GH200_JUMP_PORT="1337"
 ```
+
+SSH multiplexing is enabled automatically (`ControlMaster=auto`,
+`ControlPersist=10m`) so subsequent connections reuse the first tunnel.
+
+---
+
+## Step 1 — Sync the Repo to GH200
+
+Run this from your **local machine** inside the repo root:
 
 ```bash
-Hi Sergey,
-
-Quick status update on the hint-aware agentic KV movement idea.
-
-I’ve built a proof-of-concept SGLang-based testbed to study whether agent/tool-call pauses can be used to prepare KV cache before an agent resumes. The goal is to evaluate the motivation for hardware/runtime support for agent-aware KV movement, where software provides hints but the memory movement path can enforce priority, deadlines, residency, and telemetry more predictably.
-
-So far, I have tested controlled replay workloads and real AgentBench/SWE-style traces with tool gaps. The testbed can now trace KV lifecycle events such as host writes, GPU eviction, host-to-device reloads, recompute paths, replay timing, and first-token latency. One early observation is that replay-side KV movement often happens much later than the replay deadline. In several cases, the actual H2D copy is relatively short, but the request reaches the KV/load path late or competes with normal serving work. In other cases, useful KV is no longer available and SGLang recomputes instead.
-
-This supports the core hypothesis: the opportunity is not just “can software prefetch?” Software can issue hints. The stronger question is whether the hardware/runtime memory path can make the right KV movement timely, prioritized, protected, and observable under realistic agent traffic.
-
-Next, I’m tightening the attribution further and running calibrated pressure experiments to quantify when KV is reloaded, recomputed, or already resident, and how much latency could be avoided with a deadline-aware KV movement engine.
+./gh200/sync_to_gh200.sh
 ```
+
+What it does:
+- rsync over the jump host using the SSH options above
+- Excludes `.git/`, `.venv/`, `venv/`, `node_modules/`, `artifacts/`,
+  `__pycache__/`, `*.pyc`, `.pytest_cache/`, `.mypy_cache/`, `.ruff_cache/`,
+  `*.log`, `tmp/`, `.DS_Store`
+- Protects any existing `artifacts/` directory on the remote so experiment
+  results are never overwritten by a sync
+- Sets execute bits (`chmod ugo=rwX`) so shell scripts are runnable after sync
+- Clears stale `.pyc` files on the remote after transfer
+
+Dry-run preview (no files transferred):
 
 ```bash
-Hi Sergey,
-
-I had some discussions with Nuwan a while ago, and he asked about my plan for the hint-based agentic research. I’m thinking of exploring the following direction alongside our current studies.
-
-The idea is a hardware/runtime co-design for **hint-guided KV cache prefetching**. Existing serving frameworks like SGLang already support KV reuse and prefix caching, answering questions like: “Can we reuse this KV instead of recomputing it?” However, current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state.
-
-So the bottleneck I want to explore is slightly different: **Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?**
-
-Agentic workloads, such as coding agents, naturally pause during repo search, test runs, builds, and other tool calls. During those gaps, the runtime may know that a session is likely to resume soon, but today’s memory system mostly sees generic memory, not “high-priority KV for Agent 42 due back in 500 ms.”
-
-I’d like to prototype a hint-aware emulation testbed that compares no prefetch, generic software prefetch, and hint-guided prefetch/residency control. The goal is to estimate whether hardware/runtime support for KV metadata, priority-aware migration, temporary protection, and telemetry can reduce post-tool resume stalls and tail latency for tool-heavy agentic workflows.
-
-Do you have any pointers, recommendations, or advice?
+./gh200/sync_to_gh200.sh --dry
 ```
+
+---
+
+## Step 2 — SSH Into GH200
 
 ```bash
-Hi Sergey, I had some discussions with Nuwan awhile ago and he asked my plan for the hint-based agentic research, so I’m thinking of exploring this direction alongside our studies.
-
-I’m thinking of exploring a hardware/runtime co-design idea for hint-guided KV cache prefetching. I realize that while existing serving frameworks like SGLang already do KV reuse and prefix caching and answer questions like: “Can we reuse this KV instead of recomputing it?” But I realize that the current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state. So my proposal targets a different bottleneck: “Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?”
-
-Agentic workloads, like coding agents, naturally pause during repo search, test runs, builds, and other tools. During those gaps, the runtime often knows a session is likely to resume soon, but today’s memory system mostly sees generic memory, not “high-priority KV for Agent 42 due back in 500 ms.” I want to prototype a hint-aware emulation testbed that compares no prefetch, generic software prefetch, and hint-guided prefetch/residency control. The goal is to estimate whether hardware/runtime support for KV metadata, priority-aware migration, temporary protection, and telemetry can reduce post-tool resume stalls and tail latency for tool-heavy agentic workflows.
-
-Do you have any pointers, recommendations or advice?
-
+./gh200/ssh_to_gh200.sh
 ```
 
-Current GPU DMA and copy engines are largely agnostic to the semantic context of KV cache memory. They can move memory ranges efficiently, but they do not know whether those bytes represent KV cache for a specific agent session, whether that session is likely to resume soon, or whether the transfer should be prioritized, throttled, or protected from eviction based on agent state.
-
-I’m exploring a hardware/runtime co-design idea for **hint-guided KV cache prefetching** on Grace Hopper-style systems. Existing serving frameworks already do KV reuse and prefix caching, but they mainly answer: “Can we reuse this KV instead of recomputing it?” This proposal targets a different bottleneck: “Can we make sure the right KV is resident in fast GPU memory before an agent resumes after a tool call?”
-
-Agentic workloads, like coding agents, naturally pause during repo search, test runs, builds, and other tools. During those gaps, the runtime often knows a session is likely to resume soon, but today’s memory system mostly sees generic memory, not “high-priority KV for Agent 42 due back in 500 ms.” I want to prototype a hint-aware emulation testbed that compares no prefetch, generic software prefetch, and hint-guided prefetch/residency control. The goal is to estimate whether hardware/runtime support for KV metadata, priority-aware migration, temporary protection, and telemetry can reduce post-tool resume stalls and tail latency for tool-heavy agentic workflows.
+Or to run a single remote command:
 
 ```bash
-ssh -J ojaiyeob@falcon.7elements.com:1337 ojaiyeob@gracehopper
+./gh200/ssh_to_gh200.sh 'uname -m'   # should print: aarch64
 ```
+
+---
+
+## Step 3 — Build Python Venvs on GH200
+
+SSH into GH200 first, then run:
 
 ```bash
-Where things left off — NeMo hint injection debug (paused):
-  - Goal: prove _DynamoTransport can inject nvext.agent_hints natively, replacing manual extra_body glue in our custom DeepAgents backend
-  - What's confirmed working: transport injects hints correctly via direct httpx; GH200 Docker images + Dynamo patch all work
-  - What's broken: when _DynamoTransport is wired through LangChain ChatOpenAI + http_async_client, hints are dropped (worker logs show agent_hints: null)
-  - Current code state: agentbench/nemo_app/src/agent.py has a temporary extra_body workaround that must be reverted once the real fix is found
-  - Next step: run agentbench/diagnose_nemo_dynamo_nvext.py on GraceHopper (Dynamo running) to determine whether the transport intercepts requests through LangChain or not
+cd ~/agentic_hardware/sglang_direct_kv
+
+INSTALL_SYSTEM_DEPS=0 bash scripts/setup_gh200.sh
 ```
+
+**Critical: always pass `INSTALL_SYSTEM_DEPS=0`.**
+Without it, `apt-get` triggers a pre-existing DKMS conflict
+(`nvidia-fs` version mismatch) in the GH200 image and aborts the script before
+any venvs are created.
+
+The script creates three venvs:
+
+| Venv path | Python | Purpose |
+| --- | --- | --- |
+| `~/agentic_hardware/sglang_direct_kv/.venv` | 3.11 | Main project environment (smoke tests, report builder, workload driver) |
+| `~/agentic_hardware/.venvs/nat_py311` | 3.11 | NeMo Agent Toolkit (NAT). Install with `nvidia-nat[langchain]` — the plain `nvidia-nat` package is missing LangChain support. |
+| `~/agentic_hardware/.venvs/hermes_agent_py311` | 3.11 | Hermes Agent CLI |
+
+After the script finishes, activate the main project venv:
 
 ```bash
-The likely bug is sync vs async LangChain.
-NeMo’s Dynamo path injects nvext.agent_hints through an async HTTPX transport. The official NeMo LangChain registration passes that transport into ChatOpenAI as http_async_client, not http_client. LangChain’s docs say http_async_client is only used for async calls, while http_client is only used for sync calls. So if your agent code calls:
-llm.invoke(...)
-agent.invoke(...)
-then the NeMo async transport is bypassed, and Dynamo receives no nvext. That matches your worker log: agent_hints: null.
-Fix
-Use the async path all the way through:
-response = await llm.ainvoke(messages)
-or:
-response = await agent.ainvoke(input_payload, config=config)
-Do not expect this to work:
-ChatOpenAI(http_async_client=nemo_client).invoke(...)
-That sync .invoke() will not use http_async_client.
-Minimal Good Setup
-from langchain_openai import ChatOpenAI
-from nat.llm.dynamo_llm import DynamoModelConfig, _create_httpx_client_with_dynamo_hooks
-
-config = DynamoModelConfig(
-    model_name="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8",
-    base_url="http://127.0.0.1:8000/v1",
-    api_key="EMPTY",
-    enable_nvext_hints=True,
-    nvext_prefix_total_requests=10,
-    nvext_prefix_osl=512,
-    nvext_prefix_iat=250,
-    nvext_cache_pin_type=None,
-)
-
-async with _create_httpx_client_with_dynamo_hooks(config) as http_async_client:
-    llm = ChatOpenAI(
-        model="Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8",
-        base_url="http://127.0.0.1:8000/v1",
-        api_key="EMPTY",
-        http_async_client=http_async_client,
-    )
-
-    response = await llm.ainvoke([
-        ("user", "Reply with exactly: OK")
-    ])
-What I changed locally
-I updated [diagnose_nemo_dynamo_nvext.py](/Users/oluwolejaiyeoba/Documents/GitHub/kv_cache_offloading/agentbench/diagnose_nemo_dynamo_nvext.py) so it now checks:
-direct httpx + NeMo transport
-ChatOpenAI.ainvoke + NeMo transport
-ChatOpenAI.invoke sync bypass case
-live Dynamo request
-On GH200, run:
-cd ~/kv_cache_offloading
-
-./agentbench/debug_nemo_dynamo_nvext.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
-You want:
-captured_agent_hints_present=True
-chatopenai_async_agent_hints_present=True
-chatopenai_sync_agent_hints_present=False
-live_ok=True
-That sync=False is expected. It proves the sync path bypasses the async NeMo transport.
-Keep the temporary extra_body workaround only until your NeMo agent path is fully async. Once ChatOpenAI.ainvoke() shows hints and worker logs show non-null agent_hints, remove the workaround.
-Sources: NeMo Dynamo demo, NeMo LangChain Dynamo registration, LangChain http_client, LangChain http_async_client.
+source ~/agentic_hardware/sglang_direct_kv/.venv/bin/activate
 ```
+
+Binaries produced:
+
+| Binary | Path |
+| --- | --- |
+| `nat` | `~/agentic_hardware/.venvs/nat_py311/bin/nat` |
+| `hermes` | `~/agentic_hardware/.venvs/hermes_agent_py311/bin/hermes` |
+
+---
+
+## Step 4 — Install Node.js ARM64
+
+The native CLI harnesses (codex, claude_code, opencode, qwen_code,
+pi_agent_harness, openclaw) require Node.js. The GH200 system ships Node v12,
+which OOM-crashes under the workload. Install a current LTS build via nvm:
 
 ```bash
-cd ~/kv_cache_offloading
-
-SUITE_RUNS="exp12_synthetic" \
-DYNAMO_MACHINE_PROFILE=gh200 \
-./agentbench/run_agentic_hint_sweeps_suite_single_host.sh \
-  Qwen/Qwen2.5-Coder-7B-Instruct
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source "$HOME/.nvm/nvm.sh"
+nvm install --lts
+node -p "process.arch"   # must print: arm64
 ```
+
+If `node` is missing after reopening a session, add the nvm init lines to your
+shell profile manually:
 
 ```bash
-cd ~/kv_cache_offloading
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-SPEC_PREFILL_MODE=all \
-SPEC_PREFILL_REQUEST_SOURCE=swebench_trajectory \
-SPEC_PREFILL_TRAJECTORY_PROMPT_CATALOG=experiments/reports/latest_swebench_trajectory_prompt_catalog.csv \
-SPEC_PREFILL_TRAJECTORY_TURN_A_TASK_INDEX=0 \
-SPEC_PREFILL_TRAJECTORY_TURN_A_STAGE=planning \
-SPEC_PREFILL_TRAJECTORY_TURN_B_TASK_INDEX=-1 \
-SPEC_PREFILL_TRAJECTORY_TURN_B_STAGE=execution \
-SPEC_PREFILL_TRAJECTORY_PROMPT_PREFIX_MODE=task_stage \
-SPEC_PREFILL_REAL_TURN_B_MODE=short_followup \
-SPEC_PREFILL_COMPARISON_MODE=same_task_isolated \
-EXPERIMENT_RESET_MODE=restart \
-SPEC_PREFILL_SWEEP_AXIS=SPEC_PREFILL_INTERTURN_DISTRACTOR_COUNT \
-SPEC_PREFILL_SWEEP_VALUES="0 10 25 50 75" \
-SPEC_PREFILL_WARMUP_WAIT_MS=5000 \
-SPEC_PREFILL_STREAM_RESPONSES=1 \
-SPEC_PREFILL_OUTPUT_TOKENS=128 \
-SPEC_PREFILL_TURN_A_OUTPUT_TOKENS=2048 \
-SPEC_PREFILL_TURN_B_OUTPUT_TOKENS=8 \
-SPEC_PREFILL_INTERTURN_DISTRACTOR_START_INDEX=100 \
-SPEC_PREFILL_INTERTURN_DISTRACTOR_OUTPUT_TOKENS=1 \
-./agentbench/run_speculative_prefill_microbenchmark_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.bashrc
+echo '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"' >> ~/.bashrc
+source ~/.bashrc
 ```
+
+Verify after reopening:
 
 ```bash
-ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import csv
-from pathlib import Path
-
-p = Path("experiments/reports/latest_kv_retention_microbenchmark_matrix.csv")
-rows = list(csv.DictReader(p.open()))
-
-cols = [
-    "distractors", "arm", "hint_profile",
-    "req_prio_status", "req_prio_values",
-    "worker_prio_status", "worker_prio_values",
-    "first_ms", "replay_ms", "replay_cached", "replay_reuse",
-    "survived", "effect_status",
-]
-
-print("\t".join(cols))
-for r in rows:
-    print("\t".join(str(r.get(c, "")) for c in cols))
-PY
-distractors     arm     hint_profile    req_prio_status req_prio_values worker_prio_status      worker_prio_values      first_ms        replay_ms       replay_cached   replay_reuse    survived     effect_status
-100     control none                                    264     31      1792    0.999
-100     protected       high-priority                                   262     32      1792    0.999
-200     control none                                    261     32      1792    0.999
-200     protected       high-priority                                   263     32      1792    0.999
-300     control none                                    263     32      1792    0.999
-300     protected       high-priority                                   260     31      1792    0.999
-ojaiyeob@gracehopper:~/kv_cache_offloading$
-
-
+node --version           # e.g. v22.x.x
+node -p "process.arch"  # must print: arm64
 ```
 
+---
+
+## Step 5 — Pre-Create Required Directories
+
+Run once on GH200 before the first experiment:
 
 ```bash
-cd ~/kv_cache_offloading
-
-python3 - <<'PY'
-import csv
-from collections import Counter
-from pathlib import Path
-
-p = Path("experiments/reports/latest_swebench_trajectory_prompt_catalog.csv")
-rows = list(csv.DictReader(p.open()))
-stage_counts = Counter(r.get("stage_name") or r.get("phase") for r in rows)
-
-print("total prompt rows:", len(rows))
-print("stage counts:")
-for k, v in sorted(stage_counts.items()):
-    print(f"  {k}: {v}")
-PY
-
+mkdir -p ~/agentic_hardware/sglang_direct_kv/artifacts/results
+mkdir -p ~/agentic_hardware/sglang_direct_kv/src/agentic_kv.egg-info
 ```
 
+The `artifacts/results` directory must exist before Docker writes output files.
+The `egg-info` directory must exist before the package is importable inside the
+container.
+
+---
+
+## Step 6 — Smoke Test the Harnesses (no GPU needed)
+
+This test verifies all harness CLIs can reach and negotiate with the inspection
+gateway. It runs without a GPU using a fake local SGLang backend.
 
 ```bash
-Anticipated Direction	Value	Why There Is Opportunity for Value	Can Hints Power It?
-Lifecycle-aware KV management	Very High	Agent KV can be retained while active and removed immediately when the agent or subagent finishes, reducing both recomputation and wasted memory.	Yes. Session identity, parent-session and completion signals can guide retention and cleanup.
-Direct tool-call-aware KV prefetch	Very High	Agents often pause during tool calls. Moving KV back to GPU before the tool returns could hide transfer latency and speed up the next reasoning step.	Yes. Future timing or tool-state hints could trigger direct storage-to-GPU prefetch.
-Cache-value / semantic awareness	Very High	System prompts and tool definitions are highly reusable, while temporary reasoning and finished-subagent KV may have little value. Treating them differently improves memory efficiency.	Partly. Hints could identify content type or reuse value, but Dynamo and the runtime must enforce block-level policies.
-Cross-worker and subagent KV sharing	Very High	Shared prompts could be computed once and reused by multiple workers or subagents, avoiding repeated prefill across the cluster.	Partly. Session and shared-prefix hints help identify related requests, but shared storage, indexing and NIXL perform the actual sharing.
-Learned routing and automatic hints	High	Harnesses may not predict output length, reuse or the best worker accurately. Learned policies can improve routing automatically from past performance.	Partly. Hints provide context, but runtime telemetry and an online-learning router make the final prediction.
-Explicit latency objectives	High	Actual TTFT and inter-token-latency targets are more useful than a vague urgency score and can guide pool selection and scheduling.	Yes. Dynamo already accepts per-request ttft_target and itl_target router parameters.
-Hardware and worker-pool placement	Medium–High	Long-context or latency-sensitive requests may benefit from workers with more HBM, faster interconnects or specialized configurations.	Yes. Routing constraints can require or prefer workers with selected characteristics.
-Agent-phase awareness	Potentially High	Planning, tool waiting, synthesis and final-response stages have different latency, compute and cache needs.	Yes, if added. A future phase hint could select different scheduling, retention and prefetch policies.
-Expected resume-time awareness	Potentially High	Knowing when an agent will return helps decide whether KV should remain in GPU, move to CPU or be prefetched shortly before reuse.	Yes, if added. A future timing hint could coordinate memory placement and prefetching.
+cd ~/agentic_hardware/sglang_direct_kv
+source .venv/bin/activate
+
+HARNESS_NAT_BIN=$HOME/agentic_hardware/.venvs/nat_py311/bin/nat \
+HARNESS_HERMES_BIN=$HOME/agentic_hardware/.venvs/hermes_agent_py311/bin/hermes \
+python scripts/smoke_multi_harness_wireability.py \
+  --harnesses codex claude_code opencode qwen_code pi_agent_harness openclaw nemo_agent_toolkit hermes_agent
 ```
 
+Expected output for all 8 harnesses:
 
+```
+propagated replay priority through gateway
+```
 
+If any harness fails here, fix it before running GPU experiments.
 
+---
 
+## Step 7 — Docker Setup (required for GPU runs)
 
+### Why Docker is required
 
+The GH200 driver is 570.x series, which supports CUDA 12.8 at most. The
+pip-installable `torch` package pulls a CUDA 13.0 build. The bare `.venv`
+therefore cannot see the GPU. The `lmsysorg/sglang` Docker image bundles its
+own CUDA runtime and works with the existing driver.
 
-
-
+### Verify the image
 
 ```bash
-cd ~/kv_cache_offloading
-
-RUN_ID="exp6_prompt_evolution_gh200_1"
-grep '^25,' "experiments/reports/batches/${RUN_ID}/task_trace_index.csv" || echo "task 25 not completed; resume should retry it"
+docker images | grep lmsysorg/sglang
 ```
+
+If missing, pull it:
 
 ```bash
-Published 3 public Exp 6 report(s) after task 24 (agentbench-20260721_150945) to experiments/charts.
-===== Running SWE-bench index 25 =====
-Traceback (most recent call last):
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 5231, in <module>
-    main()
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4644, in main
-    workspace_dir, workspace_metadata = prepare_workspace(
-                                        ^^^^^^^^^^^^^^^^^^
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 4197, in prepare_workspace
-    run_command(["git", "checkout", checkout_commit], cwd=shared_repo_source)
-  File "/home/central/ojaiyeob/kv_cache_offloading/agentbench/deepagents_swebench_single_host.py", line 1686, in run_command
-    return subprocess.run(
-           ^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.11/subprocess.py", line 569, in run
-    raise CalledProcessError(retcode, process.args,
-subprocess.CalledProcessError: Command '['git', 'checkout', 'c35133622a7950d2aa96d1db03ad8b96ccd65df9']' returned non-zero exit status 128.
-Published 3 public Exp 6 report(s) after task 25 (agentbench-20260721_151210) to experiments/charts.
-Run failed: agentbench-20260721_151210
-Partial result dir: experiments/raw/agentbench/results/agentbench-20260721_151210
-Partial report dir: experiments/reports/runs/agentbench-20260721_151210
-Exit status: 1
-
-Index 25 failed; stopping because AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-Building SWE-bench trajectory prompt catalog from Experiment 6 traces...
-Preparing SWE-bench trajectory prompts...
-Trace index: experiments/reports/latest_prompt_evolution_trace_index.csv
-Catalog ID: swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1
-Stages: planning execution patch_generation review
-Min prompt chars: 200
-Max tasks: 0
-
-SWE-bench trajectory prompt catalog ready.
-catalog_id: swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1
-trace_index: experiments/reports/latest_prompt_evolution_trace_index.csv
-catalog_csv: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/swebench_trajectory_prompts/swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1/swebench_trajectory_pro    mpt_catalog.csv
-catalog_jsonl: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/swebench_trajectory_prompts/swebench_trajectory_prompts_exp6_prompt_evolution_gh200_1/swebench_trajectory_p    rompt_catalog.jsonl
-latest_csv: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
-latest_jsonl: /home/central/ojaiyeob/kv_cache_offloading/experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl
-task_count: 25
-prompt_count: 93
-stage_filter: planning execution patch_generation review
-min_prompt_chars: 200
-
-Latest catalog CSV: experiments/reports/latest_swebench_trajectory_prompt_catalog.csv
-Latest catalog JSONL: experiments/reports/latest_swebench_trajectory_prompt_catalog.jsonl
-Published catalog CSV to: experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
-
-Prompt evolution batch finished.
-Batch dir: experiments/reports/batches/exp6_prompt_evolution_gh200_1
-Driver log: experiments/reports/batches/exp6_prompt_evolution_gh200_1/prompt_evolution_batch_driver.log
-Smoke log: experiments/reports/batches/exp6_prompt_evolution_gh200_1/prompt_evolution_batch_smoke_test.log
-Progress CSV: experiments/reports/batches/exp6_prompt_evolution_gh200_1/progress_overview.csv
-Trace index CSV: experiments/reports/batches/exp6_prompt_evolution_gh200_1/task_trace_index.csv
-Trace index MD: experiments/reports/batches/exp6_prompt_evolution_gh200_1/task_trace_index.md
-Prompt evolution summary: experiments/reports/prompt_evolution_run_overview.csv
-Latest trace index CSV: experiments/reports/latest_prompt_evolution_trace_index.csv
-Latest trace index MD: experiments/reports/latest_prompt_evolution_trace_index.md
-Published readable Exp 6 reports:
-  experiments/charts/exp6_prompt_evolution_run_overview.csv
-  experiments/charts/exp6_prompt_evolution_task_summary.csv
-  experiments/charts/exp6_swebench_trajectory_prompt_catalog.csv
-
-
+docker pull lmsysorg/sglang:latest
 ```
 
+### SGLang version note
 
+The Docker image ships SGLang 0.5.8. That version **removed**
+`--disable-piecewise-cuda-graph`. All experiment runs must override
+`EXTRA_SERVER_ARGS` to use only flags that exist in 0.5.8:
 
+```
+EXTRA_SERVER_ARGS='--disable-cuda-graph --disable-overlap-schedule'
+```
 
+The `--default-priority-value` flag is version-detected at runtime by the
+experiment scripts, so no manual flag change is needed for that one.
 
+### Harness limitation in Docker
 
-For a presentation, I'd keep it to these core capabilities:
+The `lmsysorg/sglang:latest` container ships Python 3.12. The `nat` and
+`hermes` binaries depend on Python 3.11 compiled C extensions (`pydantic-core`,
+etc.) installed in the host `.venvs/nat_py311` and `.venvs/hermes_agent_py311`
+venvs. Those extensions cannot load inside the Python 3.12 container.
 
-LLM orchestration platform for scalable inference.
-KV cache-aware routing to maximize cache reuse and reduce recomputation.
-Disaggregated serving by coordinating separate prefill and decode workers.
-Distributed KV cache management with offloading across GPU, CPU, and storage.
-High-performance multi-node communication for efficient data movement between workers.
+Until the GH200 driver is upgraded to support a bare `.venv` without Docker:
 
+- Run **7 harnesses** via Docker: `hatcher codex claude_code opencode qwen_code pi_agent_harness openclaw`
+- **Exclude** `nemo_agent_toolkit` and `hermes_agent` from Docker runs
 
+### Model cache location
 
+The model cache lives at:
 
-NVIDIA Dynamo is an orchestration platform for LLM inference. It does not implement the transformer model itself. Instead, it coordinates where requests run, separates prefill and decode, routes requests using KV-cache awareness, manages the KV cache across the memory hierarchy, and moves data efficiently between machines so inference remains fast and scalable.
+```
+/home/central/ojaiyeob/dynamo_model_cache
+```
 
+This path is also available as `~/dynamo_model_cache` on GH200.
 
-Here are concise, slide-friendly descriptions for each major component:
+---
 
-API Server – Receives LLM requests and forwards them into Dynamo for processing.
-Planner – Continuously optimizes scheduling and resource usage.
-Smart Router – Routes requests to the best worker, prioritizing KV cache reuse.
-Prefill Worker – Processes the input prompt and builds the initial KV cache.
-Decode Worker – Generates output tokens using the existing KV cache.
-Distributed KV Cache – Stores and shares KV cache across workers for reuse.
-KV Cache Manager – Decides where KV cache should live (GPU, CPU, or object storage).
-NIXL (Inference Transfer Engine) – Moves data efficiently between GPUs and nodes.
-Event Plane – Monitors system health, performance, and metrics across all components.
-Host Memory – Provides larger, slower storage for offloaded KV cache.
-Object Storage – Stores long-lived KV cache beyond GPU and CPU memory.
-Disaggregated Serving – Separates prefill and decode onto specialized workers for higher efficiency.
+## Step 8 — Per-Session Setup (run every new shell)
 
+These two steps must be done once per login session before any Docker GPU run.
 
-
-
-
+### 8a — Load nvm so Node is on PATH
 
 ```bash
-Run	Status	Repo	Model	Steps	Planning	Execution	Exec Size Î”	Patch Gen	Review	Other	Total	Patch
-5310	recursion_soft_stop	NodeBB	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-5412	recursion_soft_stop	qutebrowser	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-5455	complete	NodeBB	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	1	39 - edit_file, execute, ls, read_file, write_file, write_todos	21 - execute, grep, ls, read_file, write_todos	-4979	11 - execute, ls, read_file	17 - execute, ls, read_file, write_todos	0 - none	88	4.3 KB
-5649	recursion_soft_stop	qutebrowser	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-5732	recursion_soft_stop	ansible	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-5807	recursion_soft_stop	ansible	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-5924	recursion_soft_stop	openlibrary	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-10020	recursion_soft_stop	qutebrowser	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-10112	recursion_soft_stop	teleport	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-10242	recursion_soft_stop	navidrome	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-10315	recursion_soft_stop	openlibrary	Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8	0	0 - none	0 - none		0 - none	0 - none	0 - none	0	0 B
-
-
+export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 ```
+
+### 8b — Create temp files Docker needs
+
+Docker runs as your user UID (`-u $(id -u):$(id -g)`). The torch library tries
+to look up the username for that UID in `/etc/passwd`. The NFS-mounted
+`/etc/passwd` does not contain the UID when running inside the container, so
+torch crashes on startup. A minimal single-line passwd entry fixes it.
 
 ```bash
-ojaiyeob@gracehopper:~/kv_cache_offloading$ cd ~/kv_cache_offloading
-
-RUN_DIR="$(ls -td experiments/raw/agentbench/results/agentbench-* | head -1)"
-export RUN_DIR
-
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-run_dir = Path(os.environ["RUN_DIR"])
-p = run_dir / "others" / "stage_lifecycle_trace_raw.json"
-events = json.loads(p.read_text())
-
-for e in events:
-    if e.get("event_kind") != "agent_stream_step":
-        continue
-    s = e.get("chunk_summary", {})
-    msgs = s.get("last_messages", [])
-    last = msgs[-1] if msgs else {}
-    print(
-        e["stage"],
-        "step=", e.get("chunk_index"),
-        "messages=", s.get("message_count"),
-        "last_type=", last.get("type"),
-        "tools=", last.get("tool_call_names"),
-        "preview=", (last.get("content_preview") or "")[:160].replace("\n", " "),
-    )
-
-for e in events:
-    if e.get("event_kind") == "agent_stream_error":
-        print("\nERROR:", e.get("error_type"), e.get("error"))
-        print("last:", e.get("last_chunk_summary"))
-PY
-execution_agent_stream_step step= 1 messages= 1 last_type= human tools= [] preview= Phase: execution_loop_inspect  Loop state reason: start_with_inspection.  Do not write a plan, markdown code fence, or next-steps-only answer. Use the available
-execution_agent_stream_step step= 2 messages= 2 last_type= ai tools= ['ls'] preview= I'll start by inspecting the repository structure to understand the codebase and locate the relevant files mentioned in the issue.
-execution_agent_stream_step step= 3 messages= 3 last_type= tool tools= [] preview= ['/.codeclimate.yml', '/.editorconfig', '/.eslintignore', '/.eslintrc', '/.git/', '/.gitattributes', '/.github/', '/.gitignore', '/.husky/', '/.mocharc.yml', '/
-execution_agent_stream_step step= 4 messages= 4 last_type= ai tools= ['ls'] preview= Let me explore the src directory to find the database and user modules:
-execution_agent_stream_step step= 5 messages= 5 last_type= tool tools= [] preview= ['/src/admin/', '/src/als.js', '/src/analytics.js', '/src/api/', '/src/batch.js', '/src/cache.js', '/src/cache/', '/src/cacheCreate.js', '/src/categories/', '/s
-execution_agent_stream_step step= 6 messages= 6 last_type= ai tools= ['ls'] preview= Now let me look at the database directory structure to find the adapters:
-execution_agent_stream_step step= 7 messages= 7 last_type= tool tools= [] preview= ['/src/database/cache.js', '/src/database/helpers.js', '/src/database/index.js', '/src/database/mongo.js', '/src/database/mongo/', '/src/database/postgres.js',
-execution_agent_stream_step step= 8 messages= 8 last_type= ai tools= ['ls'] preview= Let me check the database adapter files to understand their current structure:
-execution_agent_stream_step step= 9 messages= 9 last_type= tool tools= [] preview= ['/src/database/mongo/connection.js', '/src/database/mongo/hash.js', '/src/database/mongo/helpers.js', '/src/database/mongo/list.js', '/src/database/mongo/main.
-execution_agent_stream_step step= 10 messages= 10 last_type= ai tools= ['ls'] preview=
-execution_agent_stream_step step= 11 messages= 11 last_type= tool tools= [] preview= ['/src/database/postgres/connection.js', '/src/database/postgres/hash.js', '/src/database/postgres/helpers.js', '/src/database/postgres/list.js', '/src/database
-execution_agent_stream_step step= 12 messages= 12 last_type= ai tools= ['ls'] preview=
-execution_agent_stream_step step= 13 messages= 13 last_type= tool tools= [] preview= ['/src/database/redis/connection.js', '/src/database/redis/hash.js', '/src/database/redis/helpers.js', '/src/database/redis/list.js', '/src/database/redis/main.
-execution_agent_stream_step step= 14 messages= 14 last_type= ai tools= ['ls'] preview= Now let me check the user module structure:
-execution_agent_stream_step step= 15 messages= 15 last_type= tool tools= [] preview= ['/src/user/admin.js', '/src/user/approval.js', '/src/user/auth.js', '/src/user/bans.js', '/src/user/blocks.js', '/src/user/categories.js', '/src/user/create.js
-execution_agent_stream_step step= 16 messages= 16 last_type= ai tools= ['read_file'] preview= Let me first examine the current implementation of the database adapters to understand what's missing:
-execution_agent_stream_step step= 17 messages= 17 last_type= tool tools= [] preview=      1     'use strict';      2          3 module.exports = function (module) {      4             const helpers = require('./helpers');      5         module.flushdb = async function (
-execution_agent_stream_step step= 18 messages= 18 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 19 messages= 19 last_type= tool tools= [] preview=      1     'use strict';      2          3 module.exports = function (module) {      4             const helpers = require('./helpers');      5       6         module.flushdb = async fu
-execution_agent_stream_step step= 20 messages= 20 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 21 messages= 21 last_type= tool tools= [] preview=      1     'use strict';      2          3 module.exports = function (module) {      4             const helpers = require('./helpers');      5       6         module.flushdb = async fu
-execution_agent_stream_step step= 22 messages= 22 last_type= ai tools= ['read_file'] preview= Now let me check the user email module to understand the current implementation:
-execution_agent_stream_step step= 23 messages= 23 last_type= tool tools= [] preview=      1           2 'use strict';      3          4 const nconf = require('nconf');      5  const winston = require('winston');      6         7 const user = require('./in
-execution_agent_stream_step step= 24 messages= 24 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 25 messages= 25 last_type= tool tools= [] preview=    101                     options = {    102                              email: options,    103      };    104                }    105            106         const confirm_code = utils.generateUUID();    107               const confirm_link = `${
-execution_agent_stream_step step= 26 messages= 26 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 27 messages= 27 last_type= tool tools= [] preview=    201             if (oldUid && oldUid !== parseInt(uid, 10)) {    202                    throw new Error('[[error:email-taken]]');    203             }    204            205         const confirmedEmails = await
-execution_agent_stream_step step= 28 messages= 28 last_type= ai tools= ['read_file'] preview= Now let me check the user info module to understand how loadUserInfo works:
-execution_agent_stream_step step= 29 messages= 29 last_type= tool tools= [] preview=      1     'use strict';      2          3 const _ = require('lodash');      4     const validator = require('validator');      5             6 const db = require('../database')
-execution_agent_stream_step step= 30 messages= 30 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 31 messages= 31 last_type= tool tools= [] preview=    101             async function formatBanMuteData(keys, noReasonLangKey) {    102                    const data = await db.getObjects(keys);    103                   const uids = data.map(d => d.fromUid
-execution_agent_stream_step step= 32 messages= 32 last_type= ai tools= ['grep'] preview= Let me search for the loadUserInfo function to understand how it's implemented:
-execution_agent_stream_step step= 33 messages= 33 last_type= tool tools= [] preview= /src/controllers/admin/users.js
-execution_agent_stream_step step= 34 messages= 34 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 35 messages= 35 last_type= tool tools= [] preview=      1     'use strict';      2          3 const validator = require('validator');      4        5 const user = require('../../user');      6   const meta = require('../.
-execution_agent_stream_step step= 36 messages= 36 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 37 messages= 37 last_type= tool tools= [] preview=    101         102         await render(req, res, {    103                 users: users.filter(user => user && parseInt(user.uid, 10)),    104                  page: page,    105                      pageCount: Math.max
-execution_agent_stream_step step= 38 messages= 38 last_type= ai tools= ['ls'] preview= Now let me check the test files to understand what's expected:
-execution_agent_stream_step step= 39 messages= 39 last_type= tool tools= [] preview= ['/test/.eslintrc', '/test/api.js', '/test/authentication.js', '/test/batch.js', '/test/blacklist.js', '/test/build.js', '/test/categories.js', '/test/controlle
-execution_agent_stream_step step= 40 messages= 40 last_type= ai tools= ['ls'] preview=
-execution_agent_stream_step step= 41 messages= 41 last_type= tool tools= [] preview= ['/test/database/hash.js', '/test/database/keys.js', '/test/database/list.js', '/test/database/sets.js', '/test/database/sorted.js']
-execution_agent_stream_step step= 42 messages= 42 last_type= ai tools= ['ls'] preview=
-execution_agent_stream_step step= 43 messages= 43 last_type= tool tools= [] preview= ['/test/user/emails.js', '/test/user/reset.js', '/test/user/uploads.js']
-execution_agent_stream_step step= 44 messages= 44 last_type= ai tools= ['read_file'] preview= Let me check the database keys test to understand what's expected for mget:
-execution_agent_stream_step step= 45 messages= 45 last_type= tool tools= [] preview=      1     'use strict';      2          3       4 const async = require('async');      5  const assert = require('assert');      6     const db = require('../mocks/databas
-execution_agent_stream_step step= 46 messages= 46 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 47 messages= 47 last_type= tool tools= [] preview=    101                     });    102              });    103          104         it('should delete all keys passed in', (done) => {    105                    async.parallel([    106                         function (next) {    107                                        db.
-execution_agent_stream_step step= 48 messages= 48 last_type= ai tools= ['read_file'] preview= Now let me check the user emails test to understand the current behavior:
-execution_agent_stream_step step= 49 messages= 49 last_type= tool tools= [] preview=      1     'use strict';      2          3 const assert = require('assert');      4        const nconf = require('nconf');      5       const util = require('util');      6          7
-execution_agent_stream_step step= 50 messages= 50 last_type= ai tools= ['ls'] preview= Now I'll check the database mock to understand how the database interface works:
-execution_agent_stream_step step= 51 messages= 51 last_type= tool tools= [] preview= ['/test/mocks/databasemock.js', '/test/mocks/plugin_modules/']
-execution_agent_stream_step step= 52 messages= 52 last_type= ai tools= ['read_file'] preview=
-execution_agent_stream_step step= 53 messages= 53 last_type= tool tools= [] preview=      1     'use strict';      2          3 /**      4       * Database Mock - wrapper for database.js, makes system use separate test db, instead of production      5   * AT
-execution_agent_stream_step step= 54 messages= 54 last_type= ai tools= ['execute'] preview= Let me now run the tests to see what's currently failing:
-
-ERROR: GraphRecursionError GraphRecursionError('Recursion limit of 80 reached without hitting a stop condition. You can increase the limit by setting the `recursion_limit` config key.\nFor troubleshooting, visit: https://docs.langchain.com/oss/python/langgraph/errors/GRAPH_RECURSION_LIMIT')
-last: {'kind': 'state', 'keys': ['files', 'messages'], 'message_count': 54, 'last_messages': [{'type': 'ai', 'name': None, 'tool_call_id': None, 'tool_call_count': 1, 'tool_call_names': ['read_file'], 'content_preview': ''}, {'type': 'tool', 'name': 'read_file', 'tool_call_id': 'call-33fd0a50-fb4b-44ca-8bbc-9eb219a94520', 'tool_call_count': 0, 'tool_call_names': [], 'content_preview': "     1\t'use strict';\n     2\t\n     3\t/**\n     4\t * Database Mock - wrapper for database.js, makes system use separate test db, instead of production\n     5\t * ATTENTION: testing db is flushed before every use!\n     6\t */\n     7\t\n     8\trequire('../../require-main');\n     9\t\n    10\tconst path = require('path');\n    11\tconst nconf = require('nconf');\n    12\tconst url = require('url');\n    13\tconst util = require('util');\n    14\t\n    15\tprocess.env.NODE_ENV = process.env.TEST_ENV || 'production';\n    16\tglobal.env = process.env.NODE_ENV || 'production';\n    17\t\n    18\t\n    19\tconst winston = require('winston');\n    20\tconst packageInfo = require('../../package.json');\n    21\t\n    22\twinston.add(new winston.transports.Console({\n    23\t\tformat: winston.format.combine(\n    24\t\t\twinston.format.splat(),\n    25\t\t\twinston.format.simple()\n    26\t\t),\n    27\t}));\n    28\t\n    29\ttry {\n    30\t\tconst fs = require('fs');\n    31\t\tconst configJSON = fs.readFileSync(path.join(__dirname, '../../config.json'"}, {'type': 'ai', 'name': None, 'tool_call_id': None, 'tool_call_count': 1, 'tool_call_names': ['execute'], 'content_preview': "Let me now run the tests to see what's currently failing:\n\n"}]}
-ojaiyeob@gracehopper:~/kv_cache_offloading$
-
+mkdir -p /tmp/gh200home
+echo "ojaiyeob:x:$(id -u):$(id -g)::/tmp/gh200home:/bin/bash" > /tmp/gh200_passwd
 ```
 
-## Experiment 6: Deep Agents Recursion Debug
+Replace `ojaiyeob` with your actual username if different.
 
-Use this when Experiment 6 hits `GraphRecursionError` and you want to inspect
-why the agent is taking many graph steps instead of hiding the issue with a cap.
+---
 
-This run intentionally disables model-only planning:
+## Step 9 — Hatcher Sentinel Run (first GPU run)
 
-- `AGENTBENCH_MODEL_ONLY_PHASES=""`
-- `AGENTBENCH_TRACE_AGENT_STREAM=1`
+This is the recommended first Docker GPU run. It uses only the in-repo Hatcher
+control harness with 3 pressure levels (P0, P3, P5) and both modes. Run it
+first to verify the Docker setup is working end-to-end before launching the
+full harness set.
 
-That means planning runs through the real Deep Agents graph, and every graph
-step is written into `stage_lifecycle_trace_raw.json`.
+Always run inside `screen` so the experiment survives a terminal disconnect:
 
 ```bash
-cd ~/kv_cache_offloading
-
-export AGENTBENCH_EXECUTION_LOOP=1
-export AGENTBENCH_EXECUTION_LOOP_MAX_STEPS=6
-export AGENTBENCH_EXECUTION_LOOP_REQUIRE_TEST=1
-export AGENTBENCH_EXECUTION_GUARD=1
-export AGENTBENCH_PRINT_CHECKPOINTS=1
-export DYN_TOOL_CALL_PARSER=qwen3_coder
-export DYN_REASONING_PARSER=qwen3
-export AGENTBENCH_DEEPAGENTS_SOURCE=upstream
-export AGENTBENCH_FORCE_TOOL_CHOICE=auto
-export AGENTBENCH_DISABLE_GENERAL_PURPOSE_SUBAGENT=1
-export AGENTBENCH_BATCH_CONTINUE_ON_ERROR=0
-export PROMPT_EVOLUTION_REQUIRE_TOOL_LOOP=1
-export PROMPT_EVOLUTION_TOOL_LOOP_CASE=edit-validate
-
-# Important: disable model-only planning so this run exposes the real loop.
-export AGENTBENCH_MODEL_ONLY_PHASES=""
-export AGENTBENCH_TRACE_AGENT_STREAM=1
-export AGENTBENCH_TRACE_AGENT_STREAM_MODE=values
-export AGENTBENCH_AGENT_RECURSION_LIMIT=80
-
-DYNAMO_MACHINE_PROFILE=gh200 \
-PRECISE_START_MODE=clean \
-PROMPT_EVOLUTION_BATCH_START_INDEX=0 \
-PROMPT_EVOLUTION_BATCH_END_INDEX=1 \
-PROMPT_EVOLUTION_VALUE_CHAR_LIMIT=200000 \
-./agentbench/run_prompt_evolution_batch_single_host.sh \
-  Qwen/Qwen3-Coder-30B-A3B-Instruct-FP8
+screen -S gh200_experiment
+# Detach any time with: Ctrl+A then D
+# Reattach with:        screen -r gh200_experiment
 ```
 
-After the run fails or finishes, inspect the stream trace:
+Then run the Docker command:
 
 ```bash
-cd ~/kv_cache_offloading
-
-RUN_DIR="$(ls -td experiments/raw/agentbench/results/agentbench-* | head -1)"
-export RUN_DIR
-
-python3 - <<'PY'
-import json
-import os
-from pathlib import Path
-
-run_dir = Path(os.environ["RUN_DIR"])
-p = run_dir / "others" / "stage_lifecycle_trace_raw.json"
-events = json.loads(p.read_text())
-
-for e in events:
-    if e.get("event_kind") != "agent_stream_step":
-        continue
-    s = e.get("chunk_summary", {})
-    msgs = s.get("last_messages", [])
-    last = msgs[-1] if msgs else {}
-    print(
-        e["stage"],
-        "step=", e.get("chunk_index"),
-        "messages=", s.get("message_count"),
-        "last_type=", last.get("type"),
-        "tools=", last.get("tool_call_names"),
-        "preview=", (last.get("content_preview") or "")[:160].replace("\n", " "),
-    )
-
-for e in events:
-    if e.get("event_kind") == "agent_stream_error":
-        print("\nERROR:", e.get("error_type"), e.get("error"))
-        print("last:", e.get("last_chunk_summary"))
-PY
+docker run --rm --gpus all \
+  -u $(id -u):$(id -g) \
+  -v ~/agentic_hardware:/workspace/agentic_hardware \
+  -v ~/agentic_hardware:/home/central/ojaiyeob/agentic_hardware \
+  -v ~/dynamo_model_cache:/tmp/hfcache \
+  -v ~/.nvm:/tmp/gh200home/.nvm \
+  -v /tmp/gh200_passwd:/etc/passwd:ro \
+  -v /tmp/gh200home:/tmp/gh200home \
+  -e HF_HOME=/tmp/hfcache \
+  -e NVM_DIR=/tmp/gh200home/.nvm \
+  -e HOME=/tmp/gh200home \
+  -e TORCHINDUCTOR_CACHE_DIR=/tmp/gh200home/torchinductor \
+  lmsysorg/sglang:latest \
+  bash -c "
+    source /tmp/gh200home/.nvm/nvm.sh 2>/dev/null || true
+    cd /workspace/agentic_hardware/sglang_direct_kv
+    EXTRA_SERVER_ARGS='--disable-cuda-graph --disable-overlap-schedule' \
+    HARNESS_NAT_BIN=/workspace/agentic_hardware/.venvs/nat_py311/bin/nat \
+    HARNESS_HERMES_BIN=/workspace/agentic_hardware/.venvs/hermes_agent_py311/bin/hermes \
+    HARDWARE_PROFILE=ec2_a10g \
+    HARNESSES=hatcher \
+    PRESSURE_LEVELS='p0_control p3_high p5_boss_queue' \
+    MODES='no_prefetch e2e_priority_hints' \
+    REPORT_BUILDER_MODE=lightweight \
+    REPORT_LABEL=\"gh200_apples_to_apples_\$(date +%Y%m%d_%H%M%S)\" \
+    bash scripts/run_native_harness_deadline_pressure.sh \
+      Qwen/Qwen2.5-Coder-7B-Instruct
+  "
 ```
 
-How to read the output:
+Expected result: 6 cases complete (2 modes × 3 pressure levels) and the script
+prints `Done.` with a report path.
 
-- If you see the same tool or same message pattern repeating, it is probably a
-  real loop.
-- If you see many different file reads, edits, and validation commands, the task
-  is genuinely long and needs a better phase budget.
-- If planning loops before useful tool work, the issue is in the planning graph
-  path, not in the execution phase.
-- If execution loops after planning succeeds, the issue is in tool use,
-  validation, or stop-condition handling.
+### Docker flag explanations
 
+| Flag | Reason |
+| --- | --- |
+| `--gpus all` | Expose the GH200 GPU to the container |
+| `-u $(id -u):$(id -g)` | Write output files as your user, not root. Without this, `artifacts/` becomes root-owned and you cannot delete or overwrite files from the host. |
+| `-v ~/agentic_hardware:/workspace/agentic_hardware` | Primary repo mount used by the experiment scripts |
+| `-v ~/agentic_hardware:/home/central/ojaiyeob/agentic_hardware` | Secondary mount at the absolute host path. The `nat` and `hermes` binaries have shebangs pointing to absolute host paths (e.g. `/home/central/ojaiyeob/agentic_hardware/.venvs/...`). Without this second mount the shebangs cannot resolve inside the container. |
+| `-v ~/dynamo_model_cache:/tmp/hfcache` | Mounts the model cache to a path your UID owns. Mounting to `/root/.cache` causes permission errors when running as non-root. |
+| `-v ~/.nvm:/tmp/gh200home/.nvm` | Makes nvm (and the ARM64 Node.js LTS) available inside the container |
+| `-v /tmp/gh200_passwd:/etc/passwd:ro` | Provides a passwd entry for your UID so torch can look up the username. Without this torch crashes on startup. |
+| `-v /tmp/gh200home:/tmp/gh200home` | Gives torch a writable directory for its inductor cache |
+| `-e HF_HOME=/tmp/hfcache` | Tells HuggingFace to load models from the mounted cache |
+| `-e NVM_DIR=/tmp/gh200home/.nvm` | Points nvm to the mounted `.nvm` directory |
+| `-e HOME=/tmp/gh200home` | Sets HOME to a writable directory (the NFS home is not writable as non-root inside the container) |
+| `-e TORCHINDUCTOR_CACHE_DIR=...` | Keeps the torch inductor cache inside the writable `/tmp/gh200home` |
+
+### Cleaning up root-owned files from a previous run
+
+If a prior run left root-owned files in `artifacts/` that you cannot delete,
+use Docker to remove them (the container runs as the same UID that created
+them):
+
+```bash
+docker run --rm \
+  -v ~/agentic_hardware:/workspace/agentic_hardware \
+  lmsysorg/sglang:latest \
+  rm -rf /workspace/agentic_hardware/sglang_direct_kv/artifacts
+
+mkdir -p ~/agentic_hardware/sglang_direct_kv/artifacts/results
+```
+
+---
+
+## Step 10 — Full 7-Harness Apples-to-Apples Run
+
+Run this after the hatcher sentinel passes. Uses `HARDWARE_PROFILE=ec2_a10g`
+so results are directly comparable to the EC2 baseline.
+
+NAT (`nemo_agent_toolkit`) and Hermes (`hermes_agent`) are excluded because
+they require Python 3.11 C extensions that cannot load in the Python 3.12
+Docker container.
+
+```bash
+screen -S gh200_experiment   # or reattach: screen -r gh200_experiment
+
+docker run --rm --gpus all \
+  -u $(id -u):$(id -g) \
+  -v ~/agentic_hardware:/workspace/agentic_hardware \
+  -v ~/agentic_hardware:/home/central/ojaiyeob/agentic_hardware \
+  -v ~/dynamo_model_cache:/tmp/hfcache \
+  -v ~/.nvm:/tmp/gh200home/.nvm \
+  -v /tmp/gh200_passwd:/etc/passwd:ro \
+  -v /tmp/gh200home:/tmp/gh200home \
+  -e HF_HOME=/tmp/hfcache \
+  -e NVM_DIR=/tmp/gh200home/.nvm \
+  -e HOME=/tmp/gh200home \
+  -e TORCHINDUCTOR_CACHE_DIR=/tmp/gh200home/torchinductor \
+  lmsysorg/sglang:latest \
+  bash -c "
+    source /tmp/gh200home/.nvm/nvm.sh 2>/dev/null || true
+    cd /workspace/agentic_hardware/sglang_direct_kv
+    EXTRA_SERVER_ARGS='--disable-cuda-graph --disable-overlap-schedule' \
+    HARNESS_NAT_BIN=/workspace/agentic_hardware/.venvs/nat_py311/bin/nat \
+    HARNESS_HERMES_BIN=/workspace/agentic_hardware/.venvs/hermes_agent_py311/bin/hermes \
+    HARDWARE_PROFILE=ec2_a10g \
+    HARNESSES='hatcher codex claude_code opencode qwen_code pi_agent_harness openclaw' \
+    PRESSURE_LEVELS='p0_control p3_high p5_boss_queue' \
+    MODES='no_prefetch e2e_priority_hints' \
+    REPORT_BUILDER_MODE=lightweight \
+    REPORT_LABEL=\"gh200_apples_to_apples_\$(date +%Y%m%d_%H%M%S)\" \
+    bash scripts/run_native_harness_deadline_pressure.sh \
+      Qwen/Qwen2.5-Coder-7B-Instruct
+  "
+```
+
+Expected: 42 cases complete (7 harnesses × 2 modes × 3 pressure levels).
+
+---
+
+## Step 11 — GH200-Scaled Pressure Run
+
+Run this after the apples-to-apples run passes. Uses `HARDWARE_PROFILE=gh200`
+which increases token budget, HiCache size, filler count, and concurrency to
+find the GH200's own replay-deadline cliff.
+
+```bash
+docker run --rm --gpus all \
+  -u $(id -u):$(id -g) \
+  -v ~/agentic_hardware:/workspace/agentic_hardware \
+  -v ~/agentic_hardware:/home/central/ojaiyeob/agentic_hardware \
+  -v ~/dynamo_model_cache:/tmp/hfcache \
+  -v ~/.nvm:/tmp/gh200home/.nvm \
+  -v /tmp/gh200_passwd:/etc/passwd:ro \
+  -v /tmp/gh200home:/tmp/gh200home \
+  -e HF_HOME=/tmp/hfcache \
+  -e NVM_DIR=/tmp/gh200home/.nvm \
+  -e HOME=/tmp/gh200home \
+  -e TORCHINDUCTOR_CACHE_DIR=/tmp/gh200home/torchinductor \
+  lmsysorg/sglang:latest \
+  bash -c "
+    source /tmp/gh200home/.nvm/nvm.sh 2>/dev/null || true
+    cd /workspace/agentic_hardware/sglang_direct_kv
+    EXTRA_SERVER_ARGS='--disable-cuda-graph --disable-overlap-schedule' \
+    HARNESS_NAT_BIN=/workspace/agentic_hardware/.venvs/nat_py311/bin/nat \
+    HARNESS_HERMES_BIN=/workspace/agentic_hardware/.venvs/hermes_agent_py311/bin/hermes \
+    HARDWARE_PROFILE=gh200 \
+    HARNESSES='hatcher codex claude_code opencode qwen_code pi_agent_harness openclaw' \
+    PRESSURE_LEVELS='p0_control p1_mild p2_medium p3_high p4_cliff p5_boss_queue' \
+    MODES='no_prefetch e2e_priority_hints' \
+    REPORT_BUILDER_MODE=lightweight \
+    REPORT_LABEL=\"gh200_scaled_deadline_pressure_\$(date +%Y%m%d_%H%M%S)\" \
+    bash scripts/run_native_harness_deadline_pressure.sh \
+      Qwen/Qwen2.5-Coder-7B-Instruct
+  "
+```
+
+Expected: 84 cases complete (7 harnesses × 2 modes × 6 pressure levels).
+
+---
+
+## Step 12 — Download Results
+
+Run from your **local machine**:
+
+```bash
+# Latest HTML report only
+./gh200/download.sh
+
+# Full artifacts directory
+./gh200/download.sh --all
+```
+
+Files produced locally:
+
+| Local path | Content |
+| --- | --- |
+| `sglang_direct_kv/artifacts/results/latest_master_report.html` | Latest report |
+| `latest_master_report.html` | Copy at repo root |
+| `sglang_direct_kv/artifacts/results/reports/<REPORT_LABEL>/master_report.html` | Archived copy |
+
+---
+
+## Updating Code from Another Machine
+
+This setup is modular for source code changes. The Docker container mounts the
+repo as a live volume (`-v ~/agentic_hardware:/workspace/agentic_hardware`), so
+files synced to GH200 are immediately visible inside the container — no Docker
+rebuild or image pull is needed.
+
+### The update workflow
+
+**On your development machine** — commit or stage your changes, then re-run the
+sync:
+
+```bash
+./gh200/sync_to_gh200.sh
+```
+
+The sync is safe to run at any time. It protects the remote `artifacts/`
+directory (`--filter='protect sglang_direct_kv/artifacts/'`) so no experiment
+results are overwritten.
+
+**On GH200** — what you need to do next depends on what changed:
+
+| What changed | Action on GH200 |
+| --- | --- |
+| Modified `.py` files or scripts (no new dependencies) | Nothing — the editable install resolves imports directly from the source tree |
+| New `.py` files inside the existing package structure | Nothing — editable install picks them up immediately |
+| New top-level Python package directory added | `source .venv/bin/activate && pip install -e .` |
+| `requirements.txt` changed (new or updated dependency) | `source .venv/bin/activate && pip install -r requirements.txt` |
+| New dependency needed by NAT (`nemo_agent_toolkit`) | `~/agentic_hardware/.venvs/nat_py311/bin/pip install <package>` |
+| New dependency needed by Hermes | `~/agentic_hardware/.venvs/hermes_agent_py311/bin/pip install <package>` |
+| New shell script added under `scripts/` | Nothing — `sync_to_gh200.sh` sets execute bits (`chmod ugo=rwX`) during transfer |
+| New config file under `configs/` | Nothing — scripts load configs at runtime from the synced path |
+
+### What never needs to change
+
+- The Docker image (`lmsysorg/sglang:latest`) — it only provides the CUDA
+  runtime and the SGLang server. All experiment Python code, scripts, and
+  configs run from the mounted repo volume.
+- The venvs — unless `requirements.txt` or package structure changed (see
+  table above).
+- The per-session setup (Step 8) — `/tmp/gh200_passwd` and `/tmp/gh200home`
+  are independent of source code.
+
+### The one gotcha: stale egg-info
+
+If the package structure changes enough that
+`sglang_direct_kv/src/agentic_kv.egg-info` becomes stale, you may see import
+errors when running scripts. Fix:
+
+```bash
+cd ~/agentic_hardware/sglang_direct_kv
+source .venv/bin/activate
+pip install -e .
+```
+
+This is fast (a few seconds) and safe to run after any sync that touches the
+package structure.
+
+### Decision guide
+
+```
+Did requirements.txt change?
+  Yes → pip install -r requirements.txt inside .venv
+  No  → Did you add a new top-level package directory?
+          Yes → pip install -e . inside .venv
+          No  → sync is sufficient, nothing else needed
+```
+
+---
+
+## Hardware Profiles Reference
+
+Hardware profiles live in `sglang_direct_kv/configs/hardware/`.
+
+### `ec2_a10g` — apples-to-apples comparison profile
+
+| Parameter | Value |
+| --- | --- |
+| `MAX_TOTAL_TOKENS` | 24576 |
+| `HICACHE_SIZE_GB` | 8 |
+| `MEM_FRACTION_STATIC` | 0.72 |
+| `REPORT_BUILDER_MODE` | lightweight |
+| `GPU_UTIL_SAMPLE_INTERVAL_MS` | 100 |
+
+Pressure knobs:
+
+| Level | `tool_wait_ms` | `target_prompt_tokens` | `filler_sessions` | `filler_prompt_tokens` | `session_count` | `concurrency` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| P0 control | 500 | 1024 | 0 | 768 | 1 | 1 |
+| P1 mild | 250 | 2048 | 8 | 1024 | 1 | 4 |
+| P2 medium | 100 | 3072 | 16 | 1536 | 1 | 6 |
+| P3 high | 50 | 4096 | 32 | 1536 | 1 | 8 |
+| P4 cliff | 25 | 4096 | 48 | 2048 | 1 | 10 |
+| P5 boss queue | 50 | 4096 | 4 | 2048 | 4 | 12 |
+
+### `gh200` — GH200-scaled pressure profile
+
+| Parameter | Value |
+| --- | --- |
+| `MAX_TOTAL_TOKENS` | 98304 |
+| `HICACHE_SIZE_GB` | 32 |
+| `MEM_FRACTION_STATIC` | 0.80 |
+| `REPORT_BUILDER_MODE` | lightweight |
+| `GPU_UTIL_SAMPLE_INTERVAL_MS` | 100 |
+
+Pressure knobs:
+
+| Level | `tool_wait_ms` | `target_prompt_tokens` | `filler_sessions` | `filler_prompt_tokens` | `session_count` | `concurrency` |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| P0 control | 500 | 1024 | 0 | 768 | 1 | 1 |
+| P1 mild | 250 | 2048 | 16 | 1536 | 1 | 8 |
+| P2 medium | 100 | 4096 | 32 | 2048 | 1 | 12 |
+| P3 high | 50 | 4096 | 64 | 2048 | 1 | 16 |
+| P4 cliff | 25 | 8192 | 96 | 3072 | 1 | 24 |
+| P5 boss queue | 50 | 8192 | 8 | 3072 | 8 | 32 |
+
+---
+
+## Pressure Levels Reference
+
+| Level | Name | Primary stressor |
+| --- | --- | --- |
+| `p0_control` | Control | Easy baseline — long tool wait, small prompt, no fillers |
+| `p1_mild` | Mild pressure | Shorter wait, modest context, small filler count |
+| `p2_medium` | Medium pressure | More queue and KV pressure |
+| `p3_high` | Queue pressure | One urgent replay behind 32–64 filler requests |
+| `p4_cliff` | Deadline cliff | Very short wait plus large KV and heavier backend pressure |
+| `p5_boss_queue` | Boss queue | Many urgent replays compete simultaneously |
+
+Sentinel runs use `p0_control p3_high p5_boss_queue`. Full ladder runs use all
+six levels.
+
+---
+
+## Known Issues and Workarounds
+
+### DKMS conflict on apt-get
+
+`apt-get` on this GH200 image hits a pre-existing `nvidia-fs` version mismatch
+that aborts. **Always pass `INSTALL_SYSTEM_DEPS=0`** to `setup_gh200.sh`.
+
+### torch crashes with "uid not found"
+
+torch calls `getpwuid()` to look up the username. When running as a non-root
+UID inside Docker against an NFS-mounted `/etc/passwd`, the UID entry is
+missing. Fix: create `/tmp/gh200_passwd` with a single line for your UID and
+bind-mount it as `/etc/passwd:ro` (see Step 8b).
+
+### torch cannot write its cache
+
+The NFS home directory is not writable for non-root UIDs inside the container.
+Fix: set `HOME=/tmp/gh200home` and `TORCHINDUCTOR_CACHE_DIR=/tmp/gh200home/torchinductor`
+and bind-mount `/tmp/gh200home` into the container.
+
+### `--disable-piecewise-cuda-graph` is not recognized
+
+SGLang 0.5.8 (the Docker image version) removed this flag. Use:
+
+```
+EXTRA_SERVER_ARGS='--disable-cuda-graph --disable-overlap-schedule'
+```
+
+### root-owned files block re-runs
+
+If a run that was not started with `-u $(id -u):$(id -g)` left root-owned
+files, the host user cannot delete or overwrite them. Remove with Docker:
+
+```bash
+docker run --rm \
+  -v ~/agentic_hardware:/workspace/agentic_hardware \
+  lmsysorg/sglang:latest \
+  rm -rf /workspace/agentic_hardware/sglang_direct_kv/artifacts
+mkdir -p ~/agentic_hardware/sglang_direct_kv/artifacts/results
+```
+
+### NAT and Hermes fail inside Docker
+
+`nemo_agent_toolkit` and `hermes_agent` depend on Python 3.11 compiled C
+extensions. The Docker image ships Python 3.12. These two harnesses are
+excluded from all Docker-based runs. The smoke test in Step 6 can verify them
+on the host using the Python 3.11 venvs.
+
+### Node not found inside Docker
+
+The `source /tmp/gh200home/.nvm/nvm.sh 2>/dev/null || true` line at the start
+of the Docker bash command loads nvm from the bind-mounted `~/.nvm`. If Node
+is still not found, verify that `~/.nvm` on the host contains the correct LTS
+binary and that the bind-mount path is correct.
+
+### NVM install warns "no shell profile found"
+
+This is harmless. Add the init lines to `~/.bashrc` manually as shown in
+Step 4.
+
+---
+
+## Path Reference
+
+| Path | Description |
+| --- | --- |
+| `~/agentic_hardware/sglang_direct_kv/` | Main experiment directory (inside container: `/workspace/agentic_hardware/sglang_direct_kv/`) |
+| `~/agentic_hardware/sglang_direct_kv/.venv/` | Main project Python 3.11 venv |
+| `~/agentic_hardware/.venvs/nat_py311/` | NAT Python 3.11 venv |
+| `~/agentic_hardware/.venvs/hermes_agent_py311/` | Hermes Python 3.11 venv |
+| `~/agentic_hardware/sglang_direct_kv/artifacts/results/` | Experiment output root |
+| `~/agentic_hardware/sglang_direct_kv/artifacts/results/latest_master_report.html` | Latest HTML report |
+| `~/agentic_hardware/sglang_direct_kv/artifacts/results/reports/<LABEL>/` | Archived run output |
+| `~/dynamo_model_cache` | HuggingFace model cache (NFS) |
+| `/tmp/gh200home` | Writable temp home for Docker runs |
+| `/tmp/gh200_passwd` | Single-line passwd file for torch UID lookup |
+| `sglang_direct_kv/configs/hardware/ec2_a10g.env` | EC2 hardware profile |
+| `sglang_direct_kv/configs/hardware/gh200.env` | GH200 hardware profile |
+| `sglang_direct_kv/scripts/setup_gh200.sh` | Venv setup script |
+| `sglang_direct_kv/scripts/run_native_harness_deadline_pressure.sh` | Native-harness experiment runner |
+| `sglang_direct_kv/scripts/run_harness_deadline_pressure.sh` | Main experiment orchestrator |
+| `sglang_direct_kv/scripts/smoke_multi_harness_wireability.py` | No-GPU harness smoke test |
+| `gh200/sync_to_gh200.sh` | rsync repo to GH200 |
+| `gh200/ssh_to_gh200.sh` | SSH to GH200 |
+| `gh200/download.sh` | Download results from GH200 |
