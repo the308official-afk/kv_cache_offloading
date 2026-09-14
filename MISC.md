@@ -1,5 +1,22 @@
 # Misc Debug Commands
 
+
+
+
+
+
+
+Core function	Simple explanation	Example
+Routing and load balancing	Choose which worker handles a request.	Send it to a worker with useful cached conversation data and available capacity.
+Queue scheduling	Decide which waiting request goes next.	Serve an urgent user request before a background report.
+Prefill/decode coordination	Coordinate prompt processing and answer generation across separate workers.	Worker A processes the prompt; Worker B generates the answer.
+KV-cache management and movement	Reuse and move cached computation to save repeated work.	Transfer a processed prompt’s cache to the worker generating the answer.
+Resource planning and scaling	Adjust worker capacity to match demand.	Add prompt-processing workers when many long prompts arrive.
+
+
+
+
+
 ## Exp9 GH200 Priority Evidence Debug
 
 Use this when Experiment 9 finishes but the decision proof shows weak priority
