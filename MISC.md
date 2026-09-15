@@ -1,7 +1,78 @@
 # Misc Debug Commands
 
 
+```bash
+* strict_priority is a real Dynamo scheduling signal that was missing from the original slide.
 
+1. Scheduling
+priority
+latency_sensitivity
+strict_priority
+
+These answer:
+
+How urgently should this request run?
+
+priority: Moves important requests ahead and can influence SGLang KV eviction.
+latency_sensitivity: Describes how damaging delay would be; the harness can convert it into priority.
+strict_priority: Places requests into strict Dynamo router-queue tiers.
+2. KV / Cache
+prompt_cache_key
+cache_control
+cache_salt
+speculative_prefill
+iat
+total_requests
+
+These answer:
+
+What cached state should we keep, isolate, remove or prepare?
+
+prompt_cache_key: Identifies reusable prompt state.
+cache_control: Controls retention type and TTL.
+cache_salt: Separates cache namespaces between users or tenants.
+speculative_prefill: Prepares likely next-turn KV early.
+iat: Predicts how long KV may sit idle before the next request.
+total_requests: Predicts how often the cached state will be reused.
+
+This is why your suggestion about IAT is correct. Its most immediate practical value is helping the controller decide whether KV should remain in HBM, move to host memory or be prefetched later.
+
+3. Routing / Worker
+osl
+backend_instance_id
+prefill_worker_id
+decode_worker_id
+dp_rank
+
+These answer:
+
+Which worker should process this request?
+
+osl: Predicts output length, helping Dynamo estimate the future load placed on a worker.
+backend_instance_id: Selects a particular backend instance.
+prefill_worker_id: Selects the prefill worker.
+decode_worker_id: Selects the decode worker.
+dp_rank: Selects a data-parallel replica.
+
+OSL could affect scheduling indirectly, but Dynamo currently uses it primarily for resource estimation and routing, so this is the clearest bucket.
+
+4. Affinity Identity
+session_id
+parent_session_id
+prefix_id
+traceparent
+
+These answer:
+
+Which agent, conversation, prefix or trace does this request belong to?
+
+session_id: Identifies one agent reasoning chain.
+parent_session_id: Connects a subagent to its parent.
+prefix_id: Identifies requests expected to share a reusable prefix.
+traceparent: Connects tracing information across the harness, Dynamo, SGLang and tools.
+
+These identities do not automatically create affinity. A routing or cache policy must actively use them.
+```
 
 
 
