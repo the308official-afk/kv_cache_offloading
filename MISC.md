@@ -2,6 +2,24 @@
 
 
 ```bash
+Signal Meaning	Harnesses That Have Some Equivalent Support
+Priority / QoS	Nemo Agent Toolkit, Claude Code, Codex Code, possibly DeepAgents through our adapter/front-end path
+Latency sensitivity	Nemo Agent Toolkit, Claude Code via fast/QoS mode, Codex Code via service tier / speed-style setting
+Output length estimate / limit	Almost all harnesses indirectly, because they can set max output tokens. NAT is strongest because it exposes osl as an explicit hint.
+Prefix/session reuse identity	Nemo Agent Toolkit, Claude Code, Codex Code, OpenCode, Qwen Code; others may support it through session IDs or adapter-level cache keys
+Total expected requests / remaining calls	Nemo Agent Toolkit most clearly. Others may know this internally from task/workflow structure, but we have not confirmed it as an emitted serving hint.
+Inter-arrival timing / expected resume time	Nemo Agent Toolkit and our controller/testbed. Most general coding harnesses do not naturally expose this yet.
+Prompt cache key / cache namespace	OpenCode, Codex Code, Nemo Agent Toolkit, possibly Qwen Code through config. Claude has prompt caching, but not necessarily a literal cache key.
+Cache control	Claude Code, Nemo Agent Toolkit, Qwen Code, OpenCode, likely Codex Code through adapter/cache-key behavior
+Cache salt / namespace separation	Nemo Agent Toolkit most clearly. OpenCode/Codex may have equivalent cache-key namespace behavior, but not necessarily called salt.
+Speculative prefill / prewarm	Mostly our controller/gateway infrastructure, not a native harness signal yet. Claude-style prompt-cache prewarm is related but not exactly the same.
+Backend instance / worker placement	Mostly backend/controller side, not harness-native. Could be supplied by a routing gateway, not usually by Claude/NAT/Codex directly.
+Session ID	Basically all harnesses have this concept. Strong support across Claude Code, Codex, NAT, DeepAgents, Qwen, OpenCode, Pi, OpenClaw, Hermes.
+Parent session ID	More limited. Likely agent/workflow systems such as NAT or DeepAgents can support this concept better than plain CLI clients.
+Traceparent / tracing ID	Usually infrastructure/gateway-level. Any harness can carry it if the wrapper adds it, but not necessarily native.
+```
+
+```bash
 * strict_priority is a real Dynamo scheduling signal that was missing from the original slide.
 
 1. Scheduling
