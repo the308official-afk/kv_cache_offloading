@@ -3,43 +3,14 @@
 ```bash
 {
   "model": "claude-opus-5",
-  "max_tokens": 512,
-  "speed": "fast",
   "messages": [
     {
       "role": "user",
-      "content": "Investigate my account and prepare an answer."
-    },
-    {
-      "role": "assistant",
-      "content": [
-        {
-          "type": "text",
-          "text": "I will inspect the relevant transactions."
-        },
-        {
-          "type": "tool_use",
-          "id": "toolu_01ABC",
-          "name": "lookup_transactions",
-          "input": {}
-        }
-      ]
-    },
-    {
-      "role": "user",
-      "content": [
-        {
-          "type": "tool_result",
-          "tool_use_id": "toolu_01ABC",
-          "content": "Two charges were found. One was automatically reversed."
-        },
-        {
-          "type": "text",
-          "text": "Prepare the final answer using the tool results."
-        }
-      ]
+      "content": "Prepare the final answer."
     }
-  ]
+  ],
+  "max_tokens": 512,
+  "speed": "fast"
 }
 ```
 
